@@ -30,6 +30,19 @@ else
     log_info "Git safe.directory already configured"
 fi
 
+# ============================================================================
+# Git Hooks Installation (commit-msg hook to sanitize messages)
+# ============================================================================
+if [ -d /workspace/.git ]; then
+    HOOKS_SRC="/workspace/.devcontainer/hooks/commit-msg"
+    HOOKS_DST="/workspace/.git/hooks/commit-msg"
+    if [ -f "$HOOKS_SRC" ]; then
+        cp "$HOOKS_SRC" "$HOOKS_DST"
+        chmod +x "$HOOKS_DST"
+        log_success "Git commit-msg hook installed"
+    fi
+fi
+
 # Note: Tools (status-line, ktn-linter) are now baked into the Docker image
 # No longer need to update on each rebuild
 
