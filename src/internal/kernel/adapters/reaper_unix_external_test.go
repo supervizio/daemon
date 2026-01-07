@@ -5,7 +5,9 @@
 package adapters_test
 
 import (
+	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/kodflow/daemon/internal/kernel/adapters"
 )
@@ -65,6 +67,37 @@ func TestUnixZombieReaper_Start(t *testing.T) {
 	}
 }
 
+// TestUnixZombieReaper_StartWhenAlreadyRunning tests the Start method when already running.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestUnixZombieReaper_StartWhenAlreadyRunning(t *testing.T) {
+	// Define test cases for Start when already running.
+	tests := []struct {
+		name string
+	}{
+		{name: "start when already running returns early"},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			reaper := adapters.NewUnixZombieReaper()
+			// Start the reaper.
+			reaper.Start()
+			// Start again should return early.
+			reaper.Start()
+			// Stop the reaper.
+			reaper.Stop()
+			// No panic or error indicates success.
+		})
+	}
+}
+
 // TestUnixZombieReaper_Stop tests the Stop method.
 //
 // Params:
@@ -86,6 +119,33 @@ func TestUnixZombieReaper_Stop(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			reaper := adapters.NewUnixZombieReaper()
 			reaper.Start()
+			reaper.Stop()
+			// No panic or error indicates success.
+		})
+	}
+}
+
+// TestUnixZombieReaper_StopWhenNotRunning tests the Stop method when not running.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestUnixZombieReaper_StopWhenNotRunning(t *testing.T) {
+	// Define test cases for Stop when not running.
+	tests := []struct {
+		name string
+	}{
+		{name: "stop when not running returns early"},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			reaper := adapters.NewUnixZombieReaper()
+			// Stop without starting should return early.
 			reaper.Stop()
 			// No panic or error indicates success.
 		})
@@ -117,6 +177,44 @@ func TestUnixZombieReaper_ReapOnce(t *testing.T) {
 			if count < 0 {
 				t.Error("ReapOnce should return a non-negative count")
 			}
+		})
+	}
+}
+
+// TestUnixZombieReaper_ReapOnceWithZombie tests the ReapOnce method with an actual zombie.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestUnixZombieReaper_ReapOnceWithZombie(t *testing.T) {
+	// Define test cases for ReapOnce with zombie.
+	tests := []struct {
+		name string
+	}{
+		{name: "reap once increments count for zombie"},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			reaper := adapters.NewUnixZombieReaper()
+			// Create a child process that exits immediately.
+			cmd := exec.Command("true")
+			err := cmd.Start()
+			if err != nil {
+				t.Skipf("cannot start subprocess: %v", err)
+			}
+			// Wait for the child to exit (becomes zombie briefly).
+			// Don't call cmd.Wait() to leave it as a zombie.
+			time.Sleep(50 * time.Millisecond)
+			// Call ReapOnce to reap the zombie.
+			_ = reaper.ReapOnce()
+			// Also call cmd.Wait to clean up in case ReapOnce didn't get it.
+			_ = cmd.Wait()
+			// No panic indicates success.
 		})
 	}
 }

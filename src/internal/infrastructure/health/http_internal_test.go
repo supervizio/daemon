@@ -108,3 +108,33 @@ func Test_HTTPChecker_getStatusCode(t *testing.T) {
 		})
 	}
 }
+
+// Test_HTTPChecker_getStatusCode_NilTransport tests the fallback to DefaultTransport
+// when client.Transport is nil.
+func Test_HTTPChecker_getStatusCode_NilTransport(t *testing.T) {
+	// Create test server that returns 200 OK.
+	okServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Return 200 OK status.
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer okServer.Close()
+
+	cfg := &service.HealthCheckConfig{
+		Name:     "test-nil-transport",
+		Endpoint: okServer.URL,
+		Method:   "GET",
+		Timeout:  shared.Seconds(5),
+	}
+
+	checker := NewHTTPChecker(cfg)
+
+	// Set client Transport to nil to test the fallback path.
+	checker.client.Transport = nil
+
+	ctx := context.Background()
+	statusCode, err := checker.getStatusCode(ctx)
+
+	// Verify request succeeds using DefaultTransport.
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode)
+}

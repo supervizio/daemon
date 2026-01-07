@@ -36,6 +36,22 @@ var (
 	ErrServiceNotFound error = fmt.Errorf("service not found")
 )
 
+// EventHandler is a callback function for process events.
+// It is called when a service emits a lifecycle event.
+type EventHandler func(serviceName string, event *domain.Event)
+
+// ServiceStats holds statistics for a single service.
+type ServiceStats struct {
+	// StartCount is the number of times the service has started.
+	StartCount int
+	// StopCount is the number of times the service has stopped normally.
+	StopCount int
+	// FailCount is the number of times the service has failed.
+	FailCount int
+	// RestartCount is the number of times the service has restarted.
+	RestartCount int
+}
+
 // Supervisor manages multiple services and their lifecycle.
 // It coordinates starting, stopping, and monitoring of all configured services.
 type Supervisor struct {
@@ -59,6 +75,10 @@ type Supervisor struct {
 	cancel context.CancelFunc
 	// wg is the wait group for goroutines.
 	wg sync.WaitGroup
+	// eventHandler is the optional callback for events.
+	eventHandler EventHandler
+	// stats holds per-service statistics.
+	stats map[string]*ServiceStats
 }
 
 // NewSupervisor creates a new supervisor from configuration.
@@ -86,12 +106,14 @@ func NewSupervisor(cfg *service.Config, loader appconfig.Loader, executor domain
 		managers: make(map[string]*appprocess.Manager, len(cfg.Services)),
 		reaper:   reaper,
 		state:    StateStopped,
+		stats:    make(map[string]*ServiceStats, len(cfg.Services)),
 	}
 
 	// Create a manager for each configured service.
 	for i := range cfg.Services {
 		svc := &cfg.Services[i]
 		s.managers[svc.Name] = appprocess.NewManager(svc, executor)
+		s.stats[svc.Name] = &ServiceStats{}
 	}
 
 	// Return the configured supervisor.
@@ -311,9 +333,90 @@ func (s *Supervisor) monitorService(name string, mgr Eventser) {
 				// Return when channel is closed.
 				return
 			}
+			// Handle the event: update stats and call handler.
 			s.handleEvent(name, &event)
 		}
 	}
+}
+
+// handleEvent processes a service event.
+// It updates statistics and calls the optional event handler.
+//
+// Params:
+//   - name: the service name.
+//   - event: the process event.
+func (s *Supervisor) handleEvent(name string, event *domain.Event) {
+	s.mu.Lock()
+	// Get or create stats for this service.
+	stats, ok := s.stats[name]
+	if !ok {
+		stats = &ServiceStats{}
+		s.stats[name] = stats
+	}
+
+	// Update statistics based on event type.
+	switch event.Type {
+	case domain.EventStarted:
+		stats.StartCount++
+	case domain.EventStopped:
+		stats.StopCount++
+	case domain.EventFailed:
+		stats.FailCount++
+	case domain.EventRestarting:
+		stats.RestartCount++
+	case domain.EventHealthy, domain.EventUnhealthy:
+		// Health events are tracked by the health monitor, not stats.
+	}
+	s.mu.Unlock()
+
+	// Call user event handler if registered.
+	if s.eventHandler != nil {
+		s.eventHandler(name, event)
+	}
+}
+
+// SetEventHandler sets the callback for process events.
+//
+// Params:
+//   - handler: the callback function to invoke on events.
+func (s *Supervisor) SetEventHandler(handler EventHandler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.eventHandler = handler
+}
+
+// Stats returns statistics for a specific service.
+//
+// Params:
+//   - name: the service name.
+//
+// Returns:
+//   - *ServiceStats: the service statistics, or nil if not found.
+func (s *Supervisor) Stats(name string) *ServiceStats {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	// Return a copy to avoid race conditions.
+	if stats, ok := s.stats[name]; ok {
+		statsCopy := *stats
+		return &statsCopy
+	}
+	return nil
+}
+
+// AllStats returns statistics for all services.
+//
+// Returns:
+//   - map[string]*ServiceStats: a copy of all service statistics.
+func (s *Supervisor) AllStats() map[string]*ServiceStats {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	// Return a copy of all stats.
+	result := make(map[string]*ServiceStats, len(s.stats))
+	for name, stats := range s.stats {
+		statsCopy := *stats
+		result[name] = &statsCopy
+	}
+	return result
 }
 
 // Eventser defines the interface for monitoring services.
@@ -321,16 +424,6 @@ func (s *Supervisor) monitorService(name string, mgr Eventser) {
 type Eventser interface {
 	// Events returns the event channel for monitoring.
 	Events() <-chan domain.Event
-}
-
-// handleEvent handles a process event.
-//
-// Params:
-//   - name: the service name (unused).
-//   - event: the process event (unused).
-func (s *Supervisor) handleEvent(_ string, _ *domain.Event) {
-	// Events are logged/processed here
-	// Currently a no-op as the manager handles restart logic
 }
 
 // State returns the current supervisor state.

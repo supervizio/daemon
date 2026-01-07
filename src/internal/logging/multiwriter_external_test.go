@@ -3,6 +3,8 @@
 package logging_test
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,6 +16,52 @@ import (
 	"github.com/kodflow/daemon/internal/domain/service"
 	"github.com/kodflow/daemon/internal/logging"
 )
+
+// errMultiWriteFailed is an error returned when a mock multiwriter fails.
+var errMultiWriteFailed = errors.New("multiwrite failed")
+
+// errMultiCloseFailed is an error returned when a mock closer fails.
+var errMultiCloseFailed = errors.New("multiclose failed")
+
+// failingWriteCloser is a mock writer/closer that can fail on write or close.
+type failingWriteCloser struct {
+	// failOnWrite indicates whether write should fail.
+	failOnWrite bool
+	// failOnClose indicates whether close should fail.
+	failOnClose bool
+}
+
+// Write implements io.Writer.
+//
+// Params:
+//   - p: the byte slice to write.
+//
+// Returns:
+//   - int: the number of bytes written.
+//   - error: an error if failOnWrite is true.
+func (f *failingWriteCloser) Write(p []byte) (int, error) {
+	// Check if write should fail.
+	if f.failOnWrite {
+		// Return error for failing write.
+		return 0, errMultiWriteFailed
+	}
+	// Return success for non-failing write.
+	return len(p), nil
+}
+
+// Close implements io.Closer.
+//
+// Returns:
+//   - error: an error if failOnClose is true.
+func (f *failingWriteCloser) Close() error {
+	// Check if close should fail.
+	if f.failOnClose {
+		// Return error for failing close.
+		return errMultiCloseFailed
+	}
+	// Return success for non-failing close.
+	return nil
+}
 
 // readFileAsString reads a file and returns its content as string.
 //
@@ -234,3 +282,93 @@ func TestMultiWriter_Close(t *testing.T) {
 		})
 	}
 }
+
+// TestMultiWriter_Write_Error tests the Write method when a writer fails.
+//
+// Params:
+//   - t: the testing context.
+func TestMultiWriter_Write_Error(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// failFirst indicates whether the first writer should fail.
+		failFirst bool
+		// failSecond indicates whether the second writer should fail.
+		failSecond bool
+	}{
+		{
+			name:       "first_writer_fails",
+			failFirst:  true,
+			failSecond: false,
+		},
+		{
+			name:       "second_writer_fails",
+			failFirst:  false,
+			failSecond: true,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			w1 := &failingWriteCloser{failOnWrite: tt.failFirst}
+			w2 := &failingWriteCloser{failOnWrite: tt.failSecond}
+
+			mw := logging.NewMultiWriter(w1, w2)
+			defer func() { _ = mw.Close() }()
+
+			n, err := mw.Write([]byte("test message\n"))
+			assert.Error(t, err)
+			assert.Equal(t, 0, n)
+		})
+	}
+}
+
+// TestMultiWriter_Close_Error tests the Close method when a writer fails.
+//
+// Params:
+//   - t: the testing context.
+func TestMultiWriter_Close_Error(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// failFirst indicates whether the first writer should fail on close.
+		failFirst bool
+		// failSecond indicates whether the second writer should fail on close.
+		failSecond bool
+	}{
+		{
+			name:       "first_writer_close_fails",
+			failFirst:  true,
+			failSecond: false,
+		},
+		{
+			name:       "second_writer_close_fails",
+			failFirst:  false,
+			failSecond: true,
+		},
+		{
+			name:       "both_writers_close_fail",
+			failFirst:  true,
+			failSecond: true,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			w1 := &failingWriteCloser{failOnClose: tt.failFirst}
+			w2 := &failingWriteCloser{failOnClose: tt.failSecond}
+
+			mw := logging.NewMultiWriter(w1, w2)
+
+			err := mw.Close()
+			assert.Error(t, err)
+		})
+	}
+}
+
+// Ensure io.WriteCloser interface is satisfied.
+var _ io.WriteCloser = (*failingWriteCloser)(nil)

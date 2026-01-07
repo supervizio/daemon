@@ -5,6 +5,7 @@
 package adapters_test
 
 import (
+	"os"
 	"os/exec"
 	"testing"
 
@@ -88,6 +89,7 @@ func TestUnixProcessControl_GetProcessGroup(t *testing.T) {
 		expectError bool
 	}{
 		{name: "get process group for invalid pid", pid: -1, expectError: true},
+		{name: "get process group for current process", pid: os.Getpid(), expectError: false},
 	}
 
 	// Iterate over test cases.
@@ -95,13 +97,17 @@ func TestUnixProcessControl_GetProcessGroup(t *testing.T) {
 		// Run each test case as a subtest.
 		t.Run(tt.name, func(t *testing.T) {
 			pc := adapters.NewUnixProcessControl()
-			_, err := pc.GetProcessGroup(tt.pid)
+			pgid, err := pc.GetProcessGroup(tt.pid)
 			// Check if error expectation is met.
 			if tt.expectError && err == nil {
 				t.Error("expected error for invalid pid")
 			}
 			if !tt.expectError && err != nil {
 				t.Errorf("unexpected error: %v", err)
+			}
+			// Check if pgid is valid for successful calls.
+			if !tt.expectError && pgid <= 0 {
+				t.Errorf("expected positive pgid, got %d", pgid)
 			}
 		})
 	}

@@ -263,3 +263,70 @@ func TestCapture_Close(t *testing.T) {
 		})
 	}
 }
+
+// TestNewCapture_StdoutCreationError tests NewCapture when stdout writer creation fails.
+//
+// Params:
+//   - t: the testing context.
+func TestNewCapture_StdoutCreationError(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// stdoutFile is the stdout file path that will cause an error.
+		stdoutFile string
+	}{
+		{
+			name:       "stdout_invalid_path_fails",
+			stdoutFile: "stdout.log",
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			// Use a non-existent, non-writable path.
+			cfg := &mockCaptureConfig{basePath: "/nonexistent/readonly/path"}
+			svcCfg := createServiceLogging(tt.stdoutFile, "")
+
+			capture, err := logging.NewCapture("test-service", cfg, svcCfg)
+			assert.Error(t, err)
+			assert.Nil(t, capture)
+		})
+	}
+}
+
+// TestNewCapture_StderrCreationError tests NewCapture when stderr writer creation fails.
+//
+// Params:
+//   - t: the testing context.
+func TestNewCapture_StderrCreationError(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// stdoutFile is the stdout file path.
+		stdoutFile string
+		// stderrFile is the stderr file path that will cause an error.
+		stderrFile string
+	}{
+		{
+			name:       "stderr_creation_fails_after_stdout_success",
+			stdoutFile: "",
+			stderrFile: "stderr.log",
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			// Use a non-existent, non-writable path for stderr only.
+			cfg := &mockCaptureConfig{basePath: "/nonexistent/readonly/path"}
+			svcCfg := createServiceLogging(tt.stdoutFile, tt.stderrFile)
+
+			capture, err := logging.NewCapture("test-service", cfg, svcCfg)
+			assert.Error(t, err)
+			assert.Nil(t, capture)
+		})
+	}
+}

@@ -505,6 +505,12 @@ func TestNewWriterFromConfig(t *testing.T) {
 			maxFiles:        3,
 			timestampFormat: logging.FormatISO8601,
 		},
+		{
+			name:            "zero_max_files_uses_default",
+			maxSize:         "1MB",
+			maxFiles:        0,
+			timestampFormat: "",
+		},
 	}
 
 	// Iterate through all test cases.
@@ -521,6 +527,66 @@ func TestNewWriterFromConfig(t *testing.T) {
 			defer func() { _ = w.Close() }()
 
 			assert.Equal(t, path, w.Path())
+		})
+	}
+}
+
+// TestNewWriterFromConfig_DirectoryError tests NewWriterFromConfig when directory creation fails.
+//
+// Params:
+//   - t: the testing context.
+func TestNewWriterFromConfig_DirectoryError(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// path is the invalid path that will cause an error.
+		path string
+	}{
+		{
+			name: "directory_creation_fails",
+			path: "/nonexistent/readonly/path/test.log",
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createWriterConfig("test.log", "1MB", 3, "")
+
+			w, err := logging.NewWriterFromConfig(tt.path, cfg)
+			assert.Error(t, err)
+			assert.Nil(t, w)
+		})
+	}
+}
+
+// TestNewWriter_DirectoryError tests NewWriter when directory creation fails.
+//
+// Params:
+//   - t: the testing context.
+func TestNewWriter_DirectoryError(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// path is the invalid path that will cause an error.
+		path string
+	}{
+		{
+			name: "directory_creation_fails",
+			path: "/nonexistent/readonly/path/test.log",
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createWriterConfig("test.log", "1MB", 3, "")
+
+			w, err := logging.NewWriter(tt.path, cfg)
+			assert.Error(t, err)
+			assert.Nil(t, w)
 		})
 	}
 }

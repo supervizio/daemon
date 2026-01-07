@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/supervizio/daemon/actions/workflows/ci.yml/badge.svg)](https://github.com/supervizio/daemon/actions/workflows/ci.yml)
 [![Release](https://github.com/supervizio/daemon/actions/workflows/release.yml/badge.svg)](https://github.com/supervizio/daemon/releases)
+[![codecov](https://codecov.io/gh/supervizio/daemon/branch/main/graph/badge.svg)](https://codecov.io/gh/supervizio/daemon)
 [![Go Version](https://img.shields.io/badge/Go-1.25-blue.svg)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 

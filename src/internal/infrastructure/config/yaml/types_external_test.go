@@ -110,6 +110,48 @@ func TestDuration_UnmarshalYAML(t *testing.T) {
 	}
 }
 
+// TestDuration_UnmarshalYAML_NonStringValue tests Duration unmarshaling when
+// the YAML value is not a string (e.g., array, map, or number).
+// This tests the error path when unmarshal(&s) fails.
+//
+// Params:
+//   - t: testing context
+func TestDuration_UnmarshalYAML_NonStringValue(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "array value fails unmarshal",
+			input: "[1, 2, 3]",
+		},
+		{
+			name:  "map value fails unmarshal",
+			input: "key: value",
+		},
+		{
+			name:  "nested object fails unmarshal",
+			input: "outer:\n  inner: value",
+		},
+	}
+
+	// Iterate through test cases
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var d yaml.Duration
+
+			err := yamlv3.Unmarshal([]byte(tt.input), &d)
+
+			// Expect an error when value is not a string
+			assert.Error(t, err)
+		})
+	}
+}
+
 // TestDuration_MarshalText tests Duration marshaling via TextMarshaler.
 // It verifies that Duration values are correctly serialized to strings.
 //

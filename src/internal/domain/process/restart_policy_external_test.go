@@ -633,3 +633,51 @@ func TestRestartTracker_IsExhausted(t *testing.T) {
 		})
 	}
 }
+
+// TestRestartTracker_ShouldRestart_UnknownPolicy tests restart behavior with unknown policy.
+// This tests the default case in the switch statement.
+//
+// Params:
+//   - t: the testing context.
+func TestRestartTracker_ShouldRestart_UnknownPolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		policy   service.RestartPolicy
+		exitCode int
+	}{
+		{
+			name:     "unknown policy returns false on exit code 0",
+			policy:   service.RestartPolicy("unknown-policy"),
+			exitCode: 0,
+		},
+		{
+			name:     "unknown policy returns false on exit code 1",
+			policy:   service.RestartPolicy("invalid"),
+			exitCode: 1,
+		},
+		{
+			name:     "empty policy returns false",
+			policy:   service.RestartPolicy(""),
+			exitCode: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &service.RestartConfig{
+				Policy:     tt.policy,
+				MaxRetries: 3,
+				Delay:      shared.Seconds(1),
+			}
+
+			tracker := process.NewRestartTracker(cfg)
+
+			// Unknown policies should never allow restart.
+			assert.False(t, tracker.ShouldRestart(tt.exitCode))
+		})
+	}
+}
