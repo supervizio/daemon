@@ -1,9 +1,38 @@
-# Codacy Configuration
+---
+# Codacy configuration file
 # https://docs.codacy.com/repositories-configure/codacy-configuration-file/
 
----
+# Global exclude patterns - files that should not be analyzed
 exclude_paths:
-  # Test files - excluded from analysis
-  - "**/*_test.go"
-  - "**/*_external_test.go"
-  - "**/*_internal_test.go"
+  # Test files
+  - '**/*_test.go'
+  - '**/*_external_test.go'
+  - '**/*_internal_test.go'
+  - '**/testdata/**'
+
+  # Standard exclusions
+  - 'vendor/**'
+  - 'dist/**'
+  - 'build/**'
+
+# Engines configuration
+engines:
+  # Exclude test files from Lizard complexity analysis
+  # Test functions are inherently longer due to table-driven patterns
+  lizard:
+    exclude_paths:
+      - '**/*_test.go'
+      - '**/testdata/**'
+
+  # Exclude CLAUDE.md files from markdownlint
+  # These are internal AI context files, not public documentation
+  markdownlint:
+    exclude_paths:
+      - '**/CLAUDE.md'
+
+  # Exclude test files from Semgrep security checks
+  # Test code intentionally contains non-production patterns
+  semgrep:
+    exclude_paths:
+      - '**/*_test.go'
+      - '**/testdata/**'
