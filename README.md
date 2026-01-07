@@ -1,142 +1,151 @@
-# Kodflow DevContainer Template
+# superviz.io
 
-Template DevContainer complet pour le développement avec Claude Code et tous les outils DevOps/Cloud essentiels.
+[![CI](https://github.com/supervizio/daemon/actions/workflows/ci.yml/badge.svg)](https://github.com/supervizio/daemon/actions/workflows/ci.yml)
+[![Release](https://github.com/supervizio/daemon/actions/workflows/release.yml/badge.svg)](https://github.com/supervizio/daemon/releases)
+[![Go Version](https://img.shields.io/badge/Go-1.25-blue.svg)](https://go.dev/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Outils inclus
+PID1-capable process supervisor for containers and Linux/BSD systems. Manages multiple services with health checks, restart policies, and log rotation.
 
-### Base
-- **Ubuntu 24.04 LTS**
-- **Zsh + Oh My Zsh + Powerlevel10k**
-- **Git, jq, yq, curl, build-essential**
+## Features
 
-### Cloud & DevOps
-| Outil | Description |
-|-------|-------------|
-| **AWS CLI v2** | Amazon Web Services |
-| **gcloud** | Google Cloud SDK |
-| **az** | Azure CLI |
-| **terraform** | Infrastructure as Code |
-| **vault, consul, nomad, packer** | HashiCorp Suite |
-| **kubectl, helm** | Kubernetes |
-| **ansible** | Configuration Management |
-
-### Development
-| Outil | Description |
-|-------|-------------|
-| **gh** | GitHub CLI |
-| **claude** | Claude Code CLI |
-| **op** | 1Password CLI |
-| **bazel** | Build System |
-| **task** | Taskwarrior |
-| **status-line** | Claude Code status bar |
-
-### Langages
-Les langages sont ajoutés via **DevContainer Features** selon vos besoins :
-
-```json
-"features": {
-  "ghcr.io/devcontainers/features/go:1": {},
-  "ghcr.io/devcontainers/features/python:1": {},
-  "ghcr.io/devcontainers/features/rust:1": {}
-}
-```
-
-Voir : https://containers.dev/features
+- **Multi-service management**: Start, stop, and monitor multiple processes
+- **Health checks**: HTTP, TCP, and shell command with configurable retries
+- **Restart policies**: `always`, `on-failure`, `never`, `unless-stopped`
+- **Exponential backoff**: Increasing delays between restart attempts
+- **Log rotation**: By size, age, and file count with compression
+- **PID 1 support**: Zombie process reaping, signal handling
+- **Multi-platform**: Linux, BSD (FreeBSD, OpenBSD, NetBSD), macOS
 
 ## Installation
 
-### Nouveau projet
+### Pre-built binaries
+
+Download from [GitHub releases](https://github.com/supervizio/daemon/releases).
+
+### From source
 
 ```bash
-gh repo create mon-projet --template kodflow/devcontainer-template --public
-cd mon-projet
-code .
+git clone https://github.com/supervizio/daemon.git
+cd daemon/src
+go build -o supervizio ./cmd/daemon
 ```
 
-### Projet existant
-
-Copiez le dossier `.devcontainer/` dans votre projet.
-
-## Configuration MCP
-
-Le template inclut des serveurs MCP pré-configurés pour Claude Code.
-
-### Serveurs MCP inclus
-
-| Serveur | Description |
-|---------|-------------|
-| **github** | Intégration GitHub |
-| **codacy** | Analyse de code |
-| **taskwarrior** | Gestion de tâches |
-
-### Configuration des tokens
-
-**Option 1 : Variables d'environnement**
+## Usage
 
 ```bash
-export GITHUB_API_TOKEN="ghp_xxx"
-export CODACY_API_TOKEN="xxx"
+# With configuration file
+supervizio --config /etc/supervizio/config.yaml
+
+# Show version
+supervizio --version
 ```
 
-**Option 2 : 1Password**
+## Configuration
 
-Configurez `OP_SERVICE_ACCOUNT_TOKEN` et les items correspondants dans votre vault.
+```yaml
+version: "1"
 
-### Fichiers MCP
+logging:
+  base_dir: /var/log/supervizio
+  defaults:
+    timestamp_format: iso8601
+    rotation:
+      max_size: 100MB
+      max_age: 7d
+      max_files: 10
+      compress: true
 
-| Fichier | Description |
-|---------|-------------|
-| `.mcp.json` | Config MCP projet (ignoré par git) |
-| `.devcontainer/hooks/shared/mcp.json.tpl` | Template MCP |
+services:
+  - name: webapp
+    command: /usr/bin/node
+    args:
+      - /app/server.js
+    user: www-data
+    environment:
+      NODE_ENV: production
+    restart:
+      policy: always
+      max_retries: 5
+      delay: 5s
+      delay_max: 5m
+    health_checks:
+      - type: http
+        endpoint: http://localhost:3000/health
+        interval: 30s
+        timeout: 5s
+        retries: 3
+    logging:
+      stdout:
+        file: webapp.out.log
+      stderr:
+        file: webapp.err.log
+```
 
-## Structure
+See [examples/config.yaml](examples/config.yaml) for a complete configuration.
+
+## Signals
+
+| Signal | Action |
+|--------|--------|
+| `SIGTERM` / `SIGINT` | Graceful shutdown of all services |
+| `SIGHUP` | Configuration reload |
+| `SIGCHLD` | Zombie process reaping (PID 1) |
+
+## Architecture
 
 ```
-.devcontainer/
-├── devcontainer.json          # Configuration DevContainer
-├── docker-compose.yml         # Services Docker
-├── Dockerfile                 # Extends l'image de base
-├── hooks/
-│   ├── lifecycle/
-│   │   ├── initialize.sh      # Avant création (hôte)
-│   │   ├── onCreate.sh        # Création container
-│   │   ├── postCreate.sh      # Config initiale
-│   │   ├── postStart.sh       # Chaque démarrage (MCP)
-│   │   └── postAttach.sh      # Attachement IDE
-│   └── shared/
-│       ├── mcp.json.tpl       # Template MCP
-│       └── utils.sh           # Fonctions utilitaires
-└── images/
-    └── Dockerfile             # Image de base GHCR
+src/
+├── cmd/daemon/          # Entry point
+└── internal/
+    ├── config/          # YAML parsing and validation
+    ├── supervisor/      # Service orchestration
+    ├── process/         # Lifecycle management
+    ├── health/          # Health checks (HTTP, TCP, cmd)
+    ├── kernel/          # OS abstraction (ports & adapters)
+    │   ├── ports/       # Interfaces
+    │   └── adapters/    # Platform-specific implementations
+    └── logging/         # Log rotation and capture
 ```
 
-## Commandes
+## Development
 
-### Rebuild container
+### Prerequisites
+
+- Go 1.25+
+- golangci-lint
+
+### Build
 
 ```bash
-# VS Code
-Cmd+Shift+P > "Dev Containers: Rebuild Container"
+cd src
+go build ./...
 ```
 
-### Claude avec MCP
+### Tests
 
 ```bash
-# Alias configuré automatiquement
-super-claude
+cd src
+go test -race -cover ./...
 ```
 
-### Nettoyer
+### Lint
 
 ```bash
-docker compose -f .devcontainer/docker-compose.yml down -v
+cd src
+golangci-lint run
 ```
 
-## Volumes persistants
+## Supported Platforms
 
-- `{projet}-local-bin` : Binaires locaux
-- `vscode-extensions` : Extensions VS Code
-- `zsh-history` : Historique shell
+| OS | Architectures |
+|----|---------------|
+| Linux | amd64, arm64, 386, armv7 |
+| FreeBSD | amd64, arm64 |
+| OpenBSD | amd64, arm64 |
+| NetBSD | amd64, arm64 |
+| DragonFlyBSD | amd64 |
+| macOS | amd64, arm64 |
 
 ## License
 

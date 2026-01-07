@@ -1,0 +1,269 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'      # v1.0.0
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'    # v1.0.0-rc.1, v1.0.0-beta.1
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type (auto = detect from commits)'
+        required: false
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+        default: auto
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.25.5'
+
+jobs:
+  # =============================================================================
+  # Determine version
+  # =============================================================================
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_new_tag: ${{ steps.version.outputs.is_new_tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            IS_NEW_TAG="false"
+            BUMP_TYPE="tag"
+          else
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            VERSION_NUM=${LATEST_TAG#v}
+
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION_NUM%%-*}"
+            MAJOR=${MAJOR:-0}
+            MINOR=${MINOR:-0}
+            PATCH=${PATCH:-0}
+
+            BUMP_TYPE="${{ inputs.bump }}"
+
+            if [[ "$BUMP_TYPE" == "auto" || -z "$BUMP_TYPE" ]]; then
+              echo "Analyzing commits since $LATEST_TAG..."
+
+              if [[ "$LATEST_TAG" == "v0.0.0" ]]; then
+                COMMITS=$(git log --oneline --format="%s")
+              else
+                COMMITS=$(git log "${LATEST_TAG}..HEAD" --oneline --format="%s")
+              fi
+
+              echo "Commits found:"
+              echo "$COMMITS" | head -20
+
+              if echo "$COMMITS" | grep -qiE '^[a-z]+(\(.+\))?!:|BREAKING CHANGE:'; then
+                BUMP_TYPE="major"
+                echo "Detected: BREAKING CHANGE → major"
+              elif echo "$COMMITS" | grep -qiE '^feat(\(.+\))?:'; then
+                BUMP_TYPE="minor"
+                echo "Detected: feat commits → minor"
+              elif echo "$COMMITS" | grep -qiE '^fix(\(.+\))?:'; then
+                BUMP_TYPE="patch"
+                echo "Detected: fix commits → patch"
+              else
+                BUMP_TYPE="patch"
+                echo "No conventional commits detected → patch (default)"
+              fi
+            fi
+
+            case "$BUMP_TYPE" in
+              major)
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              minor)
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              patch)
+                PATCH=$((PATCH + 1))
+                ;;
+            esac
+
+            VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+            IS_NEW_TAG="true"
+          fi
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "is_new_tag=${IS_NEW_TAG}" >> $GITHUB_OUTPUT
+          echo "bump_type=${BUMP_TYPE}" >> $GITHUB_OUTPUT
+          echo ""
+          echo "=== Version Summary ==="
+          echo "Previous: $LATEST_TAG"
+          echo "Bump: $BUMP_TYPE"
+          echo "New: $VERSION"
+
+  # =============================================================================
+  # Build all platforms
+  # =============================================================================
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: linux, goarch: arm }
+          - { goos: linux, goarch: 386 }
+          - { goos: linux, goarch: riscv64 }
+          # macOS
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+          # FreeBSD
+          - { goos: freebsd, goarch: amd64 }
+          - { goos: freebsd, goarch: arm64 }
+          - { goos: freebsd, goarch: arm }
+          - { goos: freebsd, goarch: 386 }
+          - { goos: freebsd, goarch: riscv64 }
+          # OpenBSD
+          - { goos: openbsd, goarch: amd64 }
+          - { goos: openbsd, goarch: arm64 }
+          - { goos: openbsd, goarch: arm }
+          - { goos: openbsd, goarch: 386 }
+          # NetBSD
+          - { goos: netbsd, goarch: amd64 }
+          - { goos: netbsd, goarch: arm64 }
+          - { goos: netbsd, goarch: arm }
+          - { goos: netbsd, goarch: 386 }
+          # DragonFlyBSD
+          - { goos: dragonfly, goarch: amd64 }
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build binary
+        working-directory: src
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -buildvcs=false \
+            -ldflags="-s -w -X main.version=${{ needs.version.outputs.version }}" \
+            -o ../supervizio-${{ matrix.goos }}-${{ matrix.goarch }} \
+            ./cmd/daemon
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: supervizio-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: supervizio-${{ matrix.goos }}-${{ matrix.goarch }}
+          retention-days: 1
+
+  # =============================================================================
+  # Create Release
+  # =============================================================================
+  release:
+    name: Release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: artifacts
+
+      - name: Prepare release
+        run: |
+          mkdir -p release
+          cd artifacts
+          for dir in */; do
+            for file in "$dir"*; do
+              [ -f "$file" ] || continue
+              filename=$(basename "$file")
+              mv "$file" ../release/
+              (cd ../release && sha256sum "$filename" >> checksums.txt)
+            done
+          done
+          echo "=== Checksums ===" && cat ../release/checksums.txt
+
+      - name: Generate release notes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          cat > release-notes.md << 'EOF'
+          ## superviz.io ${{ needs.version.outputs.version }}
+
+          PID1-capable process supervisor for containers and Unix systems.
+
+          ### Platforms
+
+          | OS | amd64 | arm64 | arm | 386 | riscv64 |
+          |----|:-----:|:-----:|:---:|:---:|:-------:|
+          | Linux | ✅ | ✅ | ✅ | ✅ | ✅ |
+          | macOS | ✅ | ✅ | - | - | - |
+          | FreeBSD | ✅ | ✅ | ✅ | ✅ | ✅ |
+          | OpenBSD | ✅ | ✅ | ✅ | ✅ | - |
+          | NetBSD | ✅ | ✅ | ✅ | ✅ | - |
+          | DragonFlyBSD | ✅ | - | - | - | - |
+
+          ### Install
+
+          ```bash
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/;s/armv7l/arm/;s/i686/386/')
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ needs.version.outputs.version }}/supervizio-${OS}-${ARCH}" -o supervizio
+          chmod +x supervizio && sudo mv supervizio /usr/local/bin/
+          ```
+
+          ### Checksums (SHA256)
+          ```
+          EOF
+          cat release/checksums.txt >> release-notes.md
+          echo '```' >> release-notes.md
+
+      - name: Create tag (if needed)
+        if: needs.version.outputs.is_new_tag == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ needs.version.outputs.version }}" -m "Release ${{ needs.version.outputs.version }}"
+          git push origin "${{ needs.version.outputs.version }}"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+        with:
+          name: superviz.io ${{ needs.version.outputs.version }}
+          tag_name: ${{ needs.version.outputs.version }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(needs.version.outputs.version, '-') }}
+          files: release/*
+          token: ${{ secrets.GITHUB_TOKEN }}

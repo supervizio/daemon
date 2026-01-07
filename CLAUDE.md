@@ -1,131 +1,82 @@
-# Kodflow DevContainer Template
+# superviz.io - Process Supervisor
 
-## Project Structure (MANDATORY)
+PID1-capable process supervisor in Go for containers and Unix systems.
 
-```text
+## Project Structure
+
+```
 /workspace
-+-- src/                    # ALL source code (mandatory)
-|   +-- components/
-|   +-- services/
-|   +-- ...
-+-- tests/                  # Unit tests (optional, not for Go)
-+-- docs/                   # Documentation
-+-- CLAUDE.md
+├── src/                          # Go source code
+│   ├── cmd/daemon/               # CLI entry point
+│   └── internal/                 # Internal packages (hexagonal)
+│       ├── application/          # Application layer
+│       │   ├── config/           # Config port interface
+│       │   ├── health/           # Health monitoring
+│       │   ├── process/          # Process management
+│       │   └── supervisor/       # Service orchestration
+│       ├── domain/               # Domain layer
+│       │   ├── health/           # Health entities
+│       │   ├── process/          # Process entities
+│       │   ├── service/          # Service configuration
+│       │   └── shared/           # Shared value objects
+│       ├── infrastructure/       # Infrastructure layer
+│       │   ├── config/yaml/      # YAML config loader
+│       │   ├── health/           # Health check adapters
+│       │   └── process/          # Process executor
+│       ├── kernel/               # OS abstraction
+│       │   ├── adapters/         # Platform adapters
+│       │   └── ports/            # Kernel interfaces
+│       └── logging/              # Log management
+├── examples/                     # Example configurations
+├── .github/workflows/            # CI/CD (lint, test, release)
+└── .devcontainer/                # Development environment
 ```
 
-**Rules:**
-- ALL code MUST be in `/src` regardless of language
-- Tests in `/tests` (except Go: tests alongside code in `/src`)
-- Never put code at project root
+## Tech Stack
 
-## Language Rules
+- **Language**: Go 1.25.5
+- **Dependencies**: gopkg.in/yaml.v3, testify
+- **Architecture**: Hexagonal (ports & adapters)
+- **Linting**: golangci-lint, ktn-linter
 
-**STRICT**: Follow rules in `.devcontainer/features/languages/<lang>/RULES.md`
+## Development Rules
 
-Each RULES.md contains:
-1. **Line 1**: Required version (NEVER downgrade)
-2. Code style and conventions
-3. Project structure requirements
-4. Testing standards
+**STRICT**: Follow `.devcontainer/features/languages/go/RULES.md`
 
-## Workflow (MANDATORY)
+- Go tests alongside code (`*_test.go`)
+- External tests (`_external_test.go`) for black-box testing
+- Internal tests (`_internal_test.go`) for white-box testing
+- Race detection required (`go test -race`)
+- Zero lint issues (no exclusions)
 
-### 1. Context Generation
-```
-/build --context
-```
-Generates CLAUDE.md in all subdirectories + fetches latest language versions.
+## Commands
 
-### 2. Feature Development
-```
-/feature <description>
-```
-Creates `feat/<description>` branch, **mandatory planning mode**, CI check, PR creation (no auto-merge).
-
-### 3. Bug Fixes
-```
-/fix <description>
-```
-Creates `fix/<description>` branch, **mandatory planning mode**, CI check, PR creation (no auto-merge).
-
-**Flow:**
-```
-/build --context → /feature "..." ou /fix "..."
+```bash
+go build ./cmd/daemon         # Build
+go test -race ./...           # Tests with race detection
+golangci-lint run             # Standard linting
+ktn-linter lint ./...         # KTN convention linting
 ```
 
-## Branch Conventions
+## Conventions
 
-| Type | Branch | Commit prefix |
-|------|--------|---------------|
+| Type | Branch | Commit |
+|------|--------|--------|
 | Feature | `feat/<desc>` | `feat(scope): message` |
 | Bugfix | `fix/<desc>` | `fix(scope): message` |
 
-## Code Quality
+## Related Directories
 
-- Latest stable version ONLY (see RULES.md)
-- No deprecated APIs
-- No legacy patterns
-- Security-first approach
-- Full test coverage
+| Directory | See |
+|-----------|-----|
+| Source code | `src/CLAUDE.md` |
+| Examples | `examples/CLAUDE.md` |
+| CI/CD | `.github/CLAUDE.md` |
+| DevContainer | `.devcontainer/CLAUDE.md` |
 
-## MCP-FIRST RULE (MANDATORY)
+## MCP-First
 
-**ALWAYS use MCP tools BEFORE falling back to CLI binaries.**
+Always use MCP tools before CLI:
 
-```yaml
-mcp_priority:
-  rule: "MCP tools are the PRIMARY interface"
-  fallback: "CLI only when MCP unavailable or fails"
-
-  workflow:
-    1_check_mcp: "Verify MCP server is available in .mcp.json"
-    2_use_mcp: "Call mcp__<server>__<action> tool"
-    3_on_failure: "Log error, inform user, then try CLI fallback"
-    4_never_ask: "NEVER ask user for tokens if MCP is configured"
-
-  examples:
-    github:
-      priority: "mcp__github__list_pull_requests"
-      fallback: "gh pr list"
-    codacy:
-      priority: "mcp__codacy__codacy_cli_analyze"
-      fallback: "codacy-cli analyze"
-```
-
-**Why MCP-first:**
-
-- MCP servers have pre-configured authentication (tokens in .mcp.json)
-- CLI tools require separate auth (`gh auth login`, etc.)
-- MCP provides structured responses (JSON vs text parsing)
-- Single source of truth for credentials
-
-## SAFEGUARDS (ABSOLUTE - NO BYPASS)
-
-**NEVER without EXPLICIT user approval:**
-- Delete files in `.claude/` directory
-- Delete files in `.devcontainer/` directory
-- Modify `.claude/commands/*.md` destructively (removing features/logic)
-- Remove hooks from `.devcontainer/hooks/`
-
-**When simplifying/refactoring:**
-- Move content to separate files, NEVER delete logic
-- Ask before removing any feature, even if it seems redundant
-
-## Hooks (Auto-applied)
-
-| Hook | Action |
-|------|--------|
-| `pre-validate.sh` | Protect sensitive files |
-| `post-edit.sh` | Format + Imports + Lint |
-| `security.sh` | Secret detection |
-| `test.sh` | Run related tests |
-
-## Context Hierarchy
-
-```
-/CLAUDE.md              # Overview (committed)
-/src/CLAUDE.md          # src details (gitignored)
-/src/api/CLAUDE.md      # API details (gitignored)
-```
-
-**Principle:** More details deeper in tree, under 60 lines each.
+- `mcp__github__*` before `gh`
+- `mcp__codacy__*` before `codacy-cli`

@@ -4,35 +4,26 @@
 
 # Global exclude patterns - files that should not be analyzed
 exclude_paths:
-  # Test files
-  - '**/*_test.go'
-  - '**/*_external_test.go'
-  - '**/*_internal_test.go'
-  - '**/testdata/**'
+  # Test files (Java glob syntax)
+  - "**_test.go"
+  - "src/**/*_test.go"
+  - "**/testdata/**"
 
-  # Documentation files (internal, not public)
-  - '**/*.md'
-  - '**/CLAUDE.md'
+  # Documentation files
+  - "**.md"
+  - "**/*.md"
+
+  # DevContainer prompt files (Markdown used as prompts, not docs)
+  - ".devcontainer/docs/**"
+  - ".devcontainer/images/.claude/agents/**/*.md"
+  - ".devcontainer/images/.claude/commands/**/*.md"
 
   # Standard exclusions
-  - 'vendor/**'
-  - 'dist/**'
-  - 'build/**'
+  - "vendor/**"
+  - "dist/**"
+  - "build/**"
 
 # Engines configuration
 engines:
-  # Disable markdownlint entirely - CLAUDE.md files are internal AI context
   markdownlint:
     enabled: false
-
-  # Exclude test files from Lizard complexity analysis
-  lizard:
-    exclude_paths:
-      - '**/*_test.go'
-      - '**/testdata/**'
-
-  # Exclude test files from Semgrep security checks
-  semgrep:
-    exclude_paths:
-      - '**/*_test.go'
-      - '**/testdata/**'

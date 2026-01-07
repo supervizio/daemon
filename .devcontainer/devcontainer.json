@@ -13,7 +13,7 @@
     // "./features/languages/cpp": {},
     // "./features/languages/dart-flutter": {},
     // "./features/languages/elixir": {},
-    // "./features/languages/go": {},
+    "./features/languages/go": {},
     // "./features/languages/java": {},
     // "./features/languages/php": {},
     // "./features/languages/python": {},

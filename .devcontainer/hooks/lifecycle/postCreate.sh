@@ -30,6 +30,31 @@ else
     log_info "Git safe.directory already configured"
 fi
 
+# ============================================================================
+# Git Hooks Installation (commit-msg hook to sanitize messages)
+# ============================================================================
+if [ -d /workspace/.git ]; then
+    HOOKS_SRC="/workspace/.devcontainer/hooks/commit-msg"
+    HOOKS_DST="/workspace/.git/hooks/commit-msg"
+    if [ -f "$HOOKS_SRC" ]; then
+        cp "$HOOKS_SRC" "$HOOKS_DST"
+        chmod +x "$HOOKS_DST"
+        log_success "Git commit-msg hook installed"
+    fi
+fi
+
+# ============================================================================
+# GPG Signing Configuration (conditional - only if key is available)
+# ============================================================================
+GPG_KEY_ID="C8ED18EE4E425956"
+if gpg --list-secret-keys "$GPG_KEY_ID" &>/dev/null; then
+    git config --global user.signingkey "$GPG_KEY_ID"
+    git config --global commit.gpgsign true
+    log_success "GPG signing enabled with key $GPG_KEY_ID"
+else
+    log_info "GPG key $GPG_KEY_ID not found - signing disabled"
+fi
+
 # Note: Tools (status-line, ktn-linter) are now baked into the Docker image
 # No longer need to update on each rebuild
 

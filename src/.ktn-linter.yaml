@@ -1,0 +1,4 @@
+# KTN-Linter configuration for superviz.io
+# No exclusions - all issues must be fixed properly
+
+exclude: []
