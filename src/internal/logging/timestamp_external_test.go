@@ -16,7 +16,7 @@ import (
 // Params:
 //   - t: the testing context.
 func TestFormatTimestamp(t *testing.T) {
-	now := time.Date(2024, 1, 15, 10, 30, 45, 0, time.UTC)
+	now := time.Date(2024, 1, 15, 10, 30, 45, 123456789, time.UTC)
 
 	tests := []struct {
 		// name is the test case name.
@@ -35,6 +35,21 @@ func TestFormatTimestamp(t *testing.T) {
 			name:     "rfc3339_format",
 			format:   logging.FormatRFC3339,
 			contains: "2024-01-15T10:30:45",
+		},
+		{
+			name:     "unix_format",
+			format:   logging.FormatUnix,
+			contains: "1",
+		},
+		{
+			name:     "unix_milli_format",
+			format:   logging.FormatUnixMilli,
+			contains: "1",
+		},
+		{
+			name:     "unix_nano_format",
+			format:   logging.FormatUnixNano,
+			contains: "1",
 		},
 		{
 			name:     "custom_date_only",
@@ -95,6 +110,16 @@ func TestParseTimestampFormat(t *testing.T) {
 			name:     "unix_returns_unix",
 			input:    logging.FormatUnix,
 			expected: logging.FormatUnix,
+		},
+		{
+			name:     "unix_milli_returns_unix_milli",
+			input:    logging.FormatUnixMilli,
+			expected: logging.FormatUnixMilli,
+		},
+		{
+			name:     "unix_nano_returns_unix_nano",
+			input:    logging.FormatUnixNano,
+			expected: logging.FormatUnixNano,
 		},
 		{
 			name:     "custom_format_returned_as_is",

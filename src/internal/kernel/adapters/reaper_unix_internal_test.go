@@ -6,6 +6,8 @@
 package adapters
 
 import (
+	"os"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -101,6 +103,46 @@ func Test_UnixZombieReaper_reapLoop(t *testing.T) {
 			if tt.timeout > 0 {
 				time.Sleep(tt.timeout)
 			}
+			// Stop the reaper which stops reapLoop.
+			reaper.Stop()
+			// No panic indicates success.
+		})
+	}
+}
+
+// Test_UnixZombieReaper_reapLoopWithSIGCHLD tests reapLoop SIGCHLD handling.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - none
+func Test_UnixZombieReaper_reapLoopWithSIGCHLD(t *testing.T) {
+	// Define test cases for reapLoop with SIGCHLD.
+	tests := []struct {
+		// name is the test case name.
+		name string
+	}{
+		{
+			name: "reapLoop handles SIGCHLD signal",
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reaper := NewUnixZombieReaper()
+			// Start the reaper which starts reapLoop.
+			reaper.Start()
+			// Give the goroutine time to set up signal handling.
+			time.Sleep(10 * time.Millisecond)
+			// Send SIGCHLD to the current process to trigger reapAll.
+			err := syscall.Kill(os.Getpid(), syscall.SIGCHLD)
+			if err != nil {
+				t.Logf("Failed to send SIGCHLD: %v", err)
+			}
+			// Give the goroutine time to process the signal.
+			time.Sleep(20 * time.Millisecond)
 			// Stop the reaper which stops reapLoop.
 			reaper.Stop()
 			// No panic indicates success.

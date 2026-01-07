@@ -22,11 +22,76 @@ type Waiter interface {
 	Wait() error
 }
 
+// Process is an interface for process operations.
+// It abstracts os.Process methods for testability.
+type Process interface {
+	Signal(sig os.Signal) error
+	Kill() error
+	Wait() (*os.ProcessState, error)
+}
+
+// ProcessFinder is a function type for finding processes.
+// It abstracts os.FindProcess for testability.
+type ProcessFinder func(pid int) (Process, error)
+
+// osProcessWrapper wraps os.Process to implement the Process interface.
+type osProcessWrapper struct {
+	proc *os.Process
+}
+
+// Signal sends a signal to the process.
+//
+// Params:
+//   - sig: the signal to send
+//
+// Returns:
+//   - error: any error from sending the signal
+func (w *osProcessWrapper) Signal(sig os.Signal) error {
+	// Delegate to underlying os.Process
+	return w.proc.Signal(sig)
+}
+
+// Kill kills the process.
+//
+// Returns:
+//   - error: any error from killing the process
+func (w *osProcessWrapper) Kill() error {
+	// Delegate to underlying os.Process
+	return w.proc.Kill()
+}
+
+// Wait waits for the process to exit.
+//
+// Returns:
+//   - *os.ProcessState: the process state after exit
+//   - error: any error from waiting
+func (w *osProcessWrapper) Wait() (*os.ProcessState, error) {
+	// Delegate to underlying os.Process
+	return w.proc.Wait()
+}
+
+// defaultFindProcess wraps os.FindProcess to return the Process interface.
+//
+// Params:
+//   - pid: the process ID to find
+//
+// Returns:
+//   - Process: the process interface wrapper
+//   - error: any error from finding the process
+func defaultFindProcess(pid int) (Process, error) {
+	// On Unix, os.FindProcess always succeeds - it only creates a handle.
+	// The actual existence check happens when Signal/Kill is called.
+	proc, _ := os.FindProcess(pid)
+	// Wrap and return the process
+	return &osProcessWrapper{proc: proc}, nil
+}
+
 // UnixExecutor implements the domain.Executor interface for Unix systems.
 // It wraps the standard library exec.Cmd to provide process lifecycle management
 // with support for credentials, environment variables, and signal handling.
 type UnixExecutor struct {
-	kernel *kernel.Kernel
+	kernel      *kernel.Kernel
+	findProcess ProcessFinder
 }
 
 // NewUnixExecutor creates a new Unix process executor with default kernel.
@@ -36,7 +101,41 @@ type UnixExecutor struct {
 func NewUnixExecutor() *UnixExecutor {
 	// Initialize executor with default kernel configuration
 	return &UnixExecutor{
-		kernel: kernel.Default,
+		kernel:      kernel.Default,
+		findProcess: defaultFindProcess,
+	}
+}
+
+// NewUnixExecutorWithKernel creates a new Unix process executor with a custom kernel.
+// This constructor is useful for testing with mock kernel implementations.
+//
+// Params:
+//   - k: the kernel instance to use for OS operations.
+//
+// Returns:
+//   - *UnixExecutor: a configured executor instance using the provided kernel.
+func NewUnixExecutorWithKernel(k *kernel.Kernel) *UnixExecutor {
+	// Initialize executor with provided kernel configuration
+	return &UnixExecutor{
+		kernel:      k,
+		findProcess: defaultFindProcess,
+	}
+}
+
+// NewUnixExecutorWithOptions creates a new Unix process executor with custom options.
+// This constructor is useful for testing with mock implementations.
+//
+// Params:
+//   - k: the kernel instance to use for OS operations.
+//   - finder: the process finder function to use.
+//
+// Returns:
+//   - *UnixExecutor: a configured executor instance using the provided options.
+func NewUnixExecutorWithOptions(k *kernel.Kernel, finder ProcessFinder) *UnixExecutor {
+	// Initialize executor with provided options
+	return &UnixExecutor{
+		kernel:      k,
+		findProcess: finder,
 	}
 }
 
@@ -134,7 +233,7 @@ func (e *UnixExecutor) waitForProcess(cmd Waiter, wait chan<- domain.ExitResult)
 //   - error: any error encountered during stop operation.
 func (e *UnixExecutor) Stop(pid int, timeout time.Duration) error {
 	// Find the process by PID
-	proc, err := os.FindProcess(pid)
+	proc, err := e.findProcess(pid)
 	// Check if process lookup failed
 	if err != nil {
 		// Return error if process not found
@@ -187,7 +286,7 @@ func (e *UnixExecutor) Stop(pid int, timeout time.Duration) error {
 //   - error: any error encountered during signal delivery
 func (e *UnixExecutor) Signal(pid int, sig os.Signal) error {
 	// Find the process by PID
-	proc, err := os.FindProcess(pid)
+	proc, err := e.findProcess(pid)
 	// Check if process lookup failed
 	if err != nil {
 		// Return error if process not found

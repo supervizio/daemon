@@ -71,6 +71,8 @@ func NewHTTPChecker(cfg *service.HealthCheckConfig) *HTTPChecker {
 	}
 
 	// Return the configured HTTP checker.
+	// Note: CheckRedirect is not needed because we use transport.RoundTrip()
+	// directly, which does not follow redirects automatically.
 	return &HTTPChecker{
 		name:       name,
 		endpoint:   cfg.Endpoint,
@@ -79,10 +81,6 @@ func NewHTTPChecker(cfg *service.HealthCheckConfig) *HTTPChecker {
 		client: &http.Client{
 			Transport: transport,
 			Timeout:   timeout,
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				// Prevent automatic redirect following.
-				return http.ErrUseLastResponse
-			},
 		},
 	}
 }

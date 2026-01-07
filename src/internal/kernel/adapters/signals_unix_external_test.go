@@ -114,9 +114,12 @@ func TestUnixSignalManager_Forward(t *testing.T) {
 	tests := []struct {
 		name        string
 		pid         int
+		sig         os.Signal
 		expectError bool
 	}{
-		{name: "forward to invalid pid fails", pid: -1, expectError: true},
+		{name: "forward to invalid pid fails", pid: -1, sig: syscall.SIGTERM, expectError: true},
+		{name: "forward signal 0 to current process succeeds", pid: os.Getpid(), sig: syscall.Signal(0), expectError: false},
+		{name: "forward to nonexistent process fails", pid: 999999999, sig: syscall.SIGTERM, expectError: true},
 	}
 
 	sm := adapters.NewUnixSignalManager()
@@ -125,10 +128,13 @@ func TestUnixSignalManager_Forward(t *testing.T) {
 	for _, tt := range tests {
 		// Run each test case as a subtest.
 		t.Run(tt.name, func(t *testing.T) {
-			err := sm.Forward(tt.pid, syscall.SIGTERM)
+			err := sm.Forward(tt.pid, tt.sig)
 			// Check error expectation.
 			if tt.expectError && err == nil {
-				t.Error("expected error for invalid pid")
+				t.Error("expected error")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
 			}
 		})
 	}

@@ -599,6 +599,8 @@ func Test_Manager_runWithRestart(t *testing.T) {
 		name string
 		// cancelBeforeStart indicates whether to cancel before start.
 		cancelBeforeStart bool
+		// startError is the error to return from start.
+		startError error
 		// exitCode is the exit code of the process.
 		exitCode int
 		// expectedRestarts is the expected number of restarts.
@@ -607,12 +609,21 @@ func Test_Manager_runWithRestart(t *testing.T) {
 		{
 			name:              "exits_on_cancelled_context",
 			cancelBeforeStart: true,
+			startError:        nil,
 			exitCode:          0,
 			expectedRestarts:  0,
 		},
 		{
 			name:              "exits_on_successful_exit_with_never_policy",
 			cancelBeforeStart: false,
+			startError:        nil,
+			exitCode:          0,
+			expectedRestarts:  0,
+		},
+		{
+			name:              "exits_when_start_fails_with_never_policy",
+			cancelBeforeStart: false,
+			startError:        domain.ErrEmptyCommand,
 			exitCode:          0,
 			expectedRestarts:  0,
 		},
@@ -629,6 +640,11 @@ func Test_Manager_runWithRestart(t *testing.T) {
 
 			executor := &testExecutor{
 				startFunc: func(ctx context.Context, spec domain.Spec) (int, <-chan domain.ExitResult, error) {
+					// Check if start should fail.
+					if tt.startError != nil {
+						// Return error on failure.
+						return 0, nil, tt.startError
+					}
 					// Return success with exit channel.
 					return 1234, exitCh, nil
 				},
@@ -773,6 +789,484 @@ func Test_Manager_waitForProcessOrShutdown(t *testing.T) {
 			result := mgr.waitForProcessOrShutdown()
 
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Test_Manager_Uptime_when_running tests Uptime when process is running.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_Uptime_when_running(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// state is the process state.
+		state domain.State
+		// expectNonZero indicates if uptime should be non-zero.
+		expectNonZero bool
+	}{
+		{
+			name:          "returns_nonzero_when_running",
+			state:         domain.StateRunning,
+			expectNonZero: true,
+		},
+		{
+			name:          "returns_zero_when_stopped",
+			state:         domain.StateStopped,
+			expectNonZero: false,
+		},
+		{
+			name:          "returns_zero_when_failed",
+			state:         domain.StateFailed,
+			expectNonZero: false,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			executor := &testExecutor{}
+
+			mgr := NewManager(cfg, executor)
+			mgr.state = tt.state
+			mgr.startTime = time.Now().Add(-1 * time.Second)
+
+			uptime := mgr.Uptime()
+
+			// Check uptime based on expected result.
+			if tt.expectNonZero {
+				assert.Greater(t, uptime, int64(0))
+			} else {
+				assert.Equal(t, int64(0), uptime)
+			}
+		})
+	}
+}
+
+// Test_Manager_tryStartProcess_with_restart tests tryStartProcess with restart policy.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_tryStartProcess_with_restart(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// startError is the error to return from start.
+		startError error
+		// restartPolicy is the restart policy to use.
+		restartPolicy service.RestartPolicy
+		// maxRetries is the maximum retries allowed.
+		maxRetries int
+		// cancelDuringWait indicates whether to cancel during wait.
+		cancelDuringWait bool
+		// expected is the expected return value.
+		expected bool
+	}{
+		{
+			name:          "returns_true_on_error_with_always_policy_and_restart",
+			startError:    domain.ErrEmptyCommand,
+			restartPolicy: service.RestartAlways,
+			maxRetries:    3,
+			expected:      true,
+		},
+		{
+			name:             "returns_false_on_error_when_cancelled_during_wait",
+			startError:       domain.ErrEmptyCommand,
+			restartPolicy:    service.RestartAlways,
+			maxRetries:       3,
+			cancelDuringWait: true,
+			expected:         false,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			cfg.Restart.Policy = tt.restartPolicy
+			cfg.Restart.MaxRetries = tt.maxRetries
+			cfg.Restart.Delay = shared.FromTimeDuration(10 * time.Millisecond)
+
+			executor := &testExecutor{
+				startFunc: func(ctx context.Context, spec domain.Spec) (int, <-chan domain.ExitResult, error) {
+					// Return error on failure.
+					return 0, nil, tt.startError
+				},
+			}
+
+			mgr := NewManager(cfg, executor)
+			mgr.ctx, mgr.cancel = context.WithCancel(context.Background())
+
+			// Cancel during wait if requested.
+			// The goroutine terminates after calling cancel().
+			if tt.cancelDuringWait {
+				go func() {
+					time.Sleep(5 * time.Millisecond)
+					mgr.cancel()
+				}()
+			}
+
+			result := mgr.tryStartProcess()
+
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Test_Manager_handleProcessExit_with_restart tests handleProcessExit with restart.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_handleProcessExit_with_restart(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// exitCode is the exit code to test.
+		exitCode int
+		// restartPolicy is the restart policy.
+		restartPolicy service.RestartPolicy
+		// cancelDuringWait indicates whether to cancel during wait.
+		cancelDuringWait bool
+		// expected is the expected return value.
+		expected bool
+	}{
+		{
+			name:          "continues_restart_loop_on_failure_with_always_policy",
+			exitCode:      1,
+			restartPolicy: service.RestartAlways,
+			expected:      false,
+		},
+		{
+			name:          "continues_restart_loop_on_success_with_always_policy",
+			exitCode:      0,
+			restartPolicy: service.RestartAlways,
+			expected:      false,
+		},
+		{
+			name:             "stops_when_cancelled_during_restart_wait",
+			exitCode:         1,
+			restartPolicy:    service.RestartAlways,
+			cancelDuringWait: true,
+			expected:         true,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			cfg.Restart.Policy = tt.restartPolicy
+			cfg.Restart.MaxRetries = 3
+			cfg.Restart.Delay = shared.FromTimeDuration(10 * time.Millisecond)
+			executor := &testExecutor{}
+
+			mgr := NewManager(cfg, executor)
+			mgr.ctx, mgr.cancel = context.WithCancel(context.Background())
+			mgr.pid = 1234
+
+			// Cancel during wait if requested.
+			// The goroutine terminates after calling cancel().
+			if tt.cancelDuringWait {
+				go func() {
+					time.Sleep(5 * time.Millisecond)
+					mgr.cancel()
+				}()
+			}
+
+			result := domain.ExitResult{Code: tt.exitCode}
+			shouldStop := mgr.handleProcessExit(result)
+
+			assert.Equal(t, tt.expected, shouldStop)
+		})
+	}
+}
+
+// Test_Manager_Stop_with_running_process tests Stop with a running process.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_Stop_with_running_process(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// pid is the process ID.
+		pid int
+		// stopErr is the error to return from stop.
+		stopErr error
+		// expectError indicates whether an error is expected.
+		expectError bool
+	}{
+		{
+			name:        "stops_running_process_successfully",
+			pid:         1234,
+			stopErr:     nil,
+			expectError: false,
+		},
+		{
+			name:        "returns_error_when_stop_fails",
+			pid:         1234,
+			stopErr:     domain.ErrProcessFailed,
+			expectError: true,
+		},
+		{
+			name:        "succeeds_when_pid_is_zero",
+			pid:         0,
+			stopErr:     nil,
+			expectError: false,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			executor := &testExecutor{
+				stopFunc: func(pid int, timeout time.Duration) error {
+					// Return the configured stop error.
+					return tt.stopErr
+				},
+			}
+
+			mgr := NewManager(cfg, executor)
+			mgr.ctx, mgr.cancel = context.WithCancel(context.Background())
+			mgr.running = true
+			mgr.pid = tt.pid
+
+			err := mgr.Stop()
+
+			// Check if error is expected.
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// Test_Manager_Reload_when_running tests Reload when process is running.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_Reload_when_running(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// pid is the process ID.
+		pid int
+		// signalErr is the error to return from signal.
+		signalErr error
+		// expectError indicates whether an error is expected.
+		expectError bool
+	}{
+		{
+			name:        "reloads_running_process_successfully",
+			pid:         1234,
+			signalErr:   nil,
+			expectError: false,
+		},
+		{
+			name:        "returns_error_when_signal_fails",
+			pid:         1234,
+			signalErr:   domain.ErrProcessFailed,
+			expectError: true,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			executor := &testExecutor{
+				signalFunc: func(pid int, sig os.Signal) error {
+					// Return the configured signal error.
+					return tt.signalErr
+				},
+			}
+
+			mgr := NewManager(cfg, executor)
+			mgr.pid = tt.pid
+
+			err := mgr.Reload()
+
+			// Check if error is expected.
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// Test_Manager_runWithRestart_with_process_exit tests runWithRestart with process exit.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_runWithRestart_with_process_exit(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// exitCode is the exit code of the process.
+		exitCode int
+		// restartPolicy is the restart policy.
+		restartPolicy service.RestartPolicy
+		// maxRetries is the maximum retries.
+		maxRetries int
+		// cancelAfterStart indicates whether to cancel after start.
+		cancelAfterStart bool
+	}{
+		{
+			name:             "exits_on_context_cancel_after_process_exit",
+			exitCode:         1,
+			restartPolicy:    service.RestartAlways,
+			maxRetries:       3,
+			cancelAfterStart: true,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			cfg.Restart.Policy = tt.restartPolicy
+			cfg.Restart.MaxRetries = tt.maxRetries
+			cfg.Restart.Delay = shared.FromTimeDuration(10 * time.Millisecond)
+
+			callCount := 0
+			executor := &testExecutor{
+				startFunc: func(ctx context.Context, spec domain.Spec) (int, <-chan domain.ExitResult, error) {
+					callCount++
+					exitCh := make(chan domain.ExitResult, 1)
+					exitCh <- domain.ExitResult{Code: tt.exitCode}
+					// Return success with exit channel.
+					return 1234, exitCh, nil
+				},
+			}
+
+			mgr := NewManager(cfg, executor)
+			mgr.ctx, mgr.cancel = context.WithCancel(context.Background())
+
+			// Cancel after short delay if requested.
+			// The goroutine terminates after calling cancel().
+			if tt.cancelAfterStart {
+				go func() {
+					time.Sleep(50 * time.Millisecond)
+					mgr.cancel()
+				}()
+			}
+
+			mgr.runWithRestart()
+
+			// Verify at least one start attempt was made.
+			assert.GreaterOrEqual(t, callCount, 1)
+		})
+	}
+}
+
+// Test_Manager_runWithRestart_shutdown_during_wait tests runWithRestart shutdown.
+// This test covers the case where waitForProcessOrShutdown returns true (shutdown).
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_runWithRestart_shutdown_during_wait(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+	}{
+		{
+			name: "exits_when_shutdown_during_wait_for_process",
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			cfg.Restart.Policy = service.RestartNever
+
+			// Create a blocking exit channel that never sends.
+			blockingExitCh := make(chan domain.ExitResult)
+
+			startCalled := false
+			executor := &testExecutor{
+				startFunc: func(ctx context.Context, spec domain.Spec) (int, <-chan domain.ExitResult, error) {
+					startCalled = true
+					// Return blocking exit channel - process never exits.
+					return 1234, blockingExitCh, nil
+				},
+				stopFunc: func(pid int, timeout time.Duration) error {
+					// Return nil for successful stop.
+					return nil
+				},
+			}
+
+			mgr := NewManager(cfg, executor)
+			mgr.ctx, mgr.cancel = context.WithCancel(context.Background())
+
+			// Cancel context shortly after start to trigger shutdown.
+			// The goroutine terminates after calling cancel().
+			go func() {
+				time.Sleep(20 * time.Millisecond)
+				mgr.cancel()
+			}()
+
+			mgr.runWithRestart()
+
+			// Verify start was called.
+			assert.True(t, startCalled)
+		})
+	}
+}
+
+// Test_Manager_sendEvent_channel_full tests sendEvent when channel is full.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_sendEvent_channel_full(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// fillChannel indicates whether to fill the channel first.
+		fillChannel bool
+	}{
+		{
+			name:        "drops_event_when_channel_full",
+			fillChannel: true,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			executor := &testExecutor{}
+
+			mgr := NewManager(cfg, executor)
+
+			// Fill the channel if requested.
+			if tt.fillChannel {
+				// Fill the channel to capacity.
+				for range eventBufferSize {
+					mgr.events <- domain.Event{}
+				}
+			}
+
+			// This should not block even when channel is full.
+			mgr.sendEvent(domain.EventStarted, nil)
+
+			// Verify channel size hasn't changed.
+			assert.Len(t, mgr.events, eventBufferSize)
 		})
 	}
 }

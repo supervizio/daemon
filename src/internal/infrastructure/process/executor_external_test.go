@@ -44,6 +44,32 @@ func TestNewUnixExecutor(t *testing.T) {
 	}
 }
 
+// TestNewUnixExecutorWithKernel tests the NewUnixExecutorWithKernel constructor.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestNewUnixExecutorWithKernel(t *testing.T) {
+	// Define test cases for NewUnixExecutorWithKernel.
+	tests := []struct {
+		name string
+	}{
+		{name: "returns non-nil executor with custom kernel"},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			executor := process.NewUnixExecutorWithKernel(nil)
+			// Verify executor is not nil.
+			assert.NotNil(t, executor, "NewUnixExecutorWithKernel should return a non-nil instance")
+		})
+	}
+}
+
 // TestUnixExecutor_Start tests the Start method with valid commands.
 //
 // Params:
@@ -441,6 +467,313 @@ func TestUnixExecutor_Start_NonZeroExit(t *testing.T) {
 			result := <-wait
 			// Verify exit code matches expected.
 			assert.Equal(t, tt.expectedCode, result.Code)
+		})
+	}
+}
+
+// TestUnixExecutor_Start_WithStderr tests Start with stderr capture.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestUnixExecutor_Start_WithStderr(t *testing.T) {
+	// Define test cases for stderr capture.
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// command is the shell command producing stderr.
+		command string
+		// args are command arguments.
+		args []string
+		// expected is the expected stderr output.
+		expected string
+	}{
+		{
+			name:     "captures stderr",
+			command:  "sh",
+			args:     []string{"-c", "echo error >&2"},
+			expected: "error\n",
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			executor := process.NewUnixExecutor()
+			ctx := context.Background()
+
+			var stderr bytes.Buffer
+			spec := domain.Spec{
+				Command: tt.command,
+				Args:    tt.args,
+				Stderr:  &stderr,
+			}
+
+			pid, wait, err := executor.Start(ctx, spec)
+
+			// Verify no error.
+			require.NoError(t, err)
+			// Verify PID is positive.
+			assert.Greater(t, pid, 0)
+
+			// Wait for process to complete.
+			<-wait
+
+			// Verify captured stderr output.
+			assert.Equal(t, tt.expected, stderr.String())
+		})
+	}
+}
+
+// TestUnixExecutor_Start_WithBothOutputs tests Start with both stdout and stderr capture.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestUnixExecutor_Start_WithBothOutputs(t *testing.T) {
+	// Define test cases for combined output capture.
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// expectedOut is the expected stdout.
+		expectedOut string
+		// expectedErr is the expected stderr.
+		expectedErr string
+	}{
+		{
+			name:        "captures both streams",
+			expectedOut: "stdout\n",
+			expectedErr: "stderr\n",
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			executor := process.NewUnixExecutor()
+			ctx := context.Background()
+
+			var stdout, stderr bytes.Buffer
+			spec := domain.Spec{
+				Command: "sh",
+				Args:    []string{"-c", "echo stdout && echo stderr >&2"},
+				Stdout:  &stdout,
+				Stderr:  &stderr,
+			}
+
+			pid, wait, err := executor.Start(ctx, spec)
+
+			// Verify no error.
+			require.NoError(t, err)
+			// Verify PID is positive.
+			assert.Greater(t, pid, 0)
+
+			// Wait for process to complete.
+			<-wait
+
+			// Verify captured stdout.
+			assert.Equal(t, tt.expectedOut, stdout.String())
+			// Verify captured stderr.
+			assert.Equal(t, tt.expectedErr, stderr.String())
+		})
+	}
+}
+
+// TestUnixExecutor_Start_WithCredentialsError tests Start with invalid credentials.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestUnixExecutor_Start_WithCredentialsError(t *testing.T) {
+	// Define test cases for credential errors.
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// user is the invalid user.
+		user string
+		// group is the invalid group.
+		group string
+	}{
+		{
+			name: "invalid user returns error",
+			user: "nonexistent_user_xyz123",
+		},
+		{
+			name:  "invalid group returns error",
+			group: "nonexistent_group_xyz123",
+		},
+		{
+			name:  "both invalid returns error",
+			user:  "nonexistent_user_xyz123",
+			group: "nonexistent_group_xyz123",
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			executor := process.NewUnixExecutor()
+			ctx := context.Background()
+
+			spec := domain.Spec{
+				Command: "echo hello",
+				User:    tt.user,
+				Group:   tt.group,
+			}
+
+			pid, wait, err := executor.Start(ctx, spec)
+
+			// Verify error is returned.
+			assert.Error(t, err)
+			// Verify PID is zero.
+			assert.Equal(t, 0, pid)
+			// Verify wait channel is nil.
+			assert.Nil(t, wait)
+		})
+	}
+}
+
+// TestUnixExecutor_Stop_Timeout tests Stop with timeout forcing kill.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestUnixExecutor_Stop_Timeout(t *testing.T) {
+	// Define test cases for stop timeout.
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// timeout is the stop timeout.
+		timeout time.Duration
+	}{
+		{
+			name:    "kills process after timeout",
+			timeout: 100 * time.Millisecond,
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			executor := process.NewUnixExecutor()
+			ctx := context.Background()
+
+			// Start a process that ignores SIGTERM (traps it and continues).
+			spec := domain.Spec{
+				Command: "sh",
+				Args:    []string{"-c", "trap '' TERM; sleep 60"},
+			}
+
+			pid, _, err := executor.Start(ctx, spec)
+			require.NoError(t, err)
+
+			// Give process time to start and set up trap.
+			time.Sleep(100 * time.Millisecond)
+
+			// Stop the process with short timeout (should force kill).
+			err = executor.Stop(pid, tt.timeout)
+			// Verify stop completed without error.
+			assert.NoError(t, err)
+		})
+	}
+}
+
+// TestUnixExecutor_Stop_AlreadyExited tests Stop when process has already exited.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestUnixExecutor_Stop_AlreadyExited(t *testing.T) {
+	// Define test cases for already exited process.
+	tests := []struct {
+		name string
+	}{
+		{name: "returns error for already exited process"},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			executor := process.NewUnixExecutor()
+			ctx := context.Background()
+
+			// Start a fast-exiting process.
+			spec := domain.Spec{
+				Command: "true",
+			}
+
+			pid, wait, err := executor.Start(ctx, spec)
+			require.NoError(t, err)
+
+			// Wait for process to complete.
+			<-wait
+
+			// Give OS time to clean up process.
+			time.Sleep(50 * time.Millisecond)
+
+			// Try to stop already-exited process.
+			err = executor.Stop(pid, time.Second)
+			// Verify error is returned (process no longer exists).
+			assert.Error(t, err)
+		})
+	}
+}
+
+// TestUnixExecutor_Signal_AlreadyExited tests Signal when process has already exited.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestUnixExecutor_Signal_AlreadyExited(t *testing.T) {
+	// Define test cases for signaling exited process.
+	tests := []struct {
+		name string
+	}{
+		{name: "returns error for already exited process"},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			executor := process.NewUnixExecutor()
+			ctx := context.Background()
+
+			// Start a fast-exiting process.
+			spec := domain.Spec{
+				Command: "true",
+			}
+
+			pid, wait, err := executor.Start(ctx, spec)
+			require.NoError(t, err)
+
+			// Wait for process to complete.
+			<-wait
+
+			// Give OS time to clean up process.
+			time.Sleep(50 * time.Millisecond)
+
+			// Try to signal already-exited process.
+			err = executor.Signal(pid, syscall.SIGTERM)
+			// Verify error is returned (process no longer exists).
+			assert.Error(t, err)
 		})
 	}
 }

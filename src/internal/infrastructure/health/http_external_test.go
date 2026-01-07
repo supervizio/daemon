@@ -165,6 +165,86 @@ func TestNewHTTPChecker(t *testing.T) {
 	}
 }
 
+// TestNewHTTPChecker_DefaultMethod_UsedInRequest verifies that when Method is empty,
+// the default GET method is actually used when making requests.
+func TestNewHTTPChecker_DefaultMethod_UsedInRequest(t *testing.T) {
+	var receivedMethod string
+
+	// Create test server that records the HTTP method received.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedMethod = r.Method
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := &service.HealthCheckConfig{
+		Name:       "test-default-method-used",
+		Endpoint:   server.URL,
+		Method:     "", // Empty method should default to GET.
+		StatusCode: 200,
+		Timeout:    shared.Seconds(5),
+	}
+
+	checker := health.NewHTTPChecker(cfg)
+	result := checker.Check(context.Background())
+
+	// Verify the request was healthy.
+	assert.Equal(t, domain.StatusHealthy, result.Status)
+	// Verify GET method was used.
+	assert.Equal(t, http.MethodGet, receivedMethod)
+}
+
+// TestNewHTTPChecker_DefaultStatusCode_UsedInCheck verifies that when StatusCode is 0,
+// the default 200 status code is expected.
+func TestNewHTTPChecker_DefaultStatusCode_UsedInCheck(t *testing.T) {
+	// Create test server that returns 200 OK.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := &service.HealthCheckConfig{
+		Name:       "test-default-status-used",
+		Endpoint:   server.URL,
+		Method:     "GET",
+		StatusCode: 0, // Zero status code should default to 200.
+		Timeout:    shared.Seconds(5),
+	}
+
+	checker := health.NewHTTPChecker(cfg)
+	result := checker.Check(context.Background())
+
+	// Verify the request was healthy (200 expected and received).
+	assert.Equal(t, domain.StatusHealthy, result.Status)
+	assert.Contains(t, result.Message, "HTTP 200")
+}
+
+// TestHTTPChecker_Check_RedirectNotFollowed verifies that redirects are not followed
+// and the redirect status code is returned instead.
+func TestHTTPChecker_Check_RedirectNotFollowed(t *testing.T) {
+	// Create test server that returns a redirect.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Location", "/redirected")
+		w.WriteHeader(http.StatusMovedPermanently)
+	}))
+	defer server.Close()
+
+	cfg := &service.HealthCheckConfig{
+		Name:       "test-redirect",
+		Endpoint:   server.URL,
+		Method:     "GET",
+		StatusCode: http.StatusMovedPermanently, // Expect the redirect status code.
+		Timeout:    shared.Seconds(5),
+	}
+
+	checker := health.NewHTTPChecker(cfg)
+	result := checker.Check(context.Background())
+
+	// Verify the redirect status is received without following.
+	assert.Equal(t, domain.StatusHealthy, result.Status)
+	assert.Contains(t, result.Message, "HTTP 301")
+}
+
 // TestHTTPChecker_Check tests the Check method with various scenarios.
 func TestHTTPChecker_Check(t *testing.T) {
 	// Create test servers for different scenarios.

@@ -68,12 +68,9 @@ func (m *UnixSignalManager) Stop(ch chan<- os.Signal) {
 // Returns:
 //   - error: an error if the signal could not be sent
 func (m *UnixSignalManager) Forward(pid int, sig os.Signal) error {
-	process, err := os.FindProcess(pid)
-	// Check if the process could not be found.
-	if err != nil {
-		// Return the error from FindProcess.
-		return err
-	}
+	// On Unix, os.FindProcess always succeeds - it only creates a handle.
+	// The actual existence check happens when Signal is called.
+	process, _ := os.FindProcess(pid)
 	// Return the result of sending the signal to the process.
 	return process.Signal(sig)
 }
