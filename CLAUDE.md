@@ -34,7 +34,7 @@ PID1-capable process supervisor in Go for containers and Unix systems.
 
 ## Tech Stack
 
-- **Language**: Go 1.25
+- **Language**: Go 1.25.5
 - **Dependencies**: gopkg.in/yaml.v3, testify
 - **Architecture**: Hexagonal (ports & adapters)
 - **Linting**: golangci-lint, ktn-linter
@@ -77,5 +77,6 @@ ktn-linter lint ./...         # KTN convention linting
 ## MCP-First
 
 Always use MCP tools before CLI:
+
 - `mcp__github__*` before `gh`
 - `mcp__codacy__*` before `codacy-cli`
