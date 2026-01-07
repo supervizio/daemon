@@ -1,0 +1,238 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+    paths-ignore:
+      - '**/*_test.go'
+      - '**/testdata/**'
+      - '*.md'
+      - '.github/**'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.25.5'
+  BINARY_NAME: 'daemon'
+
+jobs:
+  # =============================================================================
+  # Build binaries for all platforms
+  # =============================================================================
+  build:
+    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            artifact: daemon-linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            artifact: daemon-linux-arm64
+          # macOS
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            artifact: daemon-darwin-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            artifact: daemon-darwin-arm64
+          # FreeBSD
+          - os: ubuntu-latest
+            goos: freebsd
+            goarch: amd64
+            artifact: daemon-freebsd-amd64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            echo "Latest tag: $LATEST_TAG"
+            VERSION_NUM=${LATEST_TAG#v}
+            MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+            MINOR=$(echo $VERSION_NUM | cut -d. -f2)
+            PATCH=$(echo $VERSION_NUM | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+            echo "New version: $VERSION"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version_no_v=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        working-directory: src
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -buildvcs=false \
+            -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }}" \
+            -o ../${{ matrix.artifact }} \
+            ./cmd/daemon
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          retention-days: 1
+
+  # =============================================================================
+  # Create GitHub Release
+  # =============================================================================
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            VERSION_NUM=${LATEST_TAG#v}
+            MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+            MINOR=$(echo $VERSION_NUM | cut -d. -f2)
+            PATCH=$(echo $VERSION_NUM | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          for dir in */; do
+            cd "$dir"
+            for file in *; do
+              sha256sum "$file" >> ../checksums.txt
+            done
+            cd ..
+          done
+          cat checksums.txt
+
+      - name: Generate release notes
+        run: |
+          cat > release-notes.md << 'EOF'
+          ## Daemon ${{ steps.version.outputs.version }}
+
+          PID1-capable process supervisor for containers and Linux/BSD systems.
+
+          ### Installation
+
+          #### Linux (AMD64)
+          ```bash
+          curl -Lo daemon https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/daemon-linux-amd64
+          chmod +x daemon
+          sudo mv daemon /usr/local/bin/
+          ```
+
+          #### Linux (ARM64)
+          ```bash
+          curl -Lo daemon https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/daemon-linux-arm64
+          chmod +x daemon
+          sudo mv daemon /usr/local/bin/
+          ```
+
+          #### macOS (Intel)
+          ```bash
+          curl -Lo daemon https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/daemon-darwin-amd64
+          chmod +x daemon
+          sudo mv daemon /usr/local/bin/
+          ```
+
+          #### macOS (Apple Silicon)
+          ```bash
+          curl -Lo daemon https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/daemon-darwin-arm64
+          chmod +x daemon
+          sudo mv daemon /usr/local/bin/
+          ```
+
+          #### FreeBSD (AMD64)
+          ```bash
+          curl -Lo daemon https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/daemon-freebsd-amd64
+          chmod +x daemon
+          sudo mv daemon /usr/local/bin/
+          ```
+
+          ### Checksums (SHA256)
+          ```
+          $(cat artifacts/checksums.txt)
+          ```
+
+          ### Changelog
+          See commits since last release for detailed changes.
+          EOF
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f -name 'daemon-*' -exec mv {} release/ \;
+          mv artifacts/checksums.txt release/
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Daemon ${{ steps.version.outputs.version }}
+          tag_name: ${{ steps.version.outputs.version }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          files: release/*
+          token: ${{ secrets.GITHUB_TOKEN }}
