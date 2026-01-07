@@ -8,14 +8,15 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: 'Version bump type'
-        required: true
+        description: 'Version bump type (auto = detect from commits)'
+        required: false
         type: choice
         options:
+          - auto
           - patch
           - minor
           - major
-        default: patch
+        default: auto
 
 concurrency:
   group: release
@@ -47,8 +48,9 @@ jobs:
             # Tag push: use the tag directly
             VERSION="${{ github.ref_name }}"
             IS_NEW_TAG="false"
+            BUMP_TYPE="tag"
           else
-            # workflow_dispatch: bump version
+            # Get last tag
             LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
             VERSION_NUM=${LATEST_TAG#v}
 
@@ -57,7 +59,42 @@ jobs:
             MINOR=${MINOR:-0}
             PATCH=${PATCH:-0}
 
-            case "${{ inputs.bump }}" in
+            BUMP_TYPE="${{ inputs.bump }}"
+
+            # Auto-detect from conventional commits
+            if [[ "$BUMP_TYPE" == "auto" || -z "$BUMP_TYPE" ]]; then
+              echo "Analyzing commits since $LATEST_TAG..."
+
+              # Get commits since last tag
+              if [[ "$LATEST_TAG" == "v0.0.0" ]]; then
+                COMMITS=$(git log --oneline --format="%s")
+              else
+                COMMITS=$(git log "${LATEST_TAG}..HEAD" --oneline --format="%s")
+              fi
+
+              echo "Commits found:"
+              echo "$COMMITS" | head -20
+
+              # Detect bump type from conventional commits
+              # Priority: BREAKING > feat > fix
+              if echo "$COMMITS" | grep -qiE '^[a-z]+(\(.+\))?!:|BREAKING CHANGE:'; then
+                BUMP_TYPE="major"
+                echo "Detected: BREAKING CHANGE → major"
+              elif echo "$COMMITS" | grep -qiE '^feat(\(.+\))?:'; then
+                BUMP_TYPE="minor"
+                echo "Detected: feat commits → minor"
+              elif echo "$COMMITS" | grep -qiE '^fix(\(.+\))?:'; then
+                BUMP_TYPE="patch"
+                echo "Detected: fix commits → patch"
+              else
+                # Default to patch for non-conventional commits
+                BUMP_TYPE="patch"
+                echo "No conventional commits detected → patch (default)"
+              fi
+            fi
+
+            # Apply bump
+            case "$BUMP_TYPE" in
               major)
                 MAJOR=$((MAJOR + 1))
                 MINOR=0
@@ -78,7 +115,12 @@ jobs:
 
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "is_new_tag=${IS_NEW_TAG}" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION (new_tag: $IS_NEW_TAG)"
+          echo "bump_type=${BUMP_TYPE}" >> $GITHUB_OUTPUT
+          echo ""
+          echo "=== Version Summary ==="
+          echo "Previous: $LATEST_TAG"
+          echo "Bump: $BUMP_TYPE"
+          echo "New: $VERSION"
 
   # =============================================================================
   # Build all platforms (ubuntu-latest)
