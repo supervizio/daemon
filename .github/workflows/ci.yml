@@ -67,40 +67,94 @@ jobs:
           fail_ci_if_error: false
 
   # =============================================================================
-  # Build validation (multi-platform)
+  # Native builds (use native runners for speed and validation)
   # =============================================================================
-  build:
-    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
+  build-native:
+    name: Build Native (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux native
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          # macOS native
+          - runner: macos-13
+            goos: darwin
+            goarch: amd64
+          - runner: macos-latest
+            goos: darwin
+            goarch: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build
+        working-directory: src
+        env:
+          CGO_ENABLED: 0
+        run: go build -ldflags="-s -w" -o /dev/null ./cmd/daemon
+
+  # =============================================================================
+  # Cross-compiled builds (Linux, BSD variants, other architectures)
+  # =============================================================================
+  build-cross:
+    name: Build Cross (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        goos: [linux, darwin, freebsd, openbsd, netbsd, dragonfly]
-        goarch: [amd64, arm64, arm, 386, riscv64]
-        exclude:
-          # Darwin only supports amd64 and arm64
-          - goos: darwin
+        include:
+          # Linux additional architectures
+          - goos: linux
             goarch: arm
-          - goos: darwin
+          - goos: linux
             goarch: 386
-          - goos: darwin
+          - goos: linux
             goarch: riscv64
-          # DragonFly only supports amd64
-          - goos: dragonfly
+          # FreeBSD (all architectures)
+          - goos: freebsd
+            goarch: amd64
+          - goos: freebsd
             goarch: arm64
-          - goos: dragonfly
+          - goos: freebsd
             goarch: arm
-          - goos: dragonfly
+          - goos: freebsd
             goarch: 386
-          - goos: dragonfly
+          - goos: freebsd
             goarch: riscv64
-          # OpenBSD doesn't support riscv64
+          # OpenBSD
           - goos: openbsd
-            goarch: riscv64
-          # NetBSD doesn't support riscv64
+            goarch: amd64
+          - goos: openbsd
+            goarch: arm64
+          - goos: openbsd
+            goarch: arm
+          - goos: openbsd
+            goarch: 386
+          # NetBSD
           - goos: netbsd
-            goarch: riscv64
-          # FreeBSD riscv64 is experimental, keep it for now
+            goarch: amd64
+          - goos: netbsd
+            goarch: arm64
+          - goos: netbsd
+            goarch: arm
+          - goos: netbsd
+            goarch: 386
+          # DragonFlyBSD
+          - goos: dragonfly
+            goarch: amd64
 
     steps:
       - name: Checkout code
@@ -117,5 +171,4 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
-        run: |
-          go build -ldflags="-s -w" -o /dev/null ./cmd/daemon
+        run: go build -ldflags="-s -w" -o /dev/null ./cmd/daemon
