@@ -67,94 +67,42 @@ jobs:
           fail_ci_if_error: false
 
   # =============================================================================
-  # Native builds (use native runners for speed and validation)
+  # Build validation (all platforms)
   # =============================================================================
-  build-native:
-    name: Build Native (${{ matrix.runner }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Linux native
-          - runner: ubuntu-latest
-            goos: linux
-            goarch: amd64
-          - runner: ubuntu-24.04-arm
-            goos: linux
-            goarch: arm64
-          # macOS native
-          - runner: macos-13
-            goos: darwin
-            goarch: amd64
-          - runner: macos-latest
-            goos: darwin
-            goarch: arm64
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Build
-        working-directory: src
-        env:
-          CGO_ENABLED: 0
-        run: go build -ldflags="-s -w" -o /dev/null ./cmd/daemon
-
-  # =============================================================================
-  # Cross-compiled builds (Linux, BSD variants, other architectures)
-  # =============================================================================
-  build-cross:
-    name: Build Cross (${{ matrix.goos }}/${{ matrix.goarch }})
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Linux additional architectures
-          - goos: linux
-            goarch: arm
-          - goos: linux
-            goarch: 386
-          - goos: linux
-            goarch: riscv64
-          # FreeBSD (all architectures)
-          - goos: freebsd
-            goarch: amd64
-          - goos: freebsd
-            goarch: arm64
-          - goos: freebsd
-            goarch: arm
-          - goos: freebsd
-            goarch: 386
-          - goos: freebsd
-            goarch: riscv64
+          # Linux
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: linux, goarch: arm }
+          - { goos: linux, goarch: 386 }
+          - { goos: linux, goarch: riscv64 }
+          # macOS
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+          # FreeBSD
+          - { goos: freebsd, goarch: amd64 }
+          - { goos: freebsd, goarch: arm64 }
+          - { goos: freebsd, goarch: arm }
+          - { goos: freebsd, goarch: 386 }
+          - { goos: freebsd, goarch: riscv64 }
           # OpenBSD
-          - goos: openbsd
-            goarch: amd64
-          - goos: openbsd
-            goarch: arm64
-          - goos: openbsd
-            goarch: arm
-          - goos: openbsd
-            goarch: 386
+          - { goos: openbsd, goarch: amd64 }
+          - { goos: openbsd, goarch: arm64 }
+          - { goos: openbsd, goarch: arm }
+          - { goos: openbsd, goarch: 386 }
           # NetBSD
-          - goos: netbsd
-            goarch: amd64
-          - goos: netbsd
-            goarch: arm64
-          - goos: netbsd
-            goarch: arm
-          - goos: netbsd
-            goarch: 386
+          - { goos: netbsd, goarch: amd64 }
+          - { goos: netbsd, goarch: arm64 }
+          - { goos: netbsd, goarch: arm }
+          - { goos: netbsd, goarch: 386 }
           # DragonFlyBSD
-          - goos: dragonfly
-            goarch: amd64
+          - { goos: dragonfly, goarch: amd64 }
 
     steps:
       - name: Checkout code

@@ -2,22 +2,23 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'src/cmd/**'
-      - 'src/internal/**'
-      - 'src/go.mod'
-      - 'src/go.sum'
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'      # v1.0.0
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'    # v1.0.0-rc.1, v1.0.0-beta.1
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to release (e.g., v1.0.0)'
+      bump:
+        description: 'Version bump type'
         required: true
-        type: string
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 env:
@@ -25,92 +26,64 @@ env:
 
 jobs:
   # =============================================================================
-  # Determine version (single job to avoid race conditions)
+  # Determine version
   # =============================================================================
   version:
-    name: Determine Version
+    name: Version
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      is_new_tag: ${{ steps.version.outputs.is_new_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Get version
+      - name: Calculate version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.version }}"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # Tag push: use the tag directly
+            VERSION="${{ github.ref_name }}"
+            IS_NEW_TAG="false"
           else
+            # workflow_dispatch: bump version
             LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
             VERSION_NUM=${LATEST_TAG#v}
-            MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
-            MINOR=$(echo $VERSION_NUM | cut -d. -f2)
-            PATCH=$(echo $VERSION_NUM | cut -d. -f3)
-            PATCH=$((PATCH + 1))
+
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION_NUM%%-*}"
+            MAJOR=${MAJOR:-0}
+            MINOR=${MINOR:-0}
+            PATCH=${PATCH:-0}
+
+            case "${{ inputs.bump }}" in
+              major)
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              minor)
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              patch)
+                PATCH=$((PATCH + 1))
+                ;;
+            esac
+
             VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+            IS_NEW_TAG="true"
           fi
+
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
+          echo "is_new_tag=${IS_NEW_TAG}" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION (new_tag: $IS_NEW_TAG)"
 
   # =============================================================================
-  # Native builds (fast, on native hardware)
+  # Build all platforms (ubuntu-latest)
   # =============================================================================
-  build-native:
-    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
-    needs: version
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Linux native
-          - runner: ubuntu-latest
-            goos: linux
-            goarch: amd64
-          - runner: ubuntu-24.04-arm
-            goos: linux
-            goarch: arm64
-          # macOS native
-          - runner: macos-13
-            goos: darwin
-            goarch: amd64
-          - runner: macos-latest
-            goos: darwin
-            goarch: arm64
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Build binary
-        working-directory: src
-        env:
-          CGO_ENABLED: 0
-        run: |
-          go build -buildvcs=false \
-            -ldflags="-s -w -X main.version=${{ needs.version.outputs.version }}" \
-            -o ../daemon-${{ matrix.goos }}-${{ matrix.goarch }} \
-            ./cmd/daemon
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: daemon-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: daemon-${{ matrix.goos }}-${{ matrix.goarch }}
-          retention-days: 1
-
-  # =============================================================================
-  # Cross-compiled builds (parallel on ubuntu-latest)
-  # =============================================================================
-  build-cross:
+  build:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     needs: version
     runs-on: ubuntu-latest
@@ -118,45 +91,33 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux additional architectures
-          - goos: linux
-            goarch: arm
-          - goos: linux
-            goarch: 386
-          - goos: linux
-            goarch: riscv64
+          # Linux
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: linux, goarch: arm }
+          - { goos: linux, goarch: 386 }
+          - { goos: linux, goarch: riscv64 }
+          # macOS
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
           # FreeBSD
-          - goos: freebsd
-            goarch: amd64
-          - goos: freebsd
-            goarch: arm64
-          - goos: freebsd
-            goarch: arm
-          - goos: freebsd
-            goarch: 386
-          - goos: freebsd
-            goarch: riscv64
+          - { goos: freebsd, goarch: amd64 }
+          - { goos: freebsd, goarch: arm64 }
+          - { goos: freebsd, goarch: arm }
+          - { goos: freebsd, goarch: 386 }
+          - { goos: freebsd, goarch: riscv64 }
           # OpenBSD
-          - goos: openbsd
-            goarch: amd64
-          - goos: openbsd
-            goarch: arm64
-          - goos: openbsd
-            goarch: arm
-          - goos: openbsd
-            goarch: 386
+          - { goos: openbsd, goarch: amd64 }
+          - { goos: openbsd, goarch: arm64 }
+          - { goos: openbsd, goarch: arm }
+          - { goos: openbsd, goarch: 386 }
           # NetBSD
-          - goos: netbsd
-            goarch: amd64
-          - goos: netbsd
-            goarch: arm64
-          - goos: netbsd
-            goarch: arm
-          - goos: netbsd
-            goarch: 386
+          - { goos: netbsd, goarch: amd64 }
+          - { goos: netbsd, goarch: arm64 }
+          - { goos: netbsd, goarch: arm }
+          - { goos: netbsd, goarch: 386 }
           # DragonFlyBSD
-          - goos: dragonfly
-            goarch: amd64
+          - { goos: dragonfly, goarch: amd64 }
 
     steps:
       - name: Checkout code
@@ -187,11 +148,11 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # Create GitHub Release
+  # Create Release
   # =============================================================================
   release:
-    name: Create Release
-    needs: [version, build-native, build-cross]
+    name: Release
+    needs: [version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -205,42 +166,30 @@ jobs:
         with:
           path: artifacts
 
-      - name: Prepare release assets
+      - name: Prepare release
         run: |
           mkdir -p release
-
-          # Flatten artifacts and generate checksums
           cd artifacts
           for dir in */; do
             for file in "$dir"*; do
-              if [ -f "$file" ]; then
-                filename=$(basename "$file")
-                mv "$file" ../release/
-                (cd ../release && sha256sum "$filename" >> checksums.txt)
-              fi
+              [ -f "$file" ] || continue
+              filename=$(basename "$file")
+              mv "$file" ../release/
+              (cd ../release && sha256sum "$filename" >> checksums.txt)
             done
           done
-
-          cd ../release
-          echo "=== Release assets ==="
-          ls -la
-          echo ""
-          echo "=== Checksums ==="
-          cat checksums.txt
+          echo "=== Checksums ===" && cat ../release/checksums.txt
 
       - name: Generate release notes
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          REPO="${{ github.repository }}"
-          BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
-
-          cat > release-notes.md << EOF
-          ## Daemon ${VERSION}
+          cat > release-notes.md << 'EOF'
+          ## Daemon ${{ needs.version.outputs.version }}
 
           PID1-capable process supervisor for containers and Unix systems.
 
-          ### Supported Platforms
+          ### Platforms
 
           | OS | amd64 | arm64 | arm | 386 | riscv64 |
           |----|:-----:|:-----:|:---:|:---:|:-------:|
@@ -251,30 +200,28 @@ jobs:
           | NetBSD | ✅ | ✅ | ✅ | ✅ | - |
           | DragonFlyBSD | ✅ | - | - | - | - |
 
-          ### Quick Install
+          ### Install
 
-          \`\`\`bash
-          # Auto-detect and install
-          OS=\$(uname -s | tr '[:upper:]' '[:lower:]')
-          ARCH=\$(uname -m)
-          case \$ARCH in
-            x86_64)  ARCH="amd64" ;;
-            aarch64) ARCH="arm64" ;;
-            armv7l)  ARCH="arm" ;;
-            i686)    ARCH="386" ;;
-          esac
-
-          curl -fsSL ${BASE_URL}/daemon-\${OS}-\${ARCH} -o daemon
-          chmod +x daemon
-          sudo mv daemon /usr/local/bin/
-          \`\`\`
+          ```bash
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/;s/armv7l/arm/;s/i686/386/')
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ needs.version.outputs.version }}/daemon-${OS}-${ARCH}" -o daemon
+          chmod +x daemon && sudo mv daemon /usr/local/bin/
+          ```
 
           ### Checksums (SHA256)
-
-          \`\`\`
-          $(cat release/checksums.txt)
-          \`\`\`
+          ```
           EOF
+          cat release/checksums.txt >> release-notes.md
+          echo '```' >> release-notes.md
+
+      - name: Create tag (if needed)
+        if: needs.version.outputs.is_new_tag == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ needs.version.outputs.version }}" -m "Release ${{ needs.version.outputs.version }}"
+          git push origin "${{ needs.version.outputs.version }}"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
