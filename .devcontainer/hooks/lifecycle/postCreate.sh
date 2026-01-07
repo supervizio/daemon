@@ -43,6 +43,18 @@ if [ -d /workspace/.git ]; then
     fi
 fi
 
+# ============================================================================
+# GPG Signing Configuration (conditional - only if key is available)
+# ============================================================================
+GPG_KEY_ID="C8ED18EE4E425956"
+if gpg --list-secret-keys "$GPG_KEY_ID" &>/dev/null; then
+    git config --global user.signingkey "$GPG_KEY_ID"
+    git config --global commit.gpgsign true
+    log_success "GPG signing enabled with key $GPG_KEY_ID"
+else
+    log_info "GPG key $GPG_KEY_ID not found - signing disabled"
+fi
+
 # Note: Tools (status-line, ktn-linter) are now baked into the Docker image
 # No longer need to update on each rebuild
 

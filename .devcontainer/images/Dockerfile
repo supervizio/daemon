@@ -190,12 +190,12 @@ RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     chmod +x ~/.local/bin/ktn-linter
 
 # =============================================================================
-# Git Configuration (Default user for commits + GPG signing)
+# Git Configuration (Default user for commits)
 # =============================================================================
+# Note: GPG signing is configured conditionally in postCreate.sh
+# (only if the signing key is available on the system)
 RUN git config --global user.name "Kodflow" && \
     git config --global user.email "133899878+kodflow@users.noreply.github.com" && \
-    git config --global user.signingkey C8ED18EE4E425956 && \
-    git config --global commit.gpgsign true && \
     git config --global init.defaultBranch main
 
 # =============================================================================
