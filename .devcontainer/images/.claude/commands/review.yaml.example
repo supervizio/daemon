@@ -1,0 +1,203 @@
+# .review.yaml - Configuration for /review AI Code Review Agent
+# Copy this file to your project root as `.review.yaml`
+#
+# Schema: https://example.com/review-schema.json
+# Docs: https://docs.example.com/review
+
+version: "1.0"
+language: "fr"  # fr | en | es | de
+
+# ═══════════════════════════════════════════════════════════════════
+# REVIEW SETTINGS
+# ═══════════════════════════════════════════════════════════════════
+reviews:
+  # Profile presets: chill, balanced, assertive, strict
+  profile: "balanced"
+
+  # Auto-approve settings (requires --approve flag)
+  auto_approve:
+    enabled: false
+    max_minor_issues: 5
+    require_tests: true
+    require_no_major: true
+
+  # Analysis scope
+  scope:
+    mode: "diff"  # diff | full | changed_files
+    include_dependents: true  # Check files that import modified files
+
+  # Agent persona
+  persona: "senior_mentor"  # senior_mentor | pragmatic | strict_reviewer
+
+# ═══════════════════════════════════════════════════════════════════
+# AXES D'ANALYSE
+# Enable/disable specific analysis axes
+# ═══════════════════════════════════════════════════════════════════
+axes:
+  security:      { enabled: true,  priority: 1 }
+  quality:       { enabled: true,  priority: 2 }
+  tests:         { enabled: true,  priority: 3 }
+  architecture:  { enabled: true,  priority: 4 }
+  performance:   { enabled: false, priority: 5 }
+  infrastructure: { enabled: true, priority: 6 }
+  maintainability: { enabled: false, priority: 7 }
+  documentation: { enabled: false, priority: 8 }
+  deployment:    { enabled: false, priority: 9 }
+  objectives:    { enabled: false, priority: 10 }
+
+# ═══════════════════════════════════════════════════════════════════
+# THRESHOLDS & QUALITY GATES
+# Define limits before issues are flagged
+# ═══════════════════════════════════════════════════════════════════
+thresholds:
+  complexity:
+    cyclomatic_max: 15      # NIST recommends ≤10, we allow ≤15
+    cognitive_max: 20       # SonarQube default
+    function_lines_max: 100 # Reasonable max for most languages
+    nesting_depth_max: 4    # Deeply nested = hard to read
+
+  coverage:
+    min_line_coverage: 80   # Industry standard
+    min_branch_coverage: 75
+    min_new_code_coverage: 90  # Stricter for new code
+
+  issues:
+    max_critical: 0   # Blocker - merge forbidden
+    max_major: 3      # Warning - should fix before merge
+    max_minor: 10     # Info - nice to have
+
+# ═══════════════════════════════════════════════════════════════════
+# OBJECTIFS PROJET (Contextual - for --objectives axis)
+# ═══════════════════════════════════════════════════════════════════
+objectives:
+  performance:
+    latency_p99_ms: 100
+    throughput_rps: 1000
+
+  reliability:
+    uptime_target: "99.9%"
+    error_rate_max: "0.1%"
+
+  tech_debt:
+    max_todos: 5
+    max_deprecated_apis: 0
+
+# ═══════════════════════════════════════════════════════════════════
+# TOOLS CONFIGURATION
+# Specify which linters/analyzers to simulate per language
+# ═══════════════════════════════════════════════════════════════════
+tools:
+  javascript:
+    linter: "biome"         # biome | eslint | oxlint
+    formatter: "biome"
+    security: "semgrep"
+
+  typescript:
+    linter: "biome"
+    type_checker: "tsc"
+    security: "semgrep"
+
+  python:
+    linter: "ruff"          # ruff | pylint | flake8
+    type_checker: "pyright" # pyright | mypy
+    security: "bandit"
+
+  go:
+    linter: "golangci-lint"
+    security: "gosec"
+
+  rust:
+    linter: "clippy"
+    security: "cargo-audit"
+
+  terraform:
+    linter: "tflint"
+    security: "checkov"     # checkov | trivy
+
+  docker:
+    linter: "hadolint"
+    security: "trivy"
+
+  # Universal tools (apply to all languages)
+  universal:
+    secrets: "gitleaks"     # gitleaks | trufflehog
+    semgrep:
+      enabled: true
+      rulesets:
+        - "p/default"
+        - "p/owasp-top-ten"
+
+# ═══════════════════════════════════════════════════════════════════
+# PATH FILTERS & OVERRIDES
+# Ignore or apply different rules to specific paths
+# ═══════════════════════════════════════════════════════════════════
+paths:
+  # Paths to completely ignore
+  ignore:
+    - "vendor/**"
+    - "node_modules/**"
+    - "*.min.js"
+    - "*.min.css"
+    - "*.generated.*"
+    - "**/__generated__/**"
+    - "**/dist/**"
+    - "**/build/**"
+
+  # Path-specific overrides
+  overrides:
+    # Tests can be more complex
+    - pattern: "**/*_test.go"
+      settings:
+        complexity: { cyclomatic_max: 20 }
+        axes: { documentation: { enabled: false } }
+
+    - pattern: "**/*.test.ts"
+      settings:
+        complexity: { cyclomatic_max: 20 }
+        axes: { documentation: { enabled: false } }
+
+    # Migrations have generated code
+    - pattern: "**/migrations/**"
+      settings:
+        axes: { quality: { enabled: false } }
+
+    # Config files need less scrutiny
+    - pattern: "**/*.config.*"
+      settings:
+        axes: { quality: { enabled: false }, documentation: { enabled: false } }
+
+# ═══════════════════════════════════════════════════════════════════
+# CACHING
+# Cache analysis results to speed up subsequent reviews
+# ═══════════════════════════════════════════════════════════════════
+caching:
+  enabled: true
+  strategy: "content"       # content (SHA-256) | contextual
+  directory: ".review-cache"
+  max_age_days: 7
+
+  # When to invalidate cache
+  invalidate_on:
+    - ".review.yaml"        # Config changed
+    - "package.json"        # Dependencies changed
+    - "go.mod"
+    - "requirements.txt"
+
+# ═══════════════════════════════════════════════════════════════════
+# OUTPUT FORMAT
+# ═══════════════════════════════════════════════════════════════════
+output:
+  format: "markdown"        # markdown | json | sarif | github
+  include_commendations: true
+  group_by: "severity"      # severity | file | axis
+  max_issues_per_file: 10
+  show_metrics: true
+
+# ═══════════════════════════════════════════════════════════════════
+# FEEDBACK LOOP
+# Learn from dismissed issues to reduce false positives
+# ═══════════════════════════════════════════════════════════════════
+feedback:
+  enabled: true
+  learn_from_dismissals: true
+  alert_on_high_fp_rate: 30  # Alert if >30% issues dismissed

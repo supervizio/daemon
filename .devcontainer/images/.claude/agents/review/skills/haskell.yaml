@@ -1,0 +1,145 @@
+# Haskell Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: haskell
+taxonomy: programming
+extensions: [".hs", ".lhs"]
+
+tools:
+  quality:
+    primary: hlint
+    secondary: stan
+  security:
+    primary: semgrep
+  types:
+    primary: ghc
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets:
+          - "p/haskell"
+
+  quality:
+    tools:
+      - name: hlint
+        hints:
+          - Reduce duplication
+          - Remove redundant code
+          - Simplify expressions
+          - Use standard library functions
+          - Eta reduction
+          - Use guards
+          - Use case patterns
+
+      - name: stan
+        inspections:
+          Anti-patterns:
+            - Stan001: "Partial head function"
+            - Stan002: "Partial tail function"
+            - Stan003: "Partial init function"
+            - Stan004: "Partial last function"
+            - Stan005: "Partial (!!) function"
+            - Stan006: "Partial minimum function"
+            - Stan007: "Partial maximum function"
+            - Stan008: "Partial fromJust function"
+            - Stan009: "Partial read function"
+            - Stan010: "Partial succ function"
+            - Stan011: "Partial pred function"
+            - Stan012: "Partial toEnum function"
+          Infinite:
+            - Stan101: "Infinite pattern in foldr1"
+            - Stan102: "Infinite pattern in foldl1"
+          Redundancy:
+            - Stan201: "Redundant bang patterns"
+            - Stan202: "Redundant strict fields"
+          Style:
+            - Stan301: "Undefined usage"
+            - Stan302: "Error usage"
+
+    thresholds:
+      function_length: 30
+      cyclomatic_complexity: 10
+
+patterns:
+  bad:
+    - pattern: '\bhead\s+'
+      severity: MAJOR
+      rule: Stan001
+      message: "head is partial - use pattern matching or headMaybe"
+
+    - pattern: '\btail\s+'
+      severity: MAJOR
+      rule: Stan002
+      message: "tail is partial - use pattern matching or tailMaybe"
+
+    - pattern: '\bfromJust\s+'
+      severity: MAJOR
+      rule: Stan008
+      message: "fromJust is partial - use pattern matching or fromMaybe"
+
+    - pattern: '\bread\s+'
+      severity: MAJOR
+      rule: Stan009
+      message: "read is partial - use readMaybe"
+
+    - pattern: '\bundefined\b'
+      severity: CRITICAL
+      rule: Stan301
+      message: "undefined will crash at runtime - implement properly"
+
+    - pattern: '\berror\s+"'
+      severity: MAJOR
+      rule: Stan302
+      message: "error will crash - use proper error handling"
+
+    - pattern: 'unsafePerformIO'
+      severity: CRITICAL
+      rule: unsafe-io
+      message: "unsafePerformIO breaks referential transparency"
+
+    - pattern: 'unsafeCoerce'
+      severity: CRITICAL
+      rule: unsafe-coerce
+      message: "unsafeCoerce can cause memory corruption"
+
+    - pattern: '!!\s*\d+'
+      severity: MAJOR
+      rule: Stan005
+      message: "(!!) is partial - use safe indexing"
+
+  good:
+    - pattern: "Maybe"
+      message: "Using Maybe for optional values"
+    - pattern: "Either"
+      message: "Using Either for error handling"
+    - pattern: "pattern"
+      message: "Pattern matching"
+    - pattern: "where"
+      message: "Where clause for local definitions"
+    - pattern: "newtype"
+      message: "Zero-cost wrapper type"
+    - pattern: "{-# LANGUAGE"
+      message: "Language extension pragma"
+
+idioms:
+  functional:
+    - pattern: '\.\s*\$'
+      message: "Function composition"
+    - pattern: '<\$>'
+      message: "Functor fmap"
+    - pattern: '<\*>'
+      message: "Applicative apply"
+    - pattern: '>>='
+      message: "Monadic bind"
+    - pattern: 'do\s*$'
+      message: "Do notation"
+
+  type_classes:
+    - pattern: 'instance\s+\w+'
+      message: "Type class instance"
+    - pattern: 'class\s+\w+'
+      message: "Type class definition"
+    - pattern: 'deriving'
+      message: "Automatic derivation"

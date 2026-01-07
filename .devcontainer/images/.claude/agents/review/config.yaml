@@ -1,0 +1,209 @@
+# Review Agent Configuration
+# This file defines the Hive architecture for the /review agent
+
+version: "2.0"
+name: "review"
+type: "orchestrator"
+
+# Brain configuration
+brain:
+  prompt_file: "brain.md"
+  persona: "senior_mentor"
+  timeout_seconds: 120
+
+# Taxonomy Agents (7 specialized agents by category)
+agents:
+  programming:
+    prompt_file: "agents/programming.md"
+    axes: ["security", "quality", "tests", "architecture", "performance", "documentation"]
+    skills:
+      - pattern: "*.py,*.pyw,*.pyi"
+        skill: "skills/python.yaml"
+      - pattern: "*.js,*.jsx,*.mjs"
+        skill: "skills/javascript.yaml"
+      - pattern: "*.ts,*.tsx"
+        skill: "skills/typescript.yaml"
+      - pattern: "*.go"
+        skill: "skills/go.yaml"
+      - pattern: "*.rs"
+        skill: "skills/rust.yaml"
+      - pattern: "*.java"
+        skill: "skills/java.yaml"
+      - pattern: "*.kt,*.kts"
+        skill: "skills/kotlin.yaml"
+      - pattern: "*.scala,*.sc"
+        skill: "skills/scala.yaml"
+      - pattern: "*.cs"
+        skill: "skills/csharp.yaml"
+      - pattern: "*.vb"
+        skill: "skills/visualbasic.yaml"
+      - pattern: "*.php"
+        skill: "skills/php.yaml"
+      - pattern: "*.rb,*.rake"
+        skill: "skills/ruby.yaml"
+      - pattern: "*.swift"
+        skill: "skills/swift.yaml"
+      - pattern: "*.dart"
+        skill: "skills/dart.yaml"
+      - pattern: "*.ex,*.exs"
+        skill: "skills/elixir.yaml"
+      - pattern: "*.cpp,*.cc,*.cxx,*.hpp"
+        skill: "skills/cpp.yaml"
+      - pattern: "*.c,*.h"
+        skill: "skills/c.yaml"
+      - pattern: "*.m,*.mm"
+        skill: "skills/objectivec.yaml"
+      - pattern: "*.lua"
+        skill: "skills/lua.yaml"
+      - pattern: "*.groovy"
+        skill: "skills/groovy.yaml"
+      - pattern: "*.cr"
+        skill: "skills/crystal.yaml"
+      - pattern: "*.hs"
+        skill: "skills/haskell.yaml"
+      - pattern: "*.f90,*.f95,*.f03"
+        skill: "skills/fortran.yaml"
+      - pattern: "*.erl,*.hrl"
+        skill: "skills/erlang.yaml"
+
+  infrastructure:
+    prompt_file: "agents/infrastructure.md"
+    axes: ["security", "quality", "architecture"]
+    skills:
+      - pattern: "*.tf,*.tfvars"
+        skill: "skills/terraform.yaml"
+      - pattern: "Dockerfile*,*.dockerfile"
+        skill: "skills/docker.yaml"
+      - pattern: "*.yaml,*.yml"
+        skill: "skills/kubernetes.yaml"
+        detection:
+          markers: ["apiVersion:", "kind:"]
+      - pattern: "docker-compose*.yml,docker-compose*.yaml"
+        skill: "skills/docker.yaml"
+        detection:
+          markers: ["services:", "version:"]
+
+  style:
+    prompt_file: "agents/style.md"
+    axes: ["quality", "performance"]
+    skills:
+      - pattern: "*.css"
+        skill: "skills/css.yaml"
+      - pattern: "*.scss,*.sass"
+        skill: "skills/scss.yaml"
+      - pattern: "*.less"
+        skill: "skills/less.yaml"
+
+  query:
+    prompt_file: "agents/query.md"
+    axes: ["security", "quality", "performance"]
+    skills:
+      - pattern: "*.sql"
+        skill: "skills/sql.yaml"
+      - pattern: "*.graphql,*.gql"
+        skill: "skills/graphql.yaml"
+
+  scripts:
+    prompt_file: "agents/scripts.md"
+    axes: ["security", "quality"]
+    skills:
+      - pattern: "*.sh,*.bash,*.zsh"
+        skill: "skills/shell.yaml"
+      - pattern: "*.ps1,*.psm1"
+        skill: "skills/powershell.yaml"
+
+  markup:
+    prompt_file: "agents/markup.md"
+    axes: ["quality"]
+    skills:
+      - pattern: "*.md,*.markdown"
+        skill: "skills/markdown.yaml"
+      - pattern: "*.html,*.htm"
+        skill: "skills/html.yaml"
+      - pattern: "*.xml,*.xsl"
+        skill: "skills/xml.yaml"
+
+  config:
+    prompt_file: "agents/config.md"
+    axes: ["security", "quality"]
+    skills:
+      - pattern: "*.json"
+        skill: "skills/json.yaml"
+      - pattern: "*.yaml,*.yml"
+        skill: "skills/yaml.yaml"
+        exclude_detection: ["apiVersion:", "kind:", "services:"]
+      - pattern: "*.toml"
+        skill: "skills/toml.yaml"
+      - pattern: ".env*,*.env"
+        skill: "skills/env.yaml"
+    exclude_patterns: ["package-lock.json", "yarn.lock", "pnpm-lock.yaml"]
+
+# Axes (analysis dimensions)
+axes:
+  security:
+    priority: 1
+    enabled: true
+    agents: ["programming", "infrastructure", "query", "scripts", "config"]
+
+  quality:
+    priority: 2
+    enabled: true
+    agents: ["programming", "infrastructure", "style", "query", "scripts", "markup", "config"]
+
+  tests:
+    priority: 3
+    enabled: true
+    agents: ["programming"]
+
+  architecture:
+    priority: 4
+    enabled: true
+    agents: ["programming", "infrastructure"]
+
+  performance:
+    priority: 5
+    enabled: true
+    agents: ["programming", "style", "query"]
+
+  documentation:
+    priority: 6
+    enabled: true
+    agents: ["programming"]
+
+# Skills location
+skills:
+  location: "skills/"
+  fallback: "generic"  # Use generic analysis if skill not found
+
+# Caching
+cache:
+  enabled: true
+  strategy: "content"  # SHA-256 based
+  directory: ".review-cache"
+  invalidate_on:
+    - ".review.yaml"
+    - "package.json"
+    - "go.mod"
+    - "requirements.txt"
+    - "pyproject.toml"
+
+# Output
+output:
+  default_format: "markdown"
+  supported_formats: ["markdown", "json", "sarif"]
+  max_issues_per_file: 10
+  include_commendations: true
+
+# Severity thresholds
+severity:
+  critical:
+    max_allowed: 0
+    action: "block_merge"
+
+  major:
+    max_allowed: 3
+    action: "warn"
+
+  minor:
+    max_allowed: 10
+    action: "info"

@@ -1,0 +1,130 @@
+# Fortran Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: fortran
+taxonomy: programming
+extensions: [".f90", ".f95", ".f03", ".f08", ".f", ".for", ".ftn"]
+
+tools:
+  quality:
+    primary: fprettify
+    secondary: fortran-linter
+  security:
+    primary: manual-review
+
+axes:
+  quality:
+    tools:
+      - name: fprettify
+        rules:
+          - indent: 3
+          - line_length: 132
+          - whitespace: 1
+          - case: lower
+
+      - name: fortran-linter
+        checks:
+          - implicit_none_missing
+          - obsolete_statements
+          - common_blocks
+          - equivalence
+          - computed_goto
+          - arithmetic_if
+          - assigned_goto
+          - statement_functions
+          - entry_statements
+          - assumed_size_arrays
+
+    thresholds:
+      subroutine_lines: 200
+      module_lines: 1000
+      nesting_depth: 5
+
+patterns:
+  bad:
+    - pattern: 'implicit\s+none'
+      severity: CRITICAL
+      rule: implicit-none-missing
+      message: "Missing IMPLICIT NONE - add at module/program start"
+      inverted: true
+
+    - pattern: 'common\s*/\w+/'
+      severity: MAJOR
+      rule: no-common
+      message: "COMMON blocks are obsolete - use modules"
+
+    - pattern: 'equivalence\s*\('
+      severity: MAJOR
+      rule: no-equivalence
+      message: "EQUIVALENCE is obsolete and error-prone"
+
+    - pattern: 'goto\s+\d+'
+      severity: MAJOR
+      rule: no-goto
+      message: "GOTO is obsolete - use structured control flow"
+
+    - pattern: 'real\*\d+'
+      severity: MINOR
+      rule: use-kind
+      message: "Use KIND parameters instead of real*8"
+
+    - pattern: 'character\*\d+'
+      severity: MINOR
+      rule: use-kind
+      message: "Use CHARACTER(LEN=n) instead of character*n"
+
+    - pattern: 'call\s+system\s*\('
+      severity: CRITICAL
+      rule: command-injection
+      message: "system() is vulnerable to command injection"
+
+    - pattern: 'open.*status\s*=\s*[''"]unknown[''"]'
+      severity: MINOR
+      rule: explicit-status
+      message: "Use explicit file status (replace, old, new)"
+
+    - pattern: 'data\s+\w+/'
+      severity: MINOR
+      rule: use-parameter
+      message: "Consider PARAMETER or initialization for constants"
+
+  good:
+    - pattern: "implicit none"
+      message: "Explicit typing enforced"
+    - pattern: "intent(in)"
+      message: "Intent specification"
+    - pattern: "intent(out)"
+      message: "Intent specification"
+    - pattern: "intent(inout)"
+      message: "Intent specification"
+    - pattern: "pure "
+      message: "Pure procedure"
+    - pattern: "elemental "
+      message: "Elemental procedure"
+    - pattern: "module "
+      message: "Module encapsulation"
+    - pattern: "use, only:"
+      message: "Explicit module imports"
+
+idioms:
+  modern_fortran:
+    - pattern: 'allocate\s*\('
+      message: "Dynamic allocation"
+    - pattern: 'deallocate\s*\('
+      message: "Explicit deallocation"
+    - pattern: 'select\s+case'
+      message: "Structured branching"
+    - pattern: 'do\s+concurrent'
+      message: "Parallel loop"
+    - pattern: 'block\s*$'
+      message: "Block construct for scoping"
+
+  arrays:
+    - pattern: 'dimension\s*\('
+      message: "Array dimensioning"
+    - pattern: 'reshape\s*\('
+      message: "Array reshaping"
+    - pattern: 'sum\s*\('
+      message: "Intrinsic array sum"
+    - pattern: 'matmul\s*\('
+      message: "Matrix multiplication"

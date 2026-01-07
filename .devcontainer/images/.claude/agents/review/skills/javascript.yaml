@@ -1,0 +1,249 @@
+# JavaScript Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: javascript
+taxonomy: programming
+extensions: [".js", ".mjs", ".cjs", ".jsx"]
+
+# Simulated tools for JavaScript analysis
+tools:
+  quality:
+    primary: eslint
+    secondary: biome
+  security:
+    primary: semgrep
+    secondary: eslint-plugin-security
+  types: null  # JavaScript doesn't have built-in types
+  tests:
+    primary: istanbul
+
+# Analysis rules by axis
+axes:
+  security:
+    tools:
+      - name: eslint-plugin-security
+        rules:
+          detect-buffer-noassert: "Buffer read/write without bounds check"
+          detect-child-process: "Child process execution"
+          detect-disable-mustache-escape: "Template escape disabled"
+          detect-eval-with-expression: "eval() with dynamic expression"
+          detect-new-buffer: "Deprecated Buffer() constructor"
+          detect-no-csrf-before-method-override: "CSRF vulnerability"
+          detect-non-literal-fs-filename: "Non-literal fs path"
+          detect-non-literal-regexp: "RegExp DoS risk"
+          detect-non-literal-require: "Dynamic require() call"
+          detect-object-injection: "Object injection vulnerability"
+          detect-possible-timing-attacks: "Timing attack in comparison"
+          detect-pseudoRandomBytes: "Weak random number generator"
+          detect-unsafe-regex: "ReDoS vulnerable regex"
+
+      - name: semgrep
+        rulesets:
+          - "p/javascript"
+          - "p/nodejs"
+          - "p/react"
+          - "p/express"
+          - "p/owasp-top-ten"
+
+  quality:
+    tools:
+      - name: eslint
+        rules:
+          # Possible Errors
+          no-console: "warn"
+          no-debugger: "error"
+          no-dupe-keys: "error"
+          no-duplicate-case: "error"
+          no-empty: "warn"
+          no-extra-semi: "error"
+          no-unreachable: "error"
+          no-unsafe-finally: "error"
+          no-unsafe-negation: "error"
+          valid-typeof: "error"
+
+          # Best Practices
+          curly: "error"
+          default-case: "warn"
+          dot-notation: "warn"
+          eqeqeq: "error"
+          no-alert: "warn"
+          no-caller: "error"
+          no-else-return: "warn"
+          no-empty-function: "warn"
+          no-eval: "error"
+          no-extend-native: "error"
+          no-extra-bind: "warn"
+          no-floating-decimal: "error"
+          no-implied-eval: "error"
+          no-iterator: "error"
+          no-lone-blocks: "warn"
+          no-loop-func: "error"
+          no-multi-spaces: "warn"
+          no-new: "warn"
+          no-new-func: "error"
+          no-new-wrappers: "error"
+          no-param-reassign: "warn"
+          no-proto: "error"
+          no-redeclare: "error"
+          no-return-assign: "error"
+          no-script-url: "error"
+          no-self-assign: "error"
+          no-self-compare: "error"
+          no-sequences: "error"
+          no-throw-literal: "error"
+          no-unmodified-loop-condition: "error"
+          no-unused-expressions: "warn"
+          no-useless-call: "warn"
+          no-useless-concat: "warn"
+          no-useless-return: "warn"
+          no-void: "error"
+          no-with: "error"
+          prefer-promise-reject-errors: "warn"
+          radix: "error"
+          require-await: "warn"
+          yoda: "warn"
+
+          # Variables
+          no-delete-var: "error"
+          no-shadow: "warn"
+          no-shadow-restricted-names: "error"
+          no-undef: "error"
+          no-unused-vars: "warn"
+          no-use-before-define: "error"
+
+          # ES6
+          arrow-body-style: "warn"
+          no-confusing-arrow: "warn"
+          no-duplicate-imports: "error"
+          no-useless-computed-key: "warn"
+          no-useless-constructor: "warn"
+          no-useless-rename: "warn"
+          no-var: "error"
+          prefer-arrow-callback: "warn"
+          prefer-const: "warn"
+          prefer-destructuring: "warn"
+          prefer-rest-params: "warn"
+          prefer-spread: "warn"
+          prefer-template: "warn"
+
+      - name: biome
+        rules:
+          recommended: true
+          complexity: true
+          correctness: true
+          style: true
+          suspicious: true
+
+    thresholds:
+      cyclomatic_complexity: 10
+      function_lines: 50
+      file_lines: 300
+      nesting_depth: 4
+      parameters_count: 4
+
+  tests:
+    tools:
+      - name: istanbul
+        thresholds:
+          line_coverage: 80
+          branch_coverage: 75
+          function_coverage: 90
+          statement_coverage: 80
+
+# Common patterns to detect
+patterns:
+  bad:
+    - pattern: 'eval\s*\('
+      severity: CRITICAL
+      rule: no-eval
+      message: "eval() is dangerous - enables arbitrary code execution"
+
+    - pattern: 'new\s+Function\s*\('
+      severity: CRITICAL
+      rule: no-new-func
+      message: "new Function() is similar to eval() - code injection risk"
+
+    - pattern: 'innerHTML\s*='
+      severity: MAJOR
+      rule: react-no-danger
+      message: "innerHTML can lead to XSS - use textContent or sanitize"
+
+    - pattern: 'document\.write\s*\('
+      severity: MAJOR
+      rule: no-document-write
+      message: "document.write() can be exploited for XSS"
+
+    - pattern: 'child_process\.(exec|spawn)\s*\('
+      severity: MAJOR
+      rule: detect-child-process
+      message: "Child process with user input enables command injection"
+
+    - pattern: 'dangerouslySetInnerHTML'
+      severity: MAJOR
+      rule: react-no-danger
+      message: "dangerouslySetInnerHTML can lead to XSS if not sanitized"
+
+    - pattern: 'Math\.random\s*\('
+      severity: MINOR
+      rule: detect-pseudoRandomBytes
+      message: "Use crypto.randomBytes() for security-sensitive randomness"
+
+    - pattern: '==\s*null|null\s*=='
+      severity: MINOR
+      rule: eqeqeq
+      message: "Use === for strict equality comparison"
+
+    - pattern: 'console\.(log|debug|info|warn|error)'
+      severity: MINOR
+      rule: no-console
+      message: "Remove console statements in production code"
+
+  good:
+    - pattern: "crypto.randomBytes("
+      message: "Cryptographically secure random"
+
+    - pattern: "textContent ="
+      message: "Safe DOM text manipulation"
+
+    - pattern: "DOMPurify.sanitize("
+      message: "Proper HTML sanitization"
+
+# Framework-specific rules
+frameworks:
+  react:
+    - pattern: 'dangerouslySetInnerHTML'
+      severity: MAJOR
+      rule: react-no-danger
+      message: "Use DOMPurify.sanitize() with dangerouslySetInnerHTML"
+
+    - pattern: 'useEffect\s*\(\s*\(\s*\)\s*=>\s*\{[^}]*\}\s*\)'
+      severity: MINOR
+      rule: react-hooks/exhaustive-deps
+      message: "useEffect missing dependency array"
+
+    - pattern: 'key\s*=\s*\{?\s*index\s*\}?'
+      severity: MINOR
+      rule: react-no-array-index-key
+      message: "Avoid using array index as key prop"
+
+  express:
+    - pattern: 'res\.send\s*\(.*req\.'
+      severity: MAJOR
+      rule: express-xss
+      message: "Reflecting user input may cause XSS"
+
+    - pattern: 'app\.disable\s*\(\s*["\']x-powered-by'
+      severity: MINOR
+      rule: express-security
+      message: "Good: disabling x-powered-by header"
+
+  node:
+    - pattern: 'fs\.(readFile|writeFile)Sync'
+      severity: MINOR
+      rule: node-async
+      message: "Prefer async fs methods for better performance"
+
+    - pattern: 'require\s*\([^"\'][^)]+\)'
+      severity: MAJOR
+      rule: detect-non-literal-require
+      message: "Dynamic require() can enable code injection"

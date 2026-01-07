@@ -1,0 +1,89 @@
+# Ruby Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: ruby
+taxonomy: programming
+extensions: [".rb", ".rake"]
+
+tools:
+  quality:
+    primary: rubocop
+  security:
+    primary: brakeman
+    secondary: semgrep
+
+axes:
+  security:
+    tools:
+      - name: brakeman
+        warnings:
+          - "SQL Injection"
+          - "Cross-Site Scripting"
+          - "Command Injection"
+          - "Mass Assignment"
+          - "Open Redirect"
+          - "File Access"
+          - "Session Settings"
+      - name: semgrep
+        rulesets: ["p/ruby", "p/rails"]
+
+  quality:
+    tools:
+      - name: rubocop
+        cops:
+          Style/All: true
+          Layout/All: true
+          Lint/All: true
+          Metrics/All: true
+          Security/All: true
+
+    thresholds:
+      method_length: 20
+      class_length: 100
+      cyclomatic_complexity: 10
+
+patterns:
+  bad:
+    - pattern: 'eval\s*\('
+      severity: CRITICAL
+      rule: eval-danger
+      message: "eval enables code injection"
+
+    - pattern: 'system|exec|`.*`|\%x\['
+      severity: CRITICAL
+      rule: command-injection
+      message: "Command execution - validate input"
+
+    - pattern: 'find_by_sql.*#\{'
+      severity: CRITICAL
+      rule: sql-injection
+      message: "SQL interpolation - use placeholders"
+
+    - pattern: 'send\s*\(.*params|public_send'
+      severity: CRITICAL
+      rule: mass-assignment
+      message: "Dynamic method dispatch with user input"
+
+    - pattern: 'permit!'
+      severity: MAJOR
+      rule: mass-assignment
+      message: "permit! bypasses strong parameters"
+
+    - pattern: 'raw\s*\('
+      severity: MAJOR
+      rule: xss
+      message: "raw() disables HTML escaping"
+
+  good:
+    - pattern: "strong_parameters"
+      message: "Using strong parameters"
+    - pattern: "sanitize"
+      message: "Proper input sanitization"
+
+frameworks:
+  rails:
+    - pattern: 'protect_from_forgery'
+      message: "CSRF protection enabled (good)"
+    - pattern: 'skip_before_action.*verify_authenticity_token'
+      severity: CRITICAL
+      message: "CSRF protection disabled"

@@ -1,0 +1,104 @@
+# Swift Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: swift
+taxonomy: programming
+extensions: [".swift"]
+
+tools:
+  quality:
+    primary: swiftlint
+  security:
+    primary: semgrep
+  types:
+    primary: swift-compiler
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets:
+          - "p/swift"
+          - "p/ios"
+          - "p/owasp-top-ten"
+
+  quality:
+    tools:
+      - name: swiftlint
+        rules:
+          closing_brace: warning
+          closure_parameter_position: warning
+          control_statement: warning
+          cyclomatic_complexity: warning
+          empty_count: warning
+          file_length: warning
+          force_cast: error
+          force_try: error
+          force_unwrapping: error
+          function_body_length: warning
+          function_parameter_count: warning
+          identifier_name: warning
+          implicitly_unwrapped_optional: warning
+          large_tuple: warning
+          line_length: warning
+          nesting: warning
+          type_body_length: warning
+          type_name: warning
+          unused_closure_parameter: warning
+          weak_delegate: warning
+
+    thresholds:
+      cyclomatic_complexity: 10
+      function_body_length: 40
+      file_length: 400
+      type_body_length: 200
+
+patterns:
+  bad:
+    - pattern: '!\s*$'
+      severity: CRITICAL
+      rule: force_unwrapping
+      message: "Force unwrapping is unsafe - use optional binding or guard"
+
+    - pattern: 'as!\s*'
+      severity: CRITICAL
+      rule: force_cast
+      message: "Force cast can crash - use as? with optional binding"
+
+    - pattern: 'try!\s*'
+      severity: CRITICAL
+      rule: force_try
+      message: "Force try can crash - use do-catch or try?"
+
+    - pattern: 'var\s+\w+\s*:\s*\w+!'
+      severity: MAJOR
+      rule: implicitly_unwrapped_optional
+      message: "Avoid implicitly unwrapped optionals except for IBOutlets"
+
+    - pattern: 'print\s*\('
+      severity: MINOR
+      rule: no-print
+      message: "Use proper logging instead of print"
+
+  good:
+    - pattern: "guard let"
+      message: "Early exit with guard"
+    - pattern: "if let"
+      message: "Optional binding"
+    - pattern: "defer {"
+      message: "Cleanup with defer"
+    - pattern: "[weak self]"
+      message: "Weak capture in closure"
+
+frameworks:
+  uikit:
+    - pattern: 'DispatchQueue\.main\.sync'
+      severity: MAJOR
+      rule: main-thread-sync
+      message: "sync on main queue can cause deadlock from main thread"
+
+  swiftui:
+    - pattern: '@State\s+var\s+\w+\s*='
+      severity: MINOR
+      rule: state-init
+      message: "@State should be private and not initialized in views"

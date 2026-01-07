@@ -1,0 +1,219 @@
+# Shell Skill - Scripts Taxonomy
+# Used by: agents/scripts.md
+
+language: shell
+taxonomy: scripts
+extensions: [".sh", ".bash", ".zsh"]
+
+# Simulated tools for Shell analysis
+tools:
+  security:
+    primary: shellcheck
+    secondary: semgrep
+  quality:
+    primary: shellcheck
+  portability:
+    primary: shellcheck
+
+axes:
+  security:
+    tools:
+      - name: shellcheck
+        security_codes:
+          SC2006: "Use $(...) notation instead of legacy backticks"
+          SC2046: "Quote this to prevent word splitting"
+          SC2086: "Double quote to prevent globbing and word splitting"
+          SC2091: "Remove surrounding $() to avoid executing output"
+          SC2116: "Useless echo? Instead of 'echo $(cmd)', just use 'cmd'"
+
+      - name: semgrep
+        rulesets:
+          - "p/bash"
+
+    checks:
+      - "Command injection via unquoted variables"
+      - "Hardcoded credentials"
+      - "Secrets in command arguments"
+      - "Insecure file permissions"
+      - "curl | bash patterns"
+      - "wget without verification"
+
+  quality:
+    tools:
+      - name: shellcheck
+        style_codes:
+          # Quoting
+          SC2027: "Missing quotes around variable"
+          SC2028: "echo may not expand escape sequences"
+          SC2034: "Variable appears unused"
+          SC2035: "Use ./*glob* to avoid matching on -dashed-names"
+          SC2037: "Quote to prevent word splitting"
+          SC2038: "Use -print0/-0 to allow spaces in names"
+          SC2039: "In POSIX sh, something is undefined"
+          SC2044: "Use find -exec or while read loop"
+
+          # Best practices
+          SC2004: "Remove unnecessary $"
+          SC2012: "Use find instead of ls to better handle names"
+          SC2015: "Note that A && B || C is not if-then-else"
+          SC2016: "Expressions don't expand in single quotes"
+          SC2019: "Use 'if cmd; then ..' to check exit code"
+          SC2020: "Use find instead of ls to check for existence"
+          SC2025: "Use -true or -false instead of true/false in find"
+
+          # Error handling
+          SC2154: "Variable is referenced but not assigned"
+          SC2155: "Declare and assign separately to avoid masking return values"
+          SC2164: "Use cd ... || exit"
+          SC2181: "Check exit code directly, e.g. 'if mycmd; then ...'"
+
+    checks:
+      - "set -e (exit on error)"
+      - "set -u (undefined variables)"
+      - "set -o pipefail (pipeline errors)"
+      - "Error handling patterns"
+      - "Variable quoting"
+      - "Function definitions"
+
+  portability:
+    tools:
+      - name: shellcheck
+        posix_codes:
+          SC2039: "In POSIX sh, something is undefined"
+          SC2059: "Don't use variables in the printf format string"
+          SC2068: "Double quote array expansions"
+          SC2070: "In POSIX sh, -n is undefined"
+          SC2071: "In POSIX sh, < is undefined"
+          SC2072: "In POSIX sh, == is undefined"
+          SC2169: "In dash, something is undefined"
+          SC2206: "Quote to prevent word splitting"
+
+    checks:
+      - "POSIX compliance"
+      - "Bash-specific features"
+      - "Shell selection in shebang"
+      - "Portable test syntax"
+      - "Array usage (non-POSIX)"
+
+patterns:
+  bad:
+    - pattern: '\$\w+(?!\s*["\}])'
+      severity: MAJOR
+      rule: SC2086
+      message: "Unquoted variable - quote to prevent word splitting"
+
+    - pattern: 'eval\s+'
+      severity: CRITICAL
+      rule: eval-danger
+      message: "eval is dangerous - avoid with user input"
+
+    - pattern: '\$\([^)]+\$\{'
+      severity: MAJOR
+      rule: SC2046
+      message: "Quote command substitution to prevent word splitting"
+
+    - pattern: 'curl.*\|\s*(ba)?sh'
+      severity: CRITICAL
+      rule: remote-execution
+      message: "curl | bash is dangerous - download, verify, then execute"
+
+    - pattern: 'wget.*\|\s*(ba)?sh'
+      severity: CRITICAL
+      rule: remote-execution
+      message: "wget | bash is dangerous - download, verify, then execute"
+
+    - pattern: 'chmod\s+777'
+      severity: MAJOR
+      rule: insecure-permissions
+      message: "777 permissions are too permissive"
+
+    - pattern: 'PASSWORD\s*=\s*["\'][^"\']+["\']'
+      severity: CRITICAL
+      rule: hardcoded-secret
+      message: "Hardcoded password - use environment variables"
+
+    - pattern: '`[^`]+`'
+      severity: MINOR
+      rule: SC2006
+      message: "Use $(...) instead of backticks"
+
+    - pattern: '\[\s+\$\w+\s+==\s+'
+      severity: MINOR
+      rule: SC2072
+      message: "Use = instead of == for POSIX compatibility"
+
+    - pattern: 'cd\s+[^|&;]+(?!\s*\|\|)'
+      severity: MINOR
+      rule: SC2164
+      message: "Use 'cd ... || exit' to handle cd failures"
+
+    - pattern: 'rm\s+-rf\s+\$'
+      severity: CRITICAL
+      rule: rm-rf-danger
+      message: "rm -rf with variable - ensure variable is set and quoted"
+
+  good:
+    - pattern: 'set -euo pipefail'
+      message: "Strict mode enabled"
+
+    - pattern: '"\$\w+"'
+      message: "Properly quoted variable"
+
+    - pattern: 'cd .* \|\| exit'
+      message: "Safe directory change"
+
+    - pattern: 'readonly'
+      message: "Using readonly for constants"
+
+best_practices:
+  header: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    IFS=$'\n\t'
+
+  template: |
+    #!/usr/bin/env bash
+    #
+    # Script description
+    # Usage: script.sh [options]
+    #
+
+    set -euo pipefail
+    IFS=$'\n\t'
+
+    readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+
+    # Colors for output
+    readonly RED='\033[0;31m'
+    readonly GREEN='\033[0;32m'
+    readonly NC='\033[0m' # No Color
+
+    log_error() {
+        echo -e "${RED}ERROR: $*${NC}" >&2
+    }
+
+    log_success() {
+        echo -e "${GREEN}$*${NC}"
+    }
+
+    cleanup() {
+        # Cleanup logic here
+        :
+    }
+
+    trap cleanup EXIT
+
+    main() {
+        # Main logic here
+        :
+    }
+
+    main "$@"
+
+checks:
+  shebang:
+    - pattern: '^#!/bin/bash'
+      message: "Consider #!/usr/bin/env bash for portability"
+    - pattern: '^#!/bin/sh'
+      message: "Ensure POSIX compliance when using /bin/sh"

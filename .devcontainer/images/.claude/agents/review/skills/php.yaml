@@ -1,0 +1,93 @@
+# PHP Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: php
+taxonomy: programming
+extensions: [".php"]
+
+tools:
+  quality:
+    primary: phpstan
+    secondary: psalm
+  security:
+    primary: semgrep
+    secondary: phpstan
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets: ["p/php", "p/owasp-top-ten", "p/laravel"]
+      - name: phpstan
+        level: 8
+
+    checks:
+      - severity: CRITICAL
+        patterns:
+          - "SQL injection via string concatenation"
+          - "eval() and create_function()"
+          - "Command injection via exec/shell_exec/system"
+          - "File inclusion vulnerabilities"
+          - "Deserialization of untrusted data"
+
+  quality:
+    tools:
+      - name: phpstan
+        config:
+          level: 8
+          strict: true
+      - name: php_codesniffer
+        standard: "PSR12"
+
+    thresholds:
+      cyclomatic_complexity: 10
+      function_lines: 50
+      class_lines: 300
+
+patterns:
+  bad:
+    - pattern: 'eval\s*\('
+      severity: CRITICAL
+      rule: eval-danger
+      message: "eval() enables code injection"
+
+    - pattern: 'mysql_query\s*\('
+      severity: CRITICAL
+      rule: deprecated-mysql
+      message: "mysql_* is deprecated - use PDO with prepared statements"
+
+    - pattern: '\$_GET|\$_POST|\$_REQUEST'
+      severity: MAJOR
+      rule: unsanitized-input
+      message: "Validate and sanitize superglobal input"
+
+    - pattern: 'serialize\s*\(.*\$|unserialize\s*\('
+      severity: CRITICAL
+      rule: unsafe-deserialization
+      message: "unserialize() with user input is dangerous"
+
+    - pattern: 'include\s*\(.*\$|require\s*\(.*\$'
+      severity: CRITICAL
+      rule: file-inclusion
+      message: "Dynamic file inclusion enables code execution"
+
+    - pattern: 'shell_exec|exec|system|passthru|proc_open'
+      severity: CRITICAL
+      rule: command-injection
+      message: "Command execution - validate input carefully"
+
+  good:
+    - pattern: "PDO"
+      message: "Using PDO for database access"
+    - pattern: "htmlspecialchars"
+      message: "Proper HTML escaping"
+    - pattern: "password_hash"
+      message: "Using secure password hashing"
+
+frameworks:
+  laravel:
+    - pattern: 'DB::raw\s*\('
+      severity: MAJOR
+      message: "DB::raw can bypass Eloquent's escaping"
+    - pattern: '{{.*}}'
+      message: "Blade auto-escaping (good)"

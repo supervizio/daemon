@@ -1,0 +1,199 @@
+# Docker Skill - Infrastructure Taxonomy
+# Used by: agents/infrastructure.md
+
+language: docker
+taxonomy: infrastructure
+extensions: ["Dockerfile"]
+filenames: ["Dockerfile", "Dockerfile.*", "*.dockerfile"]
+
+# Simulated tools for Docker analysis
+tools:
+  security:
+    primary: trivy
+    secondary: hadolint
+  quality:
+    primary: hadolint
+  best_practices:
+    primary: dockle
+
+axes:
+  security:
+    tools:
+      - name: trivy
+        checks:
+          - "CVE vulnerabilities in base image"
+          - "CVE vulnerabilities in installed packages"
+          - "Secrets in image layers"
+          - "Misconfigurations"
+
+      - name: hadolint
+        security_rules:
+          DL3002: "Last USER should not be root"
+          DL3004: "Do not use sudo"
+          DL3006: "Always tag the image version"
+          DL3007: "Using latest is prone to errors"
+          DL3009: "Delete apt-get lists after installing"
+          DL3018: "Pin versions in apk add"
+          DL3019: "Use --no-cache with apk"
+          DL3020: "Use COPY instead of ADD for files"
+          DL3022: "COPY --from should reference a stage"
+          DL3025: "Use JSON notation for CMD"
+          DL3027: "Do not use apt - use apt-get"
+          DL3045: "COPY with more than 2 arguments requires dest to end with /"
+
+      - name: dockle
+        rules:
+          CIS-DI-0001: "Create a user for the container"
+          CIS-DI-0002: "Use trusted base images only"
+          CIS-DI-0005: "Enable Content trust for Docker"
+          CIS-DI-0006: "Add HEALTHCHECK instruction"
+          CIS-DI-0008: "Remove setuid/setgid permissions"
+          CIS-DI-0010: "Do not store secrets in Dockerfiles"
+
+  quality:
+    tools:
+      - name: hadolint
+        quality_rules:
+          DL3000: "Use absolute WORKDIR"
+          DL3003: "Use WORKDIR to switch to a directory"
+          DL3008: "Pin versions in apt-get install"
+          DL3013: "Pin versions in pip install"
+          DL3016: "Pin versions in npm install"
+          DL3028: "Pin versions in gem install"
+          DL3042: "Avoid cache directory with pip"
+          DL3047: "Avoid wget without verification"
+          DL3059: "Multiple consecutive RUN can be merged"
+          DL3060: "yarn cache clean missing after yarn install"
+          DL4000: "MAINTAINER is deprecated"
+          DL4001: "Either use wget or curl, not both"
+          DL4003: "Multiple CMD instructions"
+          DL4004: "Multiple ENTRYPOINT instructions"
+          DL4005: "Use SHELL to change default shell"
+          DL4006: "Set SHELL option -o pipefail"
+          SC1000: "ShellCheck: Comment without hashbang"
+          SC2015: "ShellCheck: A && B || C"
+          SC2046: "ShellCheck: Quote to prevent word splitting"
+          SC2086: "ShellCheck: Double quote to prevent globbing"
+
+    checks:
+      - "Multi-stage build optimization"
+      - "Layer caching efficiency"
+      - "Image size optimization"
+      - "Instruction ordering"
+
+  best_practices:
+    checks:
+      - "Use .dockerignore"
+      - "Non-root user"
+      - "HEALTHCHECK defined"
+      - "Minimal base image"
+      - "Clear package manager cache"
+      - "Single process per container"
+      - "Use COPY over ADD"
+      - "Use JSON form for CMD/ENTRYPOINT"
+
+patterns:
+  bad:
+    - pattern: '^FROM\s+\w+$|:latest\s*$'
+      severity: MAJOR
+      rule: DL3007
+      message: "Always pin image version - avoid :latest"
+
+    - pattern: '^USER\s+root\s*$'
+      severity: MAJOR
+      rule: DL3002
+      message: "Final USER should not be root"
+
+    - pattern: 'ADD\s+https?://'
+      severity: MAJOR
+      rule: DL3020
+      message: "Use COPY + RUN curl for remote files"
+
+    - pattern: 'apt-get\s+install(?!.*--no-install-recommends)'
+      severity: MINOR
+      rule: best-practice
+      message: "Use --no-install-recommends with apt-get"
+
+    - pattern: 'pip\s+install(?!.*--no-cache-dir)'
+      severity: MINOR
+      rule: DL3042
+      message: "Use --no-cache-dir with pip install"
+
+    - pattern: 'npm\s+install(?!.*--production)'
+      severity: MINOR
+      rule: best-practice
+      message: "Use --production for npm install in production"
+
+    - pattern: 'RUN\s+chmod\s+777'
+      severity: MAJOR
+      rule: insecure-permissions
+      message: "777 permissions are too permissive"
+
+    - pattern: 'ENV\s+.*PASSWORD|SECRET|KEY|TOKEN.*='
+      severity: CRITICAL
+      rule: CIS-DI-0010
+      message: "Do not store secrets in ENV - use runtime secrets"
+
+    - pattern: 'ARG\s+.*PASSWORD|SECRET|KEY|TOKEN'
+      severity: MAJOR
+      rule: CIS-DI-0010
+      message: "Build args are visible in image history"
+
+    - pattern: 'curl.*\|\s*(ba)?sh'
+      severity: CRITICAL
+      rule: remote-execution
+      message: "curl | bash is dangerous - download and verify first"
+
+    - pattern: '^RUN\s+apt-get\s+update$'
+      severity: MAJOR
+      rule: DL3009
+      message: "Combine apt-get update && apt-get install in same RUN"
+
+  good:
+    - pattern: "FROM.*AS"
+      message: "Multi-stage build"
+
+    - pattern: "USER \\w+"
+      message: "Non-root user defined"
+
+    - pattern: "HEALTHCHECK"
+      message: "Health check defined"
+
+    - pattern: "--no-install-recommends"
+      message: "Minimal apt-get install"
+
+    - pattern: "--no-cache-dir"
+      message: "No pip cache"
+
+    - pattern: "rm -rf /var/lib/apt/lists/*"
+      message: "Cleaning apt cache"
+
+best_practices_template: |
+  # Multi-stage build example
+  FROM node:20-alpine AS builder
+  WORKDIR /app
+  COPY package*.json ./
+  RUN npm ci --only=production
+  COPY . .
+  RUN npm run build
+
+  FROM node:20-alpine
+  WORKDIR /app
+
+  # Create non-root user
+  RUN addgroup -g 1001 appgroup && \
+      adduser -u 1001 -G appgroup -D appuser
+
+  # Copy from builder
+  COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+  COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+
+  # Switch to non-root user
+  USER appuser
+
+  # Health check
+  HEALTHCHECK --interval=30s --timeout=3s \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
+  EXPOSE 3000
+  CMD ["node", "dist/main.js"]

@@ -1,0 +1,152 @@
+# Erlang Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: erlang
+taxonomy: programming
+extensions: [".erl", ".hrl"]
+
+tools:
+  quality:
+    primary: elvis
+    secondary: xref
+  security:
+    primary: semgrep
+  types:
+    primary: dialyzer
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets:
+          - "p/erlang"
+
+  quality:
+    tools:
+      - name: elvis
+        rules:
+          # Default rules
+          elvis_style/line_length: 100
+          elvis_style/no_tabs: true
+          elvis_style/no_trailing_whitespace: true
+          elvis_style/macro_names: true
+          elvis_style/macro_module_names: true
+          elvis_style/operator_spaces: true
+          elvis_style/nesting_level: 4
+          elvis_style/god_modules: 25
+          elvis_style/no_if_expression: true
+          elvis_style/invalid_dynamic_call: true
+          elvis_style/used_ignored_variable: true
+          elvis_style/no_behavior_info: true
+          elvis_style/module_naming_convention: true
+          elvis_style/function_naming_convention: true
+          elvis_style/variable_naming_convention: true
+          elvis_style/state_record_and_type: true
+          elvis_style/no_spec_with_records: true
+          elvis_style/dont_repeat_yourself: 20
+          elvis_style/max_module_length: 500
+          elvis_style/max_function_length: 30
+          elvis_style/no_call: true
+          elvis_style/no_debug_call: true
+          elvis_style/no_common_caveats_call: true
+          elvis_style/no_nested_try_catch: true
+
+      - name: dialyzer
+        warnings:
+          - error_handling
+          - race_conditions
+          - underspecs
+          - unknown
+          - unmatched_returns
+
+    thresholds:
+      function_length: 30
+      nesting_level: 4
+      module_functions: 25
+      cyclomatic_complexity: 10
+
+patterns:
+  bad:
+    - pattern: 'list_to_atom\s*\('
+      severity: CRITICAL
+      rule: atom-exhaustion
+      message: "list_to_atom with user input can exhaust atom table"
+
+    - pattern: 'binary_to_atom\s*\('
+      severity: CRITICAL
+      rule: atom-exhaustion
+      message: "binary_to_atom with user input can exhaust atom table"
+
+    - pattern: 'erlang:binary_to_term\s*\('
+      severity: CRITICAL
+      rule: unsafe-deserialization
+      message: "binary_to_term is unsafe - use safe option"
+
+    - pattern: 'os:cmd\s*\('
+      severity: CRITICAL
+      rule: command-injection
+      message: "os:cmd is vulnerable to command injection"
+
+    - pattern: 'catch\s+\w+:\w+'
+      severity: MINOR
+      rule: catch-pattern
+      message: "Use try/catch instead of catch expression"
+
+    - pattern: 'if\s+true\s*->'
+      severity: MINOR
+      rule: no-if-expression
+      message: "Use case or guards instead of if"
+
+    - pattern: 'io:format\s*\('
+      severity: MINOR
+      rule: no-io-format
+      message: "Use logger or lager instead of io:format"
+
+    - pattern: 'apply\s*\(\s*\w+\s*,\s*\w+\s*,'
+      severity: MAJOR
+      rule: invalid-dynamic-call
+      message: "Dynamic apply can call any function - validate inputs"
+
+    - pattern: '_\w+\s*='
+      severity: MINOR
+      rule: used-ignored-variable
+      message: "Prefixed underscore variable is used - remove underscore"
+
+  good:
+    - pattern: "-spec"
+      message: "Function specification"
+    - pattern: "-type"
+      message: "Type definition"
+    - pattern: "-behaviour"
+      message: "OTP behaviour"
+    - pattern: "gen_server"
+      message: "GenServer pattern"
+    - pattern: "supervisor"
+      message: "Supervisor pattern"
+    - pattern: "binary_to_existing_atom"
+      message: "Safe atom conversion"
+
+idioms:
+  otp:
+    - pattern: 'gen_server:call'
+      message: "Synchronous GenServer call"
+    - pattern: 'gen_server:cast'
+      message: "Asynchronous GenServer cast"
+    - pattern: 'supervisor:start_link'
+      message: "Supervisor start"
+
+  pattern_matching:
+    - pattern: 'case\s+\w+\s+of'
+      message: "Case expression"
+    - pattern: 'receive\s*$'
+      message: "Receive expression"
+    - pattern: '\|\s*\w+\s*\]'
+      message: "List pattern"
+
+  error_handling:
+    - pattern: 'try\s+.*\s+catch'
+      message: "Try-catch block"
+    - pattern: '{ok,'
+      message: "Ok tuple pattern"
+    - pattern: '{error,'
+      message: "Error tuple pattern"

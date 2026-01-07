@@ -1,0 +1,172 @@
+# GraphQL Skill - Query Taxonomy
+# Used by: agents/query.md
+
+language: graphql
+taxonomy: query
+extensions: [".graphql", ".gql"]
+
+tools:
+  quality:
+    primary: graphql-eslint
+  security:
+    primary: graphql-armor
+
+axes:
+  security:
+    tools:
+      - name: graphql-armor
+        rules:
+          max-depth: 10
+          max-aliases: 15
+          max-directives: 50
+          max-tokens: 1000
+          cost-limit: 1000
+
+  quality:
+    tools:
+      - name: graphql-eslint
+        rules:
+          # Schema rules
+          description-style: inline
+          input-name: true
+          naming-convention: true
+          no-hashtag-description: true
+          no-root-type: true
+          no-scalar-result-type-on-mutation: true
+          no-typename-prefix: true
+          no-unreachable-types: true
+          require-deprecation-date: true
+          require-deprecation-reason: true
+          require-description: true
+          require-field-of-type-query-in-mutation-result: true
+          require-nullable-fields-with-oneof: true
+          require-nullable-result-in-root: true
+          require-type-pattern-with-oneof: true
+          strict-id-in-types: true
+
+          # Operations rules
+          alphabetize: true
+          lone-executable-definition: true
+          match-document-filename: true
+          no-anonymous-operations: true
+          no-deprecated: true
+          no-duplicate-fields: true
+          no-one-place-fragments: true
+          no-undefined-variables: true
+          no-unused-fields: true
+          no-unused-fragments: true
+          no-unused-variables: true
+          require-id-when-available: true
+          require-import-fragment: true
+          require-selections: true
+          selection-set-depth: 5
+          unique-directive-names: true
+          unique-directive-names-per-location: true
+          unique-enum-value-names: true
+          unique-field-definition-names: true
+          unique-fragment-name: true
+          unique-input-field-names: true
+          unique-operation-name: true
+          unique-operation-types: true
+          unique-type-names: true
+          unique-variable-names: true
+
+  performance:
+    rules:
+      - no-deep-nesting
+      - limit-aliases
+      - n-plus-one-detection
+      - batch-recommendations
+
+    thresholds:
+      max_depth: 5
+      max_aliases: 10
+      max_selections: 50
+
+patterns:
+  bad:
+    - pattern: 'query\s*{'
+      severity: MINOR
+      rule: no-anonymous-operations
+      message: "Name your operations for better debugging"
+
+    - pattern: '__typename'
+      severity: MINOR
+      rule: explicit-typename
+      message: "Consider if __typename is needed or if fragment works"
+
+    - pattern: '@deprecated'
+      severity: MINOR
+      rule: no-deprecated
+      message: "Using deprecated field - check for alternatives"
+
+    - pattern: 'password|secret|token'
+      severity: CRITICAL
+      rule: sensitive-fields
+      message: "Sensitive field in schema - ensure proper authorization"
+
+    - pattern: 'mutation.*delete.*!'
+      severity: MAJOR
+      rule: dangerous-mutation
+      message: "Destructive mutation - ensure proper authorization"
+
+    - pattern: '\w+\([^)]*\$\w+:\s*String\s*!\s*\)'
+      severity: MINOR
+      rule: use-id-type
+      message: "Consider ID type instead of String for identifiers"
+
+    - pattern: 'query.*\{[^}]{500,}'
+      severity: MAJOR
+      rule: query-complexity
+      message: "Large query - consider pagination or fragments"
+
+  good:
+    - pattern: "fragment "
+      message: "Fragment for reusability"
+    - pattern: "interface "
+      message: "Interface for polymorphism"
+    - pattern: "union "
+      message: "Union type"
+    - pattern: "@auth"
+      message: "Authorization directive"
+    - pattern: "@cacheControl"
+      message: "Cache control directive"
+    - pattern: "first:"
+      message: "Pagination argument"
+    - pattern: "after:"
+      message: "Cursor-based pagination"
+    - pattern: "edges {"
+      message: "Relay-style connection"
+
+idioms:
+  relay:
+    - pattern: 'connection'
+      message: "Relay connection pattern"
+    - pattern: 'edges'
+      message: "Relay edges"
+    - pattern: 'pageInfo'
+      message: "Relay pagination info"
+    - pattern: 'node'
+      message: "Relay node interface"
+
+  mutations:
+    - pattern: 'input:'
+      message: "Input type for mutation"
+    - pattern: 'Payload'
+      message: "Mutation response type"
+    - pattern: 'userErrors'
+      message: "User-facing errors"
+
+best_practices:
+  schema:
+    - "Use nullable fields for optional data"
+    - "Return objects from mutations, not scalars"
+    - "Use Input types for mutation arguments"
+    - "Implement Node interface for entities"
+    - "Use connections for lists"
+
+  operations:
+    - "Name all operations"
+    - "Use fragments for shared selections"
+    - "Persist queries for security"
+    - "Implement query complexity limits"

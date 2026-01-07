@@ -1,0 +1,173 @@
+# Objective-C Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: objectivec
+taxonomy: programming
+extensions: [".m", ".mm", ".h"]
+
+tools:
+  quality:
+    primary: clang-tidy
+    secondary: oclint
+  security:
+    primary: semgrep
+  types:
+    primary: clang
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets:
+          - "p/objc"
+          - "p/ios"
+          - "p/owasp-mobile"
+
+  quality:
+    tools:
+      - name: oclint
+        rules:
+          basic:
+            - BitwiseOperatorInConditional
+            - BrokenNilCheck
+            - BrokenNullCheck
+            - BrokenOddnessCheck
+            - CollapsibleIfStatements
+            - ConstantConditionalOperator
+            - ConstantIfExpression
+            - DeadCode
+            - DoubleNegative
+            - ForLoopShouldBeWhileLoop
+            - GotoStatement
+            - JumbledIncrementer
+            - MisplacedNilCheck
+            - MisplacedNullCheck
+            - MultipleUnaryOperator
+            - ReturnFromFinallyBlock
+            - ThrowExceptionFromFinallyBlock
+          convention:
+            - AssignIvarOutsideAccessors
+            - AvoidBranchingStatementAsLastInLoop
+            - DefaultLabelNotLastInSwitch
+            - DestructorOfVirtualClass
+            - InvertedLogic
+            - MissingBreakInSwitchStatement
+            - NonCaseLabelInSwitch
+            - ParameterReassignment
+            - PreferEarlyExit
+            - SwitchStatementsShouldHaveDefault
+            - TooFewBranchesInSwitchStatement
+          empty:
+            - EmptyCatchStatement
+            - EmptyDoWhileStatement
+            - EmptyElseBlock
+            - EmptyFinallyStatement
+            - EmptyForStatement
+            - EmptyIfStatement
+            - EmptySwitchStatement
+            - EmptyTryStatement
+            - EmptyWhileStatement
+          naming:
+            - LongVariableName
+            - ShortVariableName
+          redundant:
+            - RedundantConditionalOperator
+            - RedundantIfStatement
+            - RedundantLocalVariable
+            - RedundantNilCheck
+            - UnnecessaryElseStatement
+            - UnnecessaryNullCheckForDealloc
+            - UselessParentheses
+          size:
+            - HighCyclomaticComplexity
+            - HighNcssMethod
+            - HighNPathComplexity
+            - LongClass
+            - LongLine
+            - LongMethod
+            - TooManyFields
+            - TooManyMethods
+            - TooManyParameters
+
+    thresholds:
+      cyclomatic_complexity: 10
+      method_length: 50
+      class_length: 500
+      max_parameters: 5
+
+patterns:
+  bad:
+    - pattern: 'stringWithFormat:.*%@.*input'
+      severity: MAJOR
+      rule: format-string
+      message: "Format string with user input - validate first"
+
+    - pattern: 'NSLog\s*\('
+      severity: MINOR
+      rule: no-nslog
+      message: "Remove NSLog in production - use proper logging"
+
+    - pattern: 'performSelector:'
+      severity: MAJOR
+      rule: unsafe-selector
+      message: "performSelector: is unsafe - use direct method calls"
+
+    - pattern: 'valueForKey:\s*@'
+      severity: MINOR
+      rule: kvc-safety
+      message: "KVC can crash on missing keys - use safe accessors"
+
+    - pattern: '@try.*@catch\s*\(.*\)'
+      severity: MINOR
+      rule: exception-handling
+      message: "ObjC exceptions are for programming errors, not control flow"
+
+    - pattern: 'retain\]'
+      severity: MAJOR
+      rule: manual-retain
+      message: "Use ARC instead of manual retain/release"
+
+    - pattern: 'autorelease\]'
+      severity: MAJOR
+      rule: manual-autorelease
+      message: "Use ARC instead of manual autorelease"
+
+    - pattern: 'dealloc\s*{'
+      severity: MINOR
+      rule: arc-dealloc
+      message: "Under ARC, dealloc should only clean up non-memory resources"
+
+  good:
+    - pattern: "__weak"
+      message: "Weak reference to prevent retain cycle"
+    - pattern: "__strong"
+      message: "Explicit strong reference"
+    - pattern: "nullable"
+      message: "Nullability annotation"
+    - pattern: "nonnull"
+      message: "Non-null annotation"
+    - pattern: "@autoreleasepool"
+      message: "Explicit autorelease pool"
+
+frameworks:
+  uikit:
+    - pattern: '\[UIApplication\s+sharedApplication\]'
+      severity: MINOR
+      rule: shared-access
+      message: "Not available in app extensions"
+
+    - pattern: 'dispatch_sync\s*\(\s*dispatch_get_main_queue'
+      severity: MAJOR
+      rule: main-thread-sync
+      message: "Can deadlock if called from main thread"
+
+  foundation:
+    - pattern: 'NSUserDefaults.*setObject:.*forKey:'
+      severity: MINOR
+      rule: userdefaults-sync
+      message: "Consider synchronize for critical data"
+
+    - pattern: 'NSKeyedUnarchiver\s+unarchiveObjectWithData:'
+      severity: CRITICAL
+      rule: unsafe-unarchive
+      message: "Use unarchivedObjectOfClass:fromData:error: for safety"

@@ -1,0 +1,164 @@
+# Elixir Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: elixir
+taxonomy: programming
+extensions: [".ex", ".exs"]
+
+tools:
+  quality:
+    primary: credo
+    secondary: dialyzer
+  security:
+    primary: sobelow
+  types:
+    primary: dialyzer
+
+axes:
+  security:
+    tools:
+      - name: sobelow
+        rules:
+          - Config.CSP
+          - Config.CSRF
+          - Config.HTTPS
+          - Config.Secrets
+          - DOS.ListToAtom
+          - DOS.StringToAtom
+          - Misc.BinToTerm
+          - SQL.Query
+          - SQL.Stream
+          - Traversal.FileModule
+          - Traversal.SendDownload
+          - XSS.ContentType
+          - XSS.HTML
+          - XSS.Raw
+          - XSS.SendResp
+
+  quality:
+    tools:
+      - name: credo
+        checks:
+          consistency:
+            - ExceptionNames
+            - LineEndings
+            - ParameterPatternMatching
+            - SpaceAroundOperators
+            - SpaceInParentheses
+            - TabsOrSpaces
+          design:
+            - AliasUsage
+            - DuplicatedCode
+            - TagFIXME
+            - TagTODO
+          readability:
+            - AliasOrder
+            - FunctionNames
+            - LargeNumbers
+            - MaxLineLength
+            - ModuleAttributeNames
+            - ModuleNames
+            - ParenthesesOnZeroArityDefs
+            - PredicateFunctionNames
+            - PreferImplicitTry
+            - RedundantBlankLines
+            - Semicolons
+            - SpaceAfterCommas
+            - StringSigils
+            - TrailingBlankLine
+            - TrailingWhiteSpace
+            - VariableNames
+          refactor:
+            - ABCSize
+            - ConditionWithMatchingBranches
+            - CyclomaticComplexity
+            - FunctionArity
+            - LongQuoteBlocks
+            - MatchInCondition
+            - NegatedConditionsInUnless
+            - NegatedConditionsWithElse
+            - Nesting
+            - UnlessWithElse
+          warning:
+            - BoolOperationOnSameValues
+            - ExpensiveEmptyEnumCheck
+            - IExPry
+            - IoInspect
+            - LazyLogging
+            - OperationOnSameValues
+            - OperationWithConstantResult
+            - RaiseInsideRescue
+            - UnusedEnumOperation
+            - UnusedFileOperation
+            - UnusedKeywordOperation
+            - UnusedListOperation
+            - UnusedPathOperation
+            - UnusedRegexOperation
+            - UnusedStringOperation
+            - UnusedTupleOperation
+
+    thresholds:
+      cyclomatic_complexity: 10
+      function_arity: 5
+      nesting_depth: 3
+
+patterns:
+  bad:
+    - pattern: 'String\.to_atom\s*\('
+      severity: CRITICAL
+      rule: DOS.StringToAtom
+      message: "String.to_atom with user input can exhaust atom table (DoS)"
+
+    - pattern: ':erlang\.binary_to_term\s*\('
+      severity: CRITICAL
+      rule: Misc.BinToTerm
+      message: "binary_to_term is unsafe - use safe: true option"
+
+    - pattern: 'IO\.inspect\s*\('
+      severity: MINOR
+      rule: IoInspect
+      message: "Remove IO.inspect before committing"
+
+    - pattern: 'IEx\.pry'
+      severity: MINOR
+      rule: IExPry
+      message: "Remove IEx.pry before committing"
+
+    - pattern: 'Repo\.query!\s*\('
+      severity: MAJOR
+      rule: SQL.Query
+      message: "Use parameterized queries to prevent SQL injection"
+
+    - pattern: 'raw\s*\('
+      severity: MAJOR
+      rule: XSS.Raw
+      message: "raw() can lead to XSS - sanitize content first"
+
+  good:
+    - pattern: "with {:ok"
+      message: "Using with for happy path"
+    - pattern: "@spec "
+      message: "Function specification"
+    - pattern: "@doc"
+      message: "Documentation"
+    - pattern: "|> "
+      message: "Pipeline operator"
+
+idioms:
+  pattern_matching:
+    - pattern: 'case\s+\w+\s+do'
+      message: "Pattern matching with case"
+    - pattern: 'fn\s+.*->'
+      message: "Anonymous function"
+
+frameworks:
+  phoenix:
+    - pattern: 'conn\.params\['
+      severity: MAJOR
+      rule: unsafe-params
+      message: "Validate and sanitize params before use"
+
+    - pattern: 'put_resp_content_type.*text/html'
+      severity: MINOR
+      rule: XSS.ContentType
+      message: "Ensure HTML content is properly escaped"

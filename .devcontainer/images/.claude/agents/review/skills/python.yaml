@@ -1,0 +1,239 @@
+# Python Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: python
+taxonomy: programming
+extensions: [".py", ".pyw", ".pyi"]
+
+# Simulated tools for Python analysis
+tools:
+  quality:
+    primary: ruff
+    secondary: pylint
+  security:
+    primary: bandit
+    secondary: semgrep
+  types:
+    primary: mypy
+  tests:
+    primary: pytest-cov
+
+# Analysis rules by axis
+axes:
+  security:
+    tools:
+      - name: bandit
+        rules:
+          B101: "assert_used - Use proper validation instead of assert"
+          B102: "exec_used - Code injection risk via exec()"
+          B103: "set_bad_file_permissions - Insecure file permissions"
+          B104: "hardcoded_bind_all_interfaces - Binding to 0.0.0.0"
+          B105: "hardcoded_password_string - Password in source code"
+          B106: "hardcoded_password_funcarg - Password as function argument"
+          B107: "hardcoded_password_default - Password as default value"
+          B108: "hardcoded_tmp_directory - Insecure temp directory"
+          B110: "try_except_pass - Silent exception swallowing"
+          B112: "try_except_continue - Silent exception in loop"
+          B301: "pickle - Deserialization vulnerability"
+          B303: "md5 - Weak hash algorithm"
+          B304: "des - Weak cipher"
+          B305: "cipher - Insecure cipher mode"
+          B306: "mktemp_q - Race condition in temp file"
+          B307: "eval - Arbitrary code execution"
+          B308: "mark_safe - XSS vulnerability in Django"
+          B310: "urllib_urlopen - SSRF risk"
+          B311: "random - Predictable random for security"
+          B312: "telnetlib - Unencrypted protocol"
+          B313: "xml_bad_cElementTree - XXE vulnerability"
+          B314: "xml_bad_ElementTree - XXE vulnerability"
+          B320: "xml_bad_sax - XXE vulnerability"
+          B323: "unverified_context - SSL verification disabled"
+          B324: "hashlib_insecure - Insecure hash function"
+          B501: "request_with_no_cert_validation - SSL not verified"
+          B502: "ssl_with_bad_version - Insecure SSL version"
+          B503: "ssl_with_bad_defaults - Insecure SSL defaults"
+          B504: "ssl_with_no_version - SSL version not specified"
+          B505: "weak_cryptographic_key - Key too short"
+          B506: "yaml_load - Unsafe YAML loading"
+          B507: "ssh_no_host_key_verification - SSH host key not verified"
+          B601: "paramiko_calls - Shell injection via SSH"
+          B602: "subprocess_popen_with_shell_equals_true - Shell injection"
+          B603: "subprocess_without_shell_equals_true - Use shell=False"
+          B604: "any_other_function_with_shell_equals_true - Shell injection"
+          B605: "start_process_with_a_shell - Command injection"
+          B606: "start_process_with_no_shell - Safer subprocess"
+          B607: "start_process_with_partial_path - Path injection"
+          B608: "hardcoded_sql_expressions - SQL injection"
+          B609: "linux_commands_wildcard_injection - Wildcard injection"
+          B610: "django_extra_used - SQL injection in Django"
+          B611: "django_rawsql_used - Raw SQL in Django"
+          B701: "jinja2_autoescape_false - XSS via Jinja2"
+          B702: "use_of_mako_templates - XSS via Mako"
+          B703: "django_mark_safe - XSS via mark_safe"
+
+      - name: semgrep
+        rulesets:
+          - "p/python"
+          - "p/django"
+          - "p/flask"
+          - "p/owasp-top-ten"
+
+  quality:
+    tools:
+      - name: ruff
+        rules:
+          E: "pycodestyle errors"
+          W: "pycodestyle warnings"
+          F: "pyflakes"
+          C: "mccabe complexity"
+          N: "pep8-naming"
+          I: "isort"
+          D: "pydocstyle"
+          UP: "pyupgrade"
+          B: "bugbear"
+          A: "builtins"
+          COM: "commas"
+          C4: "comprehensions"
+          DTZ: "datetime timezone"
+          T10: "debugger"
+          EM: "error messages"
+          ISC: "implicit string concat"
+          ICN: "import conventions"
+          PIE: "misc lints"
+          PT: "pytest style"
+          RSE: "raise"
+          RET: "return"
+          SIM: "simplify"
+          TID: "tidy imports"
+          ARG: "unused arguments"
+          ERA: "commented code"
+          PL: "pylint"
+          TRY: "tryceratops"
+          RUF: "ruff-specific"
+
+      - name: pylint
+        thresholds:
+          cyclomatic_complexity: 10
+          function_lines: 50
+          file_lines: 300
+          nesting_depth: 4
+          arguments_count: 5
+          local_variables: 15
+          public_methods: 20
+
+  types:
+    tools:
+      - name: mypy
+        config:
+          strict: true
+          warn_return_any: true
+          warn_unused_configs: true
+          disallow_untyped_defs: true
+          check_untyped_defs: true
+          disallow_incomplete_defs: true
+          no_implicit_optional: true
+          warn_redundant_casts: true
+          warn_unused_ignores: true
+
+  tests:
+    tools:
+      - name: pytest-cov
+        thresholds:
+          line_coverage: 80
+          branch_coverage: 75
+          function_coverage: 90
+
+# Common patterns to detect
+patterns:
+  bad:
+    - pattern: 'eval\s*\('
+      severity: CRITICAL
+      rule: B307
+      message: "Use of eval() is dangerous - arbitrary code execution"
+
+    - pattern: 'exec\s*\('
+      severity: CRITICAL
+      rule: B102
+      message: "Use of exec() is dangerous - arbitrary code execution"
+
+    - pattern: 'os\.system\s*\('
+      severity: CRITICAL
+      rule: B605
+      message: "os.system() is vulnerable to shell injection"
+
+    - pattern: 'subprocess\.(call|run|Popen).*shell\s*=\s*True'
+      severity: CRITICAL
+      rule: B602
+      message: "subprocess with shell=True enables shell injection"
+
+    - pattern: '(password|passwd|pwd|secret|token|api_key)\s*=\s*["\'][^"\']+["\']'
+      severity: CRITICAL
+      rule: B105
+      message: "Hardcoded credentials in source code"
+
+    - pattern: 'pickle\.(load|loads)\s*\('
+      severity: MAJOR
+      rule: B301
+      message: "Pickle deserialization is unsafe with untrusted data"
+
+    - pattern: 'yaml\.load\s*\([^,]+\)'
+      severity: MAJOR
+      rule: B506
+      message: "Use yaml.safe_load() instead of yaml.load()"
+
+    - pattern: 'hashlib\.(md5|sha1)\s*\('
+      severity: MAJOR
+      rule: B303
+      message: "MD5/SHA1 are weak hash algorithms - use SHA256+"
+
+    - pattern: 'random\.(random|randint|choice)'
+      severity: MINOR
+      rule: B311
+      message: "Use secrets module for cryptographic randomness"
+
+    - pattern: 'except\s*:\s*(pass|\.\.\.)'
+      severity: MAJOR
+      rule: B110
+      message: "Bare except with pass silently swallows errors"
+
+  good:
+    - pattern: "subprocess.run(..., shell=False)"
+      message: "Safe subprocess usage without shell"
+
+    - pattern: "yaml.safe_load("
+      message: "Safe YAML loading"
+
+    - pattern: "secrets.token_hex("
+      message: "Cryptographically secure random"
+
+    - pattern: "hashlib.sha256("
+      message: "Strong hash algorithm"
+
+# Framework-specific rules
+frameworks:
+  django:
+    - pattern: 'mark_safe\s*\('
+      severity: MAJOR
+      rule: B703
+      message: "mark_safe() can lead to XSS if input is not sanitized"
+
+    - pattern: '\.extra\s*\('
+      severity: MAJOR
+      rule: B610
+      message: "QuerySet.extra() is vulnerable to SQL injection"
+
+    - pattern: '\.raw\s*\('
+      severity: MAJOR
+      rule: B611
+      message: "RawSQL queries need careful escaping"
+
+  flask:
+    - pattern: 'render_template_string\s*\('
+      severity: MAJOR
+      rule: flask-ssti
+      message: "render_template_string with user input enables SSTI"
+
+    - pattern: 'redirect\s*\(.*request\.'
+      severity: MAJOR
+      rule: flask-open-redirect
+      message: "Validate redirect URLs to prevent open redirect"

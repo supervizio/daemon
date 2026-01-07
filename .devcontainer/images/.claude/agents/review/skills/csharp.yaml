@@ -1,0 +1,80 @@
+# C# Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: csharp
+taxonomy: programming
+extensions: [".cs"]
+
+tools:
+  quality:
+    primary: roslynator
+  security:
+    primary: semgrep
+    secondary: security-code-scan
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets: ["p/csharp", "p/dotnet", "p/owasp-top-ten"]
+      - name: security-code-scan
+        rules:
+          SCS0001: "Command injection"
+          SCS0002: "SQL injection"
+          SCS0003: "XPath injection"
+          SCS0004: "XML external entity injection"
+          SCS0005: "Weak random generator"
+          SCS0006: "Weak hash function"
+          SCS0007: "Open redirect"
+          SCS0008: "Cookie without Secure flag"
+          SCS0009: "Cookie without HttpOnly flag"
+          SCS0010: "Weak cipher"
+          SCS0011: "Unsafe deserialization"
+
+  quality:
+    tools:
+      - name: roslynator
+        analyzers:
+          - "Roslynator.Analyzers"
+          - "Roslynator.CodeAnalysis.Analyzers"
+          - "Roslynator.Formatting.Analyzers"
+
+patterns:
+  bad:
+    - pattern: 'SqlCommand.*".*\+\s*'
+      severity: CRITICAL
+      rule: SCS0002
+      message: "SQL string concatenation - use parameterized queries"
+
+    - pattern: 'Process\.Start\s*\(.*\+'
+      severity: CRITICAL
+      rule: SCS0001
+      message: "Command injection via Process.Start"
+
+    - pattern: 'BinaryFormatter|NetDataContractSerializer'
+      severity: CRITICAL
+      rule: SCS0011
+      message: "Unsafe deserialization - use JsonSerializer"
+
+    - pattern: 'new Random\s*\('
+      severity: MINOR
+      rule: SCS0005
+      message: "Use RandomNumberGenerator for crypto"
+
+    - pattern: 'MD5\.|SHA1\.'
+      severity: MAJOR
+      rule: SCS0006
+      message: "Weak hash - use SHA256 or better"
+
+    - pattern: 'dynamic'
+      severity: MINOR
+      rule: avoid-dynamic
+      message: "Consider strongly typed alternative"
+
+  good:
+    - pattern: "SqlParameter"
+      message: "Parameterized query"
+    - pattern: "RandomNumberGenerator"
+      message: "Secure random"
+    - pattern: "IDisposable"
+      message: "Proper resource management"

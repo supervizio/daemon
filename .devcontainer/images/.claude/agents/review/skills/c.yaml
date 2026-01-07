@@ -1,0 +1,155 @@
+# C Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: c
+taxonomy: programming
+extensions: [".c", ".h"]
+
+tools:
+  quality:
+    primary: clang-tidy
+    secondary: cppcheck
+  security:
+    primary: semgrep
+  types:
+    primary: clang
+
+axes:
+  security:
+    tools:
+      - name: cppcheck
+        rules:
+          - bufferAccessOutOfBounds
+          - invalidPrintfArgType_s
+          - invalidScanfArgType_s
+          - memleak
+          - nullPointer
+          - resourceLeak
+          - uninitvar
+
+      - name: semgrep
+        rulesets:
+          - "p/c"
+          - "p/owasp-top-ten"
+
+  quality:
+    tools:
+      - name: clang-tidy
+        checks:
+          - bugprone-argument-comment
+          - bugprone-assert-side-effect
+          - bugprone-branch-clone
+          - bugprone-incorrect-roundings
+          - bugprone-integer-division
+          - bugprone-macro-parentheses
+          - bugprone-macro-repeated-side-effects
+          - bugprone-misplaced-widening-cast
+          - bugprone-sizeof-container
+          - bugprone-sizeof-expression
+          - bugprone-suspicious-memset-usage
+          - bugprone-suspicious-missing-comma
+          - bugprone-suspicious-semicolon
+          - bugprone-suspicious-string-compare
+          - bugprone-swapped-arguments
+          - bugprone-undefined-memory-manipulation
+          - bugprone-unused-return-value
+          - readability-braces-around-statements
+          - readability-function-size
+          - readability-identifier-naming
+          - readability-magic-numbers
+          - readability-named-parameter
+          - readability-non-const-parameter
+          - readability-redundant-control-flow
+          - readability-simplify-boolean-expr
+
+    thresholds:
+      function_size: 80
+      cyclomatic_complexity: 15
+      max_parameters: 6
+
+patterns:
+  bad:
+    - pattern: 'gets\s*\('
+      severity: CRITICAL
+      rule: CWE-120
+      message: "gets() is banned - use fgets() with size limit"
+
+    - pattern: 'strcpy\s*\('
+      severity: CRITICAL
+      rule: CWE-120
+      message: "strcpy() buffer overflow - use strncpy() with size"
+
+    - pattern: 'strcat\s*\('
+      severity: CRITICAL
+      rule: CWE-120
+      message: "strcat() buffer overflow - use strncat() with size"
+
+    - pattern: 'sprintf\s*\('
+      severity: CRITICAL
+      rule: CWE-120
+      message: "sprintf() buffer overflow - use snprintf()"
+
+    - pattern: 'scanf\s*\(\s*"%s"'
+      severity: CRITICAL
+      rule: CWE-120
+      message: "scanf %s can overflow - specify width (%255s)"
+
+    - pattern: 'system\s*\('
+      severity: CRITICAL
+      rule: CWE-78
+      message: "system() command injection - validate input or use exec*"
+
+    - pattern: 'popen\s*\('
+      severity: MAJOR
+      rule: CWE-78
+      message: "popen() command injection - validate input carefully"
+
+    - pattern: 'malloc\s*\([^)]*\*[^)]*\)'
+      severity: MAJOR
+      rule: CWE-190
+      message: "Integer overflow in malloc size calculation"
+
+    - pattern: 'realloc\s*\(\s*\w+\s*,\s*0\s*\)'
+      severity: MAJOR
+      rule: undefined-behavior
+      message: "realloc(ptr, 0) behavior is implementation-defined"
+
+    - pattern: 'free\s*\(\s*\w+\s*\)\s*;[^}]*\1'
+      severity: CRITICAL
+      rule: CWE-415
+      message: "Potential double-free or use-after-free"
+
+    - pattern: 'atoi\s*\('
+      severity: MINOR
+      rule: unsafe-atoi
+      message: "atoi() has no error checking - use strtol()"
+
+    - pattern: 'rand\s*\(\s*\)'
+      severity: MINOR
+      rule: weak-random
+      message: "rand() is not cryptographically secure"
+
+  good:
+    - pattern: "fgets("
+      message: "Safe string input with size limit"
+    - pattern: "snprintf("
+      message: "Safe formatted output with size limit"
+    - pattern: "strncat("
+      message: "Bounded string concatenation"
+    - pattern: "strncpy("
+      message: "Bounded string copy"
+    - pattern: "calloc("
+      message: "Zero-initialized allocation"
+
+idioms:
+  memory:
+    - pattern: 'if\s*\(\s*\w+\s*==\s*NULL\s*\)'
+      message: "NULL check after allocation"
+    - pattern: 'free\s*\(\s*\w+\s*\)\s*;\s*\w+\s*=\s*NULL'
+      message: "NULL after free (good practice)"
+
+  error_handling:
+    - pattern: 'if\s*\(\s*\w+\s*<\s*0\s*\)'
+      message: "Error code checking"
+    - pattern: 'perror\s*\('
+      message: "Error message output"

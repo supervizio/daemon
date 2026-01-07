@@ -1,0 +1,125 @@
+# Kotlin Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: kotlin
+taxonomy: programming
+extensions: [".kt", ".kts"]
+
+tools:
+  quality:
+    primary: detekt
+    secondary: ktlint
+  security:
+    primary: semgrep
+  types:
+    primary: kotlin-compiler
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets:
+          - "p/kotlin"
+          - "p/owasp-top-ten"
+      - name: detekt
+        rules:
+          potential-bugs: "Potential bug patterns"
+          exceptions: "Exception handling issues"
+
+  quality:
+    tools:
+      - name: detekt
+        rulesets:
+          complexity:
+            - LongMethod
+            - LongParameterList
+            - ComplexCondition
+            - TooManyFunctions
+            - LargeClass
+            - NestedBlockDepth
+            - CyclomaticComplexMethod
+          style:
+            - MagicNumber
+            - MaxLineLength
+            - WildcardImport
+            - UnusedImports
+            - UnusedPrivateMember
+            - ReturnCount
+          naming:
+            - FunctionNaming
+            - VariableNaming
+            - ClassNaming
+            - PackageNaming
+          empty-blocks:
+            - EmptyCatchBlock
+            - EmptyClassBlock
+            - EmptyFunctionBlock
+          performance:
+            - SpreadOperator
+            - ForEachOnRange
+            - ArrayPrimitive
+
+      - name: ktlint
+        rules:
+          - "standard"
+          - "experimental"
+
+    thresholds:
+      cyclomatic_complexity: 10
+      function_lines: 60
+      file_lines: 500
+      max_parameters: 5
+
+patterns:
+  bad:
+    - pattern: '!!\s*\.'
+      severity: MAJOR
+      rule: UnsafeCallOnNullableType
+      message: "Avoid !! operator - handle nullability explicitly"
+
+    - pattern: 'println\s*\('
+      severity: MINOR
+      rule: no-println
+      message: "Use proper logging instead of println"
+
+    - pattern: 'catch\s*\(\s*e\s*:\s*Exception\s*\)'
+      severity: MAJOR
+      rule: TooGenericExceptionCaught
+      message: "Catch specific exceptions instead of generic Exception"
+
+    - pattern: 'var\s+\w+\s*:\s*\w+\s*=\s*null'
+      severity: MINOR
+      rule: VarCouldBeVal
+      message: "Consider using val with nullable type instead of var = null"
+
+    - pattern: '@Suppress\s*\('
+      severity: MINOR
+      rule: SuppressAnnotation
+      message: "Explain why suppression is needed"
+
+    - pattern: 'Runtime\.getRuntime\s*\(\s*\)\s*\.exec'
+      severity: CRITICAL
+      rule: CommandInjection
+      message: "Command execution - validate and sanitize input"
+
+  good:
+    - pattern: "?.let {"
+      message: "Safe call with let"
+    - pattern: "?: throw"
+      message: "Elvis operator with explicit exception"
+    - pattern: "sealed class"
+      message: "Using sealed class for type safety"
+    - pattern: "data class"
+      message: "Immutable data class"
+
+frameworks:
+  android:
+    - pattern: 'Handler\s*\(\s*\)'
+      severity: MAJOR
+      rule: HandlerLeak
+      message: "Handler can cause memory leaks - use WeakReference"
+
+    - pattern: 'AsyncTask'
+      severity: MAJOR
+      rule: DeprecatedAsyncTask
+      message: "AsyncTask is deprecated - use coroutines or RxJava"

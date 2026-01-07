@@ -1,0 +1,172 @@
+# TypeScript Skill - Programming Taxonomy
+# Used by: agents/programming.md
+# Extends: javascript.yaml (inherits all JS rules + adds TS-specific)
+
+language: typescript
+taxonomy: programming
+extensions: [".ts", ".tsx", ".mts", ".cts"]
+extends: javascript  # Inherit all JavaScript rules
+
+# Simulated tools for TypeScript analysis
+tools:
+  quality:
+    primary: eslint
+    secondary: biome
+  security:
+    primary: semgrep
+    secondary: eslint-plugin-security
+  types:
+    primary: tsc
+  tests:
+    primary: istanbul
+
+# Additional TypeScript-specific rules
+axes:
+  types:
+    tools:
+      - name: tsc
+        config:
+          strict: true
+          noImplicitAny: true
+          strictNullChecks: true
+          strictFunctionTypes: true
+          strictBindCallApply: true
+          strictPropertyInitialization: true
+          noImplicitThis: true
+          useUnknownInCatchVariables: true
+          alwaysStrict: true
+          noUnusedLocals: true
+          noUnusedParameters: true
+          exactOptionalPropertyTypes: true
+          noImplicitReturns: true
+          noFallthroughCasesInSwitch: true
+          noUncheckedIndexedAccess: true
+          noImplicitOverride: true
+          noPropertyAccessFromIndexSignature: true
+
+      - name: typescript-eslint
+        rules:
+          # Type Safety
+          "@typescript-eslint/no-explicit-any": "warn"
+          "@typescript-eslint/no-unsafe-assignment": "error"
+          "@typescript-eslint/no-unsafe-call": "error"
+          "@typescript-eslint/no-unsafe-member-access": "error"
+          "@typescript-eslint/no-unsafe-return": "error"
+          "@typescript-eslint/no-unsafe-argument": "error"
+
+          # Best Practices
+          "@typescript-eslint/explicit-function-return-type": "warn"
+          "@typescript-eslint/explicit-module-boundary-types": "warn"
+          "@typescript-eslint/no-non-null-assertion": "warn"
+          "@typescript-eslint/prefer-nullish-coalescing": "warn"
+          "@typescript-eslint/prefer-optional-chain": "warn"
+          "@typescript-eslint/strict-boolean-expressions": "warn"
+
+          # Code Quality
+          "@typescript-eslint/no-floating-promises": "error"
+          "@typescript-eslint/no-misused-promises": "error"
+          "@typescript-eslint/await-thenable": "error"
+          "@typescript-eslint/no-unnecessary-type-assertion": "warn"
+          "@typescript-eslint/no-unnecessary-condition": "warn"
+          "@typescript-eslint/prefer-as-const": "warn"
+
+          # Unused Code
+          "@typescript-eslint/no-unused-vars": "warn"
+          "@typescript-eslint/no-empty-interface": "warn"
+          "@typescript-eslint/no-empty-function": "warn"
+
+# TypeScript-specific patterns
+patterns:
+  bad:
+    - pattern: ':\s*any\b'
+      severity: MAJOR
+      rule: "@typescript-eslint/no-explicit-any"
+      message: "Avoid 'any' type - use 'unknown' or specific types"
+
+    - pattern: 'as\s+any\b'
+      severity: MAJOR
+      rule: "@typescript-eslint/no-explicit-any"
+      message: "Type assertion to 'any' bypasses type safety"
+
+    - pattern: '!\s*[.[]'
+      severity: MINOR
+      rule: "@typescript-eslint/no-non-null-assertion"
+      message: "Non-null assertion (!) can cause runtime errors"
+
+    - pattern: '@ts-ignore'
+      severity: MAJOR
+      rule: "@typescript-eslint/ban-ts-comment"
+      message: "Use @ts-expect-error with explanation instead of @ts-ignore"
+
+    - pattern: '@ts-nocheck'
+      severity: CRITICAL
+      rule: "@typescript-eslint/ban-ts-comment"
+      message: "@ts-nocheck disables all type checking"
+
+    - pattern: 'Object\s*\(\s*\)'
+      severity: MINOR
+      rule: "@typescript-eslint/ban-types"
+      message: "Use 'object' or Record<string, unknown> instead of Object"
+
+    - pattern: 'Function\b'
+      severity: MINOR
+      rule: "@typescript-eslint/ban-types"
+      message: "Use specific function types instead of Function"
+
+    - pattern: '\|\|\s*{}'
+      severity: MINOR
+      rule: "@typescript-eslint/prefer-nullish-coalescing"
+      message: "Use ?? for nullish coalescing instead of ||"
+
+    - pattern: '&&\s*\w+\.'
+      severity: MINOR
+      rule: "@typescript-eslint/prefer-optional-chain"
+      message: "Use optional chaining (?.) instead of && chains"
+
+  good:
+    - pattern: ": unknown"
+      message: "Using 'unknown' is safer than 'any'"
+
+    - pattern: "@ts-expect-error"
+      message: "@ts-expect-error is better than @ts-ignore"
+
+    - pattern: "?."
+      message: "Good use of optional chaining"
+
+    - pattern: "??"
+      message: "Good use of nullish coalescing"
+
+# React TypeScript patterns
+frameworks:
+  react:
+    - pattern: 'React\.FC\s*<'
+      severity: MINOR
+      rule: react-ts-fc
+      message: "Consider explicit props typing over React.FC"
+
+    - pattern: 'useState<any>'
+      severity: MAJOR
+      rule: "@typescript-eslint/no-explicit-any"
+      message: "Provide specific type for useState"
+
+    - pattern: 'useRef<any>'
+      severity: MAJOR
+      rule: "@typescript-eslint/no-explicit-any"
+      message: "Provide specific type for useRef"
+
+    - pattern: 'as\s+unknown\s+as\s+'
+      severity: MAJOR
+      rule: double-assertion
+      message: "Double type assertion is usually a sign of incorrect types"
+
+# Type definition patterns
+type_definitions:
+  - pattern: 'interface\s+\w+\s*{}'
+    severity: MINOR
+    rule: "@typescript-eslint/no-empty-interface"
+    message: "Empty interfaces should extend something or be removed"
+
+  - pattern: 'type\s+\w+\s*=\s*any'
+    severity: MAJOR
+    rule: "@typescript-eslint/no-explicit-any"
+    message: "Type alias to 'any' defeats the purpose of TypeScript"

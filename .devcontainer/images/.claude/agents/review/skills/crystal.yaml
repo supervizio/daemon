@@ -1,0 +1,147 @@
+# Crystal Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: crystal
+taxonomy: programming
+extensions: [".cr"]
+
+tools:
+  quality:
+    primary: ameba
+  security:
+    primary: semgrep
+  types:
+    primary: crystal-compiler
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets:
+          - "p/crystal"
+
+  quality:
+    tools:
+      - name: ameba
+        rules:
+          # Lint rules
+          Lint/BadDirective: true
+          Lint/ComparisonToBoolean: true
+          Lint/DebugCalls: true
+          Lint/DuplicatedRequire: true
+          Lint/EmptyEnsure: true
+          Lint/EmptyExpression: true
+          Lint/EmptyLoop: true
+          Lint/HashDuplicatedKey: true
+          Lint/LiteralAssignmentsInExpressions: true
+          Lint/LiteralInCondition: true
+          Lint/LiteralInInterpolation: true
+          Lint/MissingBlockArgument: true
+          Lint/NotNil: true
+          Lint/PercentArrays: true
+          Lint/RandZero: true
+          Lint/RedundantStringCoercion: true
+          Lint/RedundantWithIndex: true
+          Lint/RedundantWithObject: true
+          Lint/ShadowedArgument: true
+          Lint/ShadowedException: true
+          Lint/ShadowingOuterLocalVar: true
+          Lint/SharedVarInFiber: true
+          Lint/StaticComparison: true
+          Lint/Syntax: true
+          Lint/Typos: true
+          Lint/UnneededDisableDirective: true
+          Lint/UnreachableCode: true
+          Lint/UnusedArgument: true
+          Lint/UnusedBlockArgument: true
+          Lint/UselessAssign: true
+          Lint/UselessConditionInWhen: true
+          # Style rules
+          Style/ConstantNames: true
+          Style/IsAFilter: true
+          Style/LargeNumbers: true
+          Style/MethodNames: true
+          Style/NegatedConditionsInUnless: true
+          Style/ParenthesesAroundCondition: true
+          Style/PredicateName: true
+          Style/RedundantBegin: true
+          Style/RedundantNext: true
+          Style/RedundantReturn: true
+          Style/TypeNames: true
+          Style/UnlessElse: true
+          Style/VariableNames: true
+          Style/WhileTrue: true
+          # Performance
+          Performance/AnyInsteadOfEmpty: true
+          Performance/ChainedCallWithNoBang: true
+          Performance/CompactAfterMap: true
+          Performance/FlattenAfterMap: true
+          Performance/MapInsteadOfBlock: true
+          Performance/SizeAfterFilter: true
+
+    thresholds:
+      cyclomatic_complexity: 10
+      method_lines: 50
+      file_lines: 400
+
+patterns:
+  bad:
+    - pattern: 'system\s*\('
+      severity: CRITICAL
+      rule: command-injection
+      message: "system() is vulnerable to command injection"
+
+    - pattern: '`[^`]*\$'
+      severity: CRITICAL
+      rule: command-injection
+      message: "Backtick command with interpolation can be injected"
+
+    - pattern: 'pp\s+'
+      severity: MINOR
+      rule: DebugCalls
+      message: "Remove pp debug call before committing"
+
+    - pattern: 'p\s+\w+'
+      severity: MINOR
+      rule: DebugCalls
+      message: "Remove p debug call before committing"
+
+    - pattern: 'puts\s+'
+      severity: MINOR
+      rule: no-puts
+      message: "Use proper logging instead of puts"
+
+    - pattern: 'rescue\s+Exception'
+      severity: MAJOR
+      rule: ShadowedException
+      message: "Rescue specific exceptions, not Exception"
+
+    - pattern: 'not_nil!'
+      severity: MAJOR
+      rule: NotNil
+      message: "not_nil! can raise - handle nil explicitly"
+
+  good:
+    - pattern: ".try "
+      message: "Safe nil handling with try"
+    - pattern: "unless "
+      message: "Negative condition"
+    - pattern: "spawn do"
+      message: "Fiber for concurrency"
+    - pattern: "Channel("
+      message: "Channel for fiber communication"
+    - pattern: "struct "
+      message: "Value type struct"
+
+idioms:
+  error_handling:
+    - pattern: 'raise\s+\w+Error'
+      message: "Custom exception"
+    - pattern: 'rescue\s+\w+Error'
+      message: "Specific exception handling"
+
+  concurrency:
+    - pattern: 'select\s*{'
+      message: "Select for channel operations"
+    - pattern: 'Fiber\.yield'
+      message: "Cooperative scheduling"

@@ -1,0 +1,185 @@
+# Groovy Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: groovy
+taxonomy: programming
+extensions: [".groovy", ".gvy", ".gy", ".gsh"]
+
+tools:
+  quality:
+    primary: codenarc
+  security:
+    primary: semgrep
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets:
+          - "p/groovy"
+          - "p/owasp-top-ten"
+
+  quality:
+    tools:
+      - name: codenarc
+        rulesets:
+          basic:
+            - EmptyCatchBlock
+            - EmptyElseBlock
+            - EmptyFinallyBlock
+            - EmptyForStatement
+            - EmptyIfStatement
+            - EmptyMethod
+            - EmptySwitchStatement
+            - EmptySynchronizedStatement
+            - EmptyTryBlock
+            - EmptyWhileStatement
+            - EqualsAndHashCode
+            - EqualsOverloaded
+            - ReturnFromFinallyBlock
+            - ThrowExceptionFromFinallyBlock
+          braces:
+            - ElseBlockBraces
+            - ForStatementBraces
+            - IfStatementBraces
+            - WhileStatementBraces
+          concurrency:
+            - BusyWait
+            - DoubleCheckedLocking
+            - InconsistentPropertyLocking
+            - InconsistentPropertySynchronization
+            - NestedSynchronization
+            - StaticCalendarField
+            - StaticConnection
+            - StaticDateFormatField
+            - StaticMatcherField
+            - StaticSimpleDateFormatField
+            - SynchronizedMethod
+            - SynchronizedOnBoxedPrimitive
+            - SynchronizedOnGetClass
+            - SynchronizedOnReentrantLock
+            - SynchronizedOnString
+            - SynchronizedOnThis
+            - SynchronizedReadObjectMethod
+            - SystemRunFinalizersOnExit
+            - ThisReferenceEscapesConstructor
+            - ThreadGroup
+            - ThreadLocalNotStaticFinal
+            - ThreadYield
+            - UseOfNotifyMethod
+            - VolatileArrayField
+            - VolatileLongOrDoubleField
+            - WaitOutsideOfWhileLoop
+          design:
+            - AbstractClassWithPublicConstructor
+            - AbstractClassWithoutAbstractMethod
+            - BooleanMethodReturnsNull
+            - BuilderMethodWithSideEffects
+            - CloneableWithoutClone
+            - CloseWithoutCloseable
+            - CompareToWithoutComparable
+            - ConstantsOnlyInterface
+            - EmptyMethodInAbstractClass
+            - FinalClassWithProtectedMember
+            - ImplementationAsType
+            - Instanceof
+            - LocaleSetDefault
+            - NestedForLoop
+            - PrivateFieldCouldBeFinal
+            - PublicInstanceField
+            - ReturnsNullInsteadOfEmptyArray
+            - ReturnsNullInsteadOfEmptyCollection
+            - SimpleDateFormatMissingLocale
+            - StatelessSingleton
+            - ToStringReturnsNull
+          exceptions:
+            - CatchArrayIndexOutOfBoundsException
+            - CatchError
+            - CatchException
+            - CatchIllegalMonitorStateException
+            - CatchIndexOutOfBoundsException
+            - CatchNullPointerException
+            - CatchRuntimeException
+            - CatchThrowable
+            - ConfusingClassNamedException
+            - ExceptionExtendsError
+            - ExceptionExtendsThrowable
+            - ExceptionNotThrown
+            - MissingNewInThrowStatement
+            - ReturnNullFromCatchBlock
+            - SwallowThreadDeath
+            - ThrowError
+            - ThrowException
+            - ThrowNullPointerException
+            - ThrowRuntimeException
+            - ThrowThrowable
+
+    thresholds:
+      cyclomatic_complexity: 10
+      method_lines: 50
+      class_lines: 500
+
+patterns:
+  bad:
+    - pattern: 'Eval\.me\s*\('
+      severity: CRITICAL
+      rule: code-injection
+      message: "Eval.me with user input enables code injection"
+
+    - pattern: '\.execute\s*\('
+      severity: CRITICAL
+      rule: command-injection
+      message: "execute() with user input enables command injection"
+
+    - pattern: 'GroovyShell\s*\('
+      severity: MAJOR
+      rule: dynamic-code
+      message: "GroovyShell can execute arbitrary code"
+
+    - pattern: '@Grab\s*\('
+      severity: MAJOR
+      rule: dependency-injection
+      message: "@Grab can inject untrusted dependencies"
+
+    - pattern: 'catch\s*\(\s*Exception\s+'
+      severity: MAJOR
+      rule: CatchException
+      message: "Catch specific exceptions, not generic Exception"
+
+    - pattern: 'println\s*\('
+      severity: MINOR
+      rule: no-println
+      message: "Use proper logging instead of println"
+
+    - pattern: 'def\s+\w+\s*='
+      severity: MINOR
+      rule: explicit-types
+      message: "Consider explicit typing for clarity"
+
+  good:
+    - pattern: "@CompileStatic"
+      message: "Static compilation for type safety"
+    - pattern: "@TypeChecked"
+      message: "Type checking enabled"
+    - pattern: ".with {"
+      message: "Using with for builder pattern"
+    - pattern: "?.("
+      message: "Safe navigation operator"
+
+frameworks:
+  gradle:
+    - pattern: 'compile\s*\('
+      severity: MINOR
+      rule: deprecated-compile
+      message: "Use implementation() instead of compile()"
+
+    - pattern: 'testCompile\s*\('
+      severity: MINOR
+      rule: deprecated-testCompile
+      message: "Use testImplementation() instead of testCompile()"
+
+  jenkins:
+    - pattern: 'sh\s*"'
+      severity: MAJOR
+      rule: shell-injection
+      message: "sh with interpolation can lead to injection"

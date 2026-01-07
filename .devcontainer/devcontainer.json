@@ -1,0 +1,65 @@
+{
+  "name": "${localWorkspaceFolderBasename} Dev Environment",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "devcontainer",
+  "workspaceFolder": "/workspace",
+  // Features - additional languages (tools are already in base image)
+  "features": {
+    // ========== LANGUAGES ==========
+    // Node.js enabled by default (required for MCP servers)
+    "./features/languages/nodejs": {},
+    // Uncomment other languages as needed
+    // "./features/languages/carbon": {},
+    // "./features/languages/cpp": {},
+    // "./features/languages/dart-flutter": {},
+    // "./features/languages/elixir": {},
+    // "./features/languages/go": {},
+    // "./features/languages/java": {},
+    // "./features/languages/php": {},
+    // "./features/languages/python": {},
+    // "./features/languages/ruby": {},
+    // "./features/languages/rust": {},
+    // "./features/languages/scala": {},
+    // ========== EXTERNAL ==========
+    // Docker support
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false,
+      "installDockerBuildx": true,
+      "dockerDashComposeVersion": "v2"
+    }
+  },
+  // Configure tool-specific properties
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "zsh": {
+            "path": "/bin/zsh"
+          }
+        },
+        "editor.formatOnSave": true,
+        "files.eol": "\n",
+        "files.insertFinalNewline": true,
+        "files.trimTrailingWhitespace": true
+      },
+      "extensions": [
+        "vscode-icons-team.vscode-icons",
+        "redhat.vscode-yaml",
+        "tamasfe.even-better-toml",
+        "bierner.markdown-mermaid"
+      ]
+    }
+  },
+  // ========== LIFECYCLE COMMANDS ==========
+  // All commands check for script existence to avoid failures if scripts are missing
+  "initializeCommand": "[ -f \"${localWorkspaceFolder}/.devcontainer/hooks/lifecycle/initialize.sh\" ] && bash \"${localWorkspaceFolder}/.devcontainer/hooks/lifecycle/initialize.sh\" || true",
+  "onCreateCommand": "chmod +x /workspace/.devcontainer/hooks/lifecycle/*.sh 2>/dev/null; [ -f /workspace/.devcontainer/hooks/lifecycle/onCreate.sh ] && /workspace/.devcontainer/hooks/lifecycle/onCreate.sh || true",
+  "updateContentCommand": "[ -f /workspace/.devcontainer/hooks/lifecycle/updateContent.sh ] && /workspace/.devcontainer/hooks/lifecycle/updateContent.sh || true",
+  "postCreateCommand": "[ -f /workspace/.devcontainer/hooks/lifecycle/postCreate.sh ] && /workspace/.devcontainer/hooks/lifecycle/postCreate.sh || true",
+  "postStartCommand": "[ -f /workspace/.devcontainer/hooks/lifecycle/postStart.sh ] && /workspace/.devcontainer/hooks/lifecycle/postStart.sh || true",
+  "postAttachCommand": "[ -f /workspace/.devcontainer/hooks/lifecycle/postAttach.sh ] && /workspace/.devcontainer/hooks/lifecycle/postAttach.sh || true",
+  "forwardPorts": [],
+  "remoteUser": "vscode",
+  "shutdownAction": "none"
+}

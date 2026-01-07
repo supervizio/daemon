@@ -1,0 +1,100 @@
+# Scala Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: scala
+taxonomy: programming
+extensions: [".scala", ".sc"]
+
+tools:
+  quality:
+    primary: scalafix
+    secondary: wartremover
+  security:
+    primary: semgrep
+  types:
+    primary: scala-compiler
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets:
+          - "p/scala"
+          - "p/owasp-top-ten"
+
+  quality:
+    tools:
+      - name: scalafix
+        rules:
+          - DisableSyntax
+          - LeakingImplicitClassVal
+          - NoValInForComprehension
+          - ProcedureSyntax
+          - RemoveUnused
+          - OrganizeImports
+
+      - name: wartremover
+        warts:
+          unsafe:
+            - Any
+            - AsInstanceOf
+            - DefaultArguments
+            - EitherProjectionPartial
+            - IsInstanceOf
+            - Null
+            - OptionPartial
+            - Return
+            - Throw
+            - TraversableOps
+            - TryPartial
+            - Var
+
+    thresholds:
+      cyclomatic_complexity: 10
+      function_lines: 50
+      file_lines: 400
+      max_parameters: 5
+
+patterns:
+  bad:
+    - pattern: '\.get\s*$'
+      severity: MAJOR
+      rule: OptionPartial
+      message: "Avoid .get on Option - use getOrElse, fold, or pattern matching"
+
+    - pattern: '\.head\s*$'
+      severity: MAJOR
+      rule: TraversableOps
+      message: "Avoid .head - use headOption or pattern matching"
+
+    - pattern: 'null\s*$'
+      severity: MAJOR
+      rule: Null
+      message: "Avoid null - use Option instead"
+
+    - pattern: 'var\s+\w+'
+      severity: MINOR
+      rule: Var
+      message: "Prefer val over var for immutability"
+
+    - pattern: 'throw\s+new'
+      severity: MAJOR
+      rule: Throw
+      message: "Avoid throwing exceptions - use Either or Try"
+
+    - pattern: 'asInstanceOf\s*\['
+      severity: MAJOR
+      rule: AsInstanceOf
+      message: "Avoid asInstanceOf - use pattern matching"
+
+  good:
+    - pattern: "Option("
+      message: "Using Option for nullable values"
+    - pattern: "Either["
+      message: "Using Either for error handling"
+    - pattern: "Try {"
+      message: "Using Try for exception handling"
+    - pattern: "case class"
+      message: "Immutable case class"
+    - pattern: "sealed trait"
+      message: "ADT with sealed trait"

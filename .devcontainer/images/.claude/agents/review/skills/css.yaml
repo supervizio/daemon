@@ -1,0 +1,85 @@
+# CSS Skill - Style Taxonomy
+# Used by: agents/style.md
+
+language: css
+taxonomy: style
+extensions: [".css"]
+
+tools:
+  quality:
+    primary: stylelint
+
+axes:
+  quality:
+    tools:
+      - name: stylelint
+        rules:
+          # Color
+          color-hex-length: "short"
+          color-no-invalid-hex: true
+
+          # Font
+          font-family-name-quotes: "always-where-recommended"
+          font-family-no-duplicate-names: true
+
+          # Function
+          function-calc-no-unspaced-operator: true
+          function-name-case: "lower"
+
+          # Number
+          number-leading-zero: "always"
+          length-zero-no-unit: true
+
+          # Declaration
+          declaration-block-no-duplicate-properties: true
+          declaration-block-no-shorthand-property-overrides: true
+
+          # Selector
+          selector-max-id: 0
+          selector-max-specificity: "0,4,4"
+          selector-pseudo-class-no-unknown: true
+
+          # Block
+          block-no-empty: true
+
+          # General
+          no-descending-specificity: true
+          no-duplicate-selectors: true
+          max-nesting-depth: 4
+
+  performance:
+    checks:
+      - "Overly specific selectors"
+      - "Universal selector usage"
+      - "@import usage"
+      - "Unused selectors"
+      - "Redundant properties"
+      - "Shorthand optimization"
+
+patterns:
+  bad:
+    - pattern: '#\w+\s*{'
+      severity: MAJOR
+      rule: selector-max-id
+      message: "Avoid ID selectors - use classes for styling"
+
+    - pattern: '!important'
+      severity: MAJOR
+      rule: declaration-no-important
+      message: "Avoid !important - increase specificity instead"
+
+    - pattern: '@import\s+url'
+      severity: MINOR
+      rule: no-import
+      message: "@import blocks rendering - use bundling"
+
+    - pattern: '\*\s*{'
+      severity: MINOR
+      rule: selector-no-universal
+      message: "Universal selector is expensive"
+
+  good:
+    - pattern: "var(--"
+      message: "Using CSS custom properties"
+    - pattern: ":root"
+      message: "CSS variables defined at root"

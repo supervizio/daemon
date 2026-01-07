@@ -1,0 +1,179 @@
+# PowerShell Skill - Scripts Taxonomy
+# Used by: agents/scripts.md
+
+language: powershell
+taxonomy: scripts
+extensions: [".ps1", ".psm1", ".psd1"]
+
+tools:
+  quality:
+    primary: PSScriptAnalyzer
+  security:
+    primary: PSScriptAnalyzer
+
+axes:
+  security:
+    tools:
+      - name: PSScriptAnalyzer
+        rules:
+          # Security rules
+          PSAvoidUsingPlainTextForPassword: true
+          PSAvoidUsingConvertToSecureStringWithPlainText: true
+          PSAvoidUsingUsernameAndPasswordParams: true
+          PSAvoidUsingInvokeExpression: true
+          PSAvoidUsingComputerNameHardcoded: true
+          PSUsePSCredentialType: true
+          PSAvoidUsingWriteHost: true
+
+  quality:
+    tools:
+      - name: PSScriptAnalyzer
+        rules:
+          # Code quality
+          PSAvoidDefaultValueForMandatoryParameter: true
+          PSAvoidDefaultValueSwitchParameter: true
+          PSAvoidGlobalAliases: true
+          PSAvoidGlobalFunctions: true
+          PSAvoidGlobalVars: true
+          PSAvoidInvokingEmptyMembers: true
+          PSAvoidLongLines: true
+          PSAvoidNullOrEmptyHelpMessageAttribute: true
+          PSAvoidOverwritingBuiltInCmdlets: true
+          PSAvoidShouldContinueWithoutForce: true
+          PSAvoidTrailingWhitespace: true
+          PSAvoidUsingCmdletAliases: true
+          PSAvoidUsingDeprecatedManifestFields: true
+          PSAvoidUsingDoubleQuotesForConstantString: true
+          PSAvoidUsingEmptyCatchBlock: true
+          PSAvoidUsingPositionalParameters: true
+          PSAvoidUsingWMICmdlet: true
+          PSMisleadingBacktick: true
+          PSMissingModuleManifestField: true
+          PSPlaceCloseBrace: true
+          PSPlaceOpenBrace: true
+          PSPossibleIncorrectComparisonWithNull: true
+          PSPossibleIncorrectUsageOfAssignmentOperator: true
+          PSPossibleIncorrectUsageOfRedirectionOperator: true
+          PSProvideCommentHelp: true
+          PSReservedCmdletChar: true
+          PSReservedParams: true
+          PSShouldProcess: true
+          PSUseApprovedVerbs: true
+          PSUseBOMForUnicodeEncodedFile: true
+          PSUseCmdletCorrectly: true
+          PSUseCompatibleCmdlets: true
+          PSUseCompatibleCommands: true
+          PSUseCompatibleSyntax: true
+          PSUseCompatibleTypes: true
+          PSUseConsistentIndentation: true
+          PSUseConsistentWhitespace: true
+          PSUseCorrectCasing: true
+          PSUseDeclaredVarsMoreThanAssignments: true
+          PSUseLiteralInitializerForHashtable: true
+          PSUseOutputTypeCorrectly: true
+          PSUseProcessBlockForPipelineCommand: true
+          PSUseShouldProcessForStateChangingFunctions: true
+          PSUseSingularNouns: true
+          PSUseSupportsShouldProcess: true
+          PSUseToExportFieldsInManifest: true
+          PSUseUTF8EncodingForHelpFile: true
+
+    thresholds:
+      function_lines: 100
+      nesting_depth: 5
+      max_parameters: 10
+
+patterns:
+  bad:
+    - pattern: 'Invoke-Expression'
+      severity: CRITICAL
+      rule: PSAvoidUsingInvokeExpression
+      message: "Invoke-Expression is dangerous - use direct invocation"
+
+    - pattern: 'ConvertTo-SecureString.*-AsPlainText'
+      severity: CRITICAL
+      rule: PSAvoidUsingConvertToSecureStringWithPlainText
+      message: "Don't convert plain text to SecureString - use proper credential handling"
+
+    - pattern: '-Password\s+[''"][^''"]+'
+      severity: CRITICAL
+      rule: PSAvoidUsingPlainTextForPassword
+      message: "Password in plain text - use SecureString or PSCredential"
+
+    - pattern: 'Write-Host'
+      severity: MINOR
+      rule: PSAvoidUsingWriteHost
+      message: "Write-Host bypasses pipeline - use Write-Output or Write-Verbose"
+
+    - pattern: '\$global:'
+      severity: MAJOR
+      rule: PSAvoidGlobalVars
+      message: "Avoid global variables - use script scope or parameters"
+
+    - pattern: 'catch\s*{'
+      severity: MAJOR
+      rule: PSAvoidUsingEmptyCatchBlock
+      message: "Empty catch block hides errors - handle or rethrow"
+
+    - pattern: '\s+\|\s+%\s*{'
+      severity: MINOR
+      rule: PSAvoidUsingCmdletAliases
+      message: "Use ForEach-Object instead of % alias"
+
+    - pattern: '\|\s+\?\s*{'
+      severity: MINOR
+      rule: PSAvoidUsingCmdletAliases
+      message: "Use Where-Object instead of ? alias"
+
+    - pattern: 'Get-WmiObject'
+      severity: MINOR
+      rule: PSAvoidUsingWMICmdlet
+      message: "Use Get-CimInstance instead of Get-WmiObject"
+
+    - pattern: '^\s*function\s+\w+-'
+      severity: MINOR
+      rule: PSUseApprovedVerbs
+      message: "Ensure function uses approved verb (Get-, Set-, New-, etc.)"
+
+  good:
+    - pattern: "[CmdletBinding()]"
+      message: "Advanced function binding"
+    - pattern: "param("
+      message: "Parameter block"
+    - pattern: "[Parameter("
+      message: "Parameter attribute"
+    - pattern: "[ValidateNotNullOrEmpty()]"
+      message: "Parameter validation"
+    - pattern: "[SecureString]"
+      message: "Secure string type"
+    - pattern: "[PSCredential]"
+      message: "Credential type"
+    - pattern: "begin {"
+      message: "Begin block for initialization"
+    - pattern: "process {"
+      message: "Process block for pipeline"
+    - pattern: "end {"
+      message: "End block for cleanup"
+
+idioms:
+  advanced_functions:
+    - pattern: '\[CmdletBinding\(\)\]'
+      message: "Advanced function"
+    - pattern: 'SupportsShouldProcess'
+      message: "WhatIf/Confirm support"
+    - pattern: '\$PSCmdlet'
+      message: "Cmdlet context access"
+
+  error_handling:
+    - pattern: 'try\s*{'
+      message: "Try-catch block"
+    - pattern: '-ErrorAction Stop'
+      message: "Terminating error action"
+    - pattern: '\$ErrorActionPreference'
+      message: "Error preference variable"
+
+  pipeline:
+    - pattern: 'ValueFromPipeline'
+      message: "Pipeline input"
+    - pattern: 'ValueFromPipelineByPropertyName'
+      message: "Pipeline by property"

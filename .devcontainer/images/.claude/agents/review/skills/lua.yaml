@@ -1,0 +1,101 @@
+# Lua Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: lua
+taxonomy: programming
+extensions: [".lua"]
+
+tools:
+  quality:
+    primary: luacheck
+  security:
+    primary: semgrep
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets:
+          - "p/lua"
+
+  quality:
+    tools:
+      - name: luacheck
+        rules:
+          # Warnings
+          W1: "Setting an undefined global variable"
+          W2: "Setting an undefined field of a global variable"
+          W3: "Accessing an undefined global variable"
+          W4: "Accessing an undefined field of a global variable"
+          W5: "Setting a local variable that was previously defined"
+          W6: "Unused variable"
+          W7: "Unused function argument"
+          W8: "Unused loop variable"
+          # Errors
+          E1: "Syntax errors"
+          E2: "Redefinition of local variable"
+          E3: "Unbalanced assignment"
+
+    thresholds:
+      cyclomatic_complexity: 10
+      function_lines: 50
+
+patterns:
+  bad:
+    - pattern: 'loadstring\s*\('
+      severity: CRITICAL
+      rule: code-injection
+      message: "loadstring with user input enables code injection"
+
+    - pattern: 'dofile\s*\('
+      severity: MAJOR
+      rule: file-inclusion
+      message: "dofile can include arbitrary files - validate path"
+
+    - pattern: 'os\.execute\s*\('
+      severity: CRITICAL
+      rule: command-injection
+      message: "os.execute is vulnerable to command injection"
+
+    - pattern: 'io\.popen\s*\('
+      severity: CRITICAL
+      rule: command-injection
+      message: "io.popen is vulnerable to command injection"
+
+    - pattern: 'debug\.\w+'
+      severity: MAJOR
+      rule: debug-library
+      message: "debug library should not be used in production"
+
+    - pattern: '=\s*nil\s*$'
+      severity: MINOR
+      rule: explicit-nil
+      message: "Consider if nil assignment is necessary"
+
+    - pattern: 'pairs\s*\([^)]+\)\s*do'
+      severity: MINOR
+      rule: pairs-order
+      message: "pairs() iteration order is not guaranteed"
+
+  good:
+    - pattern: "local "
+      message: "Local variable declaration"
+    - pattern: "ipairs("
+      message: "Ordered iteration"
+    - pattern: "pcall("
+      message: "Protected call for error handling"
+    - pattern: "xpcall("
+      message: "Extended protected call"
+
+idioms:
+  modules:
+    - pattern: 'local\s+M\s*=\s*{}'
+      message: "Module pattern"
+    - pattern: 'return\s+M'
+      message: "Module export"
+
+  metatables:
+    - pattern: 'setmetatable\s*\('
+      message: "Metatable usage"
+    - pattern: '__index'
+      message: "Index metamethod"

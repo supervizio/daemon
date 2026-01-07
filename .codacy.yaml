@@ -1,0 +1,11 @@
+# Codacy Configuration
+# https://docs.codacy.com/repositories-configure/codacy-configuration-file/
+
+---
+exclude_paths:
+  # Documentation files (knowledge bases, guides)
+  - ".devcontainer/docs/**"
+  # Agent prompt files (Markdown used as prompts, not documentation)
+  - ".devcontainer/images/.claude/agents/**/*.md"
+  # Command skill files (Markdown used as prompts)
+  - ".devcontainer/images/.claude/commands/**/*.md"

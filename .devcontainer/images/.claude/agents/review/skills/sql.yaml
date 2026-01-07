@@ -1,0 +1,202 @@
+# SQL Skill - Query Taxonomy
+# Used by: agents/query.md
+
+language: sql
+taxonomy: query
+extensions: [".sql"]
+
+# Simulated tools for SQL analysis
+tools:
+  security:
+    primary: semgrep
+  quality:
+    primary: sqlfluff
+  performance:
+    primary: sqlfluff
+
+axes:
+  security:
+    checks:
+      injection:
+        severity: CRITICAL
+        patterns:
+          - "Dynamic SQL with concatenation"
+          - "EXEC with string variables"
+          - "sp_executesql without parameters"
+          - "EXECUTE IMMEDIATE with concatenation"
+
+      authorization:
+        severity: CRITICAL
+        patterns:
+          - "GRANT ALL PRIVILEGES"
+          - "GRANT WITH GRANT OPTION"
+          - "PUBLIC access grants"
+          - "Missing WHERE on UPDATE/DELETE"
+
+      data_exposure:
+        severity: MAJOR
+        patterns:
+          - "SELECT * exposing sensitive columns"
+          - "Sensitive data in comments"
+          - "Passwords in plain text"
+
+  quality:
+    tools:
+      - name: sqlfluff
+        rules:
+          # Layout
+          L001: "Unnecessary trailing whitespace"
+          L002: "Mixed Tabs and Spaces"
+          L003: "Indentation not consistent"
+          L004: "Inconsistent capitalisation of keywords"
+          L005: "Commas should not be preceded by whitespace"
+          L006: "Operators should be surrounded by single space"
+          L008: "Commas should be followed by a single space"
+          L010: "Inconsistent capitalisation of keywords"
+          L011: "Implicit/explicit aliasing of tables"
+          L012: "Implicit/explicit aliasing of columns"
+          L013: "Column expression without alias"
+          L014: "Inconsistent capitalisation of unquoted identifiers"
+          L015: "DISTINCT used with parentheses"
+          L016: "Line is too long"
+          L017: "Function names not followed by parentheses"
+
+          # Convention
+          L019: "Leading/Trailing comma enforcement"
+          L020: "Table aliases should be unique"
+          L021: "Ambiguous use of DISTINCT in select with GROUP BY"
+          L022: "Blank line expected but not found after CTE"
+          L023: "Join clause should be fully qualified"
+          L025: "Tables should not be aliased if not referenced"
+          L026: "References cannot reference objects not present"
+          L027: "References should be qualified if source is ambiguous"
+          L028: "References should be consistent in SELECT"
+          L029: "Keywords should not be used as identifiers"
+          L030: "Function names should be consistent"
+          L031: "Avoid aliases in from and join"
+          L032: "Prefer specifying join keys instead of using USING"
+          L033: "UNION [DISTINCT|ALL] is preferred over just UNION"
+          L034: "Select wildcards then explicit columns"
+          L035: "Do not specify ELSE NULL in a case when statement"
+          L036: "Select targets should be on new lines"
+          L037: "Ambiguous ordering directions for columns"
+          L038: "Trailing commas within select clause"
+          L039: "Unnecessary whitespace found"
+          L040: "Inconsistent capitalisation of boolean/null"
+          L041: "SELECT clause modifiers in wrong order"
+          L042: "Join/From clause should not contain subqueries"
+          L043: "Unnecessary CASE when expression"
+          L044: "Query produces cartesian product"
+          L045: "Query defines CTE but does not use it"
+          L046: "Jinja tags should have single whitespace"
+          L047: "Use COUNT(*) instead of COUNT(0) or COUNT(1)"
+
+    conventions:
+      keywords: "UPPERCASE"
+      identifiers: "lowercase"
+      functions: "UPPERCASE"
+      types: "UPPERCASE"
+
+  performance:
+    checks:
+      - severity: MAJOR
+        pattern: "SELECT *"
+        message: "Specify columns explicitly - avoid SELECT *"
+
+      - severity: MAJOR
+        pattern: "SELECT DISTINCT"
+        message: "DISTINCT may indicate a join issue"
+
+      - severity: MAJOR
+        pattern: "NOT IN (SELECT"
+        message: "NOT IN with subquery can be slow - use LEFT JOIN WHERE IS NULL"
+
+      - severity: MAJOR
+        pattern: "LIKE '%"
+        message: "Leading wildcard prevents index usage"
+
+      - severity: MINOR
+        pattern: "OR in WHERE"
+        message: "OR can prevent index usage - consider UNION"
+
+      - severity: MAJOR
+        pattern: "FUNCTION(column)"
+        message: "Functions on columns prevent index usage"
+
+      - severity: CRITICAL
+        pattern: "cartesian product"
+        message: "Missing JOIN condition creates cartesian product"
+
+      - severity: MAJOR
+        pattern: "correlated subquery"
+        message: "Correlated subqueries execute once per row"
+
+patterns:
+  bad:
+    - pattern: "'+.*+'.*SELECT|INSERT|UPDATE|DELETE"
+      severity: CRITICAL
+      rule: sql-injection
+      message: "SQL string concatenation - use parameterized queries"
+
+    - pattern: 'EXEC\s*\(\s*@|EXEC\s*\(\s*\''
+      severity: CRITICAL
+      rule: sql-injection
+      message: "Dynamic EXEC - use sp_executesql with parameters"
+
+    - pattern: "UPDATE.*(?!WHERE)"
+      severity: CRITICAL
+      rule: missing-where
+      message: "UPDATE without WHERE clause affects all rows"
+
+    - pattern: "DELETE.*(?!WHERE)"
+      severity: CRITICAL
+      rule: missing-where
+      message: "DELETE without WHERE clause deletes all rows"
+
+    - pattern: "GRANT\s+ALL"
+      severity: MAJOR
+      rule: excessive-privileges
+      message: "GRANT ALL is too permissive - use specific privileges"
+
+    - pattern: "SELECT\s+\*\s+FROM"
+      severity: MINOR
+      rule: L034
+      message: "Specify columns explicitly instead of SELECT *"
+
+    - pattern: "NOLOCK|WITH\s*\(\s*NOLOCK"
+      severity: MAJOR
+      rule: nolock-danger
+      message: "NOLOCK can cause dirty reads and inconsistent data"
+
+    - pattern: "cursor"
+      severity: MINOR
+      rule: avoid-cursors
+      message: "Cursors are slow - use set-based operations"
+
+    - pattern: "@@IDENTITY"
+      severity: MAJOR
+      rule: scope-identity
+      message: "Use SCOPE_IDENTITY() instead of @@IDENTITY"
+
+  good:
+    - pattern: "SCOPE_IDENTITY()"
+      message: "Using SCOPE_IDENTITY for last insert ID"
+
+    - pattern: "BEGIN TRANSACTION"
+      message: "Using transactions for data integrity"
+
+    - pattern: "TRY...CATCH"
+      message: "Error handling in place"
+
+    - pattern: "WITH (INDEX"
+      message: "Index hint when needed"
+
+best_practices:
+  - "Use transactions for multi-statement operations"
+  - "Always specify column lists in INSERT"
+  - "Use meaningful aliases for complex queries"
+  - "Index foreign key columns"
+  - "Use EXISTS instead of COUNT for existence checks"
+  - "Avoid SELECT * in production code"
+  - "Use CTEs for complex subqueries"
+  - "Comment complex business logic"

@@ -1,0 +1,241 @@
+# Go Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: go
+taxonomy: programming
+extensions: [".go"]
+
+# Simulated tools for Go analysis
+tools:
+  quality:
+    primary: golangci-lint
+  security:
+    primary: gosec
+    secondary: semgrep
+  types:
+    primary: go-vet
+  tests:
+    primary: go-test
+
+# Analysis rules by axis
+axes:
+  security:
+    tools:
+      - name: gosec
+        rules:
+          G101: "Hardcoded credentials"
+          G102: "Bind to all interfaces"
+          G103: "Audit the use of unsafe block"
+          G104: "Audit errors not checked"
+          G106: "Audit the use of ssh.InsecureIgnoreHostKey"
+          G107: "Url provided to HTTP request as taint input"
+          G108: "Profiling endpoint automatically exposed on /debug/pprof"
+          G109: "Potential Integer overflow made by strconv.Atoi"
+          G110: "Potential DoS vulnerability via decompression bomb"
+          G111: "Potential directory traversal"
+          G112: "Potential slowloris attack"
+          G113: "Usage of Rat.SetString in math/big with an overflow"
+          G114: "Use of net/http serve function that has no timeout"
+          G201: "SQL query construction using format string"
+          G202: "SQL query construction using string concatenation"
+          G203: "Use of unescaped data in HTML templates"
+          G204: "Audit use of command execution"
+          G301: "Poor file permissions used when creating a directory"
+          G302: "Poor file permissions used with chmod"
+          G303: "Creating tempfile using a predictable path"
+          G304: "File path provided as taint input"
+          G305: "File traversal when extracting zip/tar archive"
+          G306: "Poor file permissions used when writing to a new file"
+          G307: "Deferring a method which returns an error"
+          G401: "Detect the usage of DES, RC4, MD5 or SHA1"
+          G402: "Look for bad TLS connection settings"
+          G403: "Ensure minimum RSA key length of 2048 bits"
+          G404: "Insecure random number source (rand instead of crypto/rand)"
+          G501: "Import blocklist: crypto/md5"
+          G502: "Import blocklist: crypto/des"
+          G503: "Import blocklist: crypto/rc4"
+          G504: "Import blocklist: net/http/cgi"
+          G505: "Import blocklist: crypto/sha1"
+          G601: "Implicit memory aliasing of items from a range statement"
+          G602: "Slice access out of bounds"
+
+      - name: semgrep
+        rulesets:
+          - "p/golang"
+          - "p/owasp-top-ten"
+
+  quality:
+    tools:
+      - name: golangci-lint
+        linters:
+          # Default linters
+          errcheck: true
+          gosimple: true
+          govet: true
+          ineffassign: true
+          staticcheck: true
+          unused: true
+
+          # Additional recommended
+          bodyclose: true
+          dupl: true
+          exhaustive: true
+          funlen: true
+          gocognit: true
+          goconst: true
+          gocritic: true
+          gocyclo: true
+          godot: true
+          gofmt: true
+          goimports: true
+          gomnd: true
+          goprintffuncname: true
+          gosec: true
+          lll: true
+          misspell: true
+          nakedret: true
+          noctx: true
+          nolintlint: true
+          prealloc: true
+          revive: true
+          rowserrcheck: true
+          sqlclosecheck: true
+          stylecheck: true
+          unconvert: true
+          unparam: true
+          whitespace: true
+
+    thresholds:
+      cyclomatic_complexity: 10
+      function_lines: 60
+      file_lines: 500
+      cognitive_complexity: 15
+
+  tests:
+    tools:
+      - name: go-test
+        flags: ["-cover", "-race", "-v"]
+        thresholds:
+          coverage: 80
+
+# Go-specific patterns
+patterns:
+  bad:
+    - pattern: 'fmt\.Sprintf\s*\(\s*".*%s.*",.*\)'
+      severity: MAJOR
+      rule: G201
+      message: "SQL query with fmt.Sprintf - use parameterized queries"
+
+    - pattern: 'exec\.Command\s*\('
+      severity: MAJOR
+      rule: G204
+      message: "Command execution - ensure user input is validated"
+
+    - pattern: 'os\.Create\s*\('
+      severity: MINOR
+      rule: G306
+      message: "Check file permissions when creating files"
+
+    - pattern: 'ioutil\.TempFile\s*\(\s*""'
+      severity: MINOR
+      rule: G303
+      message: "Use os.MkdirTemp for secure temp directories"
+
+    - pattern: 'rand\.(Int|Float|Intn|Perm)'
+      severity: MINOR
+      rule: G404
+      message: "Use crypto/rand for security-sensitive randomness"
+
+    - pattern: 'http\.ListenAndServe\s*\('
+      severity: MAJOR
+      rule: G114
+      message: "http.ListenAndServe has no timeout - use http.Server"
+
+    - pattern: '//\s*nolint'
+      severity: MINOR
+      rule: nolintlint
+      message: "Explain why nolint is needed"
+
+    - pattern: 'panic\s*\('
+      severity: MAJOR
+      rule: no-panic
+      message: "Avoid panic in production code - return errors"
+
+    - pattern: '_\s*=\s*\w+\.\w+\s*\('
+      severity: MAJOR
+      rule: G104
+      message: "Error ignored - handle or explicitly mark with _"
+
+  good:
+    - pattern: "if err != nil"
+      message: "Proper error handling"
+
+    - pattern: "crypto/rand"
+      message: "Using cryptographically secure random"
+
+    - pattern: "context.Context"
+      message: "Using context for cancellation/timeout"
+
+# Go idioms
+idioms:
+  error_handling:
+    - pattern: 'if err != nil {\s*return'
+      message: "Idiomatic error handling"
+      severity: null  # Good practice
+
+    - pattern: 'errors\.(Is|As|Unwrap)'
+      message: "Go 1.13+ error wrapping"
+      severity: null  # Good practice
+
+    - pattern: 'fmt\.Errorf\s*\(".*%w'
+      message: "Error wrapping with %w"
+      severity: null  # Good practice
+
+  concurrency:
+    - pattern: 'go\s+func\s*\(\s*\)'
+      severity: MINOR
+      rule: goroutine-leak
+      message: "Goroutine without sync - potential leak"
+
+    - pattern: 'sync\.WaitGroup'
+      message: "Using WaitGroup for goroutine sync"
+      severity: null  # Good practice
+
+    - pattern: 'select\s*{\s*case'
+      message: "Using select for channel operations"
+      severity: null  # Good practice
+
+  context:
+    - pattern: 'context\.Background\s*\(\s*\)'
+      severity: MINOR
+      rule: noctx
+      message: "Consider using parent context instead of Background()"
+
+    - pattern: 'context\.TODO\s*\(\s*\)'
+      severity: MINOR
+      rule: noctx
+      message: "context.TODO should be replaced with proper context"
+
+# Package-specific rules
+packages:
+  database/sql:
+    - pattern: '\.Query\s*\(.*\+.*\)'
+      severity: CRITICAL
+      rule: G202
+      message: "SQL concatenation - use Query with parameters"
+
+    - pattern: '\.Exec\s*\(.*\+.*\)'
+      severity: CRITICAL
+      rule: G202
+      message: "SQL concatenation - use Exec with parameters"
+
+  net/http:
+    - pattern: 'http\.Get\s*\('
+      severity: MINOR
+      rule: noctx
+      message: "Use http.NewRequestWithContext for timeout control"
+
+    - pattern: 'http\.DefaultClient'
+      severity: MINOR
+      rule: http-timeout
+      message: "http.DefaultClient has no timeout - create custom client"

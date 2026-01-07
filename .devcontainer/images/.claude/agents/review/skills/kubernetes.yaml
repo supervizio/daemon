@@ -1,0 +1,115 @@
+# Kubernetes Skill - Infrastructure Taxonomy
+# Used by: agents/infrastructure.md
+
+language: kubernetes
+taxonomy: infrastructure
+extensions: [".yaml", ".yml"]
+detection:
+  markers: ["apiVersion:", "kind:"]
+
+tools:
+  security:
+    primary: checkov
+    secondary: kubesec
+
+axes:
+  security:
+    tools:
+      - name: checkov
+        policies:
+          CKV_K8S_1: "CPU limits set"
+          CKV_K8S_2: "Memory limits set"
+          CKV_K8S_3: "CPU requests set"
+          CKV_K8S_4: "Memory requests set"
+          CKV_K8S_5: "Image pull policy Always"
+          CKV_K8S_6: "Root containers"
+          CKV_K8S_7: "Allow privilege escalation"
+          CKV_K8S_8: "Liveness probe defined"
+          CKV_K8S_9: "Readiness probe defined"
+          CKV_K8S_10: "Admission of containers with NET_RAW"
+          CKV_K8S_11: "Admission of containers with SYS_ADMIN"
+          CKV_K8S_12: "Admission of containers with CAP"
+          CKV_K8S_13: "Memory requests set"
+          CKV_K8S_14: "Privileged containers"
+          CKV_K8S_15: "Image tag not latest"
+          CKV_K8S_16: "Container disallows added capabilities"
+          CKV_K8S_17: "Containers share host process ID"
+          CKV_K8S_18: "Containers share host IPC"
+          CKV_K8S_19: "Containers share host network"
+          CKV_K8S_20: "hostNetwork access"
+          CKV_K8S_21: "Default namespace"
+          CKV_K8S_22: "Read-only filesystem"
+          CKV_K8S_23: "Service Account tokens automount"
+          CKV_K8S_25: "Secrets in env vars"
+          CKV_K8S_28: "Pod connects to Tiller"
+          CKV_K8S_29: "ServiceAccount has secret"
+          CKV_K8S_30: "Apply security context"
+          CKV_K8S_31: "Seccomp profile"
+          CKV_K8S_32: "Secrets used in EnvFrom"
+          CKV_K8S_33: "Container use UID > 10000"
+          CKV_K8S_34: "No ImagePullSecrets"
+          CKV_K8S_35: "Prefer secrets from secret store"
+          CKV_K8S_37: "Service with selector"
+          CKV_K8S_38: "Service Account name"
+          CKV_K8S_39: "Use secrets from secret store"
+          CKV_K8S_40: "Image digest"
+          CKV_K8S_41: "No wildcards for RBAC"
+          CKV_K8S_43: "Drop capabilities"
+          CKV_K8S_49: "Use labels"
+
+      - name: kubesec
+        checks:
+          - "runAsNonRoot"
+          - "resources.limits"
+          - "securityContext"
+          - "hostNetwork"
+          - "privileged"
+
+patterns:
+  bad:
+    - pattern: 'privileged:\s*true'
+      severity: CRITICAL
+      rule: CKV_K8S_14
+      message: "Privileged container - avoid unless absolutely required"
+
+    - pattern: 'hostNetwork:\s*true'
+      severity: CRITICAL
+      rule: CKV_K8S_20
+      message: "hostNetwork bypasses network policies"
+
+    - pattern: 'image:.*:latest'
+      severity: MAJOR
+      rule: CKV_K8S_15
+      message: "Pin image version instead of :latest"
+
+    - pattern: 'runAsUser:\s*0'
+      severity: CRITICAL
+      rule: CKV_K8S_6
+      message: "Container running as root"
+
+    - pattern: 'allowPrivilegeEscalation:\s*true'
+      severity: CRITICAL
+      rule: CKV_K8S_7
+      message: "Privilege escalation enabled"
+
+    - pattern: 'namespace:\s*default'
+      severity: MAJOR
+      rule: CKV_K8S_21
+      message: "Avoid using default namespace"
+
+    - pattern: 'capabilities:\s*\n\s*add:'
+      severity: MAJOR
+      rule: CKV_K8S_16
+      message: "Adding Linux capabilities increases attack surface"
+
+  good:
+    - pattern: "runAsNonRoot: true"
+      message: "Non-root container"
+    - pattern: "readOnlyRootFilesystem: true"
+      message: "Read-only root filesystem"
+    - pattern: "resources:"
+      message: "Resource limits defined"
+    - pattern: "livenessProbe:"
+      message: "Liveness probe configured"
+    - pattern: "readinessProbe:"
+      message: "Readiness probe configured"

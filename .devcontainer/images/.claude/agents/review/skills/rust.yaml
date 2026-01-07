@@ -1,0 +1,228 @@
+# Rust Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: rust
+taxonomy: programming
+extensions: [".rs"]
+
+# Simulated tools for Rust analysis
+tools:
+  quality:
+    primary: clippy
+    secondary: rustfmt
+  security:
+    primary: cargo-audit
+    secondary: semgrep
+  types:
+    primary: rustc
+  tests:
+    primary: cargo-test
+
+# Analysis rules by axis
+axes:
+  security:
+    tools:
+      - name: cargo-audit
+        description: "Scans Cargo.lock for known vulnerabilities"
+        checks:
+          - "Known CVEs in dependencies"
+          - "Unmaintained crates"
+          - "Yanked crate versions"
+
+      - name: clippy
+        security_lints:
+          # Memory safety
+          clippy::invalid_upcast_comparisons: "Invalid numeric comparisons"
+          clippy::cast_sign_loss: "Sign loss in cast"
+          clippy::cast_precision_loss: "Precision loss in cast"
+          clippy::cast_possible_truncation: "Possible truncation in cast"
+          clippy::cast_possible_wrap: "Possible wrapping in cast"
+
+          # Unsafe
+          clippy::undocumented_unsafe_blocks: "Unsafe blocks should be documented"
+          clippy::multiple_unsafe_ops_per_block: "Multiple unsafe ops per block"
+
+      - name: semgrep
+        rulesets:
+          - "p/rust"
+
+  quality:
+    tools:
+      - name: clippy
+        lint_groups:
+          clippy::all: true
+          clippy::pedantic: true
+          clippy::nursery: true
+          clippy::cargo: true
+
+        key_lints:
+          # Correctness
+          clippy::correctness: "Definitely wrong code"
+          clippy::suspicious: "Likely wrong or useless code"
+          clippy::complexity: "Overly complex code"
+          clippy::perf: "Suboptimal performance"
+          clippy::style: "Idiomatic Rust style"
+
+          # Specific lints
+          clippy::unwrap_used: "Prefer expect() or proper error handling"
+          clippy::expect_used: "Consider returning Result instead"
+          clippy::panic: "Avoid panic in library code"
+          clippy::todo: "TODO marker in code"
+          clippy::unimplemented: "Unimplemented code path"
+          clippy::dbg_macro: "Debug macro in production"
+          clippy::print_stdout: "Print to stdout in library"
+          clippy::print_stderr: "Print to stderr in library"
+
+          # Complexity
+          clippy::cognitive_complexity: "High cognitive complexity"
+          clippy::too_many_lines: "Function too long"
+          clippy::too_many_arguments: "Too many function arguments"
+
+          # Style
+          clippy::needless_return: "Unnecessary return statement"
+          clippy::needless_borrow: "Unnecessary borrow"
+          clippy::clone_on_copy: "Clone on Copy type"
+          clippy::redundant_clone: "Redundant clone"
+          clippy::redundant_closure: "Redundant closure"
+          clippy::manual_map: "Use Option::map instead"
+          clippy::manual_filter_map: "Use filter_map instead"
+          clippy::match_like_matches_macro: "Use matches! macro"
+
+    thresholds:
+      cognitive_complexity: 25
+      function_lines: 100
+      arguments: 7
+
+  tests:
+    tools:
+      - name: cargo-test
+        flags: ["--all-features", "--no-fail-fast"]
+
+      - name: cargo-tarpaulin
+        thresholds:
+          line_coverage: 80
+          branch_coverage: 70
+
+# Rust-specific patterns
+patterns:
+  bad:
+    - pattern: '\.unwrap\(\)'
+      severity: MAJOR
+      rule: clippy::unwrap_used
+      message: "unwrap() will panic on None/Err - use expect() or handle error"
+
+    - pattern: '\.expect\(".*"\)'
+      severity: MINOR
+      rule: clippy::expect_used
+      message: "Consider returning Result for better error handling"
+
+    - pattern: 'panic!\s*\('
+      severity: MAJOR
+      rule: clippy::panic
+      message: "panic! should be avoided in library code"
+
+    - pattern: 'unsafe\s*{'
+      severity: MAJOR
+      rule: clippy::undocumented_unsafe_blocks
+      message: "Unsafe blocks must have SAFETY comment explaining invariants"
+
+    - pattern: 'todo!\s*\('
+      severity: MINOR
+      rule: clippy::todo
+      message: "TODO marker - implement before release"
+
+    - pattern: 'unimplemented!\s*\('
+      severity: MAJOR
+      rule: clippy::unimplemented
+      message: "Unimplemented code path will panic"
+
+    - pattern: 'dbg!\s*\('
+      severity: MINOR
+      rule: clippy::dbg_macro
+      message: "Remove debug macro before commit"
+
+    - pattern: 'println!\s*\('
+      severity: MINOR
+      rule: clippy::print_stdout
+      message: "Use proper logging instead of println! in libraries"
+
+    - pattern: '\.clone\(\)'
+      severity: MINOR
+      rule: clippy::redundant_clone
+      message: "Verify clone is necessary - consider borrowing"
+
+    - pattern: 'as\s+(u8|u16|u32|u64|i8|i16|i32|i64)'
+      severity: MINOR
+      rule: clippy::cast_possible_truncation
+      message: "Numeric cast may truncate - use try_into() for safety"
+
+  good:
+    - pattern: "// SAFETY:"
+      message: "Documented unsafe block"
+
+    - pattern: "anyhow::Result"
+      message: "Using anyhow for error handling"
+
+    - pattern: "thiserror::Error"
+      message: "Using thiserror for custom errors"
+
+    - pattern: "#[must_use]"
+      message: "Properly annotated return value"
+
+# Error handling patterns
+error_handling:
+  - pattern: 'Result<.*,.*>'
+    message: "Using Result for error handling"
+    severity: null  # Good practice
+
+  - pattern: '\.map_err\s*\('
+    message: "Error transformation"
+    severity: null  # Good practice
+
+  - pattern: '\?\s*;'
+    message: "Using ? operator for error propagation"
+    severity: null  # Good practice
+
+# Memory patterns
+memory:
+  - pattern: 'Box<dyn'
+    severity: MINOR
+    rule: performance
+    message: "Dynamic dispatch - consider generics if performance critical"
+
+  - pattern: 'Rc<RefCell'
+    severity: MINOR
+    rule: interior-mutability
+    message: "Interior mutability - ensure thread safety if needed"
+
+  - pattern: 'Arc<Mutex'
+    message: "Thread-safe shared state"
+    severity: null  # Appropriate for concurrent code
+
+# Async patterns
+async_patterns:
+  - pattern: '\.await\s*\?'
+    message: "Proper async error handling"
+    severity: null  # Good practice
+
+  - pattern: 'tokio::spawn'
+    severity: MINOR
+    rule: async-spawn
+    message: "Spawned task - ensure proper cancellation handling"
+
+  - pattern: '\.block_on\s*\('
+    severity: MAJOR
+    rule: blocking-in-async
+    message: "block_on in async context can cause deadlock"
+
+# Cargo.toml checks
+cargo:
+  - pattern: 'edition = "2018"'
+    severity: MINOR
+    rule: outdated-edition
+    message: "Consider updating to edition 2021"
+
+  - pattern: '\* = ".*"'
+    severity: MINOR
+    rule: wildcard-dependency
+    message: "Pin dependency version instead of using wildcard"

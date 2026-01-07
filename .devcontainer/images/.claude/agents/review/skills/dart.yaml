@@ -1,0 +1,96 @@
+# Dart Skill - Programming Taxonomy
+# Used by: agents/programming.md
+
+language: dart
+taxonomy: programming
+extensions: [".dart"]
+
+tools:
+  quality:
+    primary: dart_analyzer
+    secondary: linter
+  security:
+    primary: semgrep
+  types:
+    primary: dart_analyzer
+
+axes:
+  security:
+    tools:
+      - name: semgrep
+        rulesets:
+          - "p/dart"
+          - "p/flutter"
+
+  quality:
+    tools:
+      - name: dart_analyzer
+        rules:
+          - strong-mode
+          - strict-casts
+          - strict-inference
+
+      - name: linter
+        rules:
+          avoid_empty_else: true
+          avoid_print: true
+          cancel_subscriptions: true
+          close_sinks: true
+          empty_statements: true
+          hash_and_equals: true
+          no_duplicate_case_values: true
+          always_declare_return_types: true
+          annotate_overrides: true
+          avoid_catches_without_on_clauses: true
+          avoid_catching_errors: true
+          prefer_const_constructors: true
+          prefer_final_fields: true
+          prefer_final_locals: true
+          unawaited_futures: true
+
+    thresholds:
+      cyclomatic_complexity: 10
+      function_lines: 50
+      file_lines: 400
+
+patterns:
+  bad:
+    - pattern: 'print\s*\('
+      severity: MINOR
+      rule: avoid_print
+      message: "Use proper logging instead of print"
+
+    - pattern: 'catch\s*\(\s*e\s*\)'
+      severity: MAJOR
+      rule: avoid_catches_without_on_clauses
+      message: "Catch specific exception types"
+
+    - pattern: 'catch\s*\(\s*Error'
+      severity: MAJOR
+      rule: avoid_catching_errors
+      message: "Don't catch Errors - they indicate bugs"
+
+    - pattern: '!\s*$'
+      severity: MAJOR
+      rule: null-bang
+      message: "Avoid ! operator - handle null explicitly"
+
+  good:
+    - pattern: "const "
+      message: "Compile-time constant"
+    - pattern: "final "
+      message: "Immutable variable"
+    - pattern: "required "
+      message: "Required named parameter"
+
+frameworks:
+  flutter:
+    - pattern: 'setState\s*\(\s*\(\s*\)\s*{'
+      severity: MINOR
+      rule: efficient-setState
+      message: "Only include changed state in setState"
+
+    - pattern: 'BuildContext.*async'
+      severity: MAJOR
+      rule: dont-use-context-after-async
+      message: "Don't use BuildContext after async gap"

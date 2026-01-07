@@ -1,0 +1,208 @@
+# Terraform Skill - Infrastructure Taxonomy
+# Used by: agents/infrastructure.md
+
+language: terraform
+taxonomy: infrastructure
+extensions: [".tf", ".tfvars"]
+
+# Simulated tools for Terraform analysis
+tools:
+  security:
+    primary: checkov
+    secondary: tfsec
+  quality:
+    primary: tflint
+  compliance:
+    primary: checkov
+
+axes:
+  security:
+    tools:
+      - name: checkov
+        policies:
+          # AWS S3
+          CKV_AWS_18: "S3 bucket access logging"
+          CKV_AWS_19: "S3 bucket encryption"
+          CKV_AWS_20: "S3 bucket public access block"
+          CKV_AWS_21: "S3 bucket versioning"
+          CKV_AWS_53: "S3 bucket object lock"
+          CKV_AWS_144: "S3 cross-region replication"
+          CKV_AWS_145: "S3 bucket encryption with CMK"
+
+          # AWS EC2/VPC
+          CKV_AWS_23: "Security group unrestricted ingress"
+          CKV_AWS_24: "Security group SSH from 0.0.0.0/0"
+          CKV_AWS_25: "Security group RDP from 0.0.0.0/0"
+          CKV_AWS_8: "Instance encryption"
+          CKV_AWS_79: "IMDSv2 required"
+          CKV_AWS_126: "EBS encryption"
+
+          # AWS IAM
+          CKV_AWS_40: "IAM policy allows *:*"
+          CKV_AWS_49: "IAM policy allows assume role with *"
+          CKV_AWS_61: "IAM role allows assume from any AWS account"
+          CKV_AWS_62: "IAM policy with admin privileges"
+
+          # AWS RDS
+          CKV_AWS_16: "RDS encryption enabled"
+          CKV_AWS_17: "RDS minor version auto-upgrade"
+          CKV_AWS_118: "RDS multi-AZ"
+          CKV_AWS_129: "RDS logging enabled"
+          CKV_AWS_133: "RDS backup retention"
+          CKV_AWS_157: "RDS performance insights"
+
+          # AWS Lambda
+          CKV_AWS_45: "Lambda function tracing"
+          CKV_AWS_50: "Lambda dead letter queue"
+          CKV_AWS_115: "Lambda reserved concurrency"
+          CKV_AWS_116: "Lambda VPC config"
+          CKV_AWS_117: "Lambda code signing"
+
+          # AWS General
+          CKV_AWS_33: "KMS key rotation"
+          CKV_AWS_34: "Secrets Manager rotation"
+          CKV_AWS_41: "CloudWatch log encryption"
+          CKV_AWS_158: "CloudTrail multi-region"
+
+          # Azure
+          CKV_AZURE_1: "Storage account HTTPS only"
+          CKV_AZURE_2: "Storage account secure transfer"
+          CKV_AZURE_3: "Storage account encryption"
+          CKV_AZURE_9: "Network security group"
+          CKV_AZURE_10: "SSH access restricted"
+          CKV_AZURE_14: "AKS network policy"
+
+          # GCP
+          CKV_GCP_1: "GCE public IP"
+          CKV_GCP_2: "GCE boot disk encryption"
+          CKV_GCP_3: "GCS bucket encryption"
+          CKV_GCP_6: "GKE legacy auth disabled"
+          CKV_GCP_7: "GKE node pool auto-repair"
+
+      - name: tfsec
+        rules:
+          # General
+          general-secrets-sensitive-in-variable: "Sensitive variable not marked"
+          general-secrets-sensitive-in-local: "Secret in local value"
+
+          # AWS
+          aws-s3-enable-bucket-encryption: "S3 encryption"
+          aws-s3-enable-bucket-logging: "S3 logging"
+          aws-s3-no-public-access-with-acl: "S3 ACL"
+          aws-vpc-no-public-ingress-sgr: "VPC public ingress"
+          aws-iam-no-policy-wildcards: "IAM wildcards"
+          aws-ec2-no-public-ingress-sgr: "EC2 public ingress"
+
+  quality:
+    tools:
+      - name: tflint
+        rules:
+          # Terraform
+          terraform_deprecated_interpolation: "Deprecated interpolation"
+          terraform_deprecated_index: "Deprecated index syntax"
+          terraform_empty_list_equality: "Empty list comparison"
+          terraform_module_pinned_source: "Module version pinning"
+          terraform_naming_convention: "Naming conventions"
+          terraform_required_providers: "Required providers block"
+          terraform_required_version: "Required version"
+          terraform_unused_declarations: "Unused declarations"
+          terraform_unused_required_providers: "Unused providers"
+
+        naming:
+          resource_naming: "snake_case"
+          variable_naming: "snake_case"
+          output_naming: "snake_case"
+          module_naming: "snake_case"
+
+    checks:
+      - "Variable descriptions present"
+      - "Output descriptions present"
+      - "Resource tagging"
+      - "Module versioning"
+      - "Provider version constraints"
+
+  infrastructure:
+    compliance:
+      - framework: "CIS AWS Foundations"
+        controls: ["1.1", "1.2", "2.1", "2.2", "3.1"]
+      - framework: "NIST 800-53"
+        controls: ["AC-2", "AC-3", "AU-2", "SC-7"]
+      - framework: "PCI-DSS"
+        controls: ["1.2", "2.2", "8.1", "10.1"]
+      - framework: "SOC2"
+        controls: ["CC6.1", "CC6.6", "CC7.1"]
+
+patterns:
+  bad:
+    - pattern: 'ingress\s*\{[^}]*cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0/0"'
+      severity: CRITICAL
+      rule: CKV_AWS_23
+      message: "Security group allows unrestricted ingress"
+
+    - pattern: 'from_port\s*=\s*22[^0-9].*cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0/0"'
+      severity: CRITICAL
+      rule: CKV_AWS_24
+      message: "SSH open to the internet"
+
+    - pattern: 'from_port\s*=\s*3389[^0-9].*cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0/0"'
+      severity: CRITICAL
+      rule: CKV_AWS_25
+      message: "RDP open to the internet"
+
+    - pattern: 'acl\s*=\s*"public-read"'
+      severity: CRITICAL
+      rule: CKV_AWS_20
+      message: "S3 bucket is publicly readable"
+
+    - pattern: 'versioning\s*\{[^}]*enabled\s*=\s*false'
+      severity: MAJOR
+      rule: CKV_AWS_21
+      message: "S3 versioning disabled"
+
+    - pattern: 'effect\s*=\s*"Allow"[^}]*actions\s*=\s*\[\s*"\*"'
+      severity: CRITICAL
+      rule: CKV_AWS_40
+      message: "IAM policy allows all actions (*:*)"
+
+    - pattern: 'resources\s*=\s*\[\s*"\*"\s*\]'
+      severity: MAJOR
+      rule: CKV_AWS_40
+      message: "IAM policy applies to all resources (*)"
+
+    - pattern: 'storage_encrypted\s*=\s*false'
+      severity: MAJOR
+      rule: CKV_AWS_16
+      message: "RDS encryption disabled"
+
+    - pattern: 'publicly_accessible\s*=\s*true'
+      severity: CRITICAL
+      rule: rds-public
+      message: "RDS instance is publicly accessible"
+
+    - pattern: '=\s*"arn:aws:iam::\*:'
+      severity: MAJOR
+      rule: CKV_AWS_61
+      message: "IAM allows assume from any account"
+
+  good:
+    - pattern: "versioning {"
+      message: "S3 versioning enabled"
+
+    - pattern: "server_side_encryption_configuration"
+      message: "S3 encryption configured"
+
+    - pattern: "lifecycle {"
+      message: "Resource lifecycle configured"
+
+    - pattern: 'source\s*=\s*".*\?ref='
+      message: "Module version pinned"
+
+best_practices:
+  - "Use remote state with encryption"
+  - "Enable state locking with DynamoDB"
+  - "Use workspaces for environments"
+  - "Tag all resources consistently"
+  - "Pin provider and module versions"
+  - "Use variables for all changeable values"
+  - "Document all variables and outputs"
+  - "Use modules for reusable infrastructure"

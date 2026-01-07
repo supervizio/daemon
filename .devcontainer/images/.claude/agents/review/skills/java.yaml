@@ -1,0 +1,208 @@
+# Java Skill - Programming Taxonomy
+# Used by: agents/programming.md
+# Also covers: Kotlin, Scala (via extensions)
+
+language: java
+taxonomy: programming
+extensions: [".java"]
+related_skills: ["kotlin.yaml", "scala.yaml"]
+
+# Simulated tools for Java analysis
+tools:
+  quality:
+    primary: pmd
+    secondary: checkstyle
+  security:
+    primary: spotbugs
+    secondary: semgrep
+  tests:
+    primary: jacoco
+
+axes:
+  security:
+    tools:
+      - name: spotbugs
+        plugins: ["find-sec-bugs"]
+        rules:
+          # Injection
+          SQL_INJECTION: "SQL injection vulnerability"
+          SQL_INJECTION_JDBC: "JDBC SQL injection"
+          SQL_INJECTION_JPA: "JPA SQL injection"
+          COMMAND_INJECTION: "OS command injection"
+          LDAP_INJECTION: "LDAP injection"
+          XPATH_INJECTION: "XPath injection"
+
+          # XSS
+          XSS_JSP_PRINT: "XSS in JSP"
+          XSS_SERVLET: "XSS in Servlet"
+
+          # Crypto
+          WEAK_MESSAGE_DIGEST_MD5: "MD5 is weak"
+          WEAK_MESSAGE_DIGEST_SHA1: "SHA1 is weak"
+          PREDICTABLE_RANDOM: "Insecure random"
+          STATIC_IV: "Static initialization vector"
+          ECB_MODE: "ECB mode is insecure"
+          PADDING_ORACLE: "Padding oracle vulnerability"
+          CIPHER_INTEGRITY: "No integrity check"
+
+          # XXE
+          XXE_DOCUMENT: "XXE in DocumentBuilder"
+          XXE_SAX_PARSER: "XXE in SAXParser"
+          XXE_XML_READER: "XXE in XMLReader"
+
+          # Deserialization
+          OBJECT_DESERIALIZATION: "Unsafe deserialization"
+
+          # Path Traversal
+          PATH_TRAVERSAL_IN: "Path traversal input"
+          PATH_TRAVERSAL_OUT: "Path traversal output"
+
+      - name: semgrep
+        rulesets:
+          - "p/java"
+          - "p/spring"
+          - "p/owasp-top-ten"
+
+  quality:
+    tools:
+      - name: pmd
+        rulesets:
+          - "category/java/bestpractices.xml"
+          - "category/java/codestyle.xml"
+          - "category/java/design.xml"
+          - "category/java/documentation.xml"
+          - "category/java/errorprone.xml"
+          - "category/java/multithreading.xml"
+          - "category/java/performance.xml"
+
+        key_rules:
+          # Best Practices
+          AvoidReassigningParameters: "Don't reassign method parameters"
+          DefaultLabelNotLastInSwitchStmt: "Default case should be last"
+          PreserveStackTrace: "Preserve stack trace when rethrowing"
+          UseCollectionIsEmpty: "Use isEmpty() instead of size() == 0"
+
+          # Design
+          CyclomaticComplexity: "High cyclomatic complexity"
+          ExcessiveMethodLength: "Method too long"
+          ExcessiveParameterList: "Too many parameters"
+          GodClass: "Class is doing too much"
+          TooManyMethods: "Class has too many methods"
+
+          # Error Prone
+          AvoidCatchingThrowable: "Don't catch Throwable"
+          EmptyCatchBlock: "Empty catch block"
+          EmptyIfStmt: "Empty if statement"
+          MissingBreakInSwitch: "Missing break in switch"
+          NullAssignment: "Assigning null to variable"
+
+      - name: checkstyle
+        rules:
+          # Naming
+          TypeName: "Class names must be PascalCase"
+          MethodName: "Method names must be camelCase"
+          ConstantName: "Constants must be UPPER_CASE"
+
+          # Complexity
+          CyclomaticComplexity: 10
+          NPathComplexity: 200
+          BooleanExpressionComplexity: 3
+
+          # Size
+          MethodLength: 50
+          ParameterNumber: 7
+          FileLength: 500
+
+    thresholds:
+      cyclomatic_complexity: 10
+      method_lines: 50
+      class_lines: 500
+      parameters: 7
+
+  tests:
+    tools:
+      - name: jacoco
+        thresholds:
+          line_coverage: 80
+          branch_coverage: 75
+          method_coverage: 90
+
+patterns:
+  bad:
+    - pattern: 'Runtime\.getRuntime\(\)\.exec\s*\('
+      severity: CRITICAL
+      rule: COMMAND_INJECTION
+      message: "Command execution - validate and sanitize input"
+
+    - pattern: 'Statement\s+\w+\s*=.*createStatement'
+      severity: MAJOR
+      rule: SQL_INJECTION_JDBC
+      message: "Use PreparedStatement instead of Statement"
+
+    - pattern: '"\s*\+\s*\w+\s*\+\s*".*[Ss][Ee][Ll][Ee][Cc][Tt]|[Ii][Nn][Ss][Ee][Rr][Tt]|[Uu][Pp][Dd][Aa][Tt][Ee]|[Dd][Ee][Ll][Ee][Tt][Ee]'
+      severity: CRITICAL
+      rule: SQL_INJECTION
+      message: "SQL string concatenation - use PreparedStatement"
+
+    - pattern: 'ObjectInputStream.*readObject\s*\('
+      severity: CRITICAL
+      rule: OBJECT_DESERIALIZATION
+      message: "Unsafe deserialization - use allowlist validation"
+
+    - pattern: 'new\s+Random\s*\('
+      severity: MINOR
+      rule: PREDICTABLE_RANDOM
+      message: "Use SecureRandom for security-sensitive randomness"
+
+    - pattern: 'MessageDigest\.getInstance\s*\(\s*"MD5"'
+      severity: MAJOR
+      rule: WEAK_MESSAGE_DIGEST_MD5
+      message: "MD5 is cryptographically weak - use SHA-256"
+
+    - pattern: 'catch\s*\(\s*Exception\s+\w+\s*\)\s*\{\s*\}'
+      severity: MAJOR
+      rule: EmptyCatchBlock
+      message: "Empty catch block swallows exceptions"
+
+    - pattern: 'System\.out\.print'
+      severity: MINOR
+      rule: SystemPrintln
+      message: "Use logging framework instead of System.out"
+
+    - pattern: 'e\.printStackTrace\s*\(\s*\)'
+      severity: MINOR
+      rule: AvoidPrintStackTrace
+      message: "Use logging framework for stack traces"
+
+  good:
+    - pattern: "PreparedStatement"
+      message: "Using parameterized queries"
+
+    - pattern: "SecureRandom"
+      message: "Using secure random"
+
+    - pattern: "Logger"
+      message: "Using logging framework"
+
+frameworks:
+  spring:
+    - pattern: '@RequestMapping.*method\s*=.*GET.*\)'
+      severity: MINOR
+      rule: spring-request-mapping
+      message: "Use @GetMapping instead of @RequestMapping(method=GET)"
+
+    - pattern: 'password.*=.*"'
+      severity: CRITICAL
+      rule: hardcoded-credentials
+      message: "Use @Value or external configuration for credentials"
+
+    - pattern: '@Query.*\+\s*'
+      severity: CRITICAL
+      rule: SQL_INJECTION_JPA
+      message: "SQL concatenation in @Query - use named parameters"
+
+  hibernate:
+    - pattern: 'createQuery\s*\(\s*".*"\s*\+\s*'
+      severity: CRITICAL
+      rule: SQL_INJECTION_JPA
+      message: "HQL concatenation - use named parameters"

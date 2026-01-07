@@ -1,0 +1,178 @@
+# SCSS Skill - Style Taxonomy
+# Used by: agents/style.md
+
+language: scss
+taxonomy: style
+extensions: [".scss", ".sass"]
+
+tools:
+  quality:
+    primary: stylelint
+  performance:
+    primary: css-analyzer
+
+axes:
+  quality:
+    tools:
+      - name: stylelint
+        rules:
+          # Color
+          color-hex-length: short
+          color-no-invalid-hex: true
+
+          # Font
+          font-family-name-quotes: always-where-recommended
+          font-family-no-duplicate-names: true
+          font-family-no-missing-generic-family-keyword: true
+
+          # Function
+          function-calc-no-unspaced-operator: true
+          function-name-case: lower
+          function-url-quotes: always
+
+          # Number
+          number-leading-zero: always
+          number-max-precision: 4
+          length-zero-no-unit: true
+
+          # String
+          string-no-newline: true
+          string-quotes: single
+
+          # Unit
+          unit-no-unknown: true
+
+          # Value
+          value-keyword-case: lower
+          value-no-vendor-prefix: true
+
+          # Declaration
+          declaration-block-no-duplicate-properties: true
+          declaration-block-no-shorthand-property-overrides: true
+          declaration-no-important: true
+
+          # Selector
+          selector-max-id: 0
+          selector-max-specificity: "0,4,4"
+          selector-max-compound-selectors: 4
+          selector-max-universal: 1
+          selector-no-qualifying-type: true
+          selector-pseudo-class-no-unknown: true
+          selector-pseudo-element-no-unknown: true
+          selector-type-no-unknown: true
+
+          # Block
+          block-no-empty: true
+
+          # General
+          no-descending-specificity: true
+          no-duplicate-selectors: true
+          no-unknown-animations: true
+
+          # SCSS specific
+          scss/at-rule-no-unknown: true
+          scss/dollar-variable-colon-space-after: always
+          scss/dollar-variable-colon-space-before: never
+          scss/dollar-variable-no-missing-interpolation: true
+          scss/double-slash-comment-whitespace-inside: always
+          scss/declaration-nested-properties-no-divided-groups: true
+          scss/function-quote-no-quoted-strings-inside: true
+          scss/function-unquote-no-unquoted-strings-inside: true
+          scss/no-duplicate-dollar-variables: true
+          scss/no-duplicate-mixins: true
+          scss/selector-no-redundant-nesting-selector: true
+
+  performance:
+    checks:
+      - Excessive nesting depth
+      - Overly specific selectors
+      - Universal selector usage
+      - @import usage vs @use
+      - Unused variables
+      - Redundant properties
+      - Shorthand optimization
+
+    thresholds:
+      max_nesting_depth: 4
+      max_selectors: 4096
+      max_specificity: "0,4,4"
+
+patterns:
+  bad:
+    - pattern: '#\w+\s*{'
+      severity: MAJOR
+      rule: selector-max-id
+      message: "Avoid ID selectors - use classes for styling"
+
+    - pattern: '!important'
+      severity: MAJOR
+      rule: declaration-no-important
+      message: "Avoid !important - increase specificity or restructure"
+
+    - pattern: '@import\s+[''"]'
+      severity: MAJOR
+      rule: no-import
+      message: "Use @use instead of @import (Dart Sass)"
+
+    - pattern: '\*\s*{'
+      severity: MINOR
+      rule: selector-max-universal
+      message: "Universal selector is expensive"
+
+    - pattern: '&\s*{'
+      severity: MINOR
+      rule: scss/selector-no-redundant-nesting-selector
+      message: "Redundant nesting selector"
+
+    - pattern: '\s{5,}&'
+      severity: MAJOR
+      rule: max-nesting-depth
+      message: "Excessive nesting (>4 levels) - flatten structure"
+
+    - pattern: '@extend\s+%'
+      severity: MINOR
+      rule: careful-extend
+      message: "@extend can bloat output - consider mixins"
+
+  good:
+    - pattern: "@use"
+      message: "Modern module import"
+    - pattern: "@forward"
+      message: "Module forwarding"
+    - pattern: "var(--"
+      message: "CSS custom property"
+    - pattern: ":root"
+      message: "Root-level custom properties"
+    - pattern: "@mixin"
+      message: "Reusable mixin"
+    - pattern: "@function"
+      message: "Custom function"
+    - pattern: "$"
+      message: "SCSS variable"
+    - pattern: "%"
+      message: "Placeholder selector"
+
+idioms:
+  bem:
+    - pattern: '__\w+'
+      message: "BEM element"
+    - pattern: '--\w+'
+      message: "BEM modifier"
+
+  organization:
+    - pattern: '@use\s+[''"]sass:'
+      message: "Sass built-in module"
+    - pattern: '@include\s+\w+'
+      message: "Mixin inclusion"
+
+frameworks:
+  bootstrap:
+    - pattern: '@import.*bootstrap'
+      severity: MINOR
+      rule: bootstrap-import
+      message: "Import only needed Bootstrap parts"
+
+    - pattern: '\$primary'
+      severity: MINOR
+      rule: bootstrap-vars
+      message: "Consider theming via custom properties"
