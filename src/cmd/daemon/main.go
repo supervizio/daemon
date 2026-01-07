@@ -12,8 +12,8 @@ import (
 
 	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
 	infraconfig "github.com/kodflow/daemon/internal/infrastructure/config/yaml"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel"
 	infraprocess "github.com/kodflow/daemon/internal/infrastructure/process"
-	"github.com/kodflow/daemon/internal/kernel"
 )
 
 // signalHandler defines the interface for supervisor signal handling operations.

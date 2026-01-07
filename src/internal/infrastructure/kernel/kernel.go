@@ -2,8 +2,8 @@
 package kernel
 
 import (
-	"github.com/kodflow/daemon/internal/kernel/adapters"
-	"github.com/kodflow/daemon/internal/kernel/ports"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/adapters"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 )
 
 // Kernel provides access to all OS abstraction interfaces.

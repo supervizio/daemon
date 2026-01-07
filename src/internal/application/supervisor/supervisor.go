@@ -11,7 +11,7 @@ import (
 	appprocess "github.com/kodflow/daemon/internal/application/process"
 	domain "github.com/kodflow/daemon/internal/domain/process"
 	"github.com/kodflow/daemon/internal/domain/service"
-	"github.com/kodflow/daemon/internal/kernel/ports"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 )
 
 // State represents the supervisor state.

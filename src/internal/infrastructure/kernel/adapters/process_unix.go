@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/kodflow/daemon/internal/kernel/ports"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 )
 
 // UnixProcessControl implements ProcessControl for Unix systems.

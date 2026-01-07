@@ -8,11 +8,9 @@ Go source code for the process supervisor using hexagonal architecture.
 src/
 ├── cmd/daemon/               # CLI entry point
 ├── internal/                 # Private internal packages
-│   ├── application/          # Application layer (use cases)
+│   ├── application/          # Application layer (use cases + bootstrap ports)
 │   ├── domain/               # Domain layer (entities, ports)
-│   ├── infrastructure/       # Infrastructure layer (adapters)
-│   ├── kernel/               # OS abstraction layer
-│   └── logging/              # Log management utilities
+│   └── infrastructure/       # Infrastructure layer (all adapters)
 ├── go.mod                    # Module github.com/kodflow/daemon
 ├── go.sum                    # Dependency checksums
 ├── .golangci.yml             # golangci-lint configuration
@@ -59,13 +57,8 @@ ktn-linter lint ./...         # KTN convention linting
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    Infrastructure Layer                      │
-│    (YAML loader, health checkers, process executor)         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                        Kernel Layer                          │
-│      (OS abstraction: signals, credentials, reaper)         │
+│  (YAML loader, health checkers, process executor, kernel)   │
+│  kernel: OS abstraction (signals, credentials, reaper)      │
 └─────────────────────────────────────────────────────────────┘
 ```
 

@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	domain "github.com/kodflow/daemon/internal/domain/process"
-	"github.com/kodflow/daemon/internal/kernel"
-	"github.com/kodflow/daemon/internal/kernel/ports"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 )
 
 // mockCmdWaiter is a mock implementation of cmdWaiter for testing.

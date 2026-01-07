@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/kodflow/daemon/internal/kernel/adapters"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/adapters"
 )
 
 // TestNewUnixProcessControl tests the NewUnixProcessControl constructor.

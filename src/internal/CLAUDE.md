@@ -16,14 +16,14 @@ internal/
 │   ├── process/          # Process entities and ports
 │   ├── service/          # Service configuration entities
 │   └── shared/           # Shared value objects (Duration, Size)
-├── infrastructure/       # Infrastructure layer (adapters)
-│   ├── config/yaml/      # YAML configuration loader
-│   ├── health/           # Health check adapters (HTTP, TCP, cmd)
-│   └── process/          # Process executor adapter
-├── kernel/               # OS abstraction layer
-│   ├── adapters/         # Platform-specific implementations
-│   └── ports/            # Kernel interfaces
-└── logging/              # Log management utilities
+└── infrastructure/       # Infrastructure layer (adapters)
+    ├── config/yaml/      # YAML configuration loader
+    ├── health/           # Health check adapters (HTTP, TCP, cmd)
+    ├── kernel/           # OS abstraction layer
+    │   ├── adapters/     # Platform-specific implementations
+    │   └── ports/        # Kernel interfaces
+    ├── logging/          # Log management (writers, capture, rotation)
+    └── process/          # Process executor adapter
 ```
 
 ## Layer Responsibilities
@@ -40,27 +40,29 @@ internal/
 | Domain | `shared` | Duration, Size value objects |
 | Infrastructure | `config/yaml` | YAML file parsing |
 | Infrastructure | `health` | HTTP, TCP, command checkers |
+| Infrastructure | `kernel` | OS abstraction (signals, reaper) |
+| Infrastructure | `logging` | Writers, capture, rotation |
 | Infrastructure | `process` | Unix process executor |
-| Kernel | `adapters` | Unix/Linux signal handling |
-| Kernel | `ports` | OS abstraction interfaces |
-| Logging | `logging` | Line writer, capture, timestamp |
 
 ## Dependency Rules
 
 ```
 application ──→ domain ←── infrastructure
-     │            │              │
-     │            ▼              │
-     └────────→ kernel ←─────────┘
-                  │
-                  ▼
-               logging
+     │              │           │
+     │              │           ├── config/yaml
+     │              │           ├── health
+     │              │           ├── kernel
+     │              │           ├── logging
+     │              │           └── process
+     │              │
+     └──────────────┘
 ```
 
 **Rules:**
 - Application depends on Domain (never reverse)
 - Infrastructure implements Domain ports
-- Kernel provides OS abstraction to all layers
+- Application ports (config.Loader) = bootstrap/orchestration concerns
+- Domain ports (Executor, Checker) = business needs
 - No circular dependencies
 
 ## Testing Strategy
@@ -77,5 +79,3 @@ application ──→ domain ←── infrastructure
 | application | `application/CLAUDE.md` |
 | domain | `domain/CLAUDE.md` |
 | infrastructure | `infrastructure/CLAUDE.md` |
-| kernel | `kernel/CLAUDE.md` |
-| logging | `logging/CLAUDE.md` |

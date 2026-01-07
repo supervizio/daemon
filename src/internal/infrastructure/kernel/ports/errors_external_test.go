@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kodflow/daemon/internal/kernel/ports"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 )
 
 // TestSentinelErrors verifies that sentinel errors are properly defined.

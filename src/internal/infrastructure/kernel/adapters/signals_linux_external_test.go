@@ -7,7 +7,7 @@ package adapters_test
 import (
 	"testing"
 
-	"github.com/kodflow/daemon/internal/kernel/adapters"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/adapters"
 )
 
 // TestUnixSignalManager_SetSubreaper tests the SetSubreaper method.

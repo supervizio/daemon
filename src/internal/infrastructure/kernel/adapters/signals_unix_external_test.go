@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/kodflow/daemon/internal/kernel/adapters"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/adapters"
 )
 
 // TestNewUnixSignalManager tests the NewUnixSignalManager constructor.
