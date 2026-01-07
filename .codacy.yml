@@ -13,6 +13,11 @@ exclude_paths:
   - "**.md"
   - "**/*.md"
 
+  # DevContainer prompt files (Markdown used as prompts, not docs)
+  - ".devcontainer/docs/**"
+  - ".devcontainer/images/.claude/agents/**/*.md"
+  - ".devcontainer/images/.claude/commands/**/*.md"
+
   # Standard exclusions
   - "vendor/**"
   - "dist/**"
