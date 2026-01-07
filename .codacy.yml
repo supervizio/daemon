@@ -6,13 +6,10 @@
 exclude_paths:
   # Test files
   - '**/*_test.go'
-  - '**/*_external_test.go'
-  - '**/*_internal_test.go'
   - '**/testdata/**'
 
   # Documentation files (internal, not public)
   - '**/*.md'
-  - '**/CLAUDE.md'
 
   # Standard exclusions
   - 'vendor/**'
@@ -24,15 +21,3 @@ engines:
   # Disable markdownlint entirely - CLAUDE.md files are internal AI context
   markdownlint:
     enabled: false
-
-  # Exclude test files from Lizard complexity analysis
-  lizard:
-    exclude_paths:
-      - '**/*_test.go'
-      - '**/testdata/**'
-
-  # Exclude test files from Semgrep security checks
-  semgrep:
-    exclude_paths:
-      - '**/*_test.go'
-      - '**/testdata/**'
