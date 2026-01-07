@@ -1,11 +1,12 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # ══════════════════════════════════════════════════════════════════════════════
-# CodeRabbit Configuration — kodflow/devcontainer-template
+# CodeRabbit Configuration — superviz.io (Go Process Supervisor)
 # Goal: high-quality reviews with controlled token usage
 # Strategy:
 # - Balanced reviewer profile to avoid noise while keeping strong signal
 # - Diff-first, boundary-focused feedback
 # - Strong supply-chain and secrets hygiene
+# - Go-specific: hexagonal architecture, ktn-linter compliance
 # ══════════════════════════════════════════════════════════════════════════════
 
 language: "fr-FR"
@@ -127,6 +128,48 @@ reviews:
         - Concurrency: avoid conflicting jobs; use concurrency when appropriate.
         - Cache: stable keys and correct paths; never cache secrets.
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Go Source Code
+    # ─────────────────────────────────────────────────────────────────────────
+    - path: "**/*.go"
+      instructions: |
+        Go code review (hexagonal architecture):
+        Architecture:
+        - Respect layer boundaries: application → domain ← infrastructure
+        - Domain layer must be pure (no external dependencies)
+        - Infrastructure implements domain ports (interfaces)
+        - No circular dependencies between packages
+
+        Code Quality:
+        - Follow ktn-linter conventions (see .ktn-linter.yaml)
+        - Receiver names: 1-2 characters, consistent per type
+        - Single-method interfaces: use -er naming (Reader, Writer)
+        - Comments: every exported function/type needs documentation
+        - Error handling: wrap errors with context, use errors.Is/As
+
+        Testing:
+        - External tests (*_external_test.go) for black-box testing
+        - Internal tests (*_internal_test.go) for white-box testing
+        - Table-driven tests with descriptive test case names
+        - Race detection required (go test -race)
+
+        Security:
+        - No hardcoded credentials or secrets
+        - Validate all external input
+        - Use context for cancellation/timeouts
+        - Proper resource cleanup with defer
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Go Module Files
+    # ─────────────────────────────────────────────────────────────────────────
+    - path: "**/go.{mod,sum}"
+      instructions: |
+        Go module review:
+        - Pin dependency versions explicitly
+        - Avoid unnecessary dependencies
+        - Check for known vulnerabilities (govulncheck)
+        - Verify go version matches project requirements (1.25)
+
   auto_review:
     enabled: true
     auto_incremental_review: false
@@ -146,8 +189,10 @@ reviews:
       enabled: true
     gitleaks:
       enabled: true
-    # Enable hadolint if Dockerfiles are part of the template
     hadolint:
+      enabled: true
+    # Go-specific linting
+    golangci-lint:
       enabled: true
     # Semgrep can add noise/cost; keep disabled by default
     semgrep:

@@ -6,40 +6,56 @@ PID1-capable process supervisor in Go for containers and Unix systems.
 
 ```
 /workspace
-├── src/                      # Go source code (mandatory)
-│   ├── cmd/daemon/           # CLI entry point
-│   └── internal/             # Internal packages
-│       ├── config/           # YAML parsing and validation
-│       ├── supervisor/       # Service orchestration
-│       ├── process/          # Process lifecycle management
-│       ├── health/           # Health checks (HTTP/TCP/cmd)
-│       ├── kernel/           # OS abstraction (hexagonal)
-│       └── logging/          # Log rotation and capture
-├── examples/                 # Example configurations
-├── .github/workflows/        # CI/CD (lint, test, release)
-└── .devcontainer/            # Development environment
+├── src/                          # Go source code
+│   ├── cmd/daemon/               # CLI entry point
+│   └── internal/                 # Internal packages (hexagonal)
+│       ├── application/          # Application layer
+│       │   ├── config/           # Config port interface
+│       │   ├── health/           # Health monitoring
+│       │   ├── process/          # Process management
+│       │   └── supervisor/       # Service orchestration
+│       ├── domain/               # Domain layer
+│       │   ├── health/           # Health entities
+│       │   ├── process/          # Process entities
+│       │   ├── service/          # Service configuration
+│       │   └── shared/           # Shared value objects
+│       ├── infrastructure/       # Infrastructure layer
+│       │   ├── config/yaml/      # YAML config loader
+│       │   ├── health/           # Health check adapters
+│       │   └── process/          # Process executor
+│       ├── kernel/               # OS abstraction
+│       │   ├── adapters/         # Platform adapters
+│       │   └── ports/            # Kernel interfaces
+│       └── logging/              # Log management
+├── examples/                     # Example configurations
+├── .github/workflows/            # CI/CD (lint, test, release)
+└── .devcontainer/                # Development environment
 ```
 
 ## Tech Stack
 
 - **Language**: Go 1.25
 - **Dependencies**: gopkg.in/yaml.v3, testify
-- **Architecture**: Hexagonal (ports & adapters) for OS abstraction
+- **Architecture**: Hexagonal (ports & adapters)
+- **Linting**: golangci-lint, ktn-linter
 
 ## Development Rules
 
 **STRICT**: Follow `.devcontainer/features/languages/go/RULES.md`
 
 - Go tests alongside code (`*_test.go`)
-- Linting with `golangci-lint`
+- External tests (`_external_test.go`) for black-box testing
+- Internal tests (`_internal_test.go`) for white-box testing
 - Race detection required (`go test -race`)
+- Zero lint issues (no exclusions)
 
-## Workflow
+## Commands
 
-```
-/build --context    # Generate contextual docs
-/feature "desc"     # Branch feat/, planning, PR
-/fix "desc"         # Branch fix/, planning, PR
+```bash
+go build ./cmd/daemon         # Build
+go test -race ./...           # Tests with race detection
+golangci-lint run             # Standard linting
+ktn-linter lint ./...         # KTN convention linting
 ```
 
 ## Conventions

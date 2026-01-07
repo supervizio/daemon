@@ -1,0 +1,305 @@
+// Package yaml provides YAML configuration loading infrastructure.
+// It handles parsing and conversion of YAML configuration files to domain objects.
+package yaml
+
+import (
+	"time"
+
+	"github.com/kodflow/daemon/internal/domain/service"
+	"github.com/kodflow/daemon/internal/domain/shared"
+)
+
+// Duration is a wrapper around time.Duration for YAML serialization.
+// It enables parsing of human-readable duration strings like "30s" or "5m" from YAML files.
+type Duration time.Duration
+
+// UnmarshalYAML implements yaml.Unmarshaler for Duration.
+// It parses a string duration value from YAML into a Duration type.
+//
+// Params:
+//   - unmarshal: callback function to unmarshal the YAML value
+//
+// Returns:
+//   - error: parsing error if the duration string is invalid
+func (d *Duration) UnmarshalYAML(unmarshal func(any) error) error {
+	var s string
+
+	// Unmarshal the YAML value into a string
+	if err := unmarshal(&s); err != nil {
+		// Return error if unmarshaling fails
+		return err
+	}
+
+	parsed, err := time.ParseDuration(s)
+
+	// Check if duration parsing was successful
+	if err != nil {
+		// Return parsing error
+		return err
+	}
+
+	*d = Duration(parsed)
+
+	// Return nil on success
+	return nil
+}
+
+// MarshalText implements encoding.TextMarshaler for Duration.
+// It converts a Duration back to a byte slice for serialization.
+// This approach is used instead of yaml.Marshaler to avoid returning interface{}.
+//
+// Returns:
+//   - []byte: the duration as a formatted string in bytes
+//   - error: always nil for this implementation
+func (d *Duration) MarshalText() ([]byte, error) {
+	// Return the duration as a formatted string in bytes
+	return []byte(time.Duration(*d).String()), nil
+}
+
+// ConfigDTO is the YAML representation of the root configuration.
+// It serves as the data transfer object for parsing the main configuration file.
+type ConfigDTO struct {
+	Version  string             `yaml:"version"`
+	Logging  LoggingConfigDTO   `yaml:"logging"`
+	Services []ServiceConfigDTO `yaml:"services"`
+}
+
+// ServiceConfigDTO is the YAML representation of a service configuration.
+// It contains all settings needed to define and manage a supervised service.
+type ServiceConfigDTO struct {
+	Name             string            `yaml:"name"`
+	Command          string            `yaml:"command"`
+	Args             []string          `yaml:"args,omitempty"`
+	User             string            `yaml:"user,omitempty"`
+	Group            string            `yaml:"group,omitempty"`
+	WorkingDirectory string            `yaml:"working_dir,omitempty"`
+	Environment      map[string]string `yaml:"environment,omitempty"`
+	Restart          RestartConfigDTO  `yaml:"restart"`
+	HealthChecks     []HealthCheckDTO  `yaml:"health_checks,omitempty"`
+	Logging          ServiceLoggingDTO `yaml:"logging,omitempty"`
+	DependsOn        []string          `yaml:"depends_on,omitempty"`
+	Oneshot          bool              `yaml:"oneshot,omitempty"`
+}
+
+// RestartConfigDTO is the YAML representation of restart configuration.
+// It defines the restart policy and timing parameters for service recovery.
+type RestartConfigDTO struct {
+	Policy     string   `yaml:"policy"`
+	MaxRetries int      `yaml:"max_retries,omitempty"`
+	Delay      Duration `yaml:"delay,omitempty"`
+	DelayMax   Duration `yaml:"delay_max,omitempty"`
+}
+
+// HealthCheckDTO is the YAML representation of a health check.
+// It defines how to verify that a service is running correctly.
+type HealthCheckDTO struct {
+	Name       string   `yaml:"name,omitempty"`
+	Type       string   `yaml:"type"`
+	Interval   Duration `yaml:"interval"`
+	Timeout    Duration `yaml:"timeout"`
+	Retries    int      `yaml:"retries"`
+	Endpoint   string   `yaml:"endpoint,omitempty"`
+	Method     string   `yaml:"method,omitempty"`
+	StatusCode int      `yaml:"status_code,omitempty"`
+	Host       string   `yaml:"host,omitempty"`
+	Port       int      `yaml:"port,omitempty"`
+	Command    string   `yaml:"command,omitempty"`
+}
+
+// LoggingConfigDTO is the YAML representation of logging configuration.
+// It contains global logging settings including defaults and base directory.
+type LoggingConfigDTO struct {
+	Defaults LogDefaultsDTO `yaml:"defaults"`
+	BaseDir  string         `yaml:"base_dir"`
+}
+
+// LogDefaultsDTO is the YAML representation of logging defaults.
+// It defines default timestamp format and rotation settings for all log streams.
+type LogDefaultsDTO struct {
+	TimestampFormat string            `yaml:"timestamp_format"`
+	Rotation        RotationConfigDTO `yaml:"rotation"`
+}
+
+// RotationConfigDTO is the YAML representation of rotation configuration.
+// It specifies log file rotation parameters like size limits and retention.
+type RotationConfigDTO struct {
+	MaxSize  string `yaml:"max_size"`
+	MaxAge   string `yaml:"max_age"`
+	MaxFiles int    `yaml:"max_files"`
+	Compress bool   `yaml:"compress"`
+}
+
+// ServiceLoggingDTO is the YAML representation of service logging.
+// It defines separate configurations for stdout and stderr log streams.
+type ServiceLoggingDTO struct {
+	Stdout LogStreamConfigDTO `yaml:"stdout,omitempty"`
+	Stderr LogStreamConfigDTO `yaml:"stderr,omitempty"`
+}
+
+// LogStreamConfigDTO is the YAML representation of a log stream.
+// It configures file path, format, and rotation for a single log stream.
+type LogStreamConfigDTO struct {
+	File            string            `yaml:"file,omitempty"`
+	TimestampFormat string            `yaml:"timestamp_format,omitempty"`
+	Rotation        RotationConfigDTO `yaml:"rotation,omitempty"`
+}
+
+// ToDomain converts ConfigDTO to domain Config.
+// It transforms the YAML data transfer object into the domain model.
+//
+// Params:
+//   - configPath: the filesystem path of the loaded configuration file
+//
+// Returns:
+//   - *service.Config: the converted domain configuration object
+func (c *ConfigDTO) ToDomain(configPath string) *service.Config {
+	services := make([]service.ServiceConfig, 0, len(c.Services))
+
+	// Convert each service configuration to domain model
+	for i := range c.Services {
+		services = append(services, c.Services[i].ToDomain())
+	}
+
+	// Return the fully converted configuration
+	return &service.Config{
+		Version:    c.Version,
+		ConfigPath: configPath,
+		Logging:    c.Logging.ToDomain(),
+		Services:   services,
+	}
+}
+
+// ToDomain converts ServiceConfigDTO to domain ServiceConfig.
+// It maps all service settings from YAML format to the domain model.
+//
+// Returns:
+//   - service.ServiceConfig: the converted domain service configuration
+func (s *ServiceConfigDTO) ToDomain() service.ServiceConfig {
+	healthChecks := make([]service.HealthCheckConfig, 0, len(s.HealthChecks))
+
+	// Convert each health check configuration to domain model
+	for i := range s.HealthChecks {
+		healthChecks = append(healthChecks, s.HealthChecks[i].ToDomain())
+	}
+
+	// Return the fully converted service configuration
+	return service.ServiceConfig{
+		Name:             s.Name,
+		Command:          s.Command,
+		Args:             s.Args,
+		User:             s.User,
+		Group:            s.Group,
+		WorkingDirectory: s.WorkingDirectory,
+		Environment:      s.Environment,
+		Restart:          s.Restart.ToDomain(),
+		DependsOn:        s.DependsOn,
+		Oneshot:          s.Oneshot,
+		Logging:          s.Logging.ToDomain(),
+		HealthChecks:     healthChecks,
+	}
+}
+
+// ToDomain converts RestartConfigDTO to domain RestartConfig.
+// It transforms restart policy settings to the domain model format.
+//
+// Returns:
+//   - service.RestartConfig: the converted domain restart configuration
+func (r *RestartConfigDTO) ToDomain() service.RestartConfig {
+	// Return the converted restart configuration with policy and timing
+	return service.RestartConfig{
+		Policy:     service.RestartPolicy(r.Policy),
+		MaxRetries: r.MaxRetries,
+		Delay:      shared.FromTimeDuration(time.Duration(r.Delay)),
+		DelayMax:   shared.FromTimeDuration(time.Duration(r.DelayMax)),
+	}
+}
+
+// ToDomain converts HealthCheckDTO to domain HealthCheckConfig.
+// It maps health check parameters from YAML format to the domain model.
+//
+// Returns:
+//   - service.HealthCheckConfig: the converted domain health check configuration
+func (h *HealthCheckDTO) ToDomain() service.HealthCheckConfig {
+	// Return the converted health check with all parameters
+	return service.HealthCheckConfig{
+		Name:       h.Name,
+		Type:       service.HealthCheckType(h.Type),
+		Interval:   shared.FromTimeDuration(time.Duration(h.Interval)),
+		Timeout:    shared.FromTimeDuration(time.Duration(h.Timeout)),
+		Retries:    h.Retries,
+		Endpoint:   h.Endpoint,
+		Method:     h.Method,
+		StatusCode: h.StatusCode,
+		Host:       h.Host,
+		Port:       h.Port,
+		Command:    h.Command,
+	}
+}
+
+// ToDomain converts LoggingConfigDTO to domain LoggingConfig.
+// It transforms global logging settings to the domain model format.
+//
+// Returns:
+//   - service.LoggingConfig: the converted domain logging configuration
+func (l *LoggingConfigDTO) ToDomain() service.LoggingConfig {
+	// Return the converted logging configuration with base directory and defaults
+	return service.LoggingConfig{
+		BaseDir:  l.BaseDir,
+		Defaults: l.Defaults.ToDomain(),
+	}
+}
+
+// ToDomain converts LogDefaultsDTO to domain LogDefaults.
+// It maps default logging parameters to the domain model format.
+//
+// Returns:
+//   - service.LogDefaults: the converted domain log defaults
+func (l *LogDefaultsDTO) ToDomain() service.LogDefaults {
+	// Return the converted log defaults with format and rotation settings
+	return service.LogDefaults{
+		TimestampFormat: l.TimestampFormat,
+		Rotation:        l.Rotation.ToDomain(),
+	}
+}
+
+// ToDomain converts RotationConfigDTO to domain RotationConfig.
+// It transforms log rotation settings to the domain model format.
+//
+// Returns:
+//   - service.RotationConfig: the converted domain rotation configuration
+func (r *RotationConfigDTO) ToDomain() service.RotationConfig {
+	// Return the converted rotation configuration with size and retention limits
+	return service.RotationConfig{
+		MaxSize:  r.MaxSize,
+		MaxAge:   r.MaxAge,
+		MaxFiles: r.MaxFiles,
+		Compress: r.Compress,
+	}
+}
+
+// ToDomain converts ServiceLoggingDTO to domain ServiceLogging.
+// It maps service-specific logging settings to the domain model format.
+//
+// Returns:
+//   - service.ServiceLogging: the converted domain service logging configuration
+func (s *ServiceLoggingDTO) ToDomain() service.ServiceLogging {
+	// Return the converted service logging with stdout and stderr streams
+	return service.ServiceLogging{
+		Stdout: s.Stdout.ToDomain(),
+		Stderr: s.Stderr.ToDomain(),
+	}
+}
+
+// ToDomain converts LogStreamConfigDTO to domain LogStreamConfig.
+// It transforms individual log stream settings to the domain model format.
+//
+// Returns:
+//   - service.LogStreamConfig: the converted domain log stream configuration
+func (l *LogStreamConfigDTO) ToDomain() service.LogStreamConfig {
+	// Return the converted log stream with file path, format, and rotation
+	return service.LogStreamConfig{
+		FilePath:       l.File,
+		Format:         l.TimestampFormat,
+		RotationConfig: l.Rotation.ToDomain(),
+	}
+}

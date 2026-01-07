@@ -52,6 +52,9 @@ linters-settings:
       - diagnostic
       - performance
       - style
+    settings:
+      hugeParam:
+        sizeThreshold: 256 # Allow domain value objects up to 256 bytes
 
   errorlint:
     errorf: true
@@ -74,10 +77,12 @@ linters-settings:
       - name: error-strings
       - name: error-naming
       - name: exported
+        disabled: true # Conflicts with DDD naming conventions (service.ServiceConfig)
       - name: if-return
       - name: increment-decrement
       - name: var-naming
       - name: var-declaration
+        disabled: true # Conflicts with KTN-VAR-001 requiring explicit types
       - name: package-comments
       - name: range
       - name: receiver-naming

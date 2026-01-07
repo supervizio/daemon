@@ -7,22 +7,31 @@ import (
 )
 
 // Kernel provides access to all OS abstraction interfaces.
+// It aggregates platform-specific implementations for signals, credentials, process, and zombie reaping.
 type Kernel struct {
-	Signals     ports.SignalManager
+	// Signals handles signal notification and forwarding operations.
+	Signals ports.SignalManager
+	// Credentials handles user and group credential resolution and application.
 	Credentials ports.CredentialManager
-	Process     ports.ProcessControl
-	Reaper      ports.ZombieReaper
+	// Process handles process group operations.
+	Process ports.ProcessControl
+	// Reaper handles zombie process cleanup.
+	Reaper ports.ZombieReaper
 }
 
 // New creates a new Kernel with platform-specific implementations.
+//
+// Returns:
+//   - *Kernel: a new kernel instance with all interfaces initialized
 func New() *Kernel {
+	// Return a new Kernel with all platform-specific adapters initialized.
 	return &Kernel{
-		Signals:     adapters.NewSignalManager(),
-		Credentials: adapters.NewCredentialManager(),
-		Process:     adapters.NewProcessControl(),
-		Reaper:      adapters.NewZombieReaper(),
+		Signals:     adapters.NewUnixSignalManager(),
+		Credentials: adapters.NewUnixCredentialManager(),
+		Process:     adapters.NewUnixProcessControl(),
+		Reaper:      adapters.NewUnixZombieReaper(),
 	}
 }
 
 // Default is the default kernel instance.
-var Default = New()
+var Default *Kernel = New()
