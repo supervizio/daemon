@@ -37,7 +37,7 @@ jobs:
       is_new_tag: ${{ steps.version.outputs.is_new_tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
@@ -45,12 +45,10 @@ jobs:
         id: version
         run: |
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            # Tag push: use the tag directly
             VERSION="${{ github.ref_name }}"
             IS_NEW_TAG="false"
             BUMP_TYPE="tag"
           else
-            # Get last tag
             LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
             VERSION_NUM=${LATEST_TAG#v}
 
@@ -61,11 +59,9 @@ jobs:
 
             BUMP_TYPE="${{ inputs.bump }}"
 
-            # Auto-detect from conventional commits
             if [[ "$BUMP_TYPE" == "auto" || -z "$BUMP_TYPE" ]]; then
               echo "Analyzing commits since $LATEST_TAG..."
 
-              # Get commits since last tag
               if [[ "$LATEST_TAG" == "v0.0.0" ]]; then
                 COMMITS=$(git log --oneline --format="%s")
               else
@@ -75,8 +71,6 @@ jobs:
               echo "Commits found:"
               echo "$COMMITS" | head -20
 
-              # Detect bump type from conventional commits
-              # Priority: BREAKING > feat > fix
               if echo "$COMMITS" | grep -qiE '^[a-z]+(\(.+\))?!:|BREAKING CHANGE:'; then
                 BUMP_TYPE="major"
                 echo "Detected: BREAKING CHANGE → major"
@@ -87,13 +81,11 @@ jobs:
                 BUMP_TYPE="patch"
                 echo "Detected: fix commits → patch"
               else
-                # Default to patch for non-conventional commits
                 BUMP_TYPE="patch"
                 echo "No conventional commits detected → patch (default)"
               fi
             fi
 
-            # Apply bump
             case "$BUMP_TYPE" in
               major)
                 MAJOR=$((MAJOR + 1))
@@ -123,7 +115,7 @@ jobs:
           echo "New: $VERSION"
 
   # =============================================================================
-  # Build all platforms (ubuntu-latest)
+  # Build all platforms
   # =============================================================================
   build:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
@@ -163,10 +155,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -183,7 +175,7 @@ jobs:
             ./cmd/daemon
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: supervizio-${{ matrix.goos }}-${{ matrix.goarch }}
           path: supervizio-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -201,10 +193,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
 
@@ -266,7 +258,7 @@ jobs:
           git push origin "${{ needs.version.outputs.version }}"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           name: superviz.io ${{ needs.version.outputs.version }}
           tag_name: ${{ needs.version.outputs.version }}
