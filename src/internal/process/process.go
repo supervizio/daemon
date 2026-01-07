@@ -7,11 +7,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/kodflow/daemon/internal/config"
+	"github.com/kodflow/daemon/internal/kernel"
 )
 
 // State represents the current state of a process.
@@ -128,11 +130,19 @@ func (p *Process) Start(ctx context.Context) error {
 	p.state = StateStarting
 	p.done = make(chan struct{})
 
-	cmd := exec.CommandContext(ctx, p.Config.Command, p.Config.Args...)
+	// Parse command and args
+	cmdParts := parseCommand(p.Config.Command)
+	if len(cmdParts) == 0 {
+		p.state = StateFailed
+		return fmt.Errorf("empty command")
+	}
+
+	args := append(cmdParts[1:], p.Config.Args...)
+	cmd := exec.CommandContext(ctx, cmdParts[0], args...)
 
 	// Set working directory
-	if p.Config.WorkingDir != "" {
-		cmd.Dir = p.Config.WorkingDir
+	if p.Config.WorkingDirectory != "" {
+		cmd.Dir = p.Config.WorkingDirectory
 	}
 
 	// Set environment
@@ -150,14 +160,19 @@ func (p *Process) Start(ctx context.Context) error {
 	}
 
 	// Set process group for signal forwarding
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
-	}
+	kernel.Default.Process.SetProcessGroup(cmd)
 
 	// Apply credentials if configured
-	if err := applyCredentials(cmd, p.Config); err != nil {
-		p.state = StateFailed
-		return fmt.Errorf("applying credentials: %w", err)
+	if p.Config.User != "" || p.Config.Group != "" {
+		uid, gid, err := kernel.Default.Credentials.ResolveCredentials(p.Config.User, p.Config.Group)
+		if err != nil {
+			p.state = StateFailed
+			return fmt.Errorf("resolving credentials: %w", err)
+		}
+		if err := kernel.Default.Credentials.ApplyCredentials(cmd, uid, gid); err != nil {
+			p.state = StateFailed
+			return fmt.Errorf("applying credentials: %w", err)
+		}
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -174,6 +189,11 @@ func (p *Process) Start(ctx context.Context) error {
 	go p.monitor()
 
 	return nil
+}
+
+// parseCommand splits a command string into parts.
+func parseCommand(cmd string) []string {
+	return strings.Fields(cmd)
 }
 
 // monitor waits for the process to exit and updates state.
@@ -245,7 +265,7 @@ func (p *Process) Signal(sig os.Signal) error {
 	return p.cmd.Process.Signal(sig)
 }
 
-// Wait waits for the process to exit.
+// Wait returns a channel that's closed when the process exits.
 func (p *Process) Wait() <-chan struct{} {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

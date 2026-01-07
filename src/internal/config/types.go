@@ -5,9 +5,10 @@ import "time"
 
 // Config represents the root configuration structure.
 type Config struct {
-	Version  string          `yaml:"version"`
-	Logging  LoggingConfig   `yaml:"logging"`
-	Services []ServiceConfig `yaml:"services"`
+	Version    string          `yaml:"version"`
+	Logging    LoggingConfig   `yaml:"logging"`
+	Services   []ServiceConfig `yaml:"services"`
+	ConfigPath string          `yaml:"-"` // Path to the config file (not serialized)
 }
 
 // LoggingConfig defines global logging defaults.
@@ -32,18 +33,18 @@ type RotationConfig struct {
 
 // ServiceConfig defines a single service configuration.
 type ServiceConfig struct {
-	Name         string              `yaml:"name"`
-	Command      string              `yaml:"command"`
-	Args         []string            `yaml:"args,omitempty"`
-	User         string              `yaml:"user,omitempty"`
-	Group        string              `yaml:"group,omitempty"`
-	WorkingDir   string              `yaml:"working_dir,omitempty"`
-	Environment  map[string]string   `yaml:"environment,omitempty"`
-	Restart      RestartConfig       `yaml:"restart"`
-	HealthChecks []HealthCheckConfig `yaml:"health_checks,omitempty"`
-	Logging      ServiceLogging      `yaml:"logging,omitempty"`
-	DependsOn    []string            `yaml:"depends_on,omitempty"`
-	Oneshot      bool                `yaml:"oneshot,omitempty"`
+	Name             string              `yaml:"name"`
+	Command          string              `yaml:"command"`
+	Args             []string            `yaml:"args,omitempty"`
+	User             string              `yaml:"user,omitempty"`
+	Group            string              `yaml:"group,omitempty"`
+	WorkingDirectory string              `yaml:"working_dir,omitempty"`
+	Environment      map[string]string   `yaml:"environment,omitempty"`
+	Restart          RestartConfig       `yaml:"restart"`
+	HealthChecks     []HealthCheckConfig `yaml:"health_checks,omitempty"`
+	Logging          ServiceLogging      `yaml:"logging,omitempty"`
+	DependsOn        []string            `yaml:"depends_on,omitempty"`
+	Oneshot          bool                `yaml:"oneshot,omitempty"`
 }
 
 // RestartConfig defines service restart behavior.

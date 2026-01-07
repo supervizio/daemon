@@ -3,6 +3,7 @@ package process
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/kodflow/daemon/internal/config"
@@ -51,19 +52,21 @@ func (e EventType) String() string {
 
 // Manager manages the lifecycle of a single process with restart policies.
 type Manager struct {
+	mu      sync.RWMutex
 	process *Process
 	config  *config.ServiceConfig
-	events  chan<- Event
-
-	cancel context.CancelFunc
+	events  chan Event
+	ctx     context.Context
+	cancel  context.CancelFunc
+	running bool
 }
 
 // NewManager creates a new process lifecycle manager.
-func NewManager(cfg *config.ServiceConfig, events chan<- Event) *Manager {
+func NewManager(cfg *config.ServiceConfig) *Manager {
 	return &Manager{
 		process: New(cfg),
 		config:  cfg,
-		events:  events,
+		events:  make(chan Event, 16),
 	}
 }
 
@@ -72,21 +75,62 @@ func (m *Manager) Process() *Process {
 	return m.process
 }
 
+// Events returns the event channel for monitoring.
+func (m *Manager) Events() <-chan Event {
+	return m.events
+}
+
+// State returns the current process state.
+func (m *Manager) State() State {
+	return m.process.State()
+}
+
+// PID returns the current process PID.
+func (m *Manager) PID() int {
+	return m.process.PID()
+}
+
+// Uptime returns the process uptime in seconds.
+func (m *Manager) Uptime() int64 {
+	return int64(m.process.Uptime().Seconds())
+}
+
 // Start starts the managed process with automatic restart handling.
-func (m *Manager) Start(ctx context.Context) error {
-	ctx, m.cancel = context.WithCancel(ctx)
+func (m *Manager) Start() error {
+	m.mu.Lock()
+	if m.running {
+		m.mu.Unlock()
+		return fmt.Errorf("manager already running")
+	}
+	m.running = true
+	m.ctx, m.cancel = context.WithCancel(context.Background())
+	m.mu.Unlock()
+
+	go m.run()
+	return nil
+}
+
+// run is the main loop that manages the process lifecycle.
+func (m *Manager) run() {
+	defer func() {
+		m.mu.Lock()
+		m.running = false
+		m.mu.Unlock()
+	}()
 
 	if m.config.Oneshot {
-		return m.runOnce(ctx)
+		m.runOnce()
+		return
 	}
 
-	return m.runWithRestart(ctx)
+	m.runWithRestart()
 }
 
 // runOnce runs the process once without restart.
-func (m *Manager) runOnce(ctx context.Context) error {
-	if err := m.process.Start(ctx); err != nil {
-		return err
+func (m *Manager) runOnce() {
+	if err := m.process.Start(m.ctx); err != nil {
+		m.sendEvent(EventFailed, err)
+		return
 	}
 
 	m.sendEvent(EventStarted, nil)
@@ -95,23 +139,28 @@ func (m *Manager) runOnce(ctx context.Context) error {
 
 	if m.process.ExitCode() != 0 {
 		m.sendEvent(EventFailed, fmt.Errorf("exit code: %d", m.process.ExitCode()))
-		return fmt.Errorf("process exited with code %d", m.process.ExitCode())
+		return
 	}
 
 	m.sendEvent(EventStopped, nil)
-	return nil
 }
 
 // runWithRestart runs the process with automatic restart based on policy.
-func (m *Manager) runWithRestart(ctx context.Context) error {
+func (m *Manager) runWithRestart() {
 	for {
-		if err := m.process.Start(ctx); err != nil {
+		select {
+		case <-m.ctx.Done():
+			return
+		default:
+		}
+
+		if err := m.process.Start(m.ctx); err != nil {
 			m.sendEvent(EventFailed, err)
 			if !m.shouldRestart(err) {
-				return err
+				return
 			}
-			if err := m.waitAndRestart(ctx); err != nil {
-				return err
+			if !m.waitAndRestart() {
+				return
 			}
 			continue
 		}
@@ -119,8 +168,9 @@ func (m *Manager) runWithRestart(ctx context.Context) error {
 		m.sendEvent(EventStarted, nil)
 
 		select {
-		case <-ctx.Done():
-			return m.process.Stop(30 * time.Second)
+		case <-m.ctx.Done():
+			m.process.Stop(30 * time.Second)
+			return
 		case <-m.process.Wait():
 			exitCode := m.process.ExitCode()
 
@@ -131,14 +181,11 @@ func (m *Manager) runWithRestart(ctx context.Context) error {
 			}
 
 			if !m.shouldRestartExitCode(exitCode) {
-				if exitCode != 0 {
-					return fmt.Errorf("process exited with code %d", exitCode)
-				}
-				return nil
+				return
 			}
 
-			if err := m.waitAndRestart(ctx); err != nil {
-				return err
+			if !m.waitAndRestart() {
+				return
 			}
 		}
 	}
@@ -180,17 +227,17 @@ func (m *Manager) shouldRestartExitCode(exitCode int) bool {
 }
 
 // waitAndRestart waits the configured delay and prepares for restart.
-func (m *Manager) waitAndRestart(ctx context.Context) error {
+func (m *Manager) waitAndRestart() bool {
 	m.process.IncrementRestarts()
 	m.sendEvent(EventRestarting, nil)
 
 	delay := m.calculateDelay()
 
 	select {
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-m.ctx.Done():
+		return false
 	case <-time.After(delay):
-		return nil
+		return true
 	}
 }
 
@@ -215,6 +262,13 @@ func (m *Manager) calculateDelay() time.Duration {
 
 // Stop stops the managed process.
 func (m *Manager) Stop() error {
+	m.mu.Lock()
+	if !m.running {
+		m.mu.Unlock()
+		return nil
+	}
+	m.mu.Unlock()
+
 	if m.cancel != nil {
 		m.cancel()
 	}
@@ -228,10 +282,6 @@ func (m *Manager) Reload() error {
 
 // sendEvent sends a lifecycle event.
 func (m *Manager) sendEvent(eventType EventType, err error) {
-	if m.events == nil {
-		return
-	}
-
 	event := Event{
 		Type:      eventType,
 		Process:   m.config.Name,

@@ -3,9 +3,12 @@ package process
 import (
 	"os"
 	"syscall"
+
+	"github.com/kodflow/daemon/internal/kernel"
 )
 
 // SignalMap maps signal names to syscall signals.
+// Deprecated: Use kernel.Default.Signals.SignalByName instead.
 var SignalMap = map[string]os.Signal{
 	"SIGHUP":  syscall.SIGHUP,
 	"SIGINT":  syscall.SIGINT,
@@ -34,21 +37,15 @@ func ForwardSignalToGroup(p *Process, sig syscall.Signal) error {
 		return nil
 	}
 
-	// Send to process group (negative PID)
-	return syscall.Kill(-pid, sig)
+	return kernel.Default.Signals.ForwardToGroup(pid, sig)
 }
 
 // IsTermSignal returns true if the signal is a termination signal.
 func IsTermSignal(sig os.Signal) bool {
-	switch sig {
-	case syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGKILL:
-		return true
-	default:
-		return false
-	}
+	return kernel.Default.Signals.IsTermSignal(sig)
 }
 
 // IsReloadSignal returns true if the signal is a reload signal.
 func IsReloadSignal(sig os.Signal) bool {
-	return sig == syscall.SIGHUP
+	return kernel.Default.Signals.IsReloadSignal(sig)
 }

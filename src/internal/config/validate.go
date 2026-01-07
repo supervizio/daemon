@@ -224,3 +224,8 @@ func validateCommandHealthCheck(hc *HealthCheckConfig, prefix string) error {
 	}
 	return nil
 }
+
+// Validate validates the configuration.
+func (c *Config) Validate() error {
+	return Validate(c)
+}

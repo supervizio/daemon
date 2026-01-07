@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -16,7 +17,13 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("reading config file: %w", err)
 	}
 
-	return Parse(data)
+	cfg, err := Parse(data)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.ConfigPath = path
+	return cfg, nil
 }
 
 // Parse parses configuration from YAML bytes.
@@ -133,31 +140,38 @@ func (c *Config) FindService(name string) *ServiceConfig {
 // ParseSize parses a size string like "100MB" into bytes.
 func ParseSize(s string) (int64, error) {
 	s = strings.TrimSpace(strings.ToUpper(s))
-
-	multipliers := map[string]int64{
-		"B":  1,
-		"KB": 1024,
-		"MB": 1024 * 1024,
-		"GB": 1024 * 1024 * 1024,
-		"K":  1024,
-		"M":  1024 * 1024,
-		"G":  1024 * 1024 * 1024,
+	if s == "" {
+		return 0, fmt.Errorf("empty size string")
 	}
 
-	for suffix, mult := range multipliers {
-		if strings.HasSuffix(s, suffix) {
-			numStr := strings.TrimSuffix(s, suffix)
-			var num int64
-			if _, err := fmt.Sscanf(numStr, "%d", &num); err != nil {
+	// Check suffixes from longest to shortest to avoid matching "B" before "KB"
+	suffixes := []struct {
+		suffix string
+		mult   int64
+	}{
+		{"GB", 1024 * 1024 * 1024},
+		{"MB", 1024 * 1024},
+		{"KB", 1024},
+		{"G", 1024 * 1024 * 1024},
+		{"M", 1024 * 1024},
+		{"K", 1024},
+		{"B", 1},
+	}
+
+	for _, sf := range suffixes {
+		if strings.HasSuffix(s, sf.suffix) {
+			numStr := strings.TrimSuffix(s, sf.suffix)
+			num, err := strconv.ParseInt(numStr, 10, 64)
+			if err != nil {
 				return 0, fmt.Errorf("invalid size: %s", s)
 			}
-			return num * mult, nil
+			return num * sf.mult, nil
 		}
 	}
 
 	// Try parsing as plain number (bytes)
-	var num int64
-	if _, err := fmt.Sscanf(s, "%d", &num); err != nil {
+	num, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
 		return 0, fmt.Errorf("invalid size: %s", s)
 	}
 	return num, nil
