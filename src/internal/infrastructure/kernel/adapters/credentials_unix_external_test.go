@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kodflow/daemon/internal/kernel/adapters"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/adapters"
 )
 
 // TestNewUnixCredentialManager tests the NewUnixCredentialManager constructor.

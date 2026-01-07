@@ -7,7 +7,7 @@ package kernel_test
 import (
 	"testing"
 
-	"github.com/kodflow/daemon/internal/kernel"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel"
 )
 
 // TestNew tests the New constructor.

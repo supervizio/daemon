@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kodflow/daemon/internal/kernel/adapters"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/adapters"
 )
 
 // TestNewUnixZombieReaper tests the NewUnixZombieReaper constructor.

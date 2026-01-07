@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kodflow/daemon/internal/logging"
+	"github.com/kodflow/daemon/internal/infrastructure/logging"
 )
 
 // TestFormatTimestamp tests the FormatTimestamp function with various formats.

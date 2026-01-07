@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kodflow/daemon/internal/domain/service"
-	"github.com/kodflow/daemon/internal/logging"
+	"github.com/kodflow/daemon/internal/infrastructure/logging"
 )
 
 // mockCaptureConfig implements captureConfig for testing.

@@ -22,11 +22,11 @@ PID1-capable process supervisor in Go for containers and Unix systems.
 │       ├── infrastructure/       # Infrastructure layer
 │       │   ├── config/yaml/      # YAML config loader
 │       │   ├── health/           # Health check adapters
+│       │   ├── kernel/           # OS abstraction (signals, reaper)
+│       │   │   ├── adapters/     # Platform adapters
+│       │   │   └── ports/        # Kernel interfaces
+│       │   ├── logging/          # Log management (writers, capture)
 │       │   └── process/          # Process executor
-│       ├── kernel/               # OS abstraction
-│       │   ├── adapters/         # Platform adapters
-│       │   └── ports/            # Kernel interfaces
-│       └── logging/              # Log management
 ├── examples/                     # Example configurations
 ├── .github/workflows/            # CI/CD (lint, test, release)
 └── .devcontainer/                # Development environment

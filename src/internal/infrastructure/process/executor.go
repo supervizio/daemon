@@ -13,7 +13,7 @@ import (
 	"time"
 
 	domain "github.com/kodflow/daemon/internal/domain/process"
-	"github.com/kodflow/daemon/internal/kernel"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel"
 )
 
 // Waiter is a minimal interface for waiting on commands.

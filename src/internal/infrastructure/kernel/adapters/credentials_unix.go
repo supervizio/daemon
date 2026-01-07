@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/kodflow/daemon/internal/kernel/ports"
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 )
 
 const (
