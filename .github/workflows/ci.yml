@@ -75,17 +75,32 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
+        goos: [linux, darwin, freebsd, openbsd, netbsd, dragonfly]
+        goarch: [amd64, arm64, arm, 386, riscv64]
+        exclude:
+          # Darwin only supports amd64 and arm64
           - goos: darwin
-            goarch: amd64
+            goarch: arm
           - goos: darwin
+            goarch: 386
+          - goos: darwin
+            goarch: riscv64
+          # DragonFly only supports amd64
+          - goos: dragonfly
             goarch: arm64
-          - goos: freebsd
-            goarch: amd64
+          - goos: dragonfly
+            goarch: arm
+          - goos: dragonfly
+            goarch: 386
+          - goos: dragonfly
+            goarch: riscv64
+          # OpenBSD doesn't support riscv64
+          - goos: openbsd
+            goarch: riscv64
+          # NetBSD doesn't support riscv64
+          - goos: netbsd
+            goarch: riscv64
+          # FreeBSD riscv64 is experimental, keep it for now
 
     steps:
       - name: Checkout code

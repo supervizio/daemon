@@ -5,12 +5,10 @@ on:
     branches:
       - main
     paths:
-      - 'src/**'
-    paths-ignore:
-      - '**/*_test.go'
-      - '**/testdata/**'
-      - '*.md'
-      - '.github/**'
+      - 'src/cmd/**'
+      - 'src/internal/**'
+      - 'src/go.mod'
+      - 'src/go.sum'
   workflow_dispatch:
     inputs:
       version:
@@ -32,34 +30,71 @@ jobs:
   # =============================================================================
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
+          # ===================
           # Linux
-          - os: ubuntu-latest
-            goos: linux
+          # ===================
+          - goos: linux
             goarch: amd64
-            artifact: daemon-linux-amd64
-          - os: ubuntu-latest
-            goos: linux
+          - goos: linux
             goarch: arm64
-            artifact: daemon-linux-arm64
-          # macOS
-          - os: macos-latest
-            goos: darwin
+          - goos: linux
+            goarch: arm
+          - goos: linux
+            goarch: 386
+          - goos: linux
+            goarch: riscv64
+          # ===================
+          # macOS (Darwin)
+          # ===================
+          - goos: darwin
             goarch: amd64
-            artifact: daemon-darwin-amd64
-          - os: macos-latest
-            goos: darwin
+          - goos: darwin
             goarch: arm64
-            artifact: daemon-darwin-arm64
+          # ===================
           # FreeBSD
-          - os: ubuntu-latest
-            goos: freebsd
+          # ===================
+          - goos: freebsd
             goarch: amd64
-            artifact: daemon-freebsd-amd64
+          - goos: freebsd
+            goarch: arm64
+          - goos: freebsd
+            goarch: arm
+          - goos: freebsd
+            goarch: 386
+          - goos: freebsd
+            goarch: riscv64
+          # ===================
+          # OpenBSD
+          # ===================
+          - goos: openbsd
+            goarch: amd64
+          - goos: openbsd
+            goarch: arm64
+          - goos: openbsd
+            goarch: arm
+          - goos: openbsd
+            goarch: 386
+          # ===================
+          # NetBSD
+          # ===================
+          - goos: netbsd
+            goarch: amd64
+          - goos: netbsd
+            goarch: arm64
+          - goos: netbsd
+            goarch: arm
+          - goos: netbsd
+            goarch: 386
+          # ===================
+          # DragonFlyBSD
+          # ===================
+          - goos: dragonfly
+            goarch: amd64
 
     steps:
       - name: Checkout code
@@ -92,7 +127,10 @@ jobs:
             echo "New version: $VERSION"
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "version_no_v=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Set artifact name
+        id: artifact
+        run: echo "name=daemon-${{ matrix.goos }}-${{ matrix.goarch }}" >> $GITHUB_OUTPUT
 
       - name: Build binary
         working-directory: src
@@ -103,14 +141,14 @@ jobs:
         run: |
           go build -buildvcs=false \
             -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }}" \
-            -o ../${{ matrix.artifact }} \
+            -o ../${{ steps.artifact.outputs.name }} \
             ./cmd/daemon
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.artifact.outputs.name }}
           retention-days: 1
 
   # =============================================================================
@@ -168,55 +206,84 @@ jobs:
 
       - name: Generate release notes
         run: |
-          cat > release-notes.md << 'EOF'
-          ## Daemon ${{ steps.version.outputs.version }}
+          VERSION="${{ steps.version.outputs.version }}"
+          REPO="${{ github.repository }}"
+          BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
 
-          PID1-capable process supervisor for containers and Linux/BSD systems.
+          cat > release-notes.md << EOF
+          ## Daemon ${VERSION}
 
-          ### Installation
+          PID1-capable process supervisor for containers and Unix systems.
 
-          #### Linux (AMD64)
-          ```bash
-          curl -Lo daemon https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/daemon-linux-amd64
+          ### Supported Platforms
+
+          | OS | amd64 | arm64 | arm | 386 | riscv64 |
+          |----|-------|-------|-----|-----|---------|
+          | Linux | ✅ | ✅ | ✅ | ✅ | ✅ |
+          | macOS | ✅ | ✅ | - | - | - |
+          | FreeBSD | ✅ | ✅ | ✅ | ✅ | ✅ |
+          | OpenBSD | ✅ | ✅ | ✅ | ✅ | - |
+          | NetBSD | ✅ | ✅ | ✅ | ✅ | - |
+          | DragonFlyBSD | ✅ | - | - | - | - |
+
+          ### Quick Install
+
+          \`\`\`bash
+          # Detect OS and architecture
+          OS=\$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=\$(uname -m)
+          case \$ARCH in
+            x86_64) ARCH="amd64" ;;
+            aarch64) ARCH="arm64" ;;
+            armv7l) ARCH="arm" ;;
+            i686) ARCH="386" ;;
+          esac
+
+          # Download and install
+          curl -Lo daemon ${BASE_URL}/daemon-\${OS}-\${ARCH}
           chmod +x daemon
           sudo mv daemon /usr/local/bin/
-          ```
+          \`\`\`
 
-          #### Linux (ARM64)
-          ```bash
-          curl -Lo daemon https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/daemon-linux-arm64
-          chmod +x daemon
-          sudo mv daemon /usr/local/bin/
-          ```
+          ### Manual Download
 
-          #### macOS (Intel)
-          ```bash
-          curl -Lo daemon https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/daemon-darwin-amd64
-          chmod +x daemon
-          sudo mv daemon /usr/local/bin/
-          ```
+          #### Linux
+          - [daemon-linux-amd64](${BASE_URL}/daemon-linux-amd64) (x86_64)
+          - [daemon-linux-arm64](${BASE_URL}/daemon-linux-arm64) (aarch64)
+          - [daemon-linux-arm](${BASE_URL}/daemon-linux-arm) (armv7)
+          - [daemon-linux-386](${BASE_URL}/daemon-linux-386) (i686)
+          - [daemon-linux-riscv64](${BASE_URL}/daemon-linux-riscv64) (RISC-V 64)
 
-          #### macOS (Apple Silicon)
-          ```bash
-          curl -Lo daemon https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/daemon-darwin-arm64
-          chmod +x daemon
-          sudo mv daemon /usr/local/bin/
-          ```
+          #### macOS
+          - [daemon-darwin-amd64](${BASE_URL}/daemon-darwin-amd64) (Intel)
+          - [daemon-darwin-arm64](${BASE_URL}/daemon-darwin-arm64) (Apple Silicon)
 
-          #### FreeBSD (AMD64)
-          ```bash
-          curl -Lo daemon https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/daemon-freebsd-amd64
-          chmod +x daemon
-          sudo mv daemon /usr/local/bin/
-          ```
+          #### FreeBSD
+          - [daemon-freebsd-amd64](${BASE_URL}/daemon-freebsd-amd64)
+          - [daemon-freebsd-arm64](${BASE_URL}/daemon-freebsd-arm64)
+          - [daemon-freebsd-arm](${BASE_URL}/daemon-freebsd-arm)
+          - [daemon-freebsd-386](${BASE_URL}/daemon-freebsd-386)
+          - [daemon-freebsd-riscv64](${BASE_URL}/daemon-freebsd-riscv64)
+
+          #### OpenBSD
+          - [daemon-openbsd-amd64](${BASE_URL}/daemon-openbsd-amd64)
+          - [daemon-openbsd-arm64](${BASE_URL}/daemon-openbsd-arm64)
+          - [daemon-openbsd-arm](${BASE_URL}/daemon-openbsd-arm)
+          - [daemon-openbsd-386](${BASE_URL}/daemon-openbsd-386)
+
+          #### NetBSD
+          - [daemon-netbsd-amd64](${BASE_URL}/daemon-netbsd-amd64)
+          - [daemon-netbsd-arm64](${BASE_URL}/daemon-netbsd-arm64)
+          - [daemon-netbsd-arm](${BASE_URL}/daemon-netbsd-arm)
+          - [daemon-netbsd-386](${BASE_URL}/daemon-netbsd-386)
+
+          #### DragonFlyBSD
+          - [daemon-dragonfly-amd64](${BASE_URL}/daemon-dragonfly-amd64)
 
           ### Checksums (SHA256)
-          ```
+          \`\`\`
           $(cat artifacts/checksums.txt)
-          ```
-
-          ### Changelog
-          See commits since last release for detailed changes.
+          \`\`\`
           EOF
 
       - name: Flatten artifacts

@@ -8,6 +8,14 @@ import (
 	"unsafe"
 )
 
+// Linux prctl constants for child subreaper functionality.
+// These are not exported by the syscall package, so we define them here.
+// See: man 2 prctl, PR_SET_CHILD_SUBREAPER (since Linux 3.4)
+const (
+	prSetChildSubreaper = 36 // PR_SET_CHILD_SUBREAPER
+	prGetChildSubreaper = 37 // PR_GET_CHILD_SUBREAPER
+)
+
 func init() {
 	// Add Linux-specific signals
 	sm := NewSignalManager()
@@ -30,7 +38,7 @@ func (m *UnixSignalManager) ClearSubreaper() error {
 // IsSubreaper returns true if the current process is a child subreaper.
 func (m *UnixSignalManager) IsSubreaper() (bool, error) {
 	var flag int
-	_, _, errno := syscall.RawSyscall(syscall.SYS_PRCTL, syscall.PR_GET_CHILD_SUBREAPER, uintptr(unsafe.Pointer(&flag)), 0)
+	_, _, errno := syscall.RawSyscall(syscall.SYS_PRCTL, prGetChildSubreaper, uintptr(unsafe.Pointer(&flag)), 0)
 	if errno != 0 {
 		return false, os.NewSyscallError("prctl", errno)
 	}
@@ -38,7 +46,7 @@ func (m *UnixSignalManager) IsSubreaper() (bool, error) {
 }
 
 func prctlSubreaper(flag int) error {
-	_, _, errno := syscall.RawSyscall(syscall.SYS_PRCTL, syscall.PR_SET_CHILD_SUBREAPER, uintptr(flag), 0)
+	_, _, errno := syscall.RawSyscall(syscall.SYS_PRCTL, prSetChildSubreaper, uintptr(flag), 0)
 	if errno != 0 {
 		return os.NewSyscallError("prctl", errno)
 	}
