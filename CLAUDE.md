@@ -1,65 +1,65 @@
-# Daemon - Process Supervisor
+# superviz.io - Process Supervisor
 
-Superviseur de processus PID1 en Go pour conteneurs et systèmes Unix.
+PID1-capable process supervisor in Go for containers and Unix systems.
 
-## Structure du projet
+## Project Structure
 
 ```
 /workspace
-├── src/                      # Code source Go (obligatoire)
-│   ├── cmd/daemon/           # Point d'entrée CLI
-│   └── internal/             # Packages internes
-│       ├── config/           # Parsing YAML et validation
-│       ├── supervisor/       # Orchestration des services
-│       ├── process/          # Cycle de vie des processus
+├── src/                      # Go source code (mandatory)
+│   ├── cmd/daemon/           # CLI entry point
+│   └── internal/             # Internal packages
+│       ├── config/           # YAML parsing and validation
+│       ├── supervisor/       # Service orchestration
+│       ├── process/          # Process lifecycle management
 │       ├── health/           # Health checks (HTTP/TCP/cmd)
-│       ├── kernel/           # Abstraction OS (hexagonal)
-│       └── logging/          # Rotation et capture des logs
-├── examples/                 # Configurations d'exemple
+│       ├── kernel/           # OS abstraction (hexagonal)
+│       └── logging/          # Log rotation and capture
+├── examples/                 # Example configurations
 ├── .github/workflows/        # CI/CD (lint, test, release)
-└── .devcontainer/            # Environnement de développement
+└── .devcontainer/            # Development environment
 ```
 
-## Stack technique
+## Tech Stack
 
-- **Langage** : Go 1.25
-- **Dépendances** : gopkg.in/yaml.v3, testify
-- **Architecture** : Hexagonale (ports & adapters) pour l'OS
+- **Language**: Go 1.25
+- **Dependencies**: gopkg.in/yaml.v3, testify
+- **Architecture**: Hexagonal (ports & adapters) for OS abstraction
 
-## Règles de développement
+## Development Rules
 
-**STRICT** : Suivre `.devcontainer/features/languages/go/RULES.md`
+**STRICT**: Follow `.devcontainer/features/languages/go/RULES.md`
 
-- Tests Go aux côtés du code (`*_test.go`)
-- Linting avec `golangci-lint`
-- Race detection obligatoire (`go test -race`)
+- Go tests alongside code (`*_test.go`)
+- Linting with `golangci-lint`
+- Race detection required (`go test -race`)
 
 ## Workflow
 
 ```
-/build --context    # Génère la doc contextuelle
-/feature "desc"     # Branche feat/, planning, PR
-/fix "desc"         # Branche fix/, planning, PR
+/build --context    # Generate contextual docs
+/feature "desc"     # Branch feat/, planning, PR
+/fix "desc"         # Branch fix/, planning, PR
 ```
 
 ## Conventions
 
-| Type | Branche | Commit |
-|------|---------|--------|
+| Type | Branch | Commit |
+|------|--------|--------|
 | Feature | `feat/<desc>` | `feat(scope): message` |
 | Bugfix | `fix/<desc>` | `fix(scope): message` |
 
-## Dossiers liés
+## Related Directories
 
-| Dossier | Voir |
-|---------|------|
-| Code source | `src/CLAUDE.md` |
-| Exemples | `examples/CLAUDE.md` |
+| Directory | See |
+|-----------|-----|
+| Source code | `src/CLAUDE.md` |
+| Examples | `examples/CLAUDE.md` |
 | CI/CD | `.github/CLAUDE.md` |
 | DevContainer | `.devcontainer/CLAUDE.md` |
 
 ## MCP-First
 
-Toujours utiliser les outils MCP avant les CLI :
-- `mcp__github__*` avant `gh`
-- `mcp__codacy__*` avant `codacy-cli`
+Always use MCP tools before CLI:
+- `mcp__github__*` before `gh`
+- `mcp__codacy__*` before `codacy-cli`

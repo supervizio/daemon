@@ -1,44 +1,44 @@
-# Daemon
+# superviz.io
 
-[![CI](https://github.com/kodflow/daemon/actions/workflows/ci.yml/badge.svg)](https://github.com/kodflow/daemon/actions/workflows/ci.yml)
-[![Release](https://github.com/kodflow/daemon/actions/workflows/release.yml/badge.svg)](https://github.com/kodflow/daemon/releases)
+[![CI](https://github.com/supervizio/daemon/actions/workflows/ci.yml/badge.svg)](https://github.com/supervizio/daemon/actions/workflows/ci.yml)
+[![Release](https://github.com/supervizio/daemon/actions/workflows/release.yml/badge.svg)](https://github.com/supervizio/daemon/releases)
 [![Go Version](https://img.shields.io/badge/Go-1.25-blue.svg)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Superviseur de processus PID1 pour conteneurs et systèmes Linux/BSD. Gère plusieurs services avec health checks, politiques de redémarrage et rotation des logs.
+PID1-capable process supervisor for containers and Linux/BSD systems. Manages multiple services with health checks, restart policies, and log rotation.
 
-## Fonctionnalités
+## Features
 
-- **Gestion multi-services** : Démarrage, arrêt et monitoring de multiples processus
-- **Health checks** : HTTP, TCP et commande shell avec retry configurable
-- **Politiques de redémarrage** : `always`, `on-failure`, `never`, `unless-stopped`
-- **Backoff exponentiel** : Délais croissants entre les tentatives de redémarrage
-- **Rotation des logs** : Par taille, âge et nombre de fichiers avec compression
-- **Support PID 1** : Reaping des processus zombies, gestion des signaux
-- **Multi-plateforme** : Linux, BSD (FreeBSD, OpenBSD, NetBSD), macOS
+- **Multi-service management**: Start, stop, and monitor multiple processes
+- **Health checks**: HTTP, TCP, and shell command with configurable retries
+- **Restart policies**: `always`, `on-failure`, `never`, `unless-stopped`
+- **Exponential backoff**: Increasing delays between restart attempts
+- **Log rotation**: By size, age, and file count with compression
+- **PID 1 support**: Zombie process reaping, signal handling
+- **Multi-platform**: Linux, BSD (FreeBSD, OpenBSD, NetBSD), macOS
 
 ## Installation
 
-### Binaires pré-compilés
+### Pre-built binaries
 
-Téléchargez depuis les [releases GitHub](https://github.com/kodflow/daemon/releases).
+Download from [GitHub releases](https://github.com/supervizio/daemon/releases).
 
-### Depuis les sources
+### From source
 
 ```bash
-git clone https://github.com/kodflow/daemon.git
+git clone https://github.com/supervizio/daemon.git
 cd daemon/src
-go build -o daemon ./cmd/daemon
+go build -o supervizio ./cmd/daemon
 ```
 
-## Utilisation
+## Usage
 
 ```bash
-# Avec fichier de configuration
-daemon --config /etc/daemon/config.yaml
+# With configuration file
+supervizio --config /etc/supervizio/config.yaml
 
-# Afficher la version
-daemon --version
+# Show version
+supervizio --version
 ```
 
 ## Configuration
@@ -47,7 +47,7 @@ daemon --version
 version: "1"
 
 logging:
-  base_dir: /var/log/daemon
+  base_dir: /var/log/supervizio
   defaults:
     timestamp_format: iso8601
     rotation:
@@ -82,35 +82,35 @@ services:
         file: webapp.err.log
 ```
 
-Voir [examples/config.yaml](examples/config.yaml) pour une configuration complète.
+See [examples/config.yaml](examples/config.yaml) for a complete configuration.
 
-## Signaux
+## Signals
 
 | Signal | Action |
 |--------|--------|
-| `SIGTERM` / `SIGINT` | Arrêt gracieux de tous les services |
-| `SIGHUP` | Rechargement de la configuration |
-| `SIGCHLD` | Reaping des processus zombies (PID 1) |
+| `SIGTERM` / `SIGINT` | Graceful shutdown of all services |
+| `SIGHUP` | Configuration reload |
+| `SIGCHLD` | Zombie process reaping (PID 1) |
 
 ## Architecture
 
 ```
 src/
-├── cmd/daemon/          # Point d'entrée
+├── cmd/daemon/          # Entry point
 └── internal/
-    ├── config/          # Parsing et validation YAML
-    ├── supervisor/      # Orchestration des services
-    ├── process/         # Gestion du cycle de vie
+    ├── config/          # YAML parsing and validation
+    ├── supervisor/      # Service orchestration
+    ├── process/         # Lifecycle management
     ├── health/          # Health checks (HTTP, TCP, cmd)
-    ├── kernel/          # Abstraction OS (ports & adapters)
+    ├── kernel/          # OS abstraction (ports & adapters)
     │   ├── ports/       # Interfaces
-    │   └── adapters/    # Implémentations par plateforme
-    └── logging/         # Rotation et capture des logs
+    │   └── adapters/    # Platform-specific implementations
+    └── logging/         # Log rotation and capture
 ```
 
-## Développement
+## Development
 
-### Prérequis
+### Prerequisites
 
 - Go 1.25+
 - golangci-lint
@@ -136,7 +136,7 @@ cd src
 golangci-lint run
 ```
 
-## Plateformes supportées
+## Supported Platforms
 
 | OS | Architectures |
 |----|---------------|
