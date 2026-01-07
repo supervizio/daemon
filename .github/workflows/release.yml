@@ -179,14 +179,14 @@ jobs:
         run: |
           go build -buildvcs=false \
             -ldflags="-s -w -X main.version=${{ needs.version.outputs.version }}" \
-            -o ../daemon-${{ matrix.goos }}-${{ matrix.goarch }} \
+            -o ../supervizio-${{ matrix.goos }}-${{ matrix.goarch }} \
             ./cmd/daemon
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: daemon-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: daemon-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: supervizio-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: supervizio-${{ matrix.goos }}-${{ matrix.goarch }}
           retention-days: 1
 
   # =============================================================================
@@ -227,7 +227,7 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           cat > release-notes.md << 'EOF'
-          ## Daemon ${{ needs.version.outputs.version }}
+          ## superviz.io ${{ needs.version.outputs.version }}
 
           PID1-capable process supervisor for containers and Unix systems.
 
@@ -247,8 +247,8 @@ jobs:
           ```bash
           OS=$(uname -s | tr '[:upper:]' '[:lower:]')
           ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/;s/armv7l/arm/;s/i686/386/')
-          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ needs.version.outputs.version }}/daemon-${OS}-${ARCH}" -o daemon
-          chmod +x daemon && sudo mv daemon /usr/local/bin/
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ needs.version.outputs.version }}/supervizio-${OS}-${ARCH}" -o supervizio
+          chmod +x supervizio && sudo mv supervizio /usr/local/bin/
           ```
 
           ### Checksums (SHA256)
@@ -268,7 +268,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Daemon ${{ needs.version.outputs.version }}
+          name: superviz.io ${{ needs.version.outputs.version }}
           tag_name: ${{ needs.version.outputs.version }}
           body_path: release-notes.md
           draft: false

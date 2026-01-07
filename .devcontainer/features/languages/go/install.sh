@@ -103,62 +103,35 @@ install_go_tool() {
     echo -e "${YELLOW}Installing ${name}...${NC}"
 
     local tmp_file="/tmp/${name}-download"
-    local tmp_extract="/tmp/${name}-extract"
-    local install_success=false
 
     if curl -fsSL --connect-timeout 10 --max-time 120 "$url" -o "$tmp_file" 2>/dev/null; then
         case "$extract_type" in
             tar.gz)
-                rm -rf "$tmp_extract" && mkdir -p "$tmp_extract"
-                if tar -xzf "$tmp_file" -C "$tmp_extract" 2>/dev/null; then
-                    # Find the binary in extracted content (handles nested directories)
-                    local binary_path
-                    binary_path=$(find "$tmp_extract" -name "$name" -type f -executable 2>/dev/null | head -n 1)
-                    if [ -z "$binary_path" ]; then
-                        # Try without executable check (might not be set in archive)
-                        binary_path=$(find "$tmp_extract" -name "$name" -type f 2>/dev/null | head -n 1)
-                    fi
-                    if [ -n "$binary_path" ]; then
-                        mv "$binary_path" "$GOPATH/bin/$name" && install_success=true
-                    fi
-                fi
-                rm -rf "$tmp_extract"
+                tar -xzf "$tmp_file" -C "$GOPATH/bin/" "$name" 2>/dev/null || \
+                tar -xzf "$tmp_file" --wildcards --strip-components=1 -C "$GOPATH/bin/" "*/$name" 2>/dev/null || \
+                tar -xzf "$tmp_file" -C "/tmp/" && mv "/tmp/$name" "$GOPATH/bin/" 2>/dev/null
                 ;;
             zip)
-                rm -rf "$tmp_extract" && mkdir -p "$tmp_extract"
-                if unzip -o "$tmp_file" -d "$tmp_extract" 2>/dev/null; then
-                    local binary_path
-                    binary_path=$(find "$tmp_extract" -name "$name" -type f 2>/dev/null | head -n 1)
-                    if [ -n "$binary_path" ]; then
-                        mv "$binary_path" "$GOPATH/bin/$name" && install_success=true
-                    fi
-                fi
-                rm -rf "$tmp_extract"
+                unzip -o "$tmp_file" "$name" -d "$GOPATH/bin/" 2>/dev/null || \
+                unzip -o "$tmp_file" -d "/tmp/${name}-extracted" && mv "/tmp/${name}-extracted/$name" "$GOPATH/bin/" 2>/dev/null
                 ;;
             binary)
-                mv "$tmp_file" "$GOPATH/bin/$name" && install_success=true
+                mv "$tmp_file" "$GOPATH/bin/$name"
                 ;;
         esac
-        rm -f "$tmp_file" 2>/dev/null || true
-
-        if $install_success; then
-            chmod +x "$GOPATH/bin/$name"
-            echo -e "${GREEN}✓ ${name} installed (binary)${NC}"
-            return 0
-        fi
-    fi
-
-    # Fallback to go install
-    if [ -n "$go_pkg" ]; then
+        chmod +x "$GOPATH/bin/$name"
+        rm -f "$tmp_file" "/tmp/${name}-extracted" 2>/dev/null
+        echo -e "${GREEN}✓ ${name} installed (binary)${NC}"
+    elif [ -n "$go_pkg" ]; then
         echo -e "${YELLOW}  Fallback to go install...${NC}"
         if go install "${go_pkg}@latest" 2>/dev/null; then
             echo -e "${GREEN}✓ ${name} installed (compiled)${NC}"
-            return 0
+        else
+            echo -e "${YELLOW}⚠ ${name} failed to install${NC}"
         fi
+    else
+        echo -e "${YELLOW}⚠ ${name} download failed${NC}"
     fi
-
-    echo -e "${YELLOW}⚠ ${name} failed to install${NC}"
-    return 0  # Don't fail the entire build for optional tools
 }
 
 # Helper function: fetch latest version from GitHub API with fallback
