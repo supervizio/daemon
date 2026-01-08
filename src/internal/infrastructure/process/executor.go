@@ -320,9 +320,8 @@ func (e *UnixExecutor) buildCommand(ctx context.Context, spec domain.Spec) (*exe
 	// Append additional args from spec
 	args = append(args, spec.Args...)
 
-	// #nosec G204 - command is from trusted config
 	// Create command with context for cancellation support
-	cmd := exec.CommandContext(ctx, parts[0], args...)
+	cmd := TrustedCommand(ctx, parts[0], args...)
 
 	// Set working directory if specified
 	if spec.Dir != "" {
