@@ -4,23 +4,23 @@
 
 # Global exclude patterns - files that should not be analyzed
 exclude_paths:
-  # Test files (Java glob syntax)
-  - "**_test.go"
-  - "src/**/*_test.go"
-  - "**/testdata/**"
+  # DevContainer - development tooling, not production code
+  - ".devcontainer/**"
 
-  # Documentation files
-  - "**.md"
+  # Claude configuration
+  - ".claude/**"
+
+  # Documentation
+  - "docs/**"
   - "**/*.md"
 
-  # DevContainer prompt files (Markdown used as prompts, not docs)
-  - ".devcontainer/docs/**"
-  - ".devcontainer/images/.claude/agents/**/*.md"
-  - ".devcontainer/images/.claude/commands/**/*.md"
+  # Test files
+  - "**/*_test.go"
+  - "**/testdata/**"
 
-  # YAML config files (duplicate-id false positives)
-  - ".devcontainer/images/.claude/agents/review/skills/**"
+  # Config files (linters, etc.)
   - "src/.golangci.yml"
+  - "src/.ktn-linter.yaml"
 
   # Standard exclusions
   - "vendor/**"
@@ -31,7 +31,3 @@ exclude_paths:
 engines:
   markdownlint:
     enabled: false
-  semgrep:
-    exclude:
-      # curl-pipe-bash is intentional for tool installers (sdkman, rustup, pyenv)
-      - ".devcontainer/features/languages/*/install.sh"
