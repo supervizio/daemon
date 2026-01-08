@@ -1,44 +1,22 @@
 ---
-# Codacy configuration file
-# https://docs.codacy.com/repositories-configure/codacy-configuration-file/
-
-# Global exclude patterns - files that should not be analyzed
 exclude_paths:
-  # DevContainer - development tooling, not production code
   - ".devcontainer/**"
-
-  # Claude configuration
   - ".claude/**"
-
-  # GitHub workflows and config
   - ".github/**"
-
-  # Documentation
   - "docs/**"
-  - "**/*.md"
-
-  # Test files
-  - "**/*_test.go"
-  - "**/testdata/**"
-
-  # Config files (linters, etc.)
-  - "src/.golangci.yml"
-  - "src/.ktn-linter.yaml"
-
-  # Examples - sample configurations
   - "examples/**"
-
-  # Standard exclusions
   - "vendor/**"
   - "dist/**"
   - "build/**"
+  - "**/*.md"
+  - "**/*_test.go"
+  - "**/testdata/**"
+  - "src/.golangci.yml"
+  - "src/.ktn-linter.yaml"
 
-# Engines configuration
 engines:
   markdownlint:
     enabled: false
   semgrep:
     exclude_paths:
-      # TrustedCommand intentionally uses exec.CommandContext for trusted config
-      # Security model: commands come from admin-controlled YAML configs, not user input
       - "src/internal/infrastructure/process/command.go"
