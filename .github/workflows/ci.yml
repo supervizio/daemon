@@ -64,6 +64,8 @@ jobs:
         with:
           api-token: ${{ secrets.CODACY_API_TOKEN }}
           upload: true
+          # Report status check to GitHub
+          gh-check: true
           # Analyze from repo root so .codacy.yml exclusions are applied
           directory: ${{ github.workspace }}
 
