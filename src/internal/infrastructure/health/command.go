@@ -5,12 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
 	domain "github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/domain/service"
+	"github.com/kodflow/daemon/internal/infrastructure/process"
 )
 
 // checkerTypeCommand is the type identifier for command health checkers.
@@ -102,8 +102,7 @@ func (c *CommandChecker) Check(ctx context.Context) domain.Result {
 		)
 	}
 
-	// #nosec G204 command is from trusted config
-	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
+	cmd := process.TrustedCommand(ctx, parts[0], parts[1:]...)
 	output, err := cmd.CombinedOutput()
 
 	// Check if the command execution failed.

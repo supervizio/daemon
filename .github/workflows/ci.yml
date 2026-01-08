@@ -88,6 +88,7 @@ jobs:
         run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage to Codacy
+        continue-on-error: true
         working-directory: src
         env:
           CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
