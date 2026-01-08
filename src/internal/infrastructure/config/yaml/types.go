@@ -76,9 +76,36 @@ type ServiceConfigDTO struct {
 	Environment      map[string]string `yaml:"environment,omitempty"`
 	Restart          RestartConfigDTO  `yaml:"restart"`
 	HealthChecks     []HealthCheckDTO  `yaml:"health_checks,omitempty"`
+	Listeners        []ListenerDTO     `yaml:"listeners,omitempty"`
 	Logging          ServiceLoggingDTO `yaml:"logging,omitempty"`
 	DependsOn        []string          `yaml:"depends_on,omitempty"`
 	Oneshot          bool              `yaml:"oneshot,omitempty"`
+}
+
+// ListenerDTO is the YAML representation of a network listener.
+// It defines a port with optional health probe configuration.
+type ListenerDTO struct {
+	Name     string   `yaml:"name"`
+	Port     int      `yaml:"port"`
+	Protocol string   `yaml:"protocol,omitempty"`
+	Address  string   `yaml:"address,omitempty"`
+	Probe    ProbeDTO `yaml:"probe,omitempty"`
+}
+
+// ProbeDTO is the YAML representation of a probe configuration.
+// It defines how to probe a listener for health checking.
+type ProbeDTO struct {
+	Type             string   `yaml:"type"`
+	Interval         Duration `yaml:"interval,omitempty"`
+	Timeout          Duration `yaml:"timeout,omitempty"`
+	SuccessThreshold int      `yaml:"success_threshold,omitempty"`
+	FailureThreshold int      `yaml:"failure_threshold,omitempty"`
+	Path             string   `yaml:"path,omitempty"`
+	Method           string   `yaml:"method,omitempty"`
+	StatusCode       int      `yaml:"status_code,omitempty"`
+	Service          string   `yaml:"service,omitempty"`
+	Command          string   `yaml:"command,omitempty"`
+	Args             []string `yaml:"args,omitempty"`
 }
 
 // RestartConfigDTO is the YAML representation of restart configuration.
@@ -182,6 +209,13 @@ func (s *ServiceConfigDTO) ToDomain() service.ServiceConfig {
 		healthChecks = append(healthChecks, s.HealthChecks[i].ToDomain())
 	}
 
+	listeners := make([]service.ListenerConfig, 0, len(s.Listeners))
+
+	// Convert each listener configuration to domain model
+	for i := range s.Listeners {
+		listeners = append(listeners, s.Listeners[i].ToDomain())
+	}
+
 	// Return the fully converted service configuration
 	return service.ServiceConfig{
 		Name:             s.Name,
@@ -196,6 +230,81 @@ func (s *ServiceConfigDTO) ToDomain() service.ServiceConfig {
 		Oneshot:          s.Oneshot,
 		Logging:          s.Logging.ToDomain(),
 		HealthChecks:     healthChecks,
+		Listeners:        listeners,
+	}
+}
+
+// ToDomain converts ListenerDTO to domain ListenerConfig.
+// It maps listener settings from YAML format to the domain model.
+//
+// Returns:
+//   - service.ListenerConfig: the converted domain listener configuration
+func (l *ListenerDTO) ToDomain() service.ListenerConfig {
+	// Determine protocol, default to TCP.
+	protocol := l.Protocol
+	if protocol == "" {
+		protocol = "tcp"
+	}
+
+	// Create listener config.
+	listener := service.ListenerConfig{
+		Name:     l.Name,
+		Port:     l.Port,
+		Protocol: protocol,
+		Address:  l.Address,
+	}
+
+	// Add probe if configured.
+	if l.Probe.Type != "" {
+		probe := l.Probe.ToDomain()
+		listener.Probe = &probe
+	}
+
+	// Return the converted listener configuration.
+	return listener
+}
+
+// ToDomain converts ProbeDTO to domain ProbeConfig.
+// It maps probe settings from YAML format to the domain model.
+//
+// Returns:
+//   - service.ProbeConfig: the converted domain probe configuration
+func (p *ProbeDTO) ToDomain() service.ProbeConfig {
+	// Apply defaults for thresholds.
+	successThreshold := p.SuccessThreshold
+	if successThreshold == 0 {
+		successThreshold = 1
+	}
+	failureThreshold := p.FailureThreshold
+	if failureThreshold == 0 {
+		failureThreshold = 3
+	}
+
+	// Apply default method.
+	method := p.Method
+	if method == "" {
+		method = "GET"
+	}
+
+	// Apply default status code.
+	statusCode := p.StatusCode
+	if statusCode == 0 {
+		statusCode = 200
+	}
+
+	// Return the converted probe configuration.
+	return service.ProbeConfig{
+		Type:             p.Type,
+		Interval:         shared.FromTimeDuration(time.Duration(p.Interval)),
+		Timeout:          shared.FromTimeDuration(time.Duration(p.Timeout)),
+		SuccessThreshold: successThreshold,
+		FailureThreshold: failureThreshold,
+		Path:             p.Path,
+		Method:           method,
+		StatusCode:       statusCode,
+		Service:          p.Service,
+		Command:          p.Command,
+		Args:             p.Args,
 	}
 }
 
