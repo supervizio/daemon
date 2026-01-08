@@ -18,6 +18,10 @@ exclude_paths:
   - ".devcontainer/images/.claude/agents/**/*.md"
   - ".devcontainer/images/.claude/commands/**/*.md"
 
+  # YAML config files (duplicate-id false positives)
+  - ".devcontainer/images/.claude/agents/review/skills/**"
+  - "src/.golangci.yml"
+
   # Standard exclusions
   - "vendor/**"
   - "dist/**"
@@ -27,3 +31,7 @@ exclude_paths:
 engines:
   markdownlint:
     enabled: false
+  semgrep:
+    exclude:
+      # curl-pipe-bash is intentional for tool installers (sdkman, rustup, pyenv)
+      - ".devcontainer/features/languages/*/install.sh"

@@ -66,7 +66,7 @@ retry() {
         ((attempt++))
     done
 
-    return $exit_code
+    return "$exit_code"
 }
 
 # Retry with exponential backoff

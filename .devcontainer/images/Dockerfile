@@ -17,6 +17,9 @@ FROM ${BASE_IMAGE}
 ARG TARGETARCH
 ARG BUILDKIT_INLINE_CACHE=1
 
+# hadolint global ignore=DL4006
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
@@ -81,8 +84,8 @@ RUN ARCH_K8S=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/${ARCH_K8S}/kubectl" -o /usr/local/bin/kubectl && \
     chmod +x /usr/local/bin/kubectl && \
     curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-${ARCH_K8S}.tar.gz" | tar xz -C /tmp && \
-    mv /tmp/linux-${ARCH_K8S}/helm /usr/local/bin/helm && \
-    rm -rf /tmp/linux-${ARCH_K8S}
+    mv "/tmp/linux-${ARCH_K8S}/helm" /usr/local/bin/helm && \
+    rm -rf "/tmp/linux-${ARCH_K8S}"
 
 # =============================================================================
 # Ansible

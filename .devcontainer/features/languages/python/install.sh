@@ -112,11 +112,11 @@ else
 fi
 
 # Install/upgrade pip
-$PYTHON_BIN -m ensurepip --upgrade 2>/dev/null || true
-$PYTHON_BIN -m pip install --upgrade pip 2>/dev/null || \
-$PYTHON_BIN -m pip install --break-system-packages --upgrade pip 2>/dev/null || true
+"$PYTHON_BIN" -m ensurepip --upgrade 2>/dev/null || true
+"$PYTHON_BIN" -m pip install --upgrade pip 2>/dev/null || \
+"$PYTHON_BIN" -m pip install --break-system-packages --upgrade pip 2>/dev/null || true
 
-PIP_VERSION=$($PYTHON_BIN -m pip --version)
+PIP_VERSION=$("$PYTHON_BIN" -m pip --version)
 echo -e "${GREEN}✓ ${PIP_VERSION}${NC}"
 
 # Create cache directory
@@ -129,8 +129,8 @@ echo -e "${YELLOW}Installing Python development tools...${NC}"
 
 # Install tools with appropriate flags
 pip_install() {
-    $PYTHON_BIN -m pip install --quiet "$@" 2>/dev/null || \
-    $PYTHON_BIN -m pip install --quiet --break-system-packages "$@" 2>/dev/null || \
+    "$PYTHON_BIN" -m pip install --quiet "$@" 2>/dev/null || \
+    "$PYTHON_BIN" -m pip install --quiet --break-system-packages "$@" 2>/dev/null || \
     echo -e "${YELLOW}⚠ Failed to install: $*${NC}"
 }
 

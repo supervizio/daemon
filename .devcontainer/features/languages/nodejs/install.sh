@@ -44,7 +44,7 @@ retry() {
 
         exit_code=$?
 
-        if [ $attempt -lt $max_attempts ]; then
+        if [ "$attempt" -lt "$max_attempts" ]; then
             log_warning "Command failed (exit code: $exit_code), retrying in ${delay}s... (attempt $attempt/$max_attempts)"
             sleep "$delay"
         else
@@ -54,7 +54,7 @@ retry() {
         ((attempt++))
     done
 
-    return $exit_code
+    return "$exit_code"
 }
 
 # apt-get with retry and lock handling

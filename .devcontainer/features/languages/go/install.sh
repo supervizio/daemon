@@ -141,7 +141,7 @@ install_go_tool() {
         esac
         rm -f "$tmp_file" 2>/dev/null || true
 
-        if $install_success; then
+        if [[ "$install_success" == true ]]; then
             chmod +x "$GOPATH/bin/$name"
             echo -e "${GREEN}✓ ${name} installed (binary)${NC}"
             return 0
