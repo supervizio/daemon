@@ -25,12 +25,13 @@ superviz.io is built using **Hexagonal Architecture** (also known as Ports & Ada
 │         │      │  └─────────────┘  │  Reaper     │       │              │
 │         │      │                    │  Credentials│       │              │
 │         │      │  ┌─────────────┐  └─────────────┘       │              │
-│         │      │  │   health    │                         │              │
-│         │      │  │  HTTP/TCP   │  ┌─────────────┐       │              │
-│         │      │  │  Command    │  │   logging   │       │              │
-│         │      │  └─────────────┘  │   Writers   │       │              │
-│         │      │                    │   Rotation  │       │              │
-│         │      │  ┌─────────────┐  └─────────────┘       │              │
+│         │      │  │   probe     │                         │              │
+│         │      │  │  TCP/UDP    │  ┌─────────────┐       │              │
+│         │      │  │  HTTP/gRPC  │  │   logging   │       │              │
+│         │      │  │  Exec/ICMP  │  │   Writers   │       │              │
+│         │      │  └─────────────┘  │   Rotation  │       │              │
+│         │      │                    └─────────────┘       │              │
+│         │      │  ┌─────────────┐                         │              │
 │         │      │  │   process   │                         │              │
 │         │      │  │  Executor   │                         │              │
 │         │      │  └─────────────┘                         │              │
@@ -42,12 +43,18 @@ superviz.io is built using **Hexagonal Architecture** (also known as Ports & Ada
 │         │      │              DOMAIN                       │              │
 │         │      │                                           │              │
 │         │      │  ┌─────────┐ ┌─────────┐ ┌─────────┐    │              │
-│         │      │  │ service │ │ process │ │ health  │    │              │
-│         │      │  │ Config  │ │  Spec   │ │ Status  │    │              │
-│         │      │  │         │ │  State  │ │ Result  │    │              │
-│         │      │  │         │ │ Executor│ │ Checker │    │              │
+│         │      │  │ service │ │ process │ │  probe  │    │              │
+│         │      │  │ Config  │ │  Spec   │ │ Target  │    │              │
+│         │      │  │Listeners│ │  State  │ │ Result  │    │              │
+│         │      │  │         │ │ Executor│ │ Prober  │    │              │
 │         │      │  │         │ │  (port) │ │  (port) │    │              │
 │         │      │  └─────────┘ └─────────┘ └─────────┘    │              │
+│         │      │                                           │              │
+│         │      │  ┌─────────┐ ┌─────────┐                 │              │
+│         │      │  │listener │ │ health  │                 │              │
+│         │      │  │Listener │ │ Status  │                 │              │
+│         │      │  │  State  │ │Aggregated                 │              │
+│         │      │  └─────────┘ └─────────┘                 │              │
 │         │      │                                           │              │
 │         │      │  ┌─────────────────────────────────┐     │              │
 │         │      │  │             shared              │     │              │
@@ -70,11 +77,11 @@ superviz.io is built using **Hexagonal Architecture** (also known as Ports & Ada
 │                │         ┌──────────┴──────────┐          │              │
 │                │         ▼                     ▼          │              │
 │                │  ┌─────────────┐      ┌─────────────┐   │              │
-│                │  │ProcessManager│     │HealthMonitor│   │              │
+│                │  │ProcessManager│     │ ProbeMonitor│   │              │
 │                │  │             │      │             │   │              │
 │                │  │ • Start/Stop│      │ • Schedule  │   │              │
-│                │  │ • Restart   │      │ • Execute   │   │              │
-│                │  │ • Monitor   │      │ • Report    │   │              │
+│                │  │ • Restart   │      │ • Probes    │   │              │
+│                │  │ • Monitor   │      │ • Aggregate │   │              │
 │                │  └─────────────┘      └─────────────┘   │              │
 │                │                                           │              │
 │                │  ┌─────────────────────────────────┐     │              │
@@ -97,12 +104,12 @@ graph LR
     subgraph Application
         SUP[Supervisor]
         PM[ProcessManager]
-        HM[HealthMonitor]
+        PROBE[ProbeMonitor]
         CFG[config.Loader<br/>port]
     end
 
     SUP -->|manages| PM
-    SUP -->|manages| HM
+    SUP -->|manages| PROBE
     SUP -->|uses| CFG
 ```
 
@@ -110,7 +117,7 @@ graph LR
 |---------|------|-----------|
 | `supervisor` | Service orchestration, signal handling | `Supervisor`, `ServiceStats` |
 | `process` | Process lifecycle, restart logic | `ProcessManager` |
-| `health` | Health check coordination | `HealthMonitor` |
+| `health` | Probe monitoring, health aggregation | `ProbeMonitor`, `ProberFactory` |
 | `config` | Configuration loading port | `Loader`, `Reloader` |
 
 ### Domain Layer (`internal/domain/`)
@@ -123,7 +130,7 @@ graph TB
         subgraph service
             CFG[Config]
             SVC[ServiceConfig]
-            HC[HealthCheckConfig]
+            LST[ListenerConfig]
         end
 
         subgraph process
@@ -133,10 +140,20 @@ graph TB
             EXEC[Executor<br/>port]
         end
 
+        subgraph probe
+            TARGET[Target]
+            RESULT[Result]
+            PROBER[Prober<br/>port]
+        end
+
+        subgraph listener
+            LSNT[Listener]
+            LSTATE[State]
+        end
+
         subgraph health
             STATUS[Status]
-            RESULT[Result]
-            CHECKER[Checker<br/>port]
+            AGGR[AggregatedHealth]
         end
 
         subgraph shared
@@ -146,15 +163,18 @@ graph TB
     end
 
     CFG --> SVC
-    SVC --> HC
+    SVC --> LST
     SVC --> SPEC
+    LST --> TARGET
 ```
 
 | Package | Role | Key Types |
 |---------|------|-----------|
-| `service` | Configuration entities | `Config`, `ServiceConfig`, `RestartConfig` |
+| `service` | Configuration entities | `Config`, `ServiceConfig`, `ListenerConfig` |
 | `process` | Process entities and ports | `Spec`, `State`, `Event`, `Executor` |
-| `health` | Health entities | `Status`, `Result`, `Event`, `Checker` |
+| `probe` | Probe abstractions and port | `Prober`, `Target`, `Result`, `Config` |
+| `listener` | Network listener entities | `Listener`, `State` |
+| `health` | Health aggregation | `Status`, `AggregatedHealth` |
 | `shared` | Value objects | `Duration`, `Size` |
 
 ### Infrastructure Layer (`internal/infrastructure/`)
@@ -168,10 +188,13 @@ graph TB
             YAML[Loader]
         end
 
-        subgraph health
-            HTTP[HTTPChecker]
-            TCP[TCPChecker]
-            CMD[CommandChecker]
+        subgraph probe
+            TCP[TCPProber]
+            UDP[UDPProber]
+            HTTP[HTTPProber]
+            GRPC[GRPCProber]
+            EXEC_P[ExecProber]
+            ICMP[ICMPProber]
         end
 
         subgraph process
@@ -195,7 +218,7 @@ graph TB
 | Package | Role | Key Types |
 |---------|------|-----------|
 | `config/yaml` | YAML parsing | `Loader` |
-| `health` | Health check implementations | `HTTPChecker`, `TCPChecker`, `CommandChecker` |
+| `probe` | Protocol probers | `TCPProber`, `UDPProber`, `HTTPProber`, `GRPCProber`, `ExecProber`, `ICMPProber`, `Factory` |
 | `process` | Process execution | `UnixExecutor` |
 | `kernel` | OS abstractions | `SignalManager`, `Reaper`, `Credentials` |
 | `logging` | Log file management | `Writer`, `Capture`, `MultiWriter` |
@@ -238,10 +261,11 @@ graph TB
 │   application   │ │    domain     │ │ infrastructure  │
 │                 │ │               │ │                 │
 │ • supervisor    │ │ • service     │ │ • config/yaml   │
-│ • process       │ │ • process     │ │ • health        │
-│ • health        │ │ • health      │ │ • process       │
-│ • config        │ │ • shared      │ │ • kernel        │
-│                 │ │               │ │ • logging       │
+│ • process       │ │ • process     │ │ • probe         │
+│ • health        │ │ • probe       │ │ • process       │
+│ • config        │ │ • listener    │ │ • kernel        │
+│                 │ │ • health      │ │ • logging       │
+│                 │ │ • shared      │ │                 │
 └────────┬────────┘ └───────────────┘ └────────┬────────┘
          │                  ▲                   │
          │                  │                   │
@@ -261,9 +285,10 @@ type Executor interface {
     Signal(pid int, sig os.Signal) error
 }
 
-// domain/health/checker.go
-type Checker interface {
-    Check(ctx context.Context) Result
+// domain/probe/port.go
+type Prober interface {
+    Probe(ctx context.Context, target Target) Result
+    Type() string  // "tcp", "http", "grpc", "exec", "icmp"
 }
 ```
 
@@ -275,9 +300,14 @@ type UnixExecutor struct {
     // implements domain.Executor
 }
 
-// infrastructure/health/http.go
-type HTTPChecker struct {
-    // implements domain.Checker
+// infrastructure/probe/tcp.go
+type TCPProber struct {
+    // implements domain.Prober
+}
+
+// infrastructure/probe/http.go
+type HTTPProber struct {
+    // implements domain.Prober
 }
 ```
 
@@ -289,8 +319,8 @@ src/internal/
 │   ├── config/
 │   │   └── port.go                # Loader, Reloader interfaces
 │   ├── health/
-│   │   ├── monitor.go             # HealthMonitor
-│   │   └── port.go                # CheckerFactory interface
+│   │   ├── probe_monitor.go       # ProbeMonitor
+│   │   └── ports.go               # ProberFactory interface
 │   ├── process/
 │   │   ├── manager.go             # ProcessManager
 │   │   └── signals.go             # Signal handling
@@ -301,8 +331,17 @@ src/internal/
 ├── domain/                         # CORE BUSINESS LOGIC
 │   ├── health/
 │   │   ├── status.go              # Status enum
-│   │   ├── result.go              # Result struct
+│   │   ├── aggregation.go         # AggregatedHealth
 │   │   └── event.go               # HealthEvent
+│   ├── listener/
+│   │   ├── listener.go            # Listener entity
+│   │   └── state.go               # State enum (Closed, Listening, Ready)
+│   ├── probe/
+│   │   ├── port.go                # Prober interface
+│   │   ├── target.go              # Target struct
+│   │   ├── result.go              # Result struct
+│   │   ├── config.go              # Config struct
+│   │   └── errors.go              # Error types
 │   ├── process/
 │   │   ├── spec.go                # ProcessSpec
 │   │   ├── state.go               # ProcessState enum
@@ -312,7 +351,7 @@ src/internal/
 │   ├── service/
 │   │   ├── config.go              # Root Config
 │   │   ├── serviceconfig.go       # ServiceConfig
-│   │   ├── healthcheck.go         # HealthCheckConfig
+│   │   ├── listener.go            # ListenerConfig, ProbeConfig
 │   │   ├── loggingconfig.go       # LoggingConfig
 │   │   └── restart.go             # RestartConfig
 │   └── shared/
@@ -323,11 +362,14 @@ src/internal/
     ├── config/yaml/
     │   ├── loader.go              # YAML Loader
     │   └── types.go               # DTO types
-    ├── health/
-    │   ├── http.go                # HTTPChecker
-    │   ├── tcp.go                 # TCPChecker
-    │   ├── command.go             # CommandChecker
-    │   └── factory.go             # CheckerFactory
+    ├── probe/
+    │   ├── tcp.go                 # TCPProber
+    │   ├── udp.go                 # UDPProber
+    │   ├── http.go                # HTTPProber
+    │   ├── grpc.go                # GRPCProber
+    │   ├── exec.go                # ExecProber
+    │   ├── icmp.go                # ICMPProber
+    │   └── factory.go             # Factory
     ├── kernel/
     │   ├── adapters/
     │   │   ├── signals_unix.go    # Signal forwarding

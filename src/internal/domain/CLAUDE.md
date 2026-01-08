@@ -6,7 +6,9 @@ Core business entities, value objects, and port interfaces.
 
 ```
 domain/
-├── health/       # Health check entities
+├── health/       # Health check entities and aggregation
+├── listener/     # Network listener entities
+├── probe/        # Probe abstractions and port interface
 ├── process/      # Process entities and ports
 ├── service/      # Service configuration entities
 └── shared/       # Shared value objects
@@ -16,9 +18,11 @@ domain/
 
 | Package | Role |
 |---------|------|
-| `health` | Status, Result, Event types |
+| `health` | Status, Result, Event, AggregatedHealth |
+| `listener` | Listener entity, State enum |
+| `probe` | Prober port, Target, Result, Config |
 | `process` | Spec, State, Event, Executor port |
-| `service` | Config, ServiceConfig, HealthCheck |
+| `service` | Config, ServiceConfig, ListenerConfig |
 | `shared` | Duration, Size value objects |
 
 ## Dependencies
@@ -29,9 +33,20 @@ domain/
 ## Key Types
 
 ### health
-- `Status` - Healthy, Unhealthy, Unknown
+- `Status` - Healthy, Unhealthy, Unknown, Degraded
 - `Result` - Check result with status and message
 - `Event` - Health state change events
+- `AggregatedHealth` - Combined health from process, listeners, custom status
+
+### listener
+- `Listener` - Network listener entity
+- `State` - Closed, Listening, Ready states
+
+### probe
+- `Prober` - Port interface for probing
+- `Target` - Probe target (address, path, command, etc.)
+- `Result` - Probe result with latency
+- `Config` - Timeout, interval, thresholds
 
 ### process
 - `Spec` - Process specification
@@ -41,7 +56,8 @@ domain/
 ### service
 - `Config` - Root configuration
 - `ServiceConfig` - Service definition
-- `HealthCheckConfig` - Health check settings
+- `ListenerConfig` - Listener with probe config
+- `HealthCheckConfig` - Legacy health check settings
 
 ### shared
 - `Duration` - Time duration wrapper
