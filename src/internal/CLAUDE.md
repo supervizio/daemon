@@ -72,6 +72,12 @@ application ──→ domain ←── infrastructure
 - All public functions must have external tests
 - Race detection required (`go test -race`)
 
+## Security Model
+
+Command execution is centralized in `infrastructure/process.TrustedCommand()`.
+Commands come from validated YAML configurations, not user input.
+See `infrastructure/CLAUDE.md` for details.
+
 ## Related Directories
 
 | Directory | See |
