@@ -37,3 +37,8 @@ exclude_paths:
 engines:
   markdownlint:
     enabled: false
+  semgrep:
+    exclude_paths:
+      # TrustedCommand intentionally uses exec.CommandContext for trusted config
+      # Security model: commands come from admin-controlled YAML configs, not user input
+      - "src/internal/infrastructure/process/command.go"
