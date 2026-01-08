@@ -75,19 +75,6 @@ jobs:
           # Don't fail on issues - let Codacy gate the PR
           max-allowed-issues: 2147483647
 
-      # Workaround: Codacy API receives results but doesn't update GitHub status
-      # Force the status check to succeed after CLI upload completes
-      - name: Update Codacy status check
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api repos/${{ github.repository }}/statuses/${{ github.event.pull_request.head.sha || github.sha }} \
-            -f state=success \
-            -f context="Codacy Static Code Analysis" \
-            -f description="Analysis completed via CI" \
-            -f target_url="https://app.codacy.com/gh/${{ github.repository }}/pullRequests"
-
   # =============================================================================
   # Test (parallel with lint and codacy)
   # =============================================================================
