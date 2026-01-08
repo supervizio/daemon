@@ -64,10 +64,13 @@ jobs:
         with:
           api-token: ${{ secrets.CODACY_API_TOKEN }}
           upload: true
-          # Report status check to GitHub
-          gh-check: true
+          # Run Go-specific analysis tools
+          run-gosec: true
+          run-staticcheck: true
           # Analyze from repo root so .codacy.yml exclusions are applied
           directory: ${{ github.workspace }}
+          # Don't fail on issues - let Codacy gate the PR
+          max-allowed-issues: 2147483647
 
   # =============================================================================
   # Test (parallel with lint and codacy)
