@@ -23,9 +23,9 @@ application/
 
 ## Dependencies
 
-- Depends on: `domain`, `kernel`
+- Depends on: `domain`
 - Used by: `cmd/daemon`
-- Never imports: `infrastructure`
+- May use: `infrastructure/kernel` (for OS abstractions via ports)
 
 ## Key Types
 

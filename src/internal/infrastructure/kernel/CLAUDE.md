@@ -100,6 +100,6 @@ kernel.Default.Reaper.Start()
 
 | Directory | Relation |
 |-----------|----------|
-| `../application/process/` | Uses for exec and signals |
-| `../application/supervisor/` | Uses reaper if PID 1 |
-| `../infrastructure/process/` | Uses for executor |
+| `../../application/process/` | Uses for exec and signals |
+| `../../application/supervisor/` | Uses reaper if PID 1 |
+| `../process/` | Uses for executor |

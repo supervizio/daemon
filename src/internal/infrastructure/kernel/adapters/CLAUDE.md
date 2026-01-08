@@ -68,3 +68,4 @@ func ResolveCredentials(user, group string) (*Credentials, error) {
 |-----------|----------|
 | `../ports/` | Implements these interfaces |
 | `../../process/` | Uses these adapters |
+| `../../../application/process/` | Application layer consumer |

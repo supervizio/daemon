@@ -67,4 +67,4 @@ go build -ldflags "-X main.version=1.0.0" -o supervizio ./cmd/daemon
 | `../../internal/infrastructure/config/yaml/` | Config loader |
 | `../../internal/infrastructure/process/` | Process executor |
 | `../../internal/application/supervisor/` | Supervisor |
-| `../../internal/kernel/` | OS abstraction |
+| `../../internal/infrastructure/kernel/` | OS abstraction |
