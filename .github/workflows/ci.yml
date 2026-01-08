@@ -62,7 +62,7 @@ jobs:
       - name: Run Codacy Analysis CLI
         uses: codacy/codacy-analysis-cli-action@562ee3e92b8e92df8b67e0a5ff8aa8e261919c08 # v4.4.7
         with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          api-token: ${{ secrets.CODACY_API_TOKEN }}
           upload: true
           directory: src
 
@@ -89,7 +89,10 @@ jobs:
       - name: Upload coverage to Codacy
         working-directory: src
         env:
-          CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
+          CODACY_ORGANIZATION_PROVIDER: gh
+          CODACY_USERNAME: supervizio
+          CODACY_PROJECT_NAME: daemon
         run: |
           bash <(curl -Ls https://coverage.codacy.com/get.sh) report \
             --force-coverage-parser go \
