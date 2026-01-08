@@ -64,9 +64,12 @@ jobs:
         with:
           api-token: ${{ secrets.CODACY_API_TOKEN }}
           upload: true
-          # Run Go-specific analysis tools
-          run-gosec: true
-          run-staticcheck: true
+          # Disable standalone tools - incompatible with Go 1.25
+          # gosec v2.15.0 uses golang.org/x/tools@v0.5.0 which panics on Go 1.25
+          run-gosec: false
+          run-staticcheck: false
+          # Use Docker-based tools only
+          run-docker-tools: true
           # Analyze from repo root so .codacy.yml exclusions are applied
           directory: ${{ github.workspace }}
           # Don't fail on issues - let Codacy gate the PR
