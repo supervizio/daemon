@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/supervizio/daemon/actions/workflows/ci.yml/badge.svg)](https://github.com/supervizio/daemon/actions/workflows/ci.yml)
 [![Release](https://github.com/supervizio/daemon/actions/workflows/release.yml/badge.svg)](https://github.com/supervizio/daemon/releases)
-[![codecov](https://codecov.io/gh/supervizio/daemon/branch/main/graph/badge.svg)](https://codecov.io/gh/supervizio/daemon)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/c66eb99290744de6ac6a6e082f83daaf)](https://app.codacy.com/gh/supervizio/daemon/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 [![Go Version](https://img.shields.io/badge/Go-1.25-blue.svg)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
