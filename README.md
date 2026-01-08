@@ -95,19 +95,31 @@ See [examples/config.yaml](examples/config.yaml) for a complete configuration.
 
 ## Architecture
 
+Built with **Hexagonal Architecture** (Ports & Adapters):
+
 ```
 src/
-├── cmd/daemon/          # Entry point
+├── cmd/daemon/                    # Entry point
 └── internal/
-    ├── config/          # YAML parsing and validation
-    ├── supervisor/      # Service orchestration
-    ├── process/         # Lifecycle management
-    ├── health/          # Health checks (HTTP, TCP, cmd)
-    ├── kernel/          # OS abstraction (ports & adapters)
-    │   ├── ports/       # Interfaces
-    │   └── adapters/    # Platform-specific implementations
-    └── logging/         # Log rotation and capture
+    ├── application/               # Use cases & orchestration
+    │   ├── supervisor/            # Service orchestration
+    │   ├── process/               # Process lifecycle management
+    │   ├── health/                # Health monitoring
+    │   └── config/                # Configuration ports
+    ├── domain/                    # Core business logic
+    │   ├── service/               # Service configuration entities
+    │   ├── process/               # Process entities & ports
+    │   ├── health/                # Health entities
+    │   └── shared/                # Shared value objects
+    └── infrastructure/            # External adapters
+        ├── config/yaml/           # YAML configuration loader
+        ├── health/                # HTTP, TCP, command checkers
+        ├── process/               # Unix process executor
+        ├── kernel/                # OS abstraction (signals, reaper)
+        └── logging/               # File writers, rotation, capture
 ```
+
+See [docs/architecture.md](docs/architecture.md) for detailed architecture documentation.
 
 ## Development
 

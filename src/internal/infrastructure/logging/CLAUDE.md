@@ -30,7 +30,7 @@ logging/
 ## Usage
 
 ```go
-import "github.com/kodflow/daemon/internal/logging"
+import "github.com/kodflow/daemon/internal/infrastructure/logging"
 
 // Create timestamped line writer
 tw := logging.NewTimestampWriter(file, "2006-01-02 15:04:05")
@@ -73,5 +73,6 @@ logging:
 
 | Directory | Relation |
 |-----------|----------|
-| `../application/process/` | Attaches writers to processes |
-| `../domain/service/` | Receives LoggingConfig |
+| `../../application/process/` | Attaches writers to processes |
+| `../../domain/service/` | Receives LoggingConfig |
+| `../process/` | Process executor uses logging |

@@ -65,4 +65,5 @@ type CredentialManager interface {
 | Directory | Relation |
 |-----------|----------|
 | `../adapters/` | Implements these interfaces |
-| `../../process/` | Consumes these interfaces |
+| `../../process/` | Process executor uses interfaces |
+| `../../../application/` | Application layer consumers |
