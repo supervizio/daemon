@@ -64,7 +64,8 @@ jobs:
         with:
           api-token: ${{ secrets.CODACY_API_TOKEN }}
           upload: true
-          directory: ${{ github.workspace }}/src
+          # Analyze from repo root so .codacy.yml exclusions are applied
+          directory: ${{ github.workspace }}
 
   # =============================================================================
   # Test (parallel with lint and codacy)

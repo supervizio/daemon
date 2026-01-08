@@ -10,6 +10,9 @@ exclude_paths:
   # Claude configuration
   - ".claude/**"
 
+  # GitHub workflows and config
+  - ".github/**"
+
   # Documentation
   - "docs/**"
   - "**/*.md"
@@ -21,6 +24,9 @@ exclude_paths:
   # Config files (linters, etc.)
   - "src/.golangci.yml"
   - "src/.ktn-linter.yaml"
+
+  # Examples - sample configurations
+  - "examples/**"
 
   # Standard exclusions
   - "vendor/**"
