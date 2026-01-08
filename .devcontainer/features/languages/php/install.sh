@@ -32,20 +32,20 @@ sudo apt-get update
 # Install PHP
 echo -e "${YELLOW}Installing PHP ${PHP_VERSION}...${NC}"
 sudo apt-get install -y \
-    php${PHP_VERSION} \
-    php${PHP_VERSION}-cli \
-    php${PHP_VERSION}-common \
-    php${PHP_VERSION}-curl \
-    php${PHP_VERSION}-mbstring \
-    php${PHP_VERSION}-xml \
-    php${PHP_VERSION}-zip \
-    php${PHP_VERSION}-mysql \
-    php${PHP_VERSION}-pgsql \
-    php${PHP_VERSION}-sqlite3 \
-    php${PHP_VERSION}-redis \
-    php${PHP_VERSION}-gd \
-    php${PHP_VERSION}-intl \
-    php${PHP_VERSION}-bcmath
+    "php${PHP_VERSION}" \
+    "php${PHP_VERSION}-cli" \
+    "php${PHP_VERSION}-common" \
+    "php${PHP_VERSION}-curl" \
+    "php${PHP_VERSION}-mbstring" \
+    "php${PHP_VERSION}-xml" \
+    "php${PHP_VERSION}-zip" \
+    "php${PHP_VERSION}-mysql" \
+    "php${PHP_VERSION}-pgsql" \
+    "php${PHP_VERSION}-sqlite3" \
+    "php${PHP_VERSION}-redis" \
+    "php${PHP_VERSION}-gd" \
+    "php${PHP_VERSION}-intl" \
+    "php${PHP_VERSION}-bcmath"
 
 PHP_INSTALLED=$(php -version | head -n 1)
 echo -e "${GREEN}✓ ${PHP_INSTALLED} installed${NC}"
