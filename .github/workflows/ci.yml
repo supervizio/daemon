@@ -64,7 +64,7 @@ jobs:
         with:
           api-token: ${{ secrets.CODACY_API_TOKEN }}
           upload: true
-          directory: src
+          directory: ${{ github.workspace }}/src
 
   # =============================================================================
   # Test (parallel with lint and codacy)
