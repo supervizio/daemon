@@ -61,3 +61,11 @@ infrastructure/
 
 ### process
 - `UnixExecutor` - Implements domain.Executor
+- `TrustedCommand` - Secure wrapper for exec.CommandContext (trusted config sources only)
+
+## Security Notes
+
+### Command Execution
+All command execution (`exec.CommandContext`) is centralized in `process.TrustedCommand()`.
+This function is intended for commands from validated configuration files only, not user input.
+The security model assumes administrator-controlled YAML configurations loaded at startup.
