@@ -486,13 +486,13 @@ func Test_ProbeMonitor_sendEventIfChanged(t *testing.T) {
 			} else if eventCh != nil {
 				// Verify no event if channel exists.
 				select {
-					case <-eventCh:
-						t.Fatal("unexpected event received")
-					// Default case for non-blocking read.
-					default:
-						// No event as expected.
-					}
+				case <-eventCh:
+					t.Fatal("unexpected event received")
+				// Default case for non-blocking read.
+				default:
+					// No event as expected.
 				}
+			}
 		})
 	}
 }
