@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	domainprobe "github.com/kodflow/daemon/internal/domain/probe"
 	"github.com/stretchr/testify/assert"
+
+	domainprobe "github.com/kodflow/daemon/internal/domain/probe"
 )
 
 // TestUDPProber_internalFields tests internal struct fields.

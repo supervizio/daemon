@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kodflow/daemon/internal/application/health"
 	domain "github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/probe"
 	"github.com/kodflow/daemon/internal/domain/process"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // mockCreator is a mock implementation of Creator for testing.

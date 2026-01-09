@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kodflow/daemon/internal/infrastructure/probe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kodflow/daemon/internal/infrastructure/probe"
 )
 
 // TestNewFactory tests factory creation.

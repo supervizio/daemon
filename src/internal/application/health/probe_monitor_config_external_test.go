@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kodflow/daemon/internal/application/health"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kodflow/daemon/internal/application/health"
 )
 
 // TestNewProbeMonitorConfig tests the NewProbeMonitorConfig constructor.

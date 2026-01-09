@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/probe"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kodflow/daemon/internal/domain/probe"
 )
 
 // TestNewConfig tests default config creation.

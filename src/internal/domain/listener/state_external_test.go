@@ -4,8 +4,9 @@ package listener_test
 import (
 	"testing"
 
-	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kodflow/daemon/internal/domain/listener"
 )
 
 // TestState_String tests the String method.

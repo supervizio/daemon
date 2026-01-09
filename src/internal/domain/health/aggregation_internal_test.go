@@ -4,9 +4,10 @@ package health
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/process"
-	"github.com/stretchr/testify/assert"
 )
 
 // Test_AggregatedHealth_computeListenerStatus tests the computeListenerStatus helper method.

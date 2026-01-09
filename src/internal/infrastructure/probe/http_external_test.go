@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
-	domainprobe "github.com/kodflow/daemon/internal/domain/probe"
-	"github.com/kodflow/daemon/internal/infrastructure/probe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	domainprobe "github.com/kodflow/daemon/internal/domain/probe"
+	"github.com/kodflow/daemon/internal/infrastructure/probe"
 )
 
 // TestNewHTTPProber tests HTTP prober creation.

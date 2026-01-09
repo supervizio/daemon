@@ -4,8 +4,9 @@ package probe_test
 import (
 	"testing"
 
-	"github.com/kodflow/daemon/internal/domain/probe"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kodflow/daemon/internal/domain/probe"
 )
 
 // TestNewTCPTarget tests TCP target creation.

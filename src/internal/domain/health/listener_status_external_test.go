@@ -4,9 +4,10 @@ package health_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/domain/listener"
-	"github.com/stretchr/testify/assert"
 )
 
 // TestNewListenerStatus tests ListenerStatus creation.

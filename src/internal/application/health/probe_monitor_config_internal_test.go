@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	domain "github.com/kodflow/daemon/internal/domain/health"
 	"github.com/stretchr/testify/assert"
+
+	domain "github.com/kodflow/daemon/internal/domain/health"
 )
 
 // Test_ProbeMonitorConfig_struct tests the ProbeMonitorConfig struct fields.

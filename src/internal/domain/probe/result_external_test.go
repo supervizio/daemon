@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/probe"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kodflow/daemon/internal/domain/probe"
 )
 
 // TestNewSuccessResult tests successful result creation.

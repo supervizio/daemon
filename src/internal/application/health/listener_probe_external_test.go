@@ -5,11 +5,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kodflow/daemon/internal/application/health"
 	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/probe"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // mockProber is a mock implementation of probe.Prober for testing.
