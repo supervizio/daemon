@@ -161,7 +161,7 @@ func Test_defaultFindProcess(t *testing.T) {
 	}{
 		{
 			name:    "finds current process",
-			getPid:  func() int { return os.Getpid() },
+			getPid:  os.Getpid,
 			wantErr: false,
 		},
 		{

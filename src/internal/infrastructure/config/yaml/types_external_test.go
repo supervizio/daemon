@@ -893,13 +893,13 @@ func TestListenerDTO_ToDomain(t *testing.T) {
 
 	// Define test cases for table-driven testing.
 	tests := []struct {
-		name             string
-		dto              *yaml.ListenerDTO
-		expectedName     string
-		expectedPort     int
-		expectedProtocol string
-		expectedAddress  string
-		hasProbe         bool
+		name              string
+		dto               *yaml.ListenerDTO
+		expectedName      string
+		expectedPort      int
+		expectedProtocol  string
+		expectedAddress   string
+		hasProbe          bool
 		expectedProbeType string
 	}{
 		{

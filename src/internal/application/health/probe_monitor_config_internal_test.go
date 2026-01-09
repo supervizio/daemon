@@ -79,4 +79,3 @@ func Test_ProbeMonitorConfig_struct(t *testing.T) {
 		})
 	}
 }
-

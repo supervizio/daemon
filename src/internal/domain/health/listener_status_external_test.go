@@ -101,43 +101,43 @@ func TestListenerStatus_SetLastProbeResult(t *testing.T) {
 // TestListenerStatus_IncrementSuccesses tests IncrementSuccesses method.
 func TestListenerStatus_IncrementSuccesses(t *testing.T) {
 	tests := []struct {
-		name                      string
-		initialFailures           int
-		initialSuccesses          int
-		incrementCount            int
-		expectedSuccesses         int
+		name                       string
+		initialFailures            int
+		initialSuccesses           int
+		incrementCount             int
+		expectedSuccesses          int
 		expectedFailuresAfterReset int
 	}{
 		{
-			name:                      "increment_from_zero",
-			initialFailures:           0,
-			initialSuccesses:          0,
-			incrementCount:            1,
-			expectedSuccesses:         1,
+			name:                       "increment_from_zero",
+			initialFailures:            0,
+			initialSuccesses:           0,
+			incrementCount:             1,
+			expectedSuccesses:          1,
 			expectedFailuresAfterReset: 0,
 		},
 		{
-			name:                      "increment_resets_failures",
-			initialFailures:           3,
-			initialSuccesses:          0,
-			incrementCount:            1,
-			expectedSuccesses:         1,
+			name:                       "increment_resets_failures",
+			initialFailures:            3,
+			initialSuccesses:           0,
+			incrementCount:             1,
+			expectedSuccesses:          1,
 			expectedFailuresAfterReset: 0,
 		},
 		{
-			name:                      "multiple_increments",
-			initialFailures:           0,
-			initialSuccesses:          0,
-			incrementCount:            3,
-			expectedSuccesses:         3,
+			name:                       "multiple_increments",
+			initialFailures:            0,
+			initialSuccesses:           0,
+			incrementCount:             3,
+			expectedSuccesses:          3,
 			expectedFailuresAfterReset: 0,
 		},
 		{
-			name:                      "increment_with_existing_successes",
-			initialFailures:           0,
-			initialSuccesses:          2,
-			incrementCount:            2,
-			expectedSuccesses:         4,
+			name:                       "increment_with_existing_successes",
+			initialFailures:            0,
+			initialSuccesses:           2,
+			incrementCount:             2,
+			expectedSuccesses:          4,
 			expectedFailuresAfterReset: 0,
 		},
 	}
@@ -165,43 +165,43 @@ func TestListenerStatus_IncrementSuccesses(t *testing.T) {
 // TestListenerStatus_IncrementFailures tests IncrementFailures method.
 func TestListenerStatus_IncrementFailures(t *testing.T) {
 	tests := []struct {
-		name                       string
-		initialSuccesses           int
-		initialFailures            int
-		incrementCount             int
-		expectedFailures           int
+		name                        string
+		initialSuccesses            int
+		initialFailures             int
+		incrementCount              int
+		expectedFailures            int
 		expectedSuccessesAfterReset int
 	}{
 		{
-			name:                       "increment_from_zero",
-			initialSuccesses:           0,
-			initialFailures:            0,
-			incrementCount:             1,
-			expectedFailures:           1,
+			name:                        "increment_from_zero",
+			initialSuccesses:            0,
+			initialFailures:             0,
+			incrementCount:              1,
+			expectedFailures:            1,
 			expectedSuccessesAfterReset: 0,
 		},
 		{
-			name:                       "increment_resets_successes",
-			initialSuccesses:           5,
-			initialFailures:            0,
-			incrementCount:             1,
-			expectedFailures:           1,
+			name:                        "increment_resets_successes",
+			initialSuccesses:            5,
+			initialFailures:             0,
+			incrementCount:              1,
+			expectedFailures:            1,
 			expectedSuccessesAfterReset: 0,
 		},
 		{
-			name:                       "multiple_increments",
-			initialSuccesses:           0,
-			initialFailures:            0,
-			incrementCount:             3,
-			expectedFailures:           3,
+			name:                        "multiple_increments",
+			initialSuccesses:            0,
+			initialFailures:             0,
+			incrementCount:              3,
+			expectedFailures:            3,
 			expectedSuccessesAfterReset: 0,
 		},
 		{
-			name:                       "increment_with_existing_failures",
-			initialSuccesses:           0,
-			initialFailures:            2,
-			incrementCount:             2,
-			expectedFailures:           4,
+			name:                        "increment_with_existing_failures",
+			initialSuccesses:            0,
+			initialFailures:             2,
+			incrementCount:              2,
+			expectedFailures:            4,
 			expectedSuccessesAfterReset: 0,
 		},
 	}

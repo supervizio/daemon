@@ -59,7 +59,6 @@ func TestProberTypeExec_constant(t *testing.T) {
 	}
 }
 
-
 // TestExecProber_executeCommand tests the internal executeCommand method.
 func TestExecProber_executeCommand(t *testing.T) {
 	tests := []struct {
