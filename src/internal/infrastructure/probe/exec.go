@@ -58,7 +58,7 @@ func (p *ExecProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 
 	// Validate command is not empty.
 	if target.Command == "" {
-		// Return failure for empty command.
+		// Return failure for missing command configuration.
 		return probe.NewFailureResult(
 			time.Since(start),
 			"empty command",
@@ -66,14 +66,17 @@ func (p *ExecProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 		)
 	}
 
-	// Parse command if Args is empty (command may contain full command line).
+	// Extract command and arguments from target.
 	command := target.Command
 	args := target.Args
+
+	// Check if args need to be parsed from command string.
 	if len(args) == 0 {
-		// Split command line into parts.
+		// Split command line into parts to separate command from arguments.
 		parts := strings.Fields(command)
+		// Check if splitting resulted in empty parts.
 		if len(parts) == 0 {
-			// Return failure for empty command.
+			// Return failure for whitespace-only command.
 			return probe.NewFailureResult(
 				time.Since(start),
 				"empty command",
@@ -82,23 +85,40 @@ func (p *ExecProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 		}
 		// First part is the command, rest are args.
 		command = parts[0]
+		// Check if there are additional arguments after the command.
 		if len(parts) > 1 {
+			// Extract remaining parts as arguments.
 			args = parts[1:]
 		}
 	}
 
-	// Create context with timeout.
+	// Execute the command and return result.
+	return p.executeCommand(ctx, command, args, start)
+}
+
+// executeCommand runs the command and returns the probe result.
+//
+// Params:
+//   - ctx: context for cancellation and timeout control.
+//   - command: the command to execute.
+//   - args: the command arguments.
+//   - start: the start time for latency measurement.
+//
+// Returns:
+//   - probe.Result: the probe result with output and exit status.
+func (p *ExecProber) executeCommand(ctx context.Context, command string, args []string, start time.Time) probe.Result {
+	// Create context with timeout to prevent command hanging indefinitely.
 	execCtx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 
-	// Create and execute command using TrustedCommand.
+	// Create and execute command using TrustedCommand for security.
 	cmd := process.TrustedCommand(execCtx, command, args...)
 	output, err := cmd.CombinedOutput()
 	latency := time.Since(start)
 
-	// Handle execution errors.
+	// Handle execution errors from command.
 	if err != nil {
-		// Return failure result with error details.
+		// Return failure result with error details and captured output.
 		return probe.NewFailureResult(
 			latency,
 			fmt.Sprintf("command failed: %v (output: %s)", err, string(output)),
@@ -106,7 +126,7 @@ func (p *ExecProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 		)
 	}
 
-	// Return success result with command output.
+	// Return success result with trimmed command output.
 	return probe.NewSuccessResult(
 		latency,
 		strings.TrimSpace(string(output)),

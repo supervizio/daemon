@@ -4,16 +4,16 @@ package probe
 import "time"
 
 // DefaultTimeout is the default probe timeout.
-const DefaultTimeout = 5 * time.Second
+const DefaultTimeout time.Duration = 5 * time.Second
 
 // DefaultInterval is the default probe interval.
-const DefaultInterval = 10 * time.Second
+const DefaultInterval time.Duration = 10 * time.Second
 
 // DefaultSuccessThreshold is the default number of successes needed.
-const DefaultSuccessThreshold = 1
+const DefaultSuccessThreshold int = 1
 
 // DefaultFailureThreshold is the default number of failures needed.
-const DefaultFailureThreshold = 3
+const DefaultFailureThreshold int = 3
 
 // Config contains probe configuration parameters.
 // It defines timing and threshold settings for probe execution.
@@ -57,8 +57,10 @@ func NewConfig() Config {
 // Returns:
 //   - Config: a copy of the config with updated timeout.
 func (c Config) WithTimeout(timeout time.Duration) Config {
-	// Return copy with new timeout.
+	// Set the new timeout value.
 	c.Timeout = timeout
+
+	// Return copy with new timeout.
 	return c
 }
 
@@ -70,8 +72,10 @@ func (c Config) WithTimeout(timeout time.Duration) Config {
 // Returns:
 //   - Config: a copy of the config with updated interval.
 func (c Config) WithInterval(interval time.Duration) Config {
-	// Return copy with new interval.
+	// Set the new interval value.
 	c.Interval = interval
+
+	// Return copy with new interval.
 	return c
 }
 
@@ -83,8 +87,10 @@ func (c Config) WithInterval(interval time.Duration) Config {
 // Returns:
 //   - Config: a copy of the config with updated success threshold.
 func (c Config) WithSuccessThreshold(threshold int) Config {
-	// Return copy with new threshold.
+	// Set the new success threshold value.
 	c.SuccessThreshold = threshold
+
+	// Return copy with new threshold.
 	return c
 }
 
@@ -96,8 +102,10 @@ func (c Config) WithSuccessThreshold(threshold int) Config {
 // Returns:
 //   - Config: a copy of the config with updated failure threshold.
 func (c Config) WithFailureThreshold(threshold int) Config {
-	// Return copy with new threshold.
+	// Set the new failure threshold value.
 	c.FailureThreshold = threshold
+
+	// Return copy with new threshold.
 	return c
 }
 

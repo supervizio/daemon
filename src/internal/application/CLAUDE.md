@@ -32,5 +32,5 @@ application/
 - `Supervisor` - Main service orchestrator
 - `ProcessManager` - Per-service process management
 - `ProbeMonitor` - Multi-protocol health probing
-- `ProberFactory` - Port for creating probers
+- `Creator` - Port for creating probers
 - `Loader` - Config loading interface

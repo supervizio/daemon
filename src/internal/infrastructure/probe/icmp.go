@@ -13,6 +13,10 @@ import (
 // proberTypeICMP is the type identifier for ICMP probers.
 const proberTypeICMP string = "icmp"
 
+// defaultTCPFallbackPort is the default port for TCP fallback probes.
+// Port 80 (HTTP) is commonly open and suitable for connectivity checks.
+const defaultTCPFallbackPort int = 80
+
 // ICMPProber performs ICMP ping probes for latency measurement.
 // It falls back to TCP probe when ICMP is not available (no CAP_NET_RAW).
 //
@@ -40,7 +44,7 @@ func NewICMPProber(timeout time.Duration) *ICMPProber {
 	return &ICMPProber{
 		timeout:        timeout,
 		useTCPFallback: true,
-		tcpPort:        80, // Default TCP port for fallback.
+		tcpPort:        defaultTCPFallbackPort,
 	}
 }
 
@@ -84,14 +88,15 @@ func (p *ICMPProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 
 	// Resolve the target address.
 	host := target.Address
-	// If address contains port, extract just the host.
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		host = h
+	// Check if address contains port (e.g., host:port format).
+	if hostPart, _, err := net.SplitHostPort(host); err == nil {
+		// Extract just the host portion for ICMP/TCP ping.
+		host = hostPart
 	}
 
-	// Use TCP fallback for latency measurement.
-	// ICMP requires CAP_NET_RAW which is often unavailable.
+	// Use TCP fallback when CAP_NET_RAW is unavailable.
 	if p.useTCPFallback {
+		// Return TCP-based latency measurement.
 		return p.tcpPing(ctx, host, start)
 	}
 

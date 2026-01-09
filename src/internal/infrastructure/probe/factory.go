@@ -9,7 +9,7 @@ import (
 )
 
 // ErrUnknownProberType indicates an unknown prober type was requested.
-var ErrUnknownProberType = errors.New("unknown prober type")
+var ErrUnknownProberType error = errors.New("unknown prober type")
 
 // Factory creates probers based on type.
 // It provides a centralized way to create prober instances.
@@ -49,26 +49,33 @@ func (f *Factory) Create(proberType string, timeout time.Duration) (probe.Prober
 
 	// Create prober based on type.
 	switch proberType {
-	// TCP prober.
+	// TCP prober for TCP connectivity checks.
 	case proberTypeTCP:
+		// Return configured TCP prober.
 		return NewTCPProber(timeout), nil
-	// UDP prober.
+	// UDP prober for UDP packet probes.
 	case proberTypeUDP:
+		// Return configured UDP prober.
 		return NewUDPProber(timeout), nil
-	// HTTP prober.
+	// HTTP prober for HTTP endpoint checks.
 	case proberTypeHTTP:
+		// Return configured HTTP prober.
 		return NewHTTPProber(timeout), nil
-	// gRPC prober.
+	// gRPC prober for gRPC health checks.
 	case proberTypeGRPC:
+		// Return configured gRPC prober.
 		return NewGRPCProber(timeout), nil
-	// Exec prober.
+	// Exec prober for command execution probes.
 	case proberTypeExec:
+		// Return configured exec prober.
 		return NewExecProber(timeout), nil
-	// ICMP prober.
+	// ICMP prober for ping/latency probes.
 	case proberTypeICMP:
+		// Return configured ICMP prober.
 		return NewICMPProber(timeout), nil
-	// Unknown type.
+	// Unknown prober type requested.
 	default:
+		// Return error for unrecognized prober type.
 		return nil, ErrUnknownProberType
 	}
 }
@@ -85,7 +92,8 @@ func (f *Factory) CreateTCP(timeout time.Duration) *TCPProber {
 	if timeout == 0 {
 		timeout = f.defaultTimeout
 	}
-	// Return TCP prober.
+
+	// Return TCP prober configured with timeout.
 	return NewTCPProber(timeout)
 }
 
@@ -101,7 +109,8 @@ func (f *Factory) CreateUDP(timeout time.Duration) *UDPProber {
 	if timeout == 0 {
 		timeout = f.defaultTimeout
 	}
-	// Return UDP prober.
+
+	// Return UDP prober configured with timeout.
 	return NewUDPProber(timeout)
 }
 
@@ -117,7 +126,8 @@ func (f *Factory) CreateHTTP(timeout time.Duration) *HTTPProber {
 	if timeout == 0 {
 		timeout = f.defaultTimeout
 	}
-	// Return HTTP prober.
+
+	// Return HTTP prober configured with timeout.
 	return NewHTTPProber(timeout)
 }
 
@@ -133,7 +143,8 @@ func (f *Factory) CreateGRPC(timeout time.Duration) *GRPCProber {
 	if timeout == 0 {
 		timeout = f.defaultTimeout
 	}
-	// Return gRPC prober.
+
+	// Return gRPC prober configured with timeout.
 	return NewGRPCProber(timeout)
 }
 
@@ -149,7 +160,8 @@ func (f *Factory) CreateExec(timeout time.Duration) *ExecProber {
 	if timeout == 0 {
 		timeout = f.defaultTimeout
 	}
-	// Return exec prober.
+
+	// Return exec prober configured with timeout.
 	return NewExecProber(timeout)
 }
 
@@ -165,6 +177,7 @@ func (f *Factory) CreateICMP(timeout time.Duration) *ICMPProber {
 	if timeout == 0 {
 		timeout = f.defaultTimeout
 	}
-	// Return ICMP prober.
+
+	// Return ICMP prober configured with timeout.
 	return NewICMPProber(timeout)
 }

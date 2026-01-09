@@ -21,7 +21,7 @@ const defaultHTTPMethod string = http.MethodGet
 const defaultHTTPStatusCode int = http.StatusOK
 
 // ErrHTTPStatusMismatch indicates the status code didn't match.
-var ErrHTTPStatusMismatch = errors.New("status code mismatch")
+var ErrHTTPStatusMismatch error = errors.New("status code mismatch")
 
 // HTTPProber performs HTTP endpoint probes.
 // It verifies service health by making HTTP requests.
@@ -78,6 +78,7 @@ func (p *HTTPProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 
 	// Determine HTTP method.
 	method := target.Method
+	// Check if method is specified.
 	if method == "" {
 		// Default to GET if not specified.
 		method = defaultHTTPMethod
@@ -85,6 +86,7 @@ func (p *HTTPProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 
 	// Determine expected status code.
 	expectedStatus := target.StatusCode
+	// Check if status code is specified.
 	if expectedStatus == 0 {
 		// Default to 200 OK if not specified.
 		expectedStatus = defaultHTTPStatusCode
@@ -134,6 +136,7 @@ func (p *HTTPProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 func (p *HTTPProber) getStatusCode(ctx context.Context, method, url string) (int, error) {
 	// Create the request.
 	req, err := http.NewRequestWithContext(ctx, method, url, http.NoBody)
+	// Check if request creation failed.
 	if err != nil {
 		// Return wrapped error.
 		return 0, fmt.Errorf("failed to create request: %w", err)
@@ -141,6 +144,7 @@ func (p *HTTPProber) getStatusCode(ctx context.Context, method, url string) (int
 
 	// Get the transport.
 	transport := p.client.Transport
+	// Check if transport is configured.
 	if transport == nil {
 		// Use default transport if none configured.
 		transport = http.DefaultTransport
@@ -148,6 +152,7 @@ func (p *HTTPProber) getStatusCode(ctx context.Context, method, url string) (int
 
 	// Execute the request.
 	resp, err := transport.RoundTrip(req)
+	// Check if request failed.
 	if err != nil {
 		// Return the transport error.
 		return 0, err

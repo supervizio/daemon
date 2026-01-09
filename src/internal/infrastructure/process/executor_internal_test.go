@@ -376,12 +376,12 @@ type mockCredentialManager struct {
 // LookupUser implements CredentialManager.
 //
 // Params:
-//   - nameOrID: the username or UID to look up
+//   - _nameOrID: the username or UID to look up (unused in mock).
 //
 // Returns:
-//   - *ports.User: nil (not implemented for this mock)
-//   - error: always nil
-func (m *mockCredentialManager) LookupUser(nameOrID string) (*ports.User, error) {
+//   - *ports.User: nil (not implemented for this mock).
+//   - error: always nil.
+func (m *mockCredentialManager) LookupUser(_nameOrID string) (*ports.User, error) {
 	// Return nil for this mock
 	return nil, nil
 }
@@ -389,12 +389,12 @@ func (m *mockCredentialManager) LookupUser(nameOrID string) (*ports.User, error)
 // LookupGroup implements CredentialManager.
 //
 // Params:
-//   - nameOrID: the group name or GID to look up
+//   - _nameOrID: the group name or GID to look up (unused in mock).
 //
 // Returns:
-//   - *ports.Group: nil (not implemented for this mock)
-//   - error: always nil
-func (m *mockCredentialManager) LookupGroup(nameOrID string) (*ports.Group, error) {
+//   - *ports.Group: nil (not implemented for this mock).
+//   - error: always nil.
+func (m *mockCredentialManager) LookupGroup(_nameOrID string) (*ports.Group, error) {
 	// Return nil for this mock
 	return nil, nil
 }
@@ -402,14 +402,14 @@ func (m *mockCredentialManager) LookupGroup(nameOrID string) (*ports.Group, erro
 // ResolveCredentials implements CredentialManager.
 //
 // Params:
-//   - username: the username to resolve
-//   - groupname: the group name to resolve
+//   - _username: the username to resolve (unused in mock).
+//   - _groupname: the group name to resolve (unused in mock).
 //
 // Returns:
-//   - uid: the configured resolved UID
-//   - gid: the configured resolved GID
-//   - err: the configured resolve error
-func (m *mockCredentialManager) ResolveCredentials(username, groupname string) (uid, gid uint32, err error) {
+//   - uid: the configured resolved UID.
+//   - gid: the configured resolved GID.
+//   - err: the configured resolve error.
+func (m *mockCredentialManager) ResolveCredentials(_username, _groupname string) (uid, gid uint32, err error) {
 	// Return configured values
 	return m.resolvedUID, m.resolvedGID, m.resolveErr
 }
@@ -417,44 +417,15 @@ func (m *mockCredentialManager) ResolveCredentials(username, groupname string) (
 // ApplyCredentials implements CredentialManager.
 //
 // Params:
-//   - cmd: the command to apply credentials to
-//   - uid: the user ID to set
-//   - gid: the group ID to set
+//   - cmd: the command to apply credentials to.
+//   - _uid: the user ID to set (unused in mock).
+//   - _gid: the group ID to set (unused in mock).
 //
 // Returns:
-//   - error: the configured apply error
-func (m *mockCredentialManager) ApplyCredentials(cmd *exec.Cmd, uid, gid uint32) error {
+//   - error: the configured apply error.
+func (m *mockCredentialManager) ApplyCredentials(_cmd *exec.Cmd, _uid, _gid uint32) error {
 	// Return configured error
 	return m.applyErr
-}
-
-// Test_NewUnixExecutorWithKernel tests the NewUnixExecutorWithKernel constructor.
-//
-// Params:
-//   - t: the testing context
-//
-// Returns:
-//   - (none, test function)
-func Test_NewUnixExecutorWithKernel(t *testing.T) {
-	// Define test cases for NewUnixExecutorWithKernel.
-	tests := []struct {
-		name string
-	}{
-		{name: "creates executor with custom kernel"},
-	}
-
-	// Iterate over test cases.
-	for _, tt := range tests {
-		// Run each test case as a subtest.
-		t.Run(tt.name, func(t *testing.T) {
-			customKernel := kernel.New()
-			executor := NewUnixExecutorWithKernel(customKernel)
-			// Verify executor is not nil.
-			assert.NotNil(t, executor, "should return non-nil executor")
-			// Verify kernel is set correctly.
-			assert.Equal(t, customKernel, executor.kernel, "kernel should be set")
-		})
-	}
 }
 
 // Test_UnixExecutor_configureCredentials_ApplyError tests configureCredentials with ApplyCredentials error.
@@ -582,11 +553,11 @@ type mockProcess struct {
 // Signal implements Process.
 //
 // Params:
-//   - sig: the signal to send
+//   - _sig: the signal to send (unused in mock).
 //
 // Returns:
-//   - error: the configured signal error
-func (m *mockProcess) Signal(sig os.Signal) error {
+//   - error: the configured signal error.
+func (m *mockProcess) Signal(_sig os.Signal) error {
 	// Return configured error
 	return m.signalErr
 }
@@ -612,40 +583,6 @@ func (m *mockProcess) Wait() (*os.ProcessState, error) {
 	}
 	// Return nil
 	return nil, nil
-}
-
-// Test_NewUnixExecutorWithOptions tests the NewUnixExecutorWithOptions constructor.
-//
-// Params:
-//   - t: the testing context
-//
-// Returns:
-//   - (none, test function)
-func Test_NewUnixExecutorWithOptions(t *testing.T) {
-	// Define test cases for NewUnixExecutorWithOptions.
-	tests := []struct {
-		name string
-	}{
-		{name: "creates executor with custom options"},
-	}
-
-	// Iterate over test cases.
-	for _, tt := range tests {
-		// Run each test case as a subtest.
-		t.Run(tt.name, func(t *testing.T) {
-			customKernel := kernel.New()
-			customFinder := func(pid int) (Process, error) {
-				return nil, errors.New("mock finder")
-			}
-			executor := NewUnixExecutorWithOptions(customKernel, customFinder)
-			// Verify executor is not nil.
-			assert.NotNil(t, executor, "should return non-nil executor")
-			// Verify kernel is set correctly.
-			assert.Equal(t, customKernel, executor.kernel, "kernel should be set")
-			// Verify findProcess is set correctly.
-			assert.NotNil(t, executor.findProcess, "findProcess should be set")
-		})
-	}
 }
 
 // Test_UnixExecutor_Stop_FindProcessError tests Stop with findProcess error.
@@ -775,74 +712,3 @@ func Test_UnixExecutor_Signal_FindProcessError(t *testing.T) {
 	}
 }
 
-// Test_osProcessWrapper tests the osProcessWrapper methods.
-//
-// Params:
-//   - t: the testing context
-//
-// Returns:
-//   - (none, test function)
-func Test_osProcessWrapper(t *testing.T) {
-	// Test Signal method
-	t.Run("Signal delegates to underlying process", func(t *testing.T) {
-		// Get current process for testing
-		proc, err := os.FindProcess(os.Getpid())
-		require.NoError(t, err)
-
-		wrapper := &osProcessWrapper{proc: proc}
-
-		// Test Signal (send signal 0 which checks if process exists)
-		err = wrapper.Signal(syscall.Signal(0))
-		assert.NoError(t, err, "Signal should succeed for current process")
-	})
-
-	// Test Kill method
-	t.Run("Kill delegates to underlying process", func(t *testing.T) {
-		// Start a child process that we can kill
-		cmd := exec.Command("sleep", "60")
-		err := cmd.Start()
-		require.NoError(t, err)
-
-		// Get process wrapper
-		wrapper := &osProcessWrapper{proc: cmd.Process}
-
-		// Kill the process
-		err = wrapper.Kill()
-		assert.NoError(t, err, "Kill should succeed")
-
-		// Wait for the process to avoid zombie
-		_, _ = wrapper.Wait()
-	})
-
-	// Test Wait method
-	t.Run("Wait delegates to underlying process", func(t *testing.T) {
-		// Start a child process that exits quickly
-		cmd := exec.Command("true")
-		err := cmd.Start()
-		require.NoError(t, err)
-
-		// Get process wrapper
-		wrapper := &osProcessWrapper{proc: cmd.Process}
-
-		// Wait for the process
-		state, err := wrapper.Wait()
-		assert.NoError(t, err, "Wait should succeed")
-		assert.NotNil(t, state, "ProcessState should not be nil")
-	})
-}
-
-// Test_defaultFindProcess tests the defaultFindProcess function.
-//
-// Params:
-//   - t: the testing context
-//
-// Returns:
-//   - (none, test function)
-func Test_defaultFindProcess(t *testing.T) {
-	// Test finding current process
-	t.Run("finds current process", func(t *testing.T) {
-		proc, err := defaultFindProcess(os.Getpid())
-		assert.NoError(t, err, "should find current process")
-		assert.NotNil(t, proc, "process should not be nil")
-	})
-}

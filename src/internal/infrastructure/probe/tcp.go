@@ -58,6 +58,7 @@ func (p *TCPProber) Probe(ctx context.Context, target probe.Target) probe.Result
 
 	// Determine the network type.
 	network := target.Network
+	// Check if network type was specified.
 	if network == "" {
 		// Default to TCP if not specified.
 		network = "tcp"

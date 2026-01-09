@@ -882,3 +882,244 @@ func TestLogDefaultsDTO_ToDomain(t *testing.T) {
 		})
 	}
 }
+
+// TestListenerDTO_ToDomain tests ListenerDTO to domain conversion.
+// It verifies that listener configuration fields are correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestListenerDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for table-driven testing.
+	tests := []struct {
+		name             string
+		dto              *yaml.ListenerDTO
+		expectedName     string
+		expectedPort     int
+		expectedProtocol string
+		expectedAddress  string
+		hasProbe         bool
+		expectedProbeType string
+	}{
+		{
+			name: "listener with tcp protocol and probe",
+			dto: &yaml.ListenerDTO{
+				Name:     "http-listener",
+				Port:     8080,
+				Protocol: "tcp",
+				Address:  "0.0.0.0",
+				Probe: yaml.ProbeDTO{
+					Type:             "http",
+					Interval:         yaml.Duration(30 * time.Second),
+					Timeout:          yaml.Duration(5 * time.Second),
+					SuccessThreshold: 1,
+					FailureThreshold: 3,
+					Path:             "/health",
+					Method:           "GET",
+					StatusCode:       200,
+				},
+			},
+			expectedName:      "http-listener",
+			expectedPort:      8080,
+			expectedProtocol:  "tcp",
+			expectedAddress:   "0.0.0.0",
+			hasProbe:          true,
+			expectedProbeType: "http",
+		},
+		{
+			name: "listener with default protocol",
+			dto: &yaml.ListenerDTO{
+				Name:    "grpc-listener",
+				Port:    9090,
+				Address: "127.0.0.1",
+			},
+			expectedName:     "grpc-listener",
+			expectedPort:     9090,
+			expectedProtocol: "tcp",
+			expectedAddress:  "127.0.0.1",
+			hasProbe:         false,
+		},
+		{
+			name: "listener with udp protocol",
+			dto: &yaml.ListenerDTO{
+				Name:     "dns-listener",
+				Port:     53,
+				Protocol: "udp",
+				Address:  "0.0.0.0",
+			},
+			expectedName:     "dns-listener",
+			expectedPort:     53,
+			expectedProtocol: "udp",
+			expectedAddress:  "0.0.0.0",
+			hasProbe:         false,
+		},
+		{
+			name: "listener without probe",
+			dto: &yaml.ListenerDTO{
+				Name:     "admin-listener",
+				Port:     9000,
+				Protocol: "tcp",
+			},
+			expectedName:     "admin-listener",
+			expectedPort:     9000,
+			expectedProtocol: "tcp",
+			expectedAddress:  "",
+			hasProbe:         false,
+		},
+	}
+
+	// Run all test cases.
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := testCase.dto.ToDomain()
+
+			// Verify listener fields are correctly mapped.
+			assert.Equal(t, testCase.expectedName, result.Name)
+			assert.Equal(t, testCase.expectedPort, result.Port)
+			assert.Equal(t, testCase.expectedProtocol, result.Protocol)
+			assert.Equal(t, testCase.expectedAddress, result.Address)
+
+			// Check probe presence.
+			if testCase.hasProbe {
+				assert.NotNil(t, result.Probe)
+				assert.Equal(t, testCase.expectedProbeType, result.Probe.Type)
+			} else {
+				assert.Nil(t, result.Probe)
+			}
+		})
+	}
+}
+
+// TestProbeDTO_ToDomain tests ProbeDTO to domain conversion.
+// It verifies that probe configuration fields are correctly mapped with defaults.
+//
+// Params:
+//   - t: testing context
+func TestProbeDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for table-driven testing.
+	tests := []struct {
+		name                     string
+		dto                      *yaml.ProbeDTO
+		expectedType             string
+		expectedInterval         time.Duration
+		expectedTimeout          time.Duration
+		expectedSuccessThreshold int
+		expectedFailureThreshold int
+		expectedPath             string
+		expectedMethod           string
+		expectedStatusCode       int
+		expectedService          string
+		expectedCommand          string
+	}{
+		{
+			name: "http probe with all fields",
+			dto: &yaml.ProbeDTO{
+				Type:             "http",
+				Interval:         yaml.Duration(30 * time.Second),
+				Timeout:          yaml.Duration(5 * time.Second),
+				SuccessThreshold: 2,
+				FailureThreshold: 5,
+				Path:             "/healthz",
+				Method:           "POST",
+				StatusCode:       201,
+			},
+			expectedType:             "http",
+			expectedInterval:         30 * time.Second,
+			expectedTimeout:          5 * time.Second,
+			expectedSuccessThreshold: 2,
+			expectedFailureThreshold: 5,
+			expectedPath:             "/healthz",
+			expectedMethod:           "POST",
+			expectedStatusCode:       201,
+		},
+		{
+			name: "http probe with defaults",
+			dto: &yaml.ProbeDTO{
+				Type:     "http",
+				Interval: yaml.Duration(10 * time.Second),
+				Timeout:  yaml.Duration(2 * time.Second),
+				Path:     "/health",
+			},
+			expectedType:             "http",
+			expectedInterval:         10 * time.Second,
+			expectedTimeout:          2 * time.Second,
+			expectedSuccessThreshold: 1,
+			expectedFailureThreshold: 3,
+			expectedPath:             "/health",
+			expectedMethod:           "GET",
+			expectedStatusCode:       200,
+		},
+		{
+			name: "tcp probe",
+			dto: &yaml.ProbeDTO{
+				Type:     "tcp",
+				Interval: yaml.Duration(15 * time.Second),
+				Timeout:  yaml.Duration(3 * time.Second),
+			},
+			expectedType:             "tcp",
+			expectedInterval:         15 * time.Second,
+			expectedTimeout:          3 * time.Second,
+			expectedSuccessThreshold: 1,
+			expectedFailureThreshold: 3,
+			expectedMethod:           "GET",
+			expectedStatusCode:       200,
+		},
+		{
+			name: "grpc probe with service",
+			dto: &yaml.ProbeDTO{
+				Type:     "grpc",
+				Interval: yaml.Duration(20 * time.Second),
+				Timeout:  yaml.Duration(4 * time.Second),
+				Service:  "my.grpc.Service",
+			},
+			expectedType:             "grpc",
+			expectedInterval:         20 * time.Second,
+			expectedTimeout:          4 * time.Second,
+			expectedSuccessThreshold: 1,
+			expectedFailureThreshold: 3,
+			expectedService:          "my.grpc.Service",
+			expectedMethod:           "GET",
+			expectedStatusCode:       200,
+		},
+		{
+			name: "exec probe with command",
+			dto: &yaml.ProbeDTO{
+				Type:    "exec",
+				Command: "/bin/check-health",
+				Args:    []string{"--verbose"},
+			},
+			expectedType:             "exec",
+			expectedSuccessThreshold: 1,
+			expectedFailureThreshold: 3,
+			expectedCommand:          "/bin/check-health",
+			expectedMethod:           "GET",
+			expectedStatusCode:       200,
+		},
+	}
+
+	// Run all test cases.
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := testCase.dto.ToDomain()
+
+			// Verify probe configuration fields are correctly mapped.
+			assert.Equal(t, testCase.expectedType, result.Type)
+			assert.Equal(t, testCase.expectedInterval, result.Interval.Duration())
+			assert.Equal(t, testCase.expectedTimeout, result.Timeout.Duration())
+			assert.Equal(t, testCase.expectedSuccessThreshold, result.SuccessThreshold)
+			assert.Equal(t, testCase.expectedFailureThreshold, result.FailureThreshold)
+			assert.Equal(t, testCase.expectedPath, result.Path)
+			assert.Equal(t, testCase.expectedMethod, result.Method)
+			assert.Equal(t, testCase.expectedStatusCode, result.StatusCode)
+			assert.Equal(t, testCase.expectedService, result.Service)
+			assert.Equal(t, testCase.expectedCommand, result.Command)
+		})
+	}
+}

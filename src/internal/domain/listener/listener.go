@@ -42,7 +42,7 @@ type Listener struct {
 	ProbeTarget probe.Target
 }
 
-// New creates a new listener with default state.
+// NewListener creates a new listener with default state.
 //
 // Params:
 //   - name: the unique identifier for this listener.
@@ -52,7 +52,7 @@ type Listener struct {
 //
 // Returns:
 //   - *Listener: a new listener in Closed state.
-func New(name, protocol, address string, port int) *Listener {
+func NewListener(name, protocol, address string, port int) *Listener {
 	// Return new listener with Closed state.
 	return &Listener{
 		Name:     name,
@@ -74,7 +74,7 @@ func New(name, protocol, address string, port int) *Listener {
 //   - *Listener: a new TCP listener in Closed state.
 func NewTCP(name, address string, port int) *Listener {
 	// Return new TCP listener.
-	return New(name, "tcp", address, port)
+	return NewListener(name, "tcp", address, port)
 }
 
 // NewUDP creates a new UDP listener.
@@ -88,7 +88,7 @@ func NewTCP(name, address string, port int) *Listener {
 //   - *Listener: a new UDP listener in Closed state.
 func NewUDP(name, address string, port int) *Listener {
 	// Return new UDP listener.
-	return New(name, "udp", address, port)
+	return NewListener(name, "udp", address, port)
 }
 
 // WithProbe configures probing for this listener.
@@ -164,14 +164,17 @@ func (l *Listener) HasProbe() bool {
 	return l.ProbeConfig != nil
 }
 
-// GetProbeAddress returns the address for probing.
+// ProbeAddress returns the address for probing.
 // It combines the listener's address and port for network probes.
 //
 // Returns:
 //   - string: the address in host:port format.
-func (l *Listener) GetProbeAddress() string {
+func (l *Listener) ProbeAddress() string {
 	// Use localhost if address is empty.
 	addr := l.Address
+	// Empty or "0.0.0.0" addresses cannot be used directly for probing,
+	// as they represent "all interfaces" and are not routable targets.
+	// We substitute localhost to create a valid probe endpoint.
 	if addr == "" || addr == "0.0.0.0" {
 		// Use localhost for empty or any address.
 		addr = "127.0.0.1"
@@ -181,6 +184,12 @@ func (l *Listener) GetProbeAddress() string {
 }
 
 // formatPort converts a port number to string.
+//
+// Params:
+//   - port: the port number to format.
+//
+// Returns:
+//   - string: the port as a decimal string.
 func formatPort(port int) string {
 	// Format port as decimal string.
 	return fmt.Sprintf("%d", port)

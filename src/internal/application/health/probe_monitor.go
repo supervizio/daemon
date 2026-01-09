@@ -12,59 +12,31 @@ import (
 	"github.com/kodflow/daemon/internal/domain/process"
 )
 
-// ProberFactory creates probers based on type.
-// This is the port that infrastructure adapters implement.
-type ProberFactory interface {
-	// Create creates a prober of the specified type.
-	//
-	// Params:
-	//   - proberType: the type of prober to create.
-	//   - timeout: the timeout for the prober.
-	//
-	// Returns:
-	//   - probe.Prober: the created prober.
-	//   - error: if creation fails.
-	Create(proberType string, timeout time.Duration) (probe.Prober, error)
-}
-
-// ListenerProbe represents a listener with its probe configuration.
-type ListenerProbe struct {
-	// Listener is the listener to probe.
-	Listener *listener.Listener
-	// Prober is the prober to use.
-	Prober probe.Prober
-	// Config is the probe configuration.
-	Config probe.Config
-	// Target is the probe target.
-	Target probe.Target
-}
-
-// ProbeMonitor monitors health using the new Prober interface.
-// It supports multiple listeners with different probe types.
+// ProbeMonitor monitors health using the Prober interface.
+// It supports multiple listeners with different probe types and aggregates health status.
 type ProbeMonitor struct {
-	mu              sync.RWMutex
-	listeners       []*ListenerProbe
-	health          *domain.AggregatedHealth
-	processState    process.State
-	customStatus    string
-	events          chan<- domain.Event
-	stopCh          chan struct{}
-	running         bool
-	factory         ProberFactory
-	defaultTimeout  time.Duration
+	// mu protects concurrent access to monitor state.
+	mu sync.RWMutex
+	// listeners contains all monitored listeners.
+	listeners []*ListenerProbe
+	// health stores the aggregated health state.
+	health *domain.AggregatedHealth
+	// processState tracks the current process state.
+	processState process.State
+	// customStatus stores a custom status string.
+	customStatus string
+	// events channel for sending health events.
+	events chan<- domain.Event
+	// stopCh signals goroutines to stop.
+	stopCh chan struct{}
+	// running indicates if the monitor is active.
+	running bool
+	// factory creates probers.
+	factory Creator
+	// defaultTimeout is the default probe timeout.
+	defaultTimeout time.Duration
+	// defaultInterval is the default probe interval.
 	defaultInterval time.Duration
-}
-
-// ProbeMonitorConfig contains configuration for ProbeMonitor.
-type ProbeMonitorConfig struct {
-	// Factory creates probers.
-	Factory ProberFactory
-	// Events channel for health events.
-	Events chan<- domain.Event
-	// DefaultTimeout for probes.
-	DefaultTimeout time.Duration
-	// DefaultInterval between probes.
-	DefaultInterval time.Duration
 }
 
 // NewProbeMonitor creates a new probe-based health monitor.
@@ -75,19 +47,21 @@ type ProbeMonitorConfig struct {
 // Returns:
 //   - *ProbeMonitor: the new monitor instance.
 func NewProbeMonitor(config ProbeMonitorConfig) *ProbeMonitor {
-	// Set defaults if not specified.
 	defaultTimeout := config.DefaultTimeout
+	// Use probe default timeout when not configured.
 	if defaultTimeout == 0 {
 		defaultTimeout = probe.DefaultTimeout
 	}
+
 	defaultInterval := config.DefaultInterval
+	// Use probe default interval when not configured.
 	if defaultInterval == 0 {
 		defaultInterval = probe.DefaultInterval
 	}
 
-	// Return configured monitor.
+	// Return configured monitor with initialized state.
 	return &ProbeMonitor{
-		listeners:       make([]*ListenerProbe, 0),
+		listeners:       nil,
 		health:          domain.NewAggregatedHealth(process.StateStopped),
 		processState:    process.StateStopped,
 		events:          config.Events,
@@ -110,18 +84,21 @@ func (m *ProbeMonitor) AddListener(l *listener.Listener) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Skip if no probe configured.
+	// Check if listener has probe configuration.
 	if !l.HasProbe() {
 		// Add listener without prober.
 		m.listeners = append(m.listeners, &ListenerProbe{
 			Listener: l,
 		})
+		// Return nil since listener was added successfully without probe.
 		return nil
 	}
 
 	// Create prober for this listener.
 	prober, err := m.factory.Create(l.ProbeType, l.ProbeConfig.Timeout)
+	// Return error if prober creation fails.
 	if err != nil {
+		// Propagate factory error to caller.
 		return err
 	}
 
@@ -133,6 +110,7 @@ func (m *ProbeMonitor) AddListener(l *listener.Listener) error {
 		Target:   l.ProbeTarget,
 	})
 
+	// Return nil to indicate successful listener addition.
 	return nil
 }
 
@@ -144,8 +122,11 @@ func (m *ProbeMonitor) SetProcessState(state process.State) {
 	// Lock for thread-safe update.
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// Update process state.
+
+	// Update process state in monitor.
 	m.processState = state
+
+	// Update process state in aggregated health.
 	m.health.ProcessState = state
 }
 
@@ -157,33 +138,42 @@ func (m *ProbeMonitor) SetCustomStatus(status string) {
 	// Lock for thread-safe update.
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// Update custom status.
+
+	// Update custom status in monitor.
 	m.customStatus = status
+
+	// Update custom status in aggregated health.
 	m.health.SetCustomStatus(status)
 }
 
 // Start starts the probe monitor.
+// This method spawns goroutines for each listener with a prober configured.
+// Each goroutine runs a probe loop that terminates when the context is cancelled
+// or when Stop() is called (which closes stopCh). Resources are cleaned up via
+// deferred ticker.Stop() in each runProber goroutine.
 //
 // Params:
 //   - ctx: context for cancellation.
 func (m *ProbeMonitor) Start(ctx context.Context) {
 	// Lock to check and update running state.
 	m.mu.Lock()
-	// Check if already running.
+
+	// Check if already running to prevent duplicate goroutines.
 	if m.running {
 		m.mu.Unlock()
+		// Return early to avoid starting duplicate probers.
 		return
 	}
-	// Mark as running.
+
+	// Mark as running and create new stop channel.
 	m.running = true
-	// Create new stop channel.
 	m.stopCh = make(chan struct{})
 	m.mu.Unlock()
 
 	// Start a goroutine for each listener with a prober.
 	for _, lp := range m.listeners {
+		// Only start probers for listeners that have one configured.
 		if lp.Prober != nil {
-			// Run prober in its own goroutine.
 			go m.runProber(ctx, lp)
 		}
 	}
@@ -193,14 +183,16 @@ func (m *ProbeMonitor) Start(ctx context.Context) {
 func (m *ProbeMonitor) Stop() {
 	// Lock to check and update running state.
 	m.mu.Lock()
-	// Check if not running.
+
+	// Check if not running to avoid closing already-closed channel.
 	if !m.running {
 		m.mu.Unlock()
+		// Return early since monitor is not running.
 		return
 	}
-	// Mark as not running.
+
+	// Mark as not running and signal all goroutines to stop.
 	m.running = false
-	// Signal all goroutines to stop.
 	close(m.stopCh)
 	m.mu.Unlock()
 }
@@ -211,8 +203,8 @@ func (m *ProbeMonitor) Stop() {
 //   - ctx: context for cancellation.
 //   - lp: the listener probe to run.
 func (m *ProbeMonitor) runProber(ctx context.Context, lp *ListenerProbe) {
-	// Get interval.
 	interval := lp.Config.Interval
+	// Use default interval when not specified in config.
 	if interval == 0 {
 		interval = m.defaultInterval
 	}
@@ -227,14 +219,14 @@ func (m *ProbeMonitor) runProber(ctx context.Context, lp *ListenerProbe) {
 	// Loop until stopped.
 	for {
 		select {
-		// Handle stop signal.
 		case <-m.stopCh:
+			// Stop signal received.
 			return
-		// Handle context cancellation.
 		case <-ctx.Done():
+			// Context cancelled.
 			return
-		// Handle ticker tick.
 		case <-ticker.C:
+			// Perform periodic probe.
 			m.performProbe(ctx, lp)
 		}
 	}
@@ -246,8 +238,8 @@ func (m *ProbeMonitor) runProber(ctx context.Context, lp *ListenerProbe) {
 //   - ctx: parent context.
 //   - lp: the listener probe to use.
 func (m *ProbeMonitor) performProbe(ctx context.Context, lp *ListenerProbe) {
-	// Get timeout.
 	timeout := lp.Config.Timeout
+	// Use default timeout when not specified in config.
 	if timeout == 0 {
 		timeout = m.defaultTimeout
 	}
@@ -256,58 +248,53 @@ func (m *ProbeMonitor) performProbe(ctx context.Context, lp *ListenerProbe) {
 	probeCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// Build target with listener address.
 	target := lp.Target
+	// Use listener address when target address is not specified.
 	if target.Address == "" {
-		target.Address = lp.Listener.GetProbeAddress()
+		target.Address = lp.Listener.ProbeAddress()
 	}
 
 	// Execute the probe.
 	result := lp.Prober.Probe(probeCtx, target)
 
+	// Update state with probe result.
+	m.updateProbeResult(lp, result)
+}
+
+// updateProbeResult updates the listener status based on probe result.
+//
+// Params:
+//   - lp: the listener probe that was executed.
+//   - result: the probe result.
+func (m *ProbeMonitor) updateProbeResult(lp *ListenerProbe, result probe.Result) {
 	// Lock for thread-safe state updates.
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Find listener status in health.
-	var ls *domain.ListenerStatus
-	for i := range m.health.Listeners {
-		if m.health.Listeners[i].Name == lp.Listener.Name {
-			ls = &m.health.Listeners[i]
-			break
-		}
-	}
-
-	// Create listener status if not found.
-	if ls == nil {
-		m.health.Listeners = append(m.health.Listeners, domain.ListenerStatus{
-			Name:  lp.Listener.Name,
-			State: lp.Listener.State,
-		})
-		ls = &m.health.Listeners[len(m.health.Listeners)-1]
-	}
+	// Find or create listener status in health.
+	ls := m.findOrCreateListenerStatus(lp)
 
 	// Get previous state for event comparison.
 	prevState := lp.Listener.State
 
-	// Update based on result.
+	// Update counters based on result.
 	if result.Success {
-		// Reset failure count, increment success count.
+		// Probe succeeded: reset failures, increment successes.
 		ls.ConsecutiveFailures = 0
 		ls.ConsecutiveSuccesses++
-		// Check if threshold met.
+
+		// Check if success threshold met.
 		if ls.ConsecutiveSuccesses >= lp.Config.SuccessThreshold {
-			// Transition to Ready.
 			lp.Listener.MarkReady()
 			ls.State = listener.Ready
 		}
 	} else {
-		// Reset success count, increment failure count.
+		// Probe failed: reset successes, increment failures.
 		ls.ConsecutiveSuccesses = 0
 		ls.ConsecutiveFailures++
-		// Check if threshold met.
+
+		// Check if failure threshold met.
 		if ls.ConsecutiveFailures >= lp.Config.FailureThreshold {
-			// Transition to Listening (not ready).
 			ls.State = listener.Listening
 		}
 	}
@@ -321,24 +308,75 @@ func (m *ProbeMonitor) performProbe(ctx context.Context, lp *ListenerProbe) {
 		Error:     result.Error,
 	}
 
-	// Update latency.
+	// Update latency in aggregated health.
 	m.health.SetLatency(result.Latency)
 
 	// Send event if state changed.
+	m.sendEventIfChanged(lp, ls, prevState, result)
+}
+
+// findOrCreateListenerStatus finds or creates a listener status entry.
+//
+// Params:
+//   - lp: the listener probe.
+//
+// Returns:
+//   - *domain.ListenerStatus: pointer to the listener status.
+func (m *ProbeMonitor) findOrCreateListenerStatus(lp *ListenerProbe) *domain.ListenerStatus {
+	// Search for existing listener status.
+	for i := range m.health.Listeners {
+		// Return existing status if found by name.
+		if m.health.Listeners[i].Name == lp.Listener.Name {
+			// Return pointer to existing listener status.
+			return &m.health.Listeners[i]
+		}
+	}
+
+	// Create new listener status if not found.
+	m.health.Listeners = append(m.health.Listeners, domain.ListenerStatus{
+		Name:  lp.Listener.Name,
+		State: lp.Listener.State,
+	})
+	// Return pointer to newly created listener status.
+	return &m.health.Listeners[len(m.health.Listeners)-1]
+}
+
+// sendEventIfChanged sends a health event if state changed.
+//
+// Params:
+//   - lp: the listener probe.
+//   - ls: the listener status.
+//   - prevState: the previous listener state.
+//   - result: the probe result.
+func (m *ProbeMonitor) sendEventIfChanged(lp *ListenerProbe, ls *domain.ListenerStatus, prevState listener.State, result probe.Result) {
+	// Check if state changed and events channel is available.
 	if prevState != lp.Listener.State && m.events != nil {
 		event := domain.NewEvent(lp.Listener.Name, m.resultToStatus(result), *ls.LastProbeResult)
+
+		// Non-blocking send to avoid deadlocks.
 		select {
 		case m.events <- event:
+			// Event sent successfully.
 		default:
+			// Channel full, skip event.
 		}
 	}
 }
 
 // resultToStatus converts a probe result to a health status.
+//
+// Params:
+//   - result: the probe result.
+//
+// Returns:
+//   - domain.Status: the corresponding health status.
 func (m *ProbeMonitor) resultToStatus(result probe.Result) domain.Status {
+	// Map success to healthy, failure to unhealthy.
 	if result.Success {
+		// Return healthy status for successful probe.
 		return domain.StatusHealthy
 	}
+	// Return unhealthy when probe did not succeed.
 	return domain.StatusUnhealthy
 }
 
@@ -350,6 +388,7 @@ func (m *ProbeMonitor) Status() domain.Status {
 	// Lock for thread-safe read.
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	// Return computed status.
 	return m.health.Status()
 }
@@ -363,10 +402,11 @@ func (m *ProbeMonitor) Health() *domain.AggregatedHealth {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Return a copy.
+	// Return a copy to avoid data races.
 	health := *m.health
-	health.Listeners = make([]domain.ListenerStatus, len(m.health.Listeners))
-	copy(health.Listeners, m.health.Listeners)
+	health.Listeners = make([]domain.ListenerStatus, 0, len(m.health.Listeners))
+	health.Listeners = append(health.Listeners, m.health.Listeners...)
+	// Return pointer to health copy.
 	return &health
 }
 
@@ -375,6 +415,7 @@ func (m *ProbeMonitor) Health() *domain.AggregatedHealth {
 // Returns:
 //   - bool: true if status is healthy.
 func (m *ProbeMonitor) IsHealthy() bool {
+	// Compare current status against healthy threshold.
 	return m.Status() == domain.StatusHealthy
 }
 
@@ -386,5 +427,7 @@ func (m *ProbeMonitor) Latency() time.Duration {
 	// Lock for thread-safe read.
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
+	// Return stored latency.
 	return m.health.Latency
 }

@@ -811,3 +811,187 @@ func TestSupervisor_RestartService(t *testing.T) {
 		})
 	}
 }
+
+// TestSupervisor_Stats tests the Stats method on the Supervisor type.
+// This test validates the Stats method behavior using black-box testing.
+//
+// Params:
+//   - t: the testing context.
+func TestSupervisor_Stats(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// serviceName is the name of the service to get stats for.
+		serviceName string
+		// expectedFound indicates if stats should be found.
+		expectedFound bool
+	}{
+		{
+			name:          "existing_service_returns_stats",
+			serviceName:   "test-service",
+			expectedFound: true,
+		},
+		{
+			name:          "non_existing_service_returns_nil",
+			serviceName:   "nonexistent",
+			expectedFound: false,
+		},
+		{
+			name:          "empty_name_returns_nil",
+			serviceName:   "",
+			expectedFound: false,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createValidConfig()
+			loader := &mockLoader{cfg: cfg}
+			executor := &mockExecutor{}
+
+			sup, err := supervisor.NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			stats := sup.Stats(tt.serviceName)
+
+			// Check if stats are expected to be found.
+			if tt.expectedFound {
+				assert.NotNil(t, stats)
+				assert.Equal(t, 0, stats.StartCount)
+				assert.Equal(t, 0, stats.StopCount)
+				assert.Equal(t, 0, stats.FailCount)
+				assert.Equal(t, 0, stats.RestartCount)
+			} else {
+				assert.Nil(t, stats)
+			}
+		})
+	}
+}
+
+// TestSupervisor_Stats_returns_copy tests that Stats returns a copy of the statistics.
+// This ensures the returned stats are isolated from internal state.
+//
+// Params:
+//   - t: the testing context.
+func TestSupervisor_Stats_returns_copy(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+	}{
+		{
+			name: "stats_is_a_copy_not_reference",
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createValidConfig()
+			loader := &mockLoader{cfg: cfg}
+			executor := &mockExecutor{}
+
+			sup, err := supervisor.NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			// Get stats twice and verify they are independent copies.
+			stats1 := sup.Stats("test-service")
+			require.NotNil(t, stats1)
+
+			stats2 := sup.Stats("test-service")
+			require.NotNil(t, stats2)
+
+			// Modify stats1 and verify stats2 is unaffected.
+			stats1.StartCount = 999
+
+			// Stats2 should still be zero since it's a copy.
+			assert.Equal(t, 0, stats2.StartCount)
+		})
+	}
+}
+
+// TestSupervisor_AllStats tests the AllStats method on the Supervisor type.
+// This test validates the AllStats method behavior using black-box testing.
+//
+// Params:
+//   - t: the testing context.
+func TestSupervisor_AllStats(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// cfg is the configuration to use.
+		cfg *service.Config
+		// expectedCount is the expected number of stat entries.
+		expectedCount int
+	}{
+		{
+			name:          "single_service_returns_one_stat",
+			cfg:           createValidConfig(),
+			expectedCount: 1,
+		},
+		{
+			name:          "multiple_services_returns_all_stats",
+			cfg:           createMultiServiceConfig(),
+			expectedCount: 2,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			loader := &mockLoader{cfg: tt.cfg}
+			executor := &mockExecutor{}
+
+			sup, err := supervisor.NewSupervisor(tt.cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			allStats := sup.AllStats()
+
+			assert.Len(t, allStats, tt.expectedCount)
+			// Verify all stats are initialized.
+			for _, stats := range allStats {
+				assert.NotNil(t, stats)
+				assert.Equal(t, 0, stats.StartCount)
+			}
+		})
+	}
+}
+
+// TestSupervisor_SetEventHandler tests the SetEventHandler method on the Supervisor type.
+// This test validates the SetEventHandler method behavior using black-box testing.
+//
+// Params:
+//   - t: the testing context.
+func TestSupervisor_SetEventHandler(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+	}{
+		{
+			name: "set_event_handler_does_not_panic",
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createValidConfig()
+			loader := &mockLoader{cfg: cfg}
+			executor := &mockExecutor{}
+
+			sup, err := supervisor.NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			// Set a handler - should not panic.
+			handler := func(_ string, _ *domain.Event) {}
+			sup.SetEventHandler(handler)
+
+			// Set nil handler - should not panic.
+			sup.SetEventHandler(nil)
+		})
+	}
+}

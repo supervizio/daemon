@@ -24,6 +24,26 @@ type Result struct {
 	Error error
 }
 
+// NewResult creates a new probe result with the specified parameters.
+//
+// Params:
+//   - success: whether the probe succeeded.
+//   - latency: how long the probe took to complete.
+//   - output: any output from the probe.
+//   - err: any error that occurred (nil for success).
+//
+// Returns:
+//   - Result: a probe result with the specified values.
+func NewResult(success bool, latency time.Duration, output string, err error) Result {
+	// Return result with all fields set.
+	return Result{
+		Success: success,
+		Latency: latency,
+		Output:  output,
+		Error:   err,
+	}
+}
+
 // NewSuccessResult creates a successful probe result.
 //
 // Params:

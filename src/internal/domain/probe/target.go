@@ -38,6 +38,22 @@ type Target struct {
 	StatusCode int
 }
 
+// NewTarget creates a new probe target with the specified network and address.
+//
+// Params:
+//   - network: the network protocol (e.g., "tcp", "udp", "icmp").
+//   - address: the target address in host:port format.
+//
+// Returns:
+//   - Target: a target configured with the specified network and address.
+func NewTarget(network, address string) Target {
+	// Return target with basic configuration.
+	return Target{
+		Network: network,
+		Address: address,
+	}
+}
+
 // NewTCPTarget creates a target for TCP probes.
 //
 // Params:

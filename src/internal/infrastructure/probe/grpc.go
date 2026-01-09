@@ -14,11 +14,13 @@ import (
 // proberTypeGRPC is the type identifier for gRPC probers.
 const proberTypeGRPC string = "grpc"
 
-// ErrGRPCNotServing indicates the gRPC service is not serving.
-var ErrGRPCNotServing = errors.New("service not serving")
+var (
+	// ErrGRPCNotServing indicates the gRPC service is not serving.
+	ErrGRPCNotServing error = errors.New("service not serving")
 
-// ErrGRPCServiceUnknown indicates the gRPC service is unknown.
-var ErrGRPCServiceUnknown = errors.New("service unknown")
+	// ErrGRPCServiceUnknown indicates the gRPC service is unknown.
+	ErrGRPCServiceUnknown error = errors.New("service unknown")
+)
 
 // GRPCProber performs gRPC health check probes.
 // It uses the standard gRPC health/v1 protocol.
@@ -111,8 +113,9 @@ func (p *GRPCProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 
 	// Build output message.
 	service := target.Service
+	// Check if service name was specified.
 	if service == "" {
-		// Server overall health.
+		// Default to server overall health check.
 		service = "(server)"
 	}
 

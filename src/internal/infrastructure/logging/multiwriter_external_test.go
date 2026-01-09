@@ -18,10 +18,10 @@ import (
 )
 
 // errMultiWriteFailed is an error returned when a mock multiwriter fails.
-var errMultiWriteFailed = errors.New("multiwrite failed")
+var errMultiWriteFailed error = errors.New("multiwrite failed")
 
 // errMultiCloseFailed is an error returned when a mock closer fails.
-var errMultiCloseFailed = errors.New("multiclose failed")
+var errMultiCloseFailed error = errors.New("multiclose failed")
 
 // failingWriteCloser is a mock writer/closer that can fail on write or close.
 type failingWriteCloser struct {

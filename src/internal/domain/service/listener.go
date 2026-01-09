@@ -1,8 +1,6 @@
 // Package service provides domain value objects for service configuration.
 package service
 
-import "github.com/kodflow/daemon/internal/domain/shared"
-
 // Default listener probe configuration values.
 const (
 	// defaultProbeInterval is the default interval between probes (10 seconds).
@@ -38,47 +36,6 @@ type ListenerConfig struct {
 	Probe *ProbeConfig
 }
 
-// ProbeConfig defines the configuration for probing a listener.
-type ProbeConfig struct {
-	// Type specifies the probe type.
-	// Supported values: "tcp", "udp", "http", "grpc", "exec".
-	Type string
-
-	// Interval specifies the time between consecutive probes.
-	Interval shared.Duration
-
-	// Timeout specifies the maximum time to wait for a probe response.
-	Timeout shared.Duration
-
-	// SuccessThreshold specifies consecutive successes to mark ready.
-	SuccessThreshold int
-
-	// FailureThreshold specifies consecutive failures to mark not ready.
-	FailureThreshold int
-
-	// Path specifies the HTTP endpoint path for HTTP probes.
-	// Example: "/health", "/ready".
-	Path string
-
-	// Method specifies the HTTP method for HTTP probes.
-	// Example: "GET", "HEAD".
-	Method string
-
-	// StatusCode specifies the expected HTTP status code.
-	// Default is 200 if not specified.
-	StatusCode int
-
-	// Service specifies the gRPC service name for gRPC probes.
-	// Empty string means check server overall health.
-	Service string
-
-	// Command specifies the command for exec probes.
-	Command string
-
-	// Args specifies the command arguments for exec probes.
-	Args []string
-}
-
 // NewListenerConfig creates a new listener configuration.
 //
 // Params:
@@ -88,7 +45,7 @@ type ProbeConfig struct {
 // Returns:
 //   - ListenerConfig: listener configuration with TCP protocol.
 func NewListenerConfig(name string, port int) ListenerConfig {
-	// Return listener config with TCP protocol.
+	// Return listener config with TCP protocol as the default.
 	return ListenerConfig{
 		Name:     name,
 		Port:     port,
@@ -99,13 +56,14 @@ func NewListenerConfig(name string, port int) ListenerConfig {
 // WithProbe adds probe configuration to the listener.
 //
 // Params:
-//   - probe: the probe configuration.
+//   - probe: the probe configuration pointer to avoid large struct copy.
 //
 // Returns:
 //   - ListenerConfig: listener with probe configuration.
-func (l ListenerConfig) WithProbe(probe ProbeConfig) ListenerConfig {
-	// Add probe to listener.
-	l.Probe = &probe
+func (l ListenerConfig) WithProbe(probe *ProbeConfig) ListenerConfig {
+	// Attach probe to listener for health checking.
+	l.Probe = probe
+	// Return the modified listener with probe attached.
 	return l
 }
 
@@ -114,8 +72,10 @@ func (l ListenerConfig) WithProbe(probe ProbeConfig) ListenerConfig {
 // Returns:
 //   - ListenerConfig: listener with TCP probe.
 func (l ListenerConfig) WithTCPProbe() ListenerConfig {
-	// Return listener with TCP probe.
-	return l.WithProbe(DefaultProbeConfig("tcp"))
+	// Create TCP probe and attach to listener.
+	probe := DefaultProbeConfig("tcp")
+	// Return listener with TCP probe for connection checks.
+	return l.WithProbe(&probe)
 }
 
 // WithHTTPProbe adds an HTTP probe configuration.
@@ -126,11 +86,11 @@ func (l ListenerConfig) WithTCPProbe() ListenerConfig {
 // Returns:
 //   - ListenerConfig: listener with HTTP probe.
 func (l ListenerConfig) WithHTTPProbe(path string) ListenerConfig {
-	// Create HTTP probe config.
+	// Create HTTP probe config with the specified path.
 	probe := DefaultProbeConfig("http")
 	probe.Path = path
-	// Return listener with HTTP probe.
-	return l.WithProbe(probe)
+	// Return listener with HTTP probe for endpoint checks.
+	return l.WithProbe(&probe)
 }
 
 // WithGRPCProbe adds a gRPC probe configuration.
@@ -141,45 +101,9 @@ func (l ListenerConfig) WithHTTPProbe(path string) ListenerConfig {
 // Returns:
 //   - ListenerConfig: listener with gRPC probe.
 func (l ListenerConfig) WithGRPCProbe(service string) ListenerConfig {
-	// Create gRPC probe config.
+	// Create gRPC probe config with the specified service name.
 	probe := DefaultProbeConfig("grpc")
 	probe.Service = service
-	// Return listener with gRPC probe.
-	return l.WithProbe(probe)
+	// Return listener with gRPC probe for health checks.
+	return l.WithProbe(&probe)
 }
-
-// DefaultProbeConfig returns a ProbeConfig with sensible defaults.
-//
-// Params:
-//   - probeType: the type of probe.
-//
-// Returns:
-//   - ProbeConfig: a configuration with default values.
-func DefaultProbeConfig(probeType string) ProbeConfig {
-	// Return probe config with defaults.
-	return ProbeConfig{
-		Type:             probeType,
-		Interval:         shared.Seconds(defaultProbeInterval),
-		Timeout:          shared.Seconds(defaultProbeTimeout),
-		SuccessThreshold: defaultProbeSuccessThreshold,
-		FailureThreshold: defaultProbeFailureThreshold,
-		Method:           "GET",
-		StatusCode:       200,
-	}
-}
-
-// ProbeType constants.
-const (
-	// ProbeTypeTCP performs TCP connection checks.
-	ProbeTypeTCP = "tcp"
-	// ProbeTypeUDP performs UDP checks.
-	ProbeTypeUDP = "udp"
-	// ProbeTypeHTTP performs HTTP endpoint checks.
-	ProbeTypeHTTP = "http"
-	// ProbeTypeGRPC performs gRPC health checks.
-	ProbeTypeGRPC = "grpc"
-	// ProbeTypeExec executes a command.
-	ProbeTypeExec = "exec"
-	// ProbeTypeICMP performs ICMP ping checks.
-	ProbeTypeICMP = "icmp"
-)

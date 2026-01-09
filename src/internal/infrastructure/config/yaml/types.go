@@ -9,6 +9,17 @@ import (
 	"github.com/kodflow/daemon/internal/domain/shared"
 )
 
+const (
+	// defaultFailureThreshold defines how many consecutive failures before marking unhealthy.
+	// Three failures provides a balance between quick detection and avoiding false positives
+	// from transient network issues or temporary service hiccups.
+	defaultFailureThreshold int = 3
+
+	// defaultHTTPStatusCode is the expected HTTP response code for healthy endpoints.
+	// HTTP 200 OK is the standard success response indicating the request was successful.
+	defaultHTTPStatusCode int = 200
+)
+
 // Duration is a wrapper around time.Duration for YAML serialization.
 // It enables parsing of human-readable duration strings like "30s" or "5m" from YAML files.
 type Duration time.Duration
@@ -242,6 +253,7 @@ func (s *ServiceConfigDTO) ToDomain() service.ServiceConfig {
 func (l *ListenerDTO) ToDomain() service.ListenerConfig {
 	// Determine protocol, default to TCP.
 	protocol := l.Protocol
+	// Fall back to TCP when no protocol is specified in configuration.
 	if protocol == "" {
 		protocol = "tcp"
 	}
@@ -272,24 +284,28 @@ func (l *ListenerDTO) ToDomain() service.ListenerConfig {
 func (p *ProbeDTO) ToDomain() service.ProbeConfig {
 	// Apply defaults for thresholds.
 	successThreshold := p.SuccessThreshold
+	// Require at least one success to mark healthy when not configured.
 	if successThreshold == 0 {
 		successThreshold = 1
 	}
 	failureThreshold := p.FailureThreshold
+	// Allow three failures before marking unhealthy when not configured.
 	if failureThreshold == 0 {
-		failureThreshold = 3
+		failureThreshold = defaultFailureThreshold
 	}
 
 	// Apply default method.
 	method := p.Method
+	// Use GET as the standard HTTP method for health probes when not specified.
 	if method == "" {
 		method = "GET"
 	}
 
 	// Apply default status code.
 	statusCode := p.StatusCode
+	// Expect HTTP 200 OK as the healthy response when not specified.
 	if statusCode == 0 {
-		statusCode = 200
+		statusCode = defaultHTTPStatusCode
 	}
 
 	// Return the converted probe configuration.
