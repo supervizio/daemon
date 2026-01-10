@@ -464,9 +464,11 @@ func Test_ProbeMonitor_sendEventIfChanged(t *testing.T) {
 				Listener: l,
 			}
 
-			// Create listener status.
+			// Create listener status with matching state.
+			// In production, updateListenerState syncs ls.State with lp.Listener.State.
 			ls := &domain.ListenerStatus{
 				Name:            "test",
+				State:           tt.newState,
 				LastProbeResult: &domain.Result{},
 			}
 

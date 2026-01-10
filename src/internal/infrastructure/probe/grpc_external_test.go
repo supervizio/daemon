@@ -156,7 +156,7 @@ func TestGRPCProber_Probe(t *testing.T) {
 		{
 			name: "timeout_on_unreachable",
 			target: domainprobe.Target{
-				Address: "10.255.255.1:50051",
+				Address: "192.0.2.1:50051",
 			},
 			timeout:       50 * time.Millisecond,
 			expectSuccess: false,
@@ -207,7 +207,7 @@ func TestGRPCProber_Probe_ContextCancellation(t *testing.T) {
 			cancel()
 
 			target := domainprobe.Target{
-				Address: "10.255.255.1:50051",
+				Address: "192.0.2.1:50051",
 			}
 
 			// Probe should fail due to cancelled context.

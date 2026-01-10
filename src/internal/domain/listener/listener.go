@@ -8,6 +8,9 @@ import (
 	"github.com/kodflow/daemon/internal/domain/probe"
 )
 
+// maxValidPort is the maximum valid TCP/UDP port number.
+const maxValidPort int = 65535
+
 // Listener represents a network listener endpoint.
 // It tracks the listener's state and associated probe configuration.
 type Listener struct {
@@ -186,6 +189,12 @@ func (l *Listener) ProbeAddress() string {
 	// IPv6 any-address defaults to IPv6 loopback.
 	case "::":
 		addr = "::1"
+	}
+
+	// Validate port is within valid range to avoid invalid addresses.
+	if l.Port <= 0 || l.Port > maxValidPort {
+		// Return empty string for invalid port.
+		return ""
 	}
 
 	// Use net.JoinHostPort for proper IPv6 address handling.

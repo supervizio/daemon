@@ -14,6 +14,12 @@ import (
 // proberTypeExec is the type identifier for exec probers.
 const proberTypeExec string = "exec"
 
+// maxOutputBytes is the maximum output size to include in error messages.
+const maxOutputBytes int = 4 * 1024
+
+// ErrInvalidCommandFormat indicates a command with whitespace needs explicit args.
+var ErrInvalidCommandFormat error = fmt.Errorf("invalid command format")
+
 // ExecProber performs command execution probes.
 // It verifies service health by executing commands and checking exit codes.
 type ExecProber struct {
@@ -77,7 +83,7 @@ func (p *ExecProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 		return probe.NewFailureResult(
 			time.Since(start),
 			"command contains whitespace; provide args explicitly via Args field",
-			probe.ErrEmptyCommand,
+			ErrInvalidCommandFormat,
 		)
 	}
 
@@ -113,10 +119,26 @@ func (p *ExecProber) executeCommand(ctx context.Context, command string, args []
 
 	// Handle execution errors from command.
 	if err != nil {
-		// Return failure result with error details and captured output.
+		// Truncate output to prevent memory issues from noisy commands.
+		out := output
+		truncated := false
+		// Check if output exceeds maximum size.
+		if len(out) > maxOutputBytes {
+			out = out[:maxOutputBytes]
+			truncated = true
+		}
+
+		// Build error message with bounded output.
+		msg := fmt.Sprintf("command failed: %v (output: %s)", err, string(out))
+		// Indicate truncation when output was too large.
+		if truncated {
+			msg += " [truncated]"
+		}
+
+		// Return failure result with error details and bounded output.
 		return probe.NewFailureResult(
 			latency,
-			fmt.Sprintf("command failed: %v (output: %s)", err, string(output)),
+			msg,
 			err,
 		)
 	}

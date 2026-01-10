@@ -8,8 +8,23 @@ import (
 	"github.com/kodflow/daemon/internal/domain/probe"
 )
 
-// ErrUnknownProberType indicates an unknown prober type was requested.
-var ErrUnknownProberType error = errors.New("unknown prober type")
+// proberConstructor is a function that creates a prober with a given timeout.
+type proberConstructor func(timeout time.Duration) probe.Prober
+
+var (
+	// ErrUnknownProberType indicates an unknown prober type was requested.
+	ErrUnknownProberType error = errors.New("unknown prober type")
+
+	// proberConstructors maps prober types to their constructor functions.
+	proberConstructors map[string]proberConstructor = map[string]proberConstructor{
+		proberTypeTCP:  func(t time.Duration) probe.Prober { return NewTCPProber(t) },
+		proberTypeUDP:  func(t time.Duration) probe.Prober { return NewUDPProber(t) },
+		proberTypeHTTP: func(t time.Duration) probe.Prober { return NewHTTPProber(t) },
+		proberTypeGRPC: func(t time.Duration) probe.Prober { return NewGRPCProber(t) },
+		proberTypeExec: func(t time.Duration) probe.Prober { return NewExecProber(t) },
+		proberTypeICMP: func(t time.Duration) probe.Prober { return NewICMPProber(t) },
+	}
+)
 
 // Factory creates probers based on type.
 // It provides a centralized way to create prober instances.
@@ -42,42 +57,39 @@ func NewFactory(defaultTimeout time.Duration) *Factory {
 //   - probe.Prober: the created prober.
 //   - error: ErrUnknownProberType if the type is not recognized.
 func (f *Factory) Create(proberType string, timeout time.Duration) (probe.Prober, error) {
-	// Use default timeout if not specified.
-	if timeout == 0 {
-		timeout = f.defaultTimeout
-	}
+	// Normalize timeout using helper.
+	timeout = f.normalizeTimeout(timeout)
 
-	// Create prober based on type.
-	switch proberType {
-	// TCP prober for TCP connectivity checks.
-	case proberTypeTCP:
-		// Return configured TCP prober.
-		return NewTCPProber(timeout), nil
-	// UDP prober for UDP packet probes.
-	case proberTypeUDP:
-		// Return configured UDP prober.
-		return NewUDPProber(timeout), nil
-	// HTTP prober for HTTP endpoint checks.
-	case proberTypeHTTP:
-		// Return configured HTTP prober.
-		return NewHTTPProber(timeout), nil
-	// gRPC prober for gRPC health checks.
-	case proberTypeGRPC:
-		// Return configured gRPC prober.
-		return NewGRPCProber(timeout), nil
-	// Exec prober for command execution probes.
-	case proberTypeExec:
-		// Return configured exec prober.
-		return NewExecProber(timeout), nil
-	// ICMP prober for ping/latency probes.
-	case proberTypeICMP:
-		// Return configured ICMP prober.
-		return NewICMPProber(timeout), nil
-	// Unknown prober type requested.
-	default:
+	// Look up constructor in map.
+	constructor, exists := proberConstructors[proberType]
+	// Check if prober type is recognized.
+	if !exists {
 		// Return error for unrecognized prober type.
 		return nil, ErrUnknownProberType
 	}
+
+	// Create prober using constructor.
+	return constructor(timeout), nil
+}
+
+// normalizeTimeout returns a valid timeout value.
+//
+// Params:
+//   - timeout: the input timeout duration.
+//
+// Returns:
+//   - time.Duration: a valid timeout (never zero or negative).
+func (f *Factory) normalizeTimeout(timeout time.Duration) time.Duration {
+	// Use default timeout if not specified or invalid.
+	if timeout <= 0 {
+		timeout = f.defaultTimeout
+	}
+	// Fall back to probe default if factory default is also invalid.
+	if timeout <= 0 {
+		timeout = probe.DefaultTimeout
+	}
+	// Return normalized timeout.
+	return timeout
 }
 
 // CreateTCP creates a TCP prober.

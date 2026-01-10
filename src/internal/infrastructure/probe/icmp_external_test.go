@@ -175,7 +175,7 @@ func TestICMPProber_Probe(t *testing.T) {
 		{
 			name: "failure_unreachable_host",
 			target: domainprobe.Target{
-				Address: "10.255.255.1",
+				Address: "192.0.2.1",
 			},
 			tcpPort:       80,
 			timeout:       50 * time.Millisecond,
@@ -227,7 +227,7 @@ func TestICMPProber_Probe_ContextCancellation(t *testing.T) {
 			cancel()
 
 			target := domainprobe.Target{
-				Address: "10.255.255.1",
+				Address: "192.0.2.1",
 			}
 
 			// Probe should fail due to cancelled context.

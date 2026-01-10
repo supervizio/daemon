@@ -42,6 +42,11 @@ type HTTPProber struct {
 // Returns:
 //   - *HTTPProber: a configured HTTP prober ready to perform probes.
 func NewHTTPProber(timeout time.Duration) *HTTPProber {
+	// Ensure timeout is always positive to prevent indefinite hangs.
+	if timeout <= 0 {
+		timeout = probe.DefaultTimeout
+	}
+
 	// Configure transport with timeout.
 	transport := &http.Transport{
 		ResponseHeaderTimeout: timeout,

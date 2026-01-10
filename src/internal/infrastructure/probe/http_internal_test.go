@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	domainprobe "github.com/kodflow/daemon/internal/domain/probe"
 )
 
 // TestHTTPProber_internalFields tests internal struct fields.
@@ -25,9 +27,9 @@ func TestHTTPProber_internalFields(t *testing.T) {
 			expectedTimeout: 5 * time.Second,
 		},
 		{
-			name:            "zero_timeout_is_stored",
+			name:            "zero_timeout_normalized_to_default",
 			timeout:         0,
-			expectedTimeout: 0,
+			expectedTimeout: domainprobe.DefaultTimeout,
 		},
 	}
 

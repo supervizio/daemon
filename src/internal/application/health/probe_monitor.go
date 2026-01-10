@@ -33,6 +33,8 @@ type ProbeMonitor struct {
 	stopCh chan struct{}
 	// running indicates if the monitor is active.
 	running bool
+	// wg tracks prober goroutines for clean shutdown.
+	wg sync.WaitGroup
 	// factory creates probers.
 	factory Creator
 	// defaultTimeout is the default probe timeout.
@@ -217,7 +219,11 @@ func (m *ProbeMonitor) Start(ctx context.Context) {
 	for _, lp := range listeners {
 		// Only start probers for listeners that have one configured.
 		if lp.Prober != nil {
-			go m.runProber(ctx, stopCh, lp)
+			m.wg.Add(1)
+			go func(lp *ListenerProbe) {
+				defer m.wg.Done()
+				m.runProber(ctx, stopCh, lp)
+			}(lp)
 		}
 	}
 }
@@ -238,6 +244,9 @@ func (m *ProbeMonitor) Stop() {
 	m.running = false
 	close(m.stopCh)
 	m.mu.Unlock()
+
+	// Wait for all prober goroutines to terminate.
+	m.wg.Wait()
 }
 
 // runProber runs a single prober in a loop.
@@ -257,8 +266,18 @@ func (m *ProbeMonitor) runProber(ctx context.Context, stopCh <-chan struct{}, lp
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// Perform initial probe immediately.
-	m.performProbe(ctx, lp)
+	// Perform initial probe immediately (unless already stopped/cancelled).
+	select {
+	case <-stopCh:
+		// Stop signal received before initial probe.
+		return
+	case <-ctx.Done():
+		// Context cancelled before initial probe.
+		return
+	default:
+		// Perform initial probe.
+		m.performProbe(ctx, lp)
+	}
 
 	// Loop until stopped.
 	for {
@@ -466,7 +485,8 @@ func (m *ProbeMonitor) findOrCreateListenerStatus(lp *ListenerProbe) *domain.Lis
 //   - result: the probe result.
 func (m *ProbeMonitor) sendEventIfChanged(lp *ListenerProbe, ls *domain.ListenerStatus, prevState listener.State, result probe.Result) {
 	// Check if state changed and events channel is available.
-	if prevState != lp.Listener.State && m.events != nil {
+	// Use ls.State instead of lp.Listener.State for thread safety.
+	if prevState != ls.State && m.events != nil {
 		// Defensive guard to avoid panics if called before a result is stored.
 		if ls.LastProbeResult == nil {
 			// Skip event when no probe result is available yet.

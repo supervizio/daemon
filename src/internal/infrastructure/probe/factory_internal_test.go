@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	domainprobe "github.com/kodflow/daemon/internal/domain/probe"
 )
 
 // TestFactory_internalFields tests internal struct fields.
@@ -144,6 +146,60 @@ func TestErrUnknownProberType(t *testing.T) {
 			// Verify error is not nil.
 			assert.NotNil(t, ErrUnknownProberType)
 			assert.Contains(t, ErrUnknownProberType.Error(), "unknown")
+		})
+	}
+}
+
+// Test_Factory_normalizeTimeout tests the internal normalizeTimeout method.
+func Test_Factory_normalizeTimeout(t *testing.T) {
+	tests := []struct {
+		name            string
+		factoryTimeout  time.Duration
+		inputTimeout    time.Duration
+		expectedTimeout time.Duration
+	}{
+		{
+			name:            "positive_input_preserved",
+			factoryTimeout:  5 * time.Second,
+			inputTimeout:    10 * time.Second,
+			expectedTimeout: 10 * time.Second,
+		},
+		{
+			name:            "zero_input_uses_factory_default",
+			factoryTimeout:  5 * time.Second,
+			inputTimeout:    0,
+			expectedTimeout: 5 * time.Second,
+		},
+		{
+			name:            "negative_input_uses_factory_default",
+			factoryTimeout:  5 * time.Second,
+			inputTimeout:    -1 * time.Second,
+			expectedTimeout: 5 * time.Second,
+		},
+		{
+			name:            "zero_factory_uses_probe_default",
+			factoryTimeout:  0,
+			inputTimeout:    0,
+			expectedTimeout: domainprobe.DefaultTimeout,
+		},
+		{
+			name:            "negative_factory_uses_probe_default",
+			factoryTimeout:  -1 * time.Second,
+			inputTimeout:    0,
+			expectedTimeout: domainprobe.DefaultTimeout,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create factory with specified timeout.
+			factory := NewFactory(tt.factoryTimeout)
+
+			// Call normalizeTimeout.
+			result := factory.normalizeTimeout(tt.inputTimeout)
+
+			// Verify result.
+			assert.Equal(t, tt.expectedTimeout, result)
 		})
 	}
 }
