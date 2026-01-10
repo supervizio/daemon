@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	domainprobe "github.com/kodflow/daemon/internal/domain/probe"
 )
 
 // TestFactory_internalFields tests internal struct fields.
@@ -177,16 +175,16 @@ func Test_Factory_normalizeTimeout(t *testing.T) {
 			expectedTimeout: 5 * time.Second,
 		},
 		{
-			name:            "zero_factory_uses_probe_default",
+			name:            "zero_factory_returns_zero",
 			factoryTimeout:  0,
 			inputTimeout:    0,
-			expectedTimeout: domainprobe.DefaultTimeout,
+			expectedTimeout: 0,
 		},
 		{
-			name:            "negative_factory_uses_probe_default",
+			name:            "negative_factory_returns_negative",
 			factoryTimeout:  -1 * time.Second,
 			inputTimeout:    0,
-			expectedTimeout: domainprobe.DefaultTimeout,
+			expectedTimeout: -1 * time.Second,
 		},
 	}
 

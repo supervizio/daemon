@@ -78,17 +78,14 @@ func (f *Factory) Create(proberType string, timeout time.Duration) (probe.Prober
 //   - timeout: the input timeout duration.
 //
 // Returns:
-//   - time.Duration: a valid timeout (never zero or negative).
+//   - time.Duration: the input timeout or factory default if zero/negative.
 func (f *Factory) normalizeTimeout(timeout time.Duration) time.Duration {
-	// Use default timeout if not specified or invalid.
+	// Use factory default timeout if not specified or invalid.
 	if timeout <= 0 {
-		timeout = f.defaultTimeout
+		// Return factory default.
+		return f.defaultTimeout
 	}
-	// Fall back to probe default if factory default is also invalid.
-	if timeout <= 0 {
-		timeout = probe.DefaultTimeout
-	}
-	// Return normalized timeout.
+	// Return input timeout.
 	return timeout
 }
 

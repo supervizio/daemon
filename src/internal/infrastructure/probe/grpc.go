@@ -90,16 +90,9 @@ func (p *GRPCProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 	// Currently we perform TCP connectivity check.
 	// TODO: Implement full gRPC health protocol when grpc dependency is added.
 
-	// Use configured timeout or fall back to default.
-	timeout := p.timeout
-	// Apply default timeout when not configured or invalid.
-	if timeout <= 0 {
-		timeout = probe.DefaultTimeout
-	}
-
-	// Create dialer with validated timeout.
+	// Create dialer with configured timeout.
 	dialer := &net.Dialer{
-		Timeout: timeout,
+		Timeout: p.timeout,
 	}
 
 	// Attempt to establish TCP connection to gRPC server.

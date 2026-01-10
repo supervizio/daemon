@@ -64,16 +64,9 @@ func (p *TCPProber) Probe(ctx context.Context, target probe.Target) probe.Result
 		network = "tcp"
 	}
 
-	// Use configured timeout or fall back to default.
-	timeout := p.timeout
-	// Apply default timeout when not configured or invalid.
-	if timeout <= 0 {
-		timeout = probe.DefaultTimeout
-	}
-
-	// Create dialer with validated timeout.
+	// Create dialer with configured timeout.
 	dialer := &net.Dialer{
-		Timeout: timeout,
+		Timeout: p.timeout,
 	}
 
 	// Attempt to establish connection.

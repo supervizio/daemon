@@ -130,16 +130,9 @@ func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) 
 	// Build address with TCP port (handles IPv6 correctly).
 	address := net.JoinHostPort(host, strconv.Itoa(tcpPort))
 
-	// Use configured timeout or fall back to default to prevent indefinite hangs.
-	timeout := p.timeout
-	// Apply default timeout when not configured or invalid.
-	if timeout <= 0 {
-		timeout = probe.DefaultTimeout
-	}
-
-	// Create dialer with timeout.
+	// Create dialer with configured timeout.
 	dialer := &net.Dialer{
-		Timeout: timeout,
+		Timeout: p.timeout,
 	}
 
 	// Attempt to establish connection.
