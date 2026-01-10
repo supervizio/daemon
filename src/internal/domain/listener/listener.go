@@ -173,16 +173,22 @@ func (l *Listener) HasProbe() bool {
 //   - string: the address in host:port format.
 func (l *Listener) ProbeAddress() string {
 	// Normalize non-routable bind addresses to loopback for probing.
-	// Empty, "0.0.0.0" (IPv4 any), and "::" (IPv6 any) cannot be used
-	// directly as they represent "all interfaces" and are not routable.
 	addr := l.Address
+
 	// Check if address is non-routable and needs normalization.
-	if addr == "" || addr == "0.0.0.0" || addr == "::" {
-		// Use localhost for any-address bindings.
+	switch addr {
+	case "":
+		// Empty address defaults to IPv4 loopback.
 		addr = "127.0.0.1"
+	case "0.0.0.0":
+		// IPv4 any-address defaults to IPv4 loopback.
+		addr = "127.0.0.1"
+	case "::":
+		// IPv6 any-address defaults to IPv6 loopback.
+		addr = "::1"
 	}
+
 	// Use net.JoinHostPort for proper IPv6 address handling.
-	// This correctly formats IPv6 addresses as [addr]:port.
 	return net.JoinHostPort(addr, formatPort(l.Port))
 }
 

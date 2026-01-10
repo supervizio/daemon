@@ -319,15 +319,15 @@ func (p *ProbeDTO) ToDomain() service.ProbeConfig {
 func (p *ProbeDTO) getThresholdDefaults() (int, int) {
 	// Apply default for success threshold.
 	successThreshold := p.SuccessThreshold
-	// Require at least one success to mark healthy when not configured.
-	if successThreshold == 0 {
+	// Require at least one success to mark healthy when not configured or invalid.
+	if successThreshold <= 0 {
 		successThreshold = 1
 	}
 
 	// Apply default for failure threshold.
 	failureThreshold := p.FailureThreshold
-	// Allow three failures before marking unhealthy when not configured.
-	if failureThreshold == 0 {
+	// Allow three failures before marking unhealthy when not configured or invalid.
+	if failureThreshold <= 0 {
 		failureThreshold = defaultFailureThreshold
 	}
 

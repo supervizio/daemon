@@ -4,6 +4,7 @@ package probe_test
 import (
 	"context"
 	"net"
+	"strconv"
 	"testing"
 	"time"
 
@@ -238,18 +239,18 @@ func TestICMPProber_Probe_ContextCancellation(t *testing.T) {
 
 // mustParsePort parses a port string and panics on error.
 func mustParsePort(portStr string) int {
-	var port int
-	_, err := net.LookupPort("tcp", portStr)
-	if err != nil {
-		// Use manual parsing.
-		for _, c := range portStr {
-			port = port*10 + int(c-'0')
-		}
+	// Try to resolve named port (e.g., "http" -> 80).
+	if port, err := net.LookupPort("tcp", portStr); err == nil {
+		// Return resolved port number.
 		return port
 	}
-	// Parse manually.
-	for _, c := range portStr {
-		port = port*10 + int(c-'0')
+
+	// Fall back to numeric parsing.
+	port, err := strconv.Atoi(portStr)
+	// Panic if parsing fails to catch test configuration errors.
+	if err != nil {
+		panic(err)
 	}
+	// Return parsed port number.
 	return port
 }

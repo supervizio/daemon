@@ -100,8 +100,16 @@ func (m *ProbeMonitor) AddListener(l *listener.Listener) error {
 		return ErrProberFactoryMissing
 	}
 
-	// Create prober for this listener.
-	prober, err := m.factory.Create(l.ProbeType, l.ProbeConfig.Timeout)
+	// Use effective timeout, falling back to default if not set.
+	timeout := l.ProbeConfig.Timeout
+	// Check if timeout is not configured.
+	if timeout == 0 {
+		// Use default timeout from monitor configuration.
+		timeout = m.defaultTimeout
+	}
+
+	// Create prober for this listener with effective timeout.
+	prober, err := m.factory.Create(l.ProbeType, timeout)
 	// Return error if prober creation fails.
 	if err != nil {
 		// Propagate factory error to caller.
@@ -175,11 +183,14 @@ func (m *ProbeMonitor) Start(ctx context.Context) {
 	m.running = true
 	stopCh := make(chan struct{})
 	m.stopCh = stopCh
+
+	// Snapshot listeners to avoid races with AddListener().
+	listeners := append([]*ListenerProbe(nil), m.listeners...)
 	m.mu.Unlock()
 
 	// Start a goroutine for each listener with a prober.
 	// Pass stopCh as parameter to avoid race conditions on restart.
-	for _, lp := range m.listeners {
+	for _, lp := range listeners {
 		// Only start probers for listeners that have one configured.
 		if lp.Prober != nil {
 			go m.runProber(ctx, stopCh, lp)
@@ -345,8 +356,13 @@ func (m *ProbeMonitor) updateListenerState(lp *ListenerProbe, ls *domain.Listene
 
 		// Check if success threshold met to transition to Ready.
 		if ls.ConsecutiveSuccesses >= successThreshold {
-			lp.Listener.MarkReady()
-			ls.State = listener.Ready
+			// Check return value to prevent state divergence.
+			if lp.Listener.MarkReady() {
+				ls.State = listener.Ready
+			} else {
+				// Sync state if transition failed.
+				ls.State = lp.Listener.State
+			}
 		}
 	} else {
 		// Probe failed: reset successes, increment failures.
@@ -355,8 +371,13 @@ func (m *ProbeMonitor) updateListenerState(lp *ListenerProbe, ls *domain.Listene
 
 		// Check if failure threshold met to transition to Listening.
 		if ls.ConsecutiveFailures >= failureThreshold {
-			lp.Listener.MarkListening()
-			ls.State = listener.Listening
+			// Check return value to prevent state divergence.
+			if lp.Listener.MarkListening() {
+				ls.State = listener.Listening
+			} else {
+				// Sync state if transition failed.
+				ls.State = lp.Listener.State
+			}
 		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/kodflow/daemon/internal/domain/probe"
@@ -116,8 +117,8 @@ func (p *ICMPProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 // Returns:
 //   - probe.Result: the probe result with latency.
 func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) probe.Result {
-	// Build address with TCP port.
-	address := fmt.Sprintf("%s:%d", host, p.tcpPort)
+	// Build address with TCP port (handles IPv6 correctly).
+	address := net.JoinHostPort(host, strconv.Itoa(p.tcpPort))
 
 	// Create dialer with timeout.
 	dialer := &net.Dialer{

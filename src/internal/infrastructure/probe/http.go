@@ -145,6 +145,16 @@ func (p *HTTPProber) getStatusCode(ctx context.Context, method, address, path st
 		return 0, fmt.Errorf("failed to parse url: %w", err)
 	}
 
+	// If scheme is missing (e.g. "localhost:8080"), default to HTTP.
+	if targetURL.Scheme == "" {
+		targetURL, err = url.Parse("http://" + address)
+		// Check if reparsing with scheme failed.
+		if err != nil {
+			// Return wrapped error.
+			return 0, fmt.Errorf("failed to parse url: %w", err)
+		}
+	}
+
 	// Append path if provided.
 	if path != "" {
 		// Join paths, handling leading/trailing slashes.
