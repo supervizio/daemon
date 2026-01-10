@@ -227,20 +227,34 @@ func (s *Supervisor) stopAll() {
 // Returns:
 //   - error: an error if the reload fails.
 func (s *Supervisor) Reload() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Check state and get config path without holding lock during I/O.
+	s.mu.RLock()
+	state := s.state
+	configPath := s.config.ConfigPath
+	s.mu.RUnlock()
 
 	// Check if the supervisor is running.
-	if s.state != StateRunning {
+	if state != StateRunning {
 		// Return error when not running.
 		return ErrNotRunning
 	}
 
-	newCfg, err := s.loader.Load(s.config.ConfigPath)
+	// Load configuration without holding lock (I/O operation).
+	newCfg, err := s.loader.Load(configPath)
 	// Handle configuration load error.
 	if err != nil {
 		// Return wrapped error on load failure.
 		return fmt.Errorf("failed to reload config: %w", err)
+	}
+
+	// Acquire write lock for state updates.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Re-check state after acquiring lock (may have changed).
+	if s.state != StateRunning {
+		// Return error when no longer running.
+		return ErrNotRunning
 	}
 
 	s.updateServices(newCfg)

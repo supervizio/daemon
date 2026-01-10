@@ -97,13 +97,8 @@ func (f *Factory) normalizeTimeout(timeout time.Duration) time.Duration {
 // Returns:
 //   - *TCPProber: the created TCP prober.
 func (f *Factory) CreateTCP(timeout time.Duration) *TCPProber {
-	// Use default timeout if not specified.
-	if timeout == 0 {
-		timeout = f.defaultTimeout
-	}
-
-	// Return TCP prober configured with timeout.
-	return NewTCPProber(timeout)
+	// Return TCP prober with normalized timeout.
+	return NewTCPProber(f.normalizeTimeout(timeout))
 }
 
 // CreateUDP creates a UDP prober.
@@ -114,13 +109,8 @@ func (f *Factory) CreateTCP(timeout time.Duration) *TCPProber {
 // Returns:
 //   - *UDPProber: the created UDP prober.
 func (f *Factory) CreateUDP(timeout time.Duration) *UDPProber {
-	// Use default timeout if not specified.
-	if timeout == 0 {
-		timeout = f.defaultTimeout
-	}
-
-	// Return UDP prober configured with timeout.
-	return NewUDPProber(timeout)
+	// Return UDP prober with normalized timeout.
+	return NewUDPProber(f.normalizeTimeout(timeout))
 }
 
 // CreateHTTP creates an HTTP prober.
@@ -131,13 +121,8 @@ func (f *Factory) CreateUDP(timeout time.Duration) *UDPProber {
 // Returns:
 //   - *HTTPProber: the created HTTP prober.
 func (f *Factory) CreateHTTP(timeout time.Duration) *HTTPProber {
-	// Use default timeout if not specified.
-	if timeout == 0 {
-		timeout = f.defaultTimeout
-	}
-
-	// Return HTTP prober configured with timeout.
-	return NewHTTPProber(timeout)
+	// Return HTTP prober with normalized timeout.
+	return NewHTTPProber(f.normalizeTimeout(timeout))
 }
 
 // CreateGRPC creates a gRPC prober.
@@ -148,13 +133,8 @@ func (f *Factory) CreateHTTP(timeout time.Duration) *HTTPProber {
 // Returns:
 //   - *GRPCProber: the created gRPC prober.
 func (f *Factory) CreateGRPC(timeout time.Duration) *GRPCProber {
-	// Use default timeout if not specified.
-	if timeout == 0 {
-		timeout = f.defaultTimeout
-	}
-
-	// Return gRPC prober configured with timeout.
-	return NewGRPCProber(timeout)
+	// Return gRPC prober with normalized timeout.
+	return NewGRPCProber(f.normalizeTimeout(timeout))
 }
 
 // CreateExec creates an exec prober.
@@ -165,13 +145,8 @@ func (f *Factory) CreateGRPC(timeout time.Duration) *GRPCProber {
 // Returns:
 //   - *ExecProber: the created exec prober.
 func (f *Factory) CreateExec(timeout time.Duration) *ExecProber {
-	// Use default timeout if not specified.
-	if timeout == 0 {
-		timeout = f.defaultTimeout
-	}
-
-	// Return exec prober configured with timeout.
-	return NewExecProber(timeout)
+	// Return exec prober with normalized timeout.
+	return NewExecProber(f.normalizeTimeout(timeout))
 }
 
 // CreateICMP creates an ICMP prober.
@@ -182,11 +157,6 @@ func (f *Factory) CreateExec(timeout time.Duration) *ExecProber {
 // Returns:
 //   - *ICMPProber: the created ICMP prober.
 func (f *Factory) CreateICMP(timeout time.Duration) *ICMPProber {
-	// Use default timeout if not specified.
-	if timeout == 0 {
-		timeout = f.defaultTimeout
-	}
-
-	// Return ICMP prober configured with timeout.
-	return NewICMPProber(timeout)
+	// Return ICMP prober with normalized timeout.
+	return NewICMPProber(f.normalizeTimeout(timeout))
 }

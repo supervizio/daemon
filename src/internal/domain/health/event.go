@@ -27,11 +27,27 @@ type Event struct {
 // Returns:
 //   - Event: a new event with the current timestamp
 func NewEvent(checker string, status Status, result Result) Event {
-	// Build and return the event with current timestamp.
+	// Delegate to NewEventAt with current time.
+	return NewEventAt(checker, status, result, time.Now())
+}
+
+// NewEventAt creates a new health event with a specific timestamp.
+// This is useful for testing or reconstructing events from stored data.
+//
+// Params:
+//   - checker: name of the health checker that generated this event
+//   - status: current health status from the checker
+//   - result: full result details from the health check
+//   - timestamp: the timestamp to use for this event
+//
+// Returns:
+//   - Event: a new event with the specified timestamp
+func NewEventAt(checker string, status Status, result Result, timestamp time.Time) Event {
+	// Build and return the event with specified timestamp.
 	return Event{
 		Checker:   checker,
 		Status:    status,
 		Result:    result,
-		Timestamp: time.Now(),
+		Timestamp: timestamp,
 	}
 }
