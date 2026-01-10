@@ -94,6 +94,12 @@ func (m *ProbeMonitor) AddListener(l *listener.Listener) error {
 		return nil
 	}
 
+	// Check if factory is configured before attempting to create prober.
+	if m.factory == nil {
+		// Return error when factory is missing but probe is configured.
+		return ErrProberFactoryMissing
+	}
+
 	// Create prober for this listener.
 	prober, err := m.factory.Create(l.ProbeType, l.ProbeConfig.Timeout)
 	// Return error if prober creation fails.
@@ -167,14 +173,16 @@ func (m *ProbeMonitor) Start(ctx context.Context) {
 
 	// Mark as running and create new stop channel.
 	m.running = true
-	m.stopCh = make(chan struct{})
+	stopCh := make(chan struct{})
+	m.stopCh = stopCh
 	m.mu.Unlock()
 
 	// Start a goroutine for each listener with a prober.
+	// Pass stopCh as parameter to avoid race conditions on restart.
 	for _, lp := range m.listeners {
 		// Only start probers for listeners that have one configured.
 		if lp.Prober != nil {
-			go m.runProber(ctx, lp)
+			go m.runProber(ctx, stopCh, lp)
 		}
 	}
 }
@@ -201,8 +209,9 @@ func (m *ProbeMonitor) Stop() {
 //
 // Params:
 //   - ctx: context for cancellation.
+//   - stopCh: channel to signal stop (passed as param to avoid race on restart).
 //   - lp: the listener probe to run.
-func (m *ProbeMonitor) runProber(ctx context.Context, lp *ListenerProbe) {
+func (m *ProbeMonitor) runProber(ctx context.Context, stopCh <-chan struct{}, lp *ListenerProbe) {
 	interval := lp.Config.Interval
 	// Use default interval when not specified in config.
 	if interval == 0 {
@@ -219,7 +228,7 @@ func (m *ProbeMonitor) runProber(ctx context.Context, lp *ListenerProbe) {
 	// Loop until stopped.
 	for {
 		select {
-		case <-m.stopCh:
+		case <-stopCh:
 			// Stop signal received.
 			return
 		case <-ctx.Done():
@@ -277,14 +286,65 @@ func (m *ProbeMonitor) updateProbeResult(lp *ListenerProbe, result probe.Result)
 	// Get previous state for event comparison.
 	prevState := lp.Listener.State
 
-	// Update counters based on result.
+	// Get normalized thresholds (zero values become 1).
+	successThreshold, failureThreshold := m.normalizeThresholds(lp.Config)
+
+	// Update state based on probe result.
+	m.updateListenerState(lp, ls, result, successThreshold, failureThreshold)
+
+	// Store the probe result and update latency.
+	m.storeProbeResult(ls, result)
+
+	// Send event if state changed.
+	m.sendEventIfChanged(lp, ls, prevState, result)
+}
+
+// normalizeThresholds returns thresholds with zero values normalized to 1.
+//
+// Params:
+//   - config: the probe configuration.
+//
+// Returns:
+//   - int: normalized success threshold (minimum 1).
+//   - int: normalized failure threshold (minimum 1).
+func (m *ProbeMonitor) normalizeThresholds(config probe.Config) (int, int) {
+	// Default to 1 for zero or negative success threshold.
+	successThreshold := config.SuccessThreshold
+	// Check if success threshold needs normalization.
+	if successThreshold <= 0 {
+		// Use minimum of 1 for unset threshold.
+		successThreshold = 1
+	}
+
+	// Default to 1 for zero or negative failure threshold.
+	failureThreshold := config.FailureThreshold
+	// Check if failure threshold needs normalization.
+	if failureThreshold <= 0 {
+		// Use minimum of 1 for unset threshold.
+		failureThreshold = 1
+	}
+
+	// Return both normalized values.
+	return successThreshold, failureThreshold
+}
+
+// updateListenerState updates listener state based on probe result and thresholds.
+//
+// Params:
+//   - lp: the listener probe.
+//   - ls: the listener status to update.
+//   - result: the probe result.
+//   - successThreshold: number of successes needed.
+//   - failureThreshold: number of failures needed.
+func (m *ProbeMonitor) updateListenerState(lp *ListenerProbe, ls *domain.ListenerStatus, result probe.Result, successThreshold, failureThreshold int) {
+	// Check if probe succeeded to update counters accordingly.
 	if result.Success {
 		// Probe succeeded: reset failures, increment successes.
 		ls.ConsecutiveFailures = 0
 		ls.ConsecutiveSuccesses++
 
-		// Check if success threshold met.
-		if ls.ConsecutiveSuccesses >= lp.Config.SuccessThreshold {
+		// Check if success threshold met to transition to Ready.
+		if ls.ConsecutiveSuccesses >= successThreshold {
 			lp.Listener.MarkReady()
 			ls.State = listener.Ready
 		}
@@ -293,13 +353,21 @@ func (m *ProbeMonitor) updateProbeResult(lp *ListenerProbe, result probe.Result)
 		ls.ConsecutiveSuccesses = 0
 		ls.ConsecutiveFailures++
 
-		// Check if failure threshold met.
-		if ls.ConsecutiveFailures >= lp.Config.FailureThreshold {
+		// Check if failure threshold met to transition to Listening.
+		if ls.ConsecutiveFailures >= failureThreshold {
+			lp.Listener.MarkListening()
 			ls.State = listener.Listening
 		}
 	}
+}
 
-	// Store last result.
+// storeProbeResult stores the probe result and updates latency.
+//
+// Params:
+//   - ls: the listener status to update.
+//   - result: the probe result to store.
+func (m *ProbeMonitor) storeProbeResult(ls *domain.ListenerStatus, result probe.Result) {
+	// Store last result with all details.
 	ls.LastProbeResult = &domain.Result{
 		Status:    m.resultToStatus(result),
 		Message:   result.Output,
@@ -310,9 +378,6 @@ func (m *ProbeMonitor) updateProbeResult(lp *ListenerProbe, result probe.Result)
 
 	// Update latency in aggregated health.
 	m.health.SetLatency(result.Latency)
-
-	// Send event if state changed.
-	m.sendEventIfChanged(lp, ls, prevState, result)
 }
 
 // findOrCreateListenerStatus finds or creates a listener status entry.
@@ -402,10 +467,20 @@ func (m *ProbeMonitor) Health() *domain.AggregatedHealth {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Return a copy to avoid data races.
+	// Return a deep copy to avoid data races.
 	health := *m.health
 	health.Listeners = make([]domain.ListenerStatus, 0, len(m.health.Listeners))
-	health.Listeners = append(health.Listeners, m.health.Listeners...)
+	// Deep copy each listener status including nested pointers.
+	for i := range m.health.Listeners {
+		// Copy listener status struct.
+		lsCopy := m.health.Listeners[i]
+		// Deep copy LastProbeResult pointer to avoid concurrent access.
+		if lsCopy.LastProbeResult != nil {
+			resultCopy := *lsCopy.LastProbeResult
+			lsCopy.LastProbeResult = &resultCopy
+		}
+		health.Listeners = append(health.Listeners, lsCopy)
+	}
 	// Return pointer to health copy.
 	return &health
 }

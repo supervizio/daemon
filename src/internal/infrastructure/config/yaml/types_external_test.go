@@ -1094,6 +1094,8 @@ func TestProbeDTO_ToDomain(t *testing.T) {
 				Args:    []string{"--verbose"},
 			},
 			expectedType:             "exec",
+			expectedInterval:         10 * time.Second,
+			expectedTimeout:          5 * time.Second,
 			expectedSuccessThreshold: 1,
 			expectedFailureThreshold: 3,
 			expectedCommand:          "/bin/check-health",

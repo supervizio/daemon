@@ -2,7 +2,8 @@
 package listener
 
 import (
-	"fmt"
+	"net"
+	"strconv"
 
 	"github.com/kodflow/daemon/internal/domain/probe"
 )
@@ -166,21 +167,23 @@ func (l *Listener) HasProbe() bool {
 
 // ProbeAddress returns the address for probing.
 // It combines the listener's address and port for network probes.
+// Uses net.JoinHostPort for proper IPv6 address handling.
 //
 // Returns:
 //   - string: the address in host:port format.
 func (l *Listener) ProbeAddress() string {
-	// Use localhost if address is empty.
+	// Normalize non-routable bind addresses to loopback for probing.
+	// Empty, "0.0.0.0" (IPv4 any), and "::" (IPv6 any) cannot be used
+	// directly as they represent "all interfaces" and are not routable.
 	addr := l.Address
-	// Empty or "0.0.0.0" addresses cannot be used directly for probing,
-	// as they represent "all interfaces" and are not routable targets.
-	// We substitute localhost to create a valid probe endpoint.
-	if addr == "" || addr == "0.0.0.0" {
-		// Use localhost for empty or any address.
+	// Check if address is non-routable and needs normalization.
+	if addr == "" || addr == "0.0.0.0" || addr == "::" {
+		// Use localhost for any-address bindings.
 		addr = "127.0.0.1"
 	}
-	// Return formatted address with port.
-	return addr + ":" + formatPort(l.Port)
+	// Use net.JoinHostPort for proper IPv6 address handling.
+	// This correctly formats IPv6 addresses as [addr]:port.
+	return net.JoinHostPort(addr, formatPort(l.Port))
 }
 
 // formatPort converts a port number to string.
@@ -191,6 +194,6 @@ func (l *Listener) ProbeAddress() string {
 // Returns:
 //   - string: the port as a decimal string.
 func formatPort(port int) string {
-	// Format port as decimal string.
-	return fmt.Sprintf("%d", port)
+	// Use strconv for efficient integer to string conversion.
+	return strconv.Itoa(port)
 }

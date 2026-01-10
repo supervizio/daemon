@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"time"
 
 	"github.com/kodflow/daemon/internal/domain/probe"
@@ -47,10 +48,13 @@ type UDPProber struct {
 // Returns:
 //   - *UDPProber: a configured UDP prober ready to perform probes.
 func NewUDPProber(timeout time.Duration) *UDPProber {
-	// Return configured UDP prober with default payload.
+	// Defensive copy of default payload to prevent external modifications.
+	payloadCopy := slices.Clone(defaultUDPPayload)
+
+	// Return configured UDP prober with copied payload.
 	return &UDPProber{
 		timeout: timeout,
-		payload: defaultUDPPayload,
+		payload: payloadCopy,
 	}
 }
 
@@ -63,10 +67,19 @@ func NewUDPProber(timeout time.Duration) *UDPProber {
 // Returns:
 //   - *UDPProber: a configured UDP prober ready to perform probes.
 func NewUDPProberWithPayload(timeout time.Duration, payload []byte) *UDPProber {
-	// Return configured UDP prober with custom payload.
+	// Use default prober if payload is nil.
+	if payload == nil {
+		// Return prober with default payload.
+		return NewUDPProber(timeout)
+	}
+
+	// Defensive copy of payload to prevent external modifications.
+	payloadCopy := slices.Clone(payload)
+
+	// Return configured UDP prober with copied payload.
 	return &UDPProber{
 		timeout: timeout,
-		payload: payload,
+		payload: payloadCopy,
 	}
 }
 
@@ -85,16 +98,29 @@ func (p *UDPProber) Type() string {
 // The probe measures the ability to send and receive data.
 //
 // Params:
-//   - _ctx: context for cancellation (unused, required by interface).
+//   - ctx: context for cancellation and timeout control.
 //   - target: the target to probe.
 //
 // Returns:
 //   - probe.Result: the probe result with latency and status.
-func (p *UDPProber) Probe(_ctx context.Context, target probe.Target) probe.Result {
+func (p *UDPProber) Probe(ctx context.Context, target probe.Target) probe.Result {
 	start := time.Now()
 
+	// Check if context is already cancelled.
+	select {
+	case <-ctx.Done():
+		// Return early with context error.
+		return probe.NewFailureResult(
+			time.Since(start),
+			fmt.Sprintf("context cancelled: %v", ctx.Err()),
+			ctx.Err(),
+		)
+	default:
+		// Continue with probe.
+	}
+
 	// Establish UDP connection to target.
-	conn, result := p.dialUDP(target, start)
+	conn, result := p.dialUDP(ctx, target, start)
 	// Check if connection failed.
 	if conn == nil {
 		// Return failure result from dial.
@@ -112,13 +138,14 @@ func (p *UDPProber) Probe(_ctx context.Context, target probe.Target) probe.Resul
 // dialUDP establishes a UDP connection to the target.
 //
 // Params:
+//   - ctx: context for cancellation (used to derive deadline if timeout is zero).
 //   - target: the probe target.
 //   - start: the start time for latency measurement.
 //
 // Returns:
 //   - *net.UDPConn: the established connection (nil if failed).
 //   - probe.Result: failure result if connection failed.
-func (p *UDPProber) dialUDP(target probe.Target, start time.Time) (*net.UDPConn, probe.Result) {
+func (p *UDPProber) dialUDP(ctx context.Context, target probe.Target, start time.Time) (*net.UDPConn, probe.Result) {
 	// Determine the network type.
 	network := target.Network
 	// Check if network type was specified.
@@ -151,9 +178,10 @@ func (p *UDPProber) dialUDP(target probe.Target, start time.Time) (*net.UDPConn,
 		)
 	}
 
+	// Determine deadline from timeout or context.
+	deadline := p.calculateDeadline(ctx)
+
 	// Set deadlines for read/write operations.
-	deadline := time.Now().Add(p.timeout)
-	// Check if deadline configuration failed.
 	if err := conn.SetDeadline(deadline); err != nil {
 		// Close connection before returning.
 		_ = conn.Close()
@@ -167,6 +195,30 @@ func (p *UDPProber) dialUDP(target probe.Target, start time.Time) (*net.UDPConn,
 
 	// Return established connection with empty result.
 	return conn, probe.Result{}
+}
+
+// calculateDeadline determines the deadline from timeout or context.
+//
+// Params:
+//   - ctx: context that may contain a deadline.
+//
+// Returns:
+//   - time.Time: the calculated deadline.
+func (p *UDPProber) calculateDeadline(ctx context.Context) time.Time {
+	// Use prober timeout if positive.
+	if p.timeout > 0 {
+		// Return deadline based on configured timeout.
+		return time.Now().Add(p.timeout)
+	}
+
+	// Use context deadline if available.
+	if ctxDeadline, ok := ctx.Deadline(); ok {
+		// Return context-provided deadline.
+		return ctxDeadline
+	}
+
+	// Fall back to default timeout.
+	return time.Now().Add(probe.DefaultTimeout)
 }
 
 // sendAndReceive sends the probe packet and reads the response.

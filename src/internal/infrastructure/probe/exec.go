@@ -107,8 +107,14 @@ func (p *ExecProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 // Returns:
 //   - probe.Result: the probe result with output and exit status.
 func (p *ExecProber) executeCommand(ctx context.Context, command string, args []string, start time.Time) probe.Result {
-	// Create context with timeout to prevent command hanging indefinitely.
-	execCtx, cancel := context.WithTimeout(ctx, p.timeout)
+	// Create context with timeout only if timeout is positive.
+	// Zero or negative timeout would create an already-canceled context.
+	execCtx := ctx
+	cancel := func() {}
+	// Check if timeout is configured before creating timeout context.
+	if p.timeout > 0 {
+		execCtx, cancel = context.WithTimeout(ctx, p.timeout)
+	}
 	defer cancel()
 
 	// Create and execute command using TrustedCommand for security.

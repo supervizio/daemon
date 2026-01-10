@@ -18,6 +18,14 @@ const (
 	// defaultHTTPStatusCode is the expected HTTP response code for healthy endpoints.
 	// HTTP 200 OK is the standard success response indicating the request was successful.
 	defaultHTTPStatusCode int = 200
+
+	// defaultProbeInterval is the default interval between probe executions.
+	// 10 seconds is a reasonable balance between responsiveness and resource usage.
+	defaultProbeInterval time.Duration = 10 * time.Second
+
+	// defaultProbeTimeout is the default timeout for a single probe execution.
+	// 5 seconds allows most network operations to complete without false timeouts.
+	defaultProbeTimeout time.Duration = 5 * time.Second
 )
 
 // Duration is a wrapper around time.Duration for YAML serialization.
@@ -282,18 +290,81 @@ func (l *ListenerDTO) ToDomain() service.ListenerConfig {
 // Returns:
 //   - service.ProbeConfig: the converted domain probe configuration
 func (p *ProbeDTO) ToDomain() service.ProbeConfig {
-	// Apply defaults for thresholds.
+	// Get threshold, timing, and HTTP defaults.
+	successThreshold, failureThreshold := p.getThresholdDefaults()
+	interval, timeout := p.getTimingDefaults()
+	method, statusCode := p.getHTTPDefaults()
+
+	// Return the converted probe configuration.
+	return service.ProbeConfig{
+		Type:             p.Type,
+		Interval:         shared.FromTimeDuration(interval),
+		Timeout:          shared.FromTimeDuration(timeout),
+		SuccessThreshold: successThreshold,
+		FailureThreshold: failureThreshold,
+		Path:             p.Path,
+		Method:           method,
+		StatusCode:       statusCode,
+		Service:          p.Service,
+		Command:          p.Command,
+		Args:             p.Args,
+	}
+}
+
+// getThresholdDefaults returns threshold values with defaults applied.
+//
+// Returns:
+//   - int: success threshold (default 1).
+//   - int: failure threshold (default 3).
+func (p *ProbeDTO) getThresholdDefaults() (int, int) {
+	// Apply default for success threshold.
 	successThreshold := p.SuccessThreshold
 	// Require at least one success to mark healthy when not configured.
 	if successThreshold == 0 {
 		successThreshold = 1
 	}
+
+	// Apply default for failure threshold.
 	failureThreshold := p.FailureThreshold
 	// Allow three failures before marking unhealthy when not configured.
 	if failureThreshold == 0 {
 		failureThreshold = defaultFailureThreshold
 	}
 
+	// Return both threshold values.
+	return successThreshold, failureThreshold
+}
+
+// getTimingDefaults returns timing values with defaults applied.
+//
+// Returns:
+//   - time.Duration: interval (default 10s).
+//   - time.Duration: timeout (default 5s).
+func (p *ProbeDTO) getTimingDefaults() (time.Duration, time.Duration) {
+	// Apply default for interval.
+	interval := time.Duration(p.Interval)
+	// Use default probe interval when not configured.
+	if interval == 0 {
+		interval = defaultProbeInterval
+	}
+
+	// Apply default for timeout.
+	timeout := time.Duration(p.Timeout)
+	// Use default probe timeout when not configured.
+	if timeout == 0 {
+		timeout = defaultProbeTimeout
+	}
+
+	// Return both timing values.
+	return interval, timeout
+}
+
+// getHTTPDefaults returns HTTP-specific values with defaults applied.
+//
+// Returns:
+//   - string: HTTP method (default "GET").
+//   - int: expected status code (default 200).
+func (p *ProbeDTO) getHTTPDefaults() (string, int) {
 	// Apply default method.
 	method := p.Method
 	// Use GET as the standard HTTP method for health probes when not specified.
@@ -308,20 +379,8 @@ func (p *ProbeDTO) ToDomain() service.ProbeConfig {
 		statusCode = defaultHTTPStatusCode
 	}
 
-	// Return the converted probe configuration.
-	return service.ProbeConfig{
-		Type:             p.Type,
-		Interval:         shared.FromTimeDuration(time.Duration(p.Interval)),
-		Timeout:          shared.FromTimeDuration(time.Duration(p.Timeout)),
-		SuccessThreshold: successThreshold,
-		FailureThreshold: failureThreshold,
-		Path:             p.Path,
-		Method:           method,
-		StatusCode:       statusCode,
-		Service:          p.Service,
-		Command:          p.Command,
-		Args:             p.Args,
-	}
+	// Return both HTTP values.
+	return method, statusCode
 }
 
 // ToDomain converts RestartConfigDTO to domain RestartConfig.

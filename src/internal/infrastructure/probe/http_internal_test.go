@@ -101,8 +101,8 @@ func TestHTTPProber_getStatusCode(t *testing.T) {
 			prober := NewHTTPProber(100 * time.Millisecond)
 			ctx := context.Background()
 
-			// Call internal method.
-			statusCode, err := prober.getStatusCode(ctx, tt.method, tt.url)
+			// Call internal method with empty path.
+			statusCode, err := prober.getStatusCode(ctx, tt.method, tt.url, "")
 
 			// Verify result.
 			if tt.expectError {

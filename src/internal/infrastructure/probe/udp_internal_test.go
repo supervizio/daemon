@@ -2,6 +2,7 @@
 package probe
 
 import (
+	"context"
 	"errors"
 	"net"
 	"testing"
@@ -162,9 +163,10 @@ func Test_UDPProber_dialUDP(t *testing.T) {
 			// Create UDP prober.
 			prober := NewUDPProber(tt.timeout)
 			start := time.Now()
+			ctx := context.Background()
 
-			// Call internal method.
-			conn, result := prober.dialUDP(tt.target, start)
+			// Call internal method with context.
+			conn, result := prober.dialUDP(ctx, tt.target, start)
 
 			// Verify result.
 			if tt.expectConn {

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/kodflow/daemon/internal/domain/probe"
@@ -92,8 +94,8 @@ func (p *HTTPProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 		expectedStatus = defaultHTTPStatusCode
 	}
 
-	// Get the status code.
-	statusCode, err := p.getStatusCode(ctx, method, target.Address)
+	// Get the status code, including optional path.
+	statusCode, err := p.getStatusCode(ctx, method, target.Address, target.Path)
 	latency := time.Since(start)
 
 	// Handle request errors.
@@ -128,33 +130,41 @@ func (p *HTTPProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 // Params:
 //   - ctx: context for cancellation.
 //   - method: the HTTP method to use.
-//   - url: the URL to request.
+//   - address: the base URL to request.
+//   - path: optional path to append to the URL.
 //
 // Returns:
 //   - int: the HTTP status code from the response.
 //   - error: any error that occurred during the request.
-func (p *HTTPProber) getStatusCode(ctx context.Context, method, url string) (int, error) {
-	// Create the request.
-	req, err := http.NewRequestWithContext(ctx, method, url, http.NoBody)
+func (p *HTTPProber) getStatusCode(ctx context.Context, method, address, path string) (int, error) {
+	// Parse the base URL.
+	targetURL, err := url.Parse(address)
+	// Check if URL parsing failed.
+	if err != nil {
+		// Return wrapped error.
+		return 0, fmt.Errorf("failed to parse url: %w", err)
+	}
+
+	// Append path if provided.
+	if path != "" {
+		// Join paths, handling leading/trailing slashes.
+		targetURL.Path = strings.TrimRight(targetURL.Path, "/") + "/" + strings.TrimLeft(path, "/")
+	}
+
+	// Create the request with the full URL.
+	req, err := http.NewRequestWithContext(ctx, method, targetURL.String(), http.NoBody)
 	// Check if request creation failed.
 	if err != nil {
 		// Return wrapped error.
 		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Get the transport.
-	transport := p.client.Transport
-	// Check if transport is configured.
-	if transport == nil {
-		// Use default transport if none configured.
-		transport = http.DefaultTransport
-	}
-
-	// Execute the request.
-	resp, err := transport.RoundTrip(req)
+	// Execute the request using the configured client.
+	// Using client.Do respects client configuration (timeouts, redirects, etc.).
+	resp, err := p.client.Do(req)
 	// Check if request failed.
 	if err != nil {
-		// Return the transport error.
+		// Return the client error.
 		return 0, err
 	}
 	// Ensure response body is closed.

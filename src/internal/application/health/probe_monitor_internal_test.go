@@ -609,12 +609,13 @@ func Test_ProbeMonitor_runProber(t *testing.T) {
 
 			// Start monitor to initialize stopCh.
 			monitor.running = true
-			monitor.stopCh = make(chan struct{})
+			stopCh := make(chan struct{})
+			monitor.stopCh = stopCh
 
 			// Run prober in goroutine.
 			done := make(chan struct{})
 			go func() {
-				monitor.runProber(ctx, lp)
+				monitor.runProber(ctx, stopCh, lp)
 				close(done)
 			}()
 
