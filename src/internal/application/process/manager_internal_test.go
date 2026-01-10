@@ -847,6 +847,8 @@ func Test_Manager_Uptime_when_running(t *testing.T) {
 }
 
 // Test_Manager_tryStartProcess_with_restart tests tryStartProcess with restart policy.
+// This test may spawn a goroutine to cancel the context during restart wait.
+// The goroutine terminates after calling cancel(), typically within 5ms.
 //
 // Params:
 //   - t: the testing context.
@@ -918,6 +920,8 @@ func Test_Manager_tryStartProcess_with_restart(t *testing.T) {
 }
 
 // Test_Manager_handleProcessExit_with_restart tests handleProcessExit with restart.
+// This test may spawn a goroutine to cancel the context during restart wait.
+// The goroutine terminates after calling cancel(), typically within 5ms.
 //
 // Params:
 //   - t: the testing context.
@@ -1107,6 +1111,8 @@ func Test_Manager_Reload_when_running(t *testing.T) {
 }
 
 // Test_Manager_runWithRestart_with_process_exit tests runWithRestart with process exit.
+// This test may spawn a goroutine to cancel the context after start.
+// The goroutine terminates after calling cancel(), typically within 50ms.
 //
 // Params:
 //   - t: the testing context.
@@ -1174,6 +1180,8 @@ func Test_Manager_runWithRestart_with_process_exit(t *testing.T) {
 
 // Test_Manager_runWithRestart_shutdown_during_wait tests runWithRestart shutdown.
 // This test covers the case where waitForProcessOrShutdown returns true (shutdown).
+// This test spawns a goroutine to cancel the context during process wait.
+// The goroutine terminates after calling cancel(), typically within 20ms.
 //
 // Params:
 //   - t: the testing context.

@@ -11,7 +11,7 @@ import (
 )
 
 // errCloseFailed is an error returned when a mock close fails.
-var errCloseFailed = errors.New("close failed")
+var errCloseFailed error = errors.New("close failed")
 
 // mockWriteCloser is a mock io.WriteCloser for testing.
 type mockWriteCloser struct {

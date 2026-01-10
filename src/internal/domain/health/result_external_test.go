@@ -124,6 +124,104 @@ func TestNewUnhealthyResult(t *testing.T) {
 	}
 }
 
+// TestNewHealthyResultAt tests the NewHealthyResultAt factory with explicit timestamp.
+//
+// Params:
+//   - t: the testing context.
+func TestNewHealthyResultAt(t *testing.T) {
+	tests := []struct {
+		name      string
+		message   string
+		duration  time.Duration
+		timestamp time.Time
+	}{
+		{
+			name:      "specific_timestamp",
+			message:   "check passed",
+			duration:  100 * time.Millisecond,
+			timestamp: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+		},
+		{
+			name:      "past_timestamp",
+			message:   "health check succeeded",
+			duration:  5 * time.Second,
+			timestamp: time.Date(2020, 6, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:      "zero_timestamp",
+			message:   "instant check",
+			duration:  0,
+			timestamp: time.Time{},
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create result with explicit timestamp.
+			result := health.NewHealthyResultAt(tt.message, tt.duration, tt.timestamp)
+
+			// Assert all fields match expected values.
+			assert.Equal(t, health.StatusHealthy, result.Status)
+			assert.Equal(t, tt.message, result.Message)
+			assert.Equal(t, tt.duration, result.Duration)
+			assert.Equal(t, tt.timestamp, result.Timestamp)
+			assert.Nil(t, result.Error)
+		})
+	}
+}
+
+// TestNewUnhealthyResultAt tests the NewUnhealthyResultAt factory with explicit timestamp.
+//
+// Params:
+//   - t: the testing context.
+func TestNewUnhealthyResultAt(t *testing.T) {
+	tests := []struct {
+		name      string
+		message   string
+		duration  time.Duration
+		err       error
+		timestamp time.Time
+	}{
+		{
+			name:      "specific_timestamp",
+			message:   "check failed",
+			duration:  5 * time.Second,
+			err:       errors.New("connection refused"),
+			timestamp: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+		},
+		{
+			name:      "past_timestamp",
+			message:   "health check timed out",
+			duration:  30 * time.Second,
+			err:       errors.New("timeout"),
+			timestamp: time.Date(2020, 6, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:      "nil_error_with_timestamp",
+			message:   "unhealthy without error",
+			duration:  100 * time.Millisecond,
+			err:       nil,
+			timestamp: time.Date(2023, 12, 25, 12, 0, 0, 0, time.UTC),
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create result with explicit timestamp.
+			result := health.NewUnhealthyResultAt(tt.message, tt.duration, tt.err, tt.timestamp)
+
+			// Assert all fields match expected values.
+			assert.Equal(t, health.StatusUnhealthy, result.Status)
+			assert.Equal(t, tt.message, result.Message)
+			assert.Equal(t, tt.duration, result.Duration)
+			assert.Equal(t, tt.timestamp, result.Timestamp)
+			assert.Equal(t, tt.err, result.Error)
+		})
+	}
+}
+
 // TestResult_Fields tests direct field access on Result struct.
 //
 // Params:

@@ -70,6 +70,32 @@ func TestNewUnixExecutorWithKernel(t *testing.T) {
 	}
 }
 
+// TestNewUnixExecutorWithOptions tests the NewUnixExecutorWithOptions constructor.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestNewUnixExecutorWithOptions(t *testing.T) {
+	// Define test cases for NewUnixExecutorWithOptions.
+	tests := []struct {
+		name string
+	}{
+		{name: "returns non-nil executor with custom options"},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			executor := process.NewUnixExecutorWithOptions(nil, nil)
+			// Verify executor is not nil.
+			assert.NotNil(t, executor, "NewUnixExecutorWithOptions should return a non-nil instance")
+		})
+	}
+}
+
 // TestUnixExecutor_Start tests the Start method with valid commands.
 //
 // Params:

@@ -14,7 +14,7 @@ import (
 )
 
 // errWriteFailed is an error returned when a mock writer fails.
-var errWriteFailed = errors.New("write failed")
+var errWriteFailed error = errors.New("write failed")
 
 // failingWriter is a mock writer that fails on write.
 type failingWriter struct {

@@ -7,7 +7,7 @@ Use case implementations coordinating domain and infrastructure.
 ```
 application/
 ├── config/       # Configuration port interface
-├── health/       # Health monitoring orchestration
+├── health/       # Health monitoring with ProbeMonitor
 ├── process/      # Process lifecycle management
 └── supervisor/   # Service orchestration
 ```
@@ -17,7 +17,7 @@ application/
 | Package | Role |
 |---------|------|
 | `config` | Loader interface (port) |
-| `health` | HealthMonitor coordinates checks |
+| `health` | ProbeMonitor coordinates listener probes |
 | `process` | ProcessManager handles lifecycle |
 | `supervisor` | Supervisor orchestrates services |
 
@@ -31,5 +31,6 @@ application/
 
 - `Supervisor` - Main service orchestrator
 - `ProcessManager` - Per-service process management
-- `HealthMonitor` - Periodic health checking
+- `ProbeMonitor` - Multi-protocol health probing
+- `Creator` - Port for creating probers
 - `Loader` - Config loading interface

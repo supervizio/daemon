@@ -8,21 +8,23 @@ Private internal packages following hexagonal architecture.
 internal/
 ├── application/          # Application layer (use cases)
 │   ├── config/           # Configuration port interface
-│   ├── health/           # Health monitoring orchestration
+│   ├── health/           # Health monitoring with ProbeMonitor
 │   ├── process/          # Process lifecycle management
 │   └── supervisor/       # Service orchestration
 ├── domain/               # Domain layer (entities, ports)
-│   ├── health/           # Health check entities
+│   ├── health/           # Health status, aggregation
+│   ├── listener/         # Network listener entities
+│   ├── probe/            # Prober port, Target, Result, Config
 │   ├── process/          # Process entities and ports
 │   ├── service/          # Service configuration entities
 │   └── shared/           # Shared value objects (Duration, Size)
 └── infrastructure/       # Infrastructure layer (adapters)
     ├── config/yaml/      # YAML configuration loader
-    ├── health/           # Health check adapters (HTTP, TCP, cmd)
     ├── kernel/           # OS abstraction layer
     │   ├── adapters/     # Platform-specific implementations
     │   └── ports/        # Kernel interfaces
     ├── logging/          # Log management (writers, capture, rotation)
+    ├── probe/            # Protocol probers (TCP, UDP, HTTP, gRPC, Exec, ICMP)
     └── process/          # Process executor adapter
 ```
 
@@ -32,16 +34,18 @@ internal/
 |-------|---------|------|
 | Application | `supervisor` | Service lifecycle orchestration |
 | Application | `process` | Process manager with restart logic |
-| Application | `health` | Health monitor coordination |
+| Application | `health` | ProbeMonitor - health orchestration |
 | Application | `config` | Configuration port interface |
 | Domain | `service` | Service configuration entities |
 | Domain | `process` | Process entities, states, events |
-| Domain | `health` | Health status, results, events |
+| Domain | `health` | Health status, AggregatedHealth |
+| Domain | `listener` | Listener entity, state machine |
+| Domain | `probe` | Prober port, Target, Result |
 | Domain | `shared` | Duration, Size value objects |
 | Infrastructure | `config/yaml` | YAML file parsing |
-| Infrastructure | `health` | HTTP, TCP, command checkers |
 | Infrastructure | `kernel` | OS abstraction (signals, reaper) |
 | Infrastructure | `logging` | Writers, capture, rotation |
+| Infrastructure | `probe` | TCP, UDP, HTTP, gRPC, Exec, ICMP probers |
 | Infrastructure | `process` | Unix process executor |
 
 ## Dependency Rules
@@ -50,9 +54,9 @@ internal/
 application ──→ domain ←── infrastructure
      │              │           │
      │              │           ├── config/yaml
-     │              │           ├── health
      │              │           ├── kernel
      │              │           ├── logging
+     │              │           ├── probe
      │              │           └── process
      │              │
      └──────────────┘
@@ -62,7 +66,7 @@ application ──→ domain ←── infrastructure
 - Application depends on Domain (never reverse)
 - Infrastructure implements Domain ports
 - Application ports (config.Loader) = bootstrap/orchestration concerns
-- Domain ports (Executor, Checker) = business needs
+- Domain ports (Executor, Prober) = business needs
 - No circular dependencies
 
 ## Testing Strategy
