@@ -83,8 +83,8 @@ func (h *AggregatedHealth) SetLatency(latency time.Duration) {
 //   - Status: the computed listener status.
 func (h *AggregatedHealth) computeListenerStatus() Status {
 	// No listeners configured means no listener-based health concerns.
-	// Return healthy since there are no listeners to fail.
 	if len(h.Listeners) == 0 {
+		// Return healthy since there are no listeners to fail.
 		return StatusHealthy
 	}
 

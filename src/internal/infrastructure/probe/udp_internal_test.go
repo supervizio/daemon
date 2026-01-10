@@ -363,3 +363,75 @@ func (e *timeoutError) Temporary() bool {
 	// This is not a temporary error.
 	return false
 }
+
+// Test_UDPProber_calculateDeadline tests the internal calculateDeadline method.
+func Test_UDPProber_calculateDeadline(t *testing.T) {
+	tests := []struct {
+		name            string
+		timeout         time.Duration
+		contextTimeout  time.Duration
+		useContext      bool
+		expectUseProber bool
+	}{
+		{
+			name:            "prober_timeout_only",
+			timeout:         5 * time.Second,
+			useContext:      false,
+			expectUseProber: true,
+		},
+		{
+			name:            "zero_prober_timeout_uses_default",
+			timeout:         0,
+			useContext:      false,
+			expectUseProber: false,
+		},
+		{
+			name:            "context_deadline_earlier",
+			timeout:         10 * time.Second,
+			contextTimeout:  2 * time.Second,
+			useContext:      true,
+			expectUseProber: false,
+		},
+		{
+			name:            "prober_deadline_earlier",
+			timeout:         1 * time.Second,
+			contextTimeout:  10 * time.Second,
+			useContext:      true,
+			expectUseProber: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create UDP prober with specified timeout.
+			prober := NewUDPProber(tt.timeout)
+
+			// Create context.
+			var ctx context.Context
+			var cancel context.CancelFunc
+			// Configure context deadline when needed.
+			if tt.useContext && tt.contextTimeout > 0 {
+				// Create context with deadline.
+				ctx, cancel = context.WithTimeout(context.Background(), tt.contextTimeout)
+				defer cancel()
+			} else {
+				// Use background context.
+				ctx = context.Background()
+			}
+
+			now := time.Now()
+			deadline := prober.calculateDeadline(ctx)
+
+			// Verify deadline is in the future.
+			assert.True(t, deadline.After(now))
+
+			// Verify deadline is reasonable based on expectations.
+			if tt.expectUseProber && tt.timeout > 0 {
+				// Expect deadline to be close to prober timeout.
+				expectedDeadline := now.Add(tt.timeout)
+				// Allow 100ms tolerance for execution time.
+				assert.WithinDuration(t, expectedDeadline, deadline, 100*time.Millisecond)
+			}
+		})
+	}
+}

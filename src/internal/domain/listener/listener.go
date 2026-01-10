@@ -177,14 +177,14 @@ func (l *Listener) ProbeAddress() string {
 
 	// Check if address is non-routable and needs normalization.
 	switch addr {
+	// Empty address defaults to IPv4 loopback.
 	case "":
-		// Empty address defaults to IPv4 loopback.
 		addr = "127.0.0.1"
+	// IPv4 any-address defaults to IPv4 loopback.
 	case "0.0.0.0":
-		// IPv4 any-address defaults to IPv4 loopback.
 		addr = "127.0.0.1"
+	// IPv6 any-address defaults to IPv6 loopback.
 	case "::":
-		// IPv6 any-address defaults to IPv6 loopback.
 		addr = "::1"
 	}
 

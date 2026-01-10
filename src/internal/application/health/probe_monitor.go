@@ -4,6 +4,7 @@ package health
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -88,39 +89,17 @@ func (m *ProbeMonitor) AddListener(l *listener.Listener) error {
 	// Check if listener has probe configuration.
 	if !l.HasProbe() {
 		// Add listener without prober.
-		m.listeners = append(m.listeners, &ListenerProbe{
-			Listener: l,
-		})
-		// Return nil since listener was added successfully without probe.
+		m.listeners = append(m.listeners, &ListenerProbe{Listener: l})
+		// Return success for listener without probe.
 		return nil
 	}
 
-	// Check if factory is configured before attempting to create prober.
-	if m.factory == nil {
-		// Return error when factory is missing but probe is configured.
-		return ErrProberFactoryMissing
-	}
-
-	// Validate probe type is not empty before calling factory.
-	if l.ProbeType == "" {
-		// Return error when probe type is missing.
-		return ErrEmptyProbeType
-	}
-
-	// Use effective timeout, falling back to default if not set.
-	timeout := l.ProbeConfig.Timeout
-	// Check if timeout is not configured.
-	if timeout == 0 {
-		// Use default timeout from monitor configuration.
-		timeout = m.defaultTimeout
-	}
-
-	// Create prober for this listener with effective timeout.
-	prober, err := m.factory.Create(l.ProbeType, timeout)
-	// Return error if prober creation fails.
+	// Create prober for listener with probe configuration.
+	prober, err := m.createProber(l)
+	// Check for prober creation failure.
 	if err != nil {
-		// Wrap factory error with listener context.
-		return fmt.Errorf("create prober for listener %q: %w", l.Name, err)
+		// Return prober creation error.
+		return err
 	}
 
 	// Add listener with prober.
@@ -130,9 +109,47 @@ func (m *ProbeMonitor) AddListener(l *listener.Listener) error {
 		Config:   *l.ProbeConfig,
 		Target:   l.ProbeTarget,
 	})
-
-	// Return nil to indicate successful listener addition.
+	// Return success for listener with prober.
 	return nil
+}
+
+// createProber creates a prober for the given listener.
+//
+// Params:
+//   - l: the listener requiring a prober.
+//
+// Returns:
+//   - probe.Prober: the created prober.
+//   - error: if factory is missing, probe type is empty, or creation fails.
+func (m *ProbeMonitor) createProber(l *listener.Listener) (probe.Prober, error) {
+	// Check if factory is configured.
+	if m.factory == nil {
+		// Return error when factory is missing.
+		return nil, ErrProberFactoryMissing
+	}
+
+	// Validate probe type is not empty.
+	if l.ProbeType == "" {
+		// Return error when probe type is missing.
+		return nil, ErrEmptyProbeType
+	}
+
+	// Use effective timeout, falling back to default if not set.
+	timeout := l.ProbeConfig.Timeout
+	// Apply default timeout when not configured.
+	if timeout == 0 {
+		timeout = m.defaultTimeout
+	}
+
+	// Create prober with effective timeout.
+	prober, err := m.factory.Create(l.ProbeType, timeout)
+	// Check for factory creation failure.
+	if err != nil {
+		// Wrap factory error with listener context.
+		return nil, fmt.Errorf("create prober for listener %q: %w", l.Name, err)
+	}
+	// Return successfully created prober.
+	return prober, nil
 }
 
 // SetProcessState updates the process state.
@@ -192,7 +209,7 @@ func (m *ProbeMonitor) Start(ctx context.Context) {
 	m.stopCh = stopCh
 
 	// Snapshot listeners to avoid races with AddListener().
-	listeners := append([]*ListenerProbe(nil), m.listeners...)
+	listeners := slices.Clone(m.listeners)
 	m.mu.Unlock()
 
 	// Start a goroutine for each listener with a prober.
@@ -267,6 +284,7 @@ func (m *ProbeMonitor) runProber(ctx context.Context, stopCh <-chan struct{}, lp
 func (m *ProbeMonitor) performProbe(ctx context.Context, lp *ListenerProbe) {
 	// Guard against nil prober to prevent panic.
 	if lp.Prober == nil {
+		// Skip probe execution when prober is not configured.
 		return
 	}
 
@@ -451,6 +469,7 @@ func (m *ProbeMonitor) sendEventIfChanged(lp *ListenerProbe, ls *domain.Listener
 	if prevState != lp.Listener.State && m.events != nil {
 		// Defensive guard to avoid panics if called before a result is stored.
 		if ls.LastProbeResult == nil {
+			// Skip event when no probe result is available yet.
 			return
 		}
 

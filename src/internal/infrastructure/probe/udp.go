@@ -209,6 +209,7 @@ func (p *UDPProber) calculateDeadline(ctx context.Context) time.Time {
 
 	// Compute prober deadline if configured.
 	var proberDeadline time.Time
+	// Set prober deadline only when timeout is positive.
 	if p.timeout > 0 {
 		proberDeadline = now.Add(p.timeout)
 	}
@@ -217,6 +218,7 @@ func (p *UDPProber) calculateDeadline(ctx context.Context) time.Time {
 	if ctxDeadline, ok := ctx.Deadline(); ok {
 		// Check if prober deadline is earlier than context deadline.
 		if !proberDeadline.IsZero() && proberDeadline.Before(ctxDeadline) {
+			// Return prober deadline as it expires sooner.
 			return proberDeadline
 		}
 		// Return context-provided deadline.
@@ -225,6 +227,7 @@ func (p *UDPProber) calculateDeadline(ctx context.Context) time.Time {
 
 	// Use prober deadline if set.
 	if !proberDeadline.IsZero() {
+		// Return prober-configured deadline.
 		return proberDeadline
 	}
 

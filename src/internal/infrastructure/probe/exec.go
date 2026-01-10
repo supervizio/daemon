@@ -73,6 +73,7 @@ func (p *ExecProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 	// If Args is empty, require Command to be a single executable token.
 	// This avoids incorrect parsing of quoted/escaped arguments.
 	if len(args) == 0 && strings.ContainsAny(command, " \t\n") {
+		// Return failure for unsafe command format requiring explicit args.
 		return probe.NewFailureResult(
 			time.Since(start),
 			"command contains whitespace; provide args explicitly via Args field",

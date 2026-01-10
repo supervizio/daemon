@@ -122,6 +122,7 @@ func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) 
 
 	// Use configured timeout or fall back to default to prevent indefinite hangs.
 	timeout := p.timeout
+	// Apply default timeout when not configured or invalid.
 	if timeout <= 0 {
 		timeout = probe.DefaultTimeout
 	}
