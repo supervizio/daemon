@@ -75,12 +75,19 @@ func (h *AggregatedHealth) SetLatency(latency time.Duration) {
 }
 
 // computeListenerStatus determines the health status based on listener states.
-// It returns StatusHealthy if all listeners are ready, StatusDegraded if some
-// are listening but not all ready, and StatusUnhealthy if none are listening.
+// It returns StatusHealthy if all listeners are ready (or no listeners exist),
+// StatusDegraded if some are listening but not all ready, and StatusUnhealthy
+// if none are listening.
 //
 // Returns:
 //   - Status: the computed listener status.
 func (h *AggregatedHealth) computeListenerStatus() Status {
+	// No listeners configured means no listener-based health concerns.
+	// Return healthy since there are no listeners to fail.
+	if len(h.Listeners) == 0 {
+		return StatusHealthy
+	}
+
 	// Check if all listeners are ready.
 	allReady := h.AllListenersReady()
 

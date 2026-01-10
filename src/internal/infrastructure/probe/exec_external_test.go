@@ -96,12 +96,12 @@ func TestExecProber_Probe(t *testing.T) {
 			expectSuccess: true,
 		},
 		{
-			name: "successful_command_with_args_in_command",
+			name: "failure_command_with_whitespace_requires_args",
 			target: domainprobe.Target{
 				Command: "echo hello world",
 			},
 			timeout:       time.Second,
-			expectSuccess: true,
+			expectSuccess: false,
 		},
 		{
 			name: "failure_false_command",

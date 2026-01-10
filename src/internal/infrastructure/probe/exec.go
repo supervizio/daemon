@@ -70,26 +70,14 @@ func (p *ExecProber) Probe(ctx context.Context, target probe.Target) probe.Resul
 	command := target.Command
 	args := target.Args
 
-	// Check if args need to be parsed from command string.
-	if len(args) == 0 {
-		// Split command line into parts to separate command from arguments.
-		parts := strings.Fields(command)
-		// Check if splitting resulted in empty parts.
-		if len(parts) == 0 {
-			// Return failure for whitespace-only command.
-			return probe.NewFailureResult(
-				time.Since(start),
-				"empty command",
-				probe.ErrEmptyCommand,
-			)
-		}
-		// First part is the command, rest are args.
-		command = parts[0]
-		// Check if there are additional arguments after the command.
-		if len(parts) > 1 {
-			// Extract remaining parts as arguments.
-			args = parts[1:]
-		}
+	// If Args is empty, require Command to be a single executable token.
+	// This avoids incorrect parsing of quoted/escaped arguments.
+	if len(args) == 0 && strings.ContainsAny(command, " \t\n") {
+		return probe.NewFailureResult(
+			time.Since(start),
+			"command contains whitespace; provide args explicitly via Args field",
+			probe.ErrEmptyCommand,
+		)
 	}
 
 	// Execute the command and return result.

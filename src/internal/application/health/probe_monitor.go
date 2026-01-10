@@ -3,6 +3,7 @@ package health
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -100,6 +101,12 @@ func (m *ProbeMonitor) AddListener(l *listener.Listener) error {
 		return ErrProberFactoryMissing
 	}
 
+	// Validate probe type is not empty before calling factory.
+	if l.ProbeType == "" {
+		// Return error when probe type is missing.
+		return ErrEmptyProbeType
+	}
+
 	// Use effective timeout, falling back to default if not set.
 	timeout := l.ProbeConfig.Timeout
 	// Check if timeout is not configured.
@@ -112,8 +119,8 @@ func (m *ProbeMonitor) AddListener(l *listener.Listener) error {
 	prober, err := m.factory.Create(l.ProbeType, timeout)
 	// Return error if prober creation fails.
 	if err != nil {
-		// Propagate factory error to caller.
-		return err
+		// Wrap factory error with listener context.
+		return fmt.Errorf("create prober for listener %q: %w", l.Name, err)
 	}
 
 	// Add listener with prober.
@@ -258,6 +265,11 @@ func (m *ProbeMonitor) runProber(ctx context.Context, stopCh <-chan struct{}, lp
 //   - ctx: parent context.
 //   - lp: the listener probe to use.
 func (m *ProbeMonitor) performProbe(ctx context.Context, lp *ListenerProbe) {
+	// Guard against nil prober to prevent panic.
+	if lp.Prober == nil {
+		return
+	}
+
 	timeout := lp.Config.Timeout
 	// Use default timeout when not specified in config.
 	if timeout == 0 {
@@ -437,6 +449,11 @@ func (m *ProbeMonitor) findOrCreateListenerStatus(lp *ListenerProbe) *domain.Lis
 func (m *ProbeMonitor) sendEventIfChanged(lp *ListenerProbe, ls *domain.ListenerStatus, prevState listener.State, result probe.Result) {
 	// Check if state changed and events channel is available.
 	if prevState != lp.Listener.State && m.events != nil {
+		// Defensive guard to avoid panics if called before a result is stored.
+		if ls.LastProbeResult == nil {
+			return
+		}
+
 		event := domain.NewEvent(lp.Listener.Name, m.resultToStatus(result), *ls.LastProbeResult)
 
 		// Non-blocking send to avoid deadlocks.

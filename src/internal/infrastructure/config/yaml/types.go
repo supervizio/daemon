@@ -343,15 +343,15 @@ func (p *ProbeDTO) getThresholdDefaults() (successThreshold, failureThreshold in
 func (p *ProbeDTO) getTimingDefaults() (interval, timeout time.Duration) {
 	// Apply default for interval.
 	interval = time.Duration(p.Interval)
-	// Use default probe interval when not configured.
-	if interval == 0 {
+	// Use default probe interval when not configured or invalid.
+	if interval <= 0 {
 		interval = defaultProbeInterval
 	}
 
 	// Apply default for timeout.
 	timeout = time.Duration(p.Timeout)
-	// Use default probe timeout when not configured.
-	if timeout == 0 {
+	// Use default probe timeout when not configured or invalid.
+	if timeout <= 0 {
 		timeout = defaultProbeTimeout
 	}
 

@@ -205,20 +205,31 @@ func (p *UDPProber) dialUDP(ctx context.Context, target probe.Target, start time
 // Returns:
 //   - time.Time: the calculated deadline.
 func (p *UDPProber) calculateDeadline(ctx context.Context) time.Time {
-	// Use prober timeout if positive.
+	now := time.Now()
+
+	// Compute prober deadline if configured.
+	var proberDeadline time.Time
 	if p.timeout > 0 {
-		// Return deadline based on configured timeout.
-		return time.Now().Add(p.timeout)
+		proberDeadline = now.Add(p.timeout)
 	}
 
-	// Use context deadline if available.
+	// Prefer the earliest deadline between prober timeout and context deadline.
 	if ctxDeadline, ok := ctx.Deadline(); ok {
+		// Check if prober deadline is earlier than context deadline.
+		if !proberDeadline.IsZero() && proberDeadline.Before(ctxDeadline) {
+			return proberDeadline
+		}
 		// Return context-provided deadline.
 		return ctxDeadline
 	}
 
-	// Fall back to default timeout.
-	return time.Now().Add(probe.DefaultTimeout)
+	// Use prober deadline if set.
+	if !proberDeadline.IsZero() {
+		return proberDeadline
+	}
+
+	// Fall back to default timeout when neither is set.
+	return now.Add(probe.DefaultTimeout)
 }
 
 // sendAndReceive sends the probe packet and reads the response.

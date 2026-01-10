@@ -137,7 +137,7 @@ func TestTCPProber_Probe(t *testing.T) {
 		{
 			name: "timeout_on_unreachable",
 			target: domainprobe.Target{
-				Address: "10.255.255.1:80",
+				Address: "192.0.2.1:80",
 			},
 			timeout:       50 * time.Millisecond,
 			expectSuccess: false,
@@ -189,7 +189,7 @@ func TestTCPProber_Probe_ContextCancellation(t *testing.T) {
 
 			// Create target for unreachable address.
 			target := domainprobe.Target{
-				Address: "10.255.255.1:80",
+				Address: "192.0.2.1:80",
 			}
 
 			// Probe should fail due to cancelled context.
