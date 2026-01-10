@@ -316,16 +316,16 @@ func (p *ProbeDTO) ToDomain() service.ProbeConfig {
 // Returns:
 //   - int: success threshold (default 1).
 //   - int: failure threshold (default 3).
-func (p *ProbeDTO) getThresholdDefaults() (int, int) {
+func (p *ProbeDTO) getThresholdDefaults() (successThreshold, failureThreshold int) {
 	// Apply default for success threshold.
-	successThreshold := p.SuccessThreshold
+	successThreshold = p.SuccessThreshold
 	// Require at least one success to mark healthy when not configured or invalid.
 	if successThreshold <= 0 {
 		successThreshold = 1
 	}
 
 	// Apply default for failure threshold.
-	failureThreshold := p.FailureThreshold
+	failureThreshold = p.FailureThreshold
 	// Allow three failures before marking unhealthy when not configured or invalid.
 	if failureThreshold <= 0 {
 		failureThreshold = defaultFailureThreshold
@@ -340,16 +340,16 @@ func (p *ProbeDTO) getThresholdDefaults() (int, int) {
 // Returns:
 //   - time.Duration: interval (default 10s).
 //   - time.Duration: timeout (default 5s).
-func (p *ProbeDTO) getTimingDefaults() (time.Duration, time.Duration) {
+func (p *ProbeDTO) getTimingDefaults() (interval, timeout time.Duration) {
 	// Apply default for interval.
-	interval := time.Duration(p.Interval)
+	interval = time.Duration(p.Interval)
 	// Use default probe interval when not configured.
 	if interval == 0 {
 		interval = defaultProbeInterval
 	}
 
 	// Apply default for timeout.
-	timeout := time.Duration(p.Timeout)
+	timeout = time.Duration(p.Timeout)
 	// Use default probe timeout when not configured.
 	if timeout == 0 {
 		timeout = defaultProbeTimeout
@@ -364,16 +364,16 @@ func (p *ProbeDTO) getTimingDefaults() (time.Duration, time.Duration) {
 // Returns:
 //   - string: HTTP method (default "GET").
 //   - int: expected status code (default 200).
-func (p *ProbeDTO) getHTTPDefaults() (string, int) {
+func (p *ProbeDTO) getHTTPDefaults() (method string, statusCode int) {
 	// Apply default method.
-	method := p.Method
+	method = p.Method
 	// Use GET as the standard HTTP method for health probes when not specified.
 	if method == "" {
 		method = "GET"
 	}
 
 	// Apply default status code.
-	statusCode := p.StatusCode
+	statusCode = p.StatusCode
 	// Expect HTTP 200 OK as the healthy response when not specified.
 	if statusCode == 0 {
 		statusCode = defaultHTTPStatusCode

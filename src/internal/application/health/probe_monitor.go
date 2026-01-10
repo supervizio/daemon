@@ -318,9 +318,9 @@ func (m *ProbeMonitor) updateProbeResult(lp *ListenerProbe, result probe.Result)
 // Returns:
 //   - int: normalized success threshold (minimum 1).
 //   - int: normalized failure threshold (minimum 1).
-func (m *ProbeMonitor) normalizeThresholds(config probe.Config) (int, int) {
+func (m *ProbeMonitor) normalizeThresholds(config probe.Config) (successThreshold, failureThreshold int) {
 	// Default to 1 for zero or negative success threshold.
-	successThreshold := config.SuccessThreshold
+	successThreshold = config.SuccessThreshold
 	// Check if success threshold needs normalization.
 	if successThreshold <= 0 {
 		// Use minimum of 1 for unset threshold.
@@ -328,7 +328,7 @@ func (m *ProbeMonitor) normalizeThresholds(config probe.Config) (int, int) {
 	}
 
 	// Default to 1 for zero or negative failure threshold.
-	failureThreshold := config.FailureThreshold
+	failureThreshold = config.FailureThreshold
 	// Check if failure threshold needs normalization.
 	if failureThreshold <= 0 {
 		// Use minimum of 1 for unset threshold.
