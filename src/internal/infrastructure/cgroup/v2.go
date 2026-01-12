@@ -54,7 +54,7 @@ func detectCurrentCgroup() (string, error) {
 		}
 	}
 
-	return DefaultCgroupPath, nil
+	return "", ErrPathNotFound
 }
 
 // CPUUsage returns the total CPU usage in microseconds.

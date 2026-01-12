@@ -266,3 +266,29 @@ func TestNewV2Reader_InvalidPath(t *testing.T) {
 	_, err := cgroup.NewV2Reader("/nonexistent/path/that/should/not/exist")
 	assert.Error(t, err)
 }
+
+func TestReader_Interface(t *testing.T) {
+	t.Parallel()
+
+	mockCgroup := t.TempDir()
+
+	// V2Reader should implement Reader interface
+	reader, err := cgroup.NewV2Reader(mockCgroup)
+	require.NoError(t, err)
+
+	// Verify interface compliance
+	var _ cgroup.Reader = reader
+	assert.Equal(t, mockCgroup, reader.Path())
+}
+
+func TestErrors(t *testing.T) {
+	t.Parallel()
+
+	assert.Error(t, cgroup.ErrV1NotSupported)
+	assert.Error(t, cgroup.ErrUnknownVersion)
+	assert.Error(t, cgroup.ErrPathNotFound)
+
+	assert.Contains(t, cgroup.ErrV1NotSupported.Error(), "v1")
+	assert.Contains(t, cgroup.ErrUnknownVersion.Error(), "unknown")
+	assert.Contains(t, cgroup.ErrPathNotFound.Error(), "not found")
+}

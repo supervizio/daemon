@@ -4,8 +4,10 @@
 package cgroup
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Version represents the cgroup version.
@@ -87,24 +89,38 @@ func IsContainerized() bool {
 
 	content := string(data)
 	// Docker/containerd typically have paths like /docker/<id> or /kubepods/<id>
-	return len(content) > 0 && (contains(content, "/docker/") ||
-		contains(content, "/kubepods/") ||
-		contains(content, "/lxc/") ||
-		contains(content, "/containerd/"))
+	return len(content) > 0 && (strings.Contains(content, "/docker/") ||
+		strings.Contains(content, "/kubepods/") ||
+		strings.Contains(content, "/lxc/") ||
+		strings.Contains(content, "/containerd/"))
 }
 
-// contains is a simple string contains check.
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchString(s, substr) >= 0
+// Reader is the interface for reading cgroup metrics.
+type Reader interface {
+	CPUUsage(ctx context.Context) (uint64, error)
+	CPULimit(ctx context.Context) (quota, period uint64, err error)
+	MemoryUsage(ctx context.Context) (uint64, error)
+	MemoryLimit(ctx context.Context) (uint64, error)
+	Path() string
 }
 
-// searchString finds substr in s.
-func searchString(s, substr string) int {
-	n := len(substr)
-	for i := 0; i+n <= len(s); i++ {
-		if s[i:i+n] == substr {
-			return i
-		}
+// NewReader creates a cgroup reader based on the detected version.
+// Returns an error if the cgroup version is not supported.
+func NewReader() (Reader, error) {
+	return NewReaderWithPath("")
+}
+
+// NewReaderWithPath creates a cgroup reader for the specified path.
+// If path is empty, it auto-detects the current cgroup.
+func NewReaderWithPath(path string) (Reader, error) {
+	version := Detect()
+	switch version {
+	case VersionV2, VersionHybrid:
+		return NewV2Reader(path)
+	case VersionV1:
+		return nil, ErrV1NotSupported
+	case VersionUnknown:
+		return nil, ErrUnknownVersion
 	}
-	return -1
+	return nil, ErrUnknownVersion
 }
