@@ -1,0 +1,171 @@
+// Copyright 2024 supervizio. All rights reserved.
+// Protocol buffer definitions for daemon and service state.
+
+syntax = "proto3";
+
+package daemon.v1;
+
+option go_package = "github.com/kodflow/daemon/api/proto/v1/daemon;daemonpb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+// DaemonState represents the overall state of the daemon.
+enum DaemonState {
+  DAEMON_STATE_UNSPECIFIED = 0;
+  DAEMON_STATE_STARTING = 1;
+  DAEMON_STATE_RUNNING = 2;
+  DAEMON_STATE_STOPPING = 3;
+  DAEMON_STATE_STOPPED = 4;
+}
+
+// HealthStatus represents the health status.
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_STATUS_HEALTHY = 1;
+  HEALTH_STATUS_UNHEALTHY = 2;
+  HEALTH_STATUS_DEGRADED = 3;
+  HEALTH_STATUS_UNKNOWN = 4;
+}
+
+// HostInfo contains information about the host machine.
+message HostInfo {
+  // Hostname.
+  string hostname = 1;
+  // Operating system (e.g., "linux", "darwin", "freebsd").
+  string os = 2;
+  // Architecture (e.g., "amd64", "arm64").
+  string arch = 3;
+  // Kernel version.
+  string kernel_version = 4;
+  // Number of CPU cores.
+  int32 cpu_count = 5;
+  // Total memory in bytes.
+  uint64 memory_total = 6;
+  // Host boot time.
+  google.protobuf.Timestamp boot_time = 7;
+}
+
+// DaemonInfo contains information about the daemon instance.
+message DaemonInfo {
+  // Daemon version.
+  string version = 1;
+  // Git commit hash.
+  string commit = 2;
+  // Build timestamp.
+  google.protobuf.Timestamp build_time = 3;
+  // Daemon process ID.
+  int32 pid = 4;
+  // Is running as PID 1.
+  bool is_pid1 = 5;
+  // Configuration file path.
+  string config_path = 6;
+  // Daemon start time.
+  google.protobuf.Timestamp start_time = 7;
+  // Current daemon state.
+  DaemonState state = 8;
+}
+
+// ServiceState represents the state of a managed service.
+message ServiceState {
+  // Service name.
+  string name = 1;
+  // Current process ID (0 if not running).
+  int32 pid = 2;
+  // Service state.
+  string state = 3;
+  // Health status.
+  HealthStatus health_status = 4;
+  // Health message.
+  string health_message = 5;
+  // Service uptime.
+  google.protobuf.Duration uptime = 6;
+  // Restart count.
+  int32 restart_count = 7;
+  // Last state change time.
+  google.protobuf.Timestamp last_state_change = 8;
+  // Listeners managed by this service.
+  repeated ListenerState listeners = 9;
+}
+
+// ListenerState represents the state of a network listener.
+message ListenerState {
+  // Listener address.
+  string address = 1;
+  // Network type (tcp, udp).
+  string network = 2;
+  // Current state.
+  string state = 3;
+  // Last probe result.
+  ProbeResult last_probe = 4;
+}
+
+// ProbeResult represents the result of a health probe.
+message ProbeResult {
+  // Probe succeeded.
+  bool success = 1;
+  // Probe latency.
+  google.protobuf.Duration latency = 2;
+  // Probe output/message.
+  string output = 3;
+  // Error message (if failed).
+  string error = 4;
+  // When the probe was performed.
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+// StateSnapshot represents a complete state snapshot.
+message StateSnapshot {
+  // Host information.
+  HostInfo host = 1;
+  // Daemon information.
+  DaemonInfo daemon = 2;
+  // Service states.
+  repeated ServiceState services = 3;
+  // Overall health status.
+  HealthStatus overall_health = 4;
+  // Snapshot timestamp.
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+// GetStateRequest requests current state.
+message GetStateRequest {
+  // Include host information.
+  bool include_host = 1;
+  // Include daemon information.
+  bool include_daemon = 2;
+  // Include service states.
+  bool include_services = 3;
+  // Filter services by name (empty = all).
+  repeated string service_filter = 4;
+}
+
+// GetStateResponse contains the requested state.
+message GetStateResponse {
+  // State snapshot.
+  StateSnapshot state = 1;
+}
+
+// StreamStateRequest configures state streaming.
+message StreamStateRequest {
+  // Interval between updates.
+  google.protobuf.Duration interval = 1;
+  // Include host information.
+  bool include_host = 2;
+  // Include daemon information.
+  bool include_daemon = 3;
+  // Include service states.
+  bool include_services = 4;
+  // Filter services by name (empty = all).
+  repeated string service_filter = 5;
+}
+
+// StateUpdate represents a state change update.
+message StateUpdate {
+  // Changed services only (delta update).
+  repeated ServiceState services = 1;
+  // Overall health status.
+  HealthStatus overall_health = 2;
+  // Update timestamp.
+  google.protobuf.Timestamp timestamp = 3;
+}

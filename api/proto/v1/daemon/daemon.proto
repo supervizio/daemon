@@ -1,0 +1,96 @@
+// Copyright 2024 supervizio. All rights reserved.
+// Protocol buffer definitions for the daemon gRPC API.
+
+syntax = "proto3";
+
+package daemon.v1;
+
+option go_package = "github.com/kodflow/daemon/api/proto/v1/daemon;daemonpb";
+
+import "api/proto/v1/daemon/metrics.proto";
+import "api/proto/v1/daemon/events.proto";
+import "api/proto/v1/daemon/state.proto";
+import "api/proto/v1/daemon/topology.proto";
+import "api/proto/v1/daemon/kubernetes.proto";
+import "api/proto/v1/daemon/permissions.proto";
+
+// MetricsService provides metrics collection and streaming.
+service MetricsService {
+  // GetMetrics returns a snapshot of current metrics.
+  rpc GetMetrics(GetMetricsRequest) returns (GetMetricsResponse);
+
+  // StreamMetrics streams metrics updates at the configured interval.
+  rpc StreamMetrics(StreamMetricsRequest) returns (stream MetricsUpdate);
+}
+
+// EventsService provides event streaming and history.
+service EventsService {
+  // ListEvents returns historical events.
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+
+  // StreamEvents streams events in real-time.
+  rpc StreamEvents(StreamEventsRequest) returns (stream Event);
+}
+
+// StateService provides daemon and service state information.
+service StateService {
+  // GetState returns the current state snapshot.
+  rpc GetState(GetStateRequest) returns (GetStateResponse);
+
+  // StreamState streams state updates.
+  rpc StreamState(StreamStateRequest) returns (stream StateUpdate);
+}
+
+// TopologyService provides mesh topology information.
+service TopologyService {
+  // GetTopology returns the current mesh topology.
+  rpc GetTopology(GetTopologyRequest) returns (GetTopologyResponse);
+
+  // StreamTopology streams topology updates.
+  rpc StreamTopology(StreamTopologyRequest) returns (stream TopologyUpdate);
+
+  // RegisterNode registers a node with the mesh.
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+
+  // Heartbeat sends a heartbeat to the mesh.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+// KubernetesService provides Kubernetes resource discovery.
+service KubernetesService {
+  // ListPods lists pods matching the criteria.
+  rpc ListPods(ListPodsRequest) returns (ListPodsResponse);
+
+  // GetPod returns a specific pod.
+  rpc GetPod(GetPodRequest) returns (GetPodResponse);
+
+  // WatchPods watches for pod changes.
+  rpc WatchPods(WatchPodsRequest) returns (stream PodEvent);
+
+  // ListServices lists services matching the criteria.
+  rpc ListServices(ListServicesRequest) returns (ListServicesResponse);
+
+  // GetService returns a specific service.
+  rpc GetService(GetServiceRequest) returns (GetServiceResponse);
+
+  // ListNamespaces lists namespaces.
+  rpc ListNamespaces(ListNamespacesRequest) returns (ListNamespacesResponse);
+}
+
+// PermissionsService provides Kubernetes RBAC checking and generation.
+service PermissionsService {
+  // CheckPermission checks a single permission.
+  rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse);
+
+  // CheckPermissionSet checks multiple permissions.
+  rpc CheckPermissionSet(CheckPermissionSetRequest) returns (CheckPermissionSetResponse);
+
+  // GetRequiredPermissions returns required permissions for features.
+  rpc GetRequiredPermissions(GetRequiredPermissionsRequest) returns (GetRequiredPermissionsResponse);
+
+  // GenerateRBAC generates RBAC YAML for the daemon.
+  rpc GenerateRBAC(GenerateRBACRequest) returns (GenerateRBACResponse);
+
+  // GetRBACStatus returns current RBAC authorization status.
+  rpc GetRBACStatus(GetRBACStatusRequest) returns (GetRBACStatusResponse);
+}

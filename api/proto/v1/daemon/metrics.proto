@@ -1,0 +1,183 @@
+// Copyright 2024 supervizio. All rights reserved.
+// Protocol buffer definitions for metrics.
+
+syntax = "proto3";
+
+package daemon.v1;
+
+option go_package = "github.com/kodflow/daemon/api/proto/v1/daemon;daemonpb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+// SystemCPU represents system-wide CPU metrics.
+message SystemCPU {
+  // User mode CPU time in jiffies.
+  uint64 user = 1;
+  // Nice (low priority user mode) CPU time in jiffies.
+  uint64 nice = 2;
+  // System (kernel) mode CPU time in jiffies.
+  uint64 system = 3;
+  // Idle CPU time in jiffies.
+  uint64 idle = 4;
+  // I/O wait time in jiffies.
+  uint64 io_wait = 5;
+  // Hardware interrupt servicing time in jiffies.
+  uint64 irq = 6;
+  // Software interrupt servicing time in jiffies.
+  uint64 soft_irq = 7;
+  // Stolen time (virtualized environments) in jiffies.
+  uint64 steal = 8;
+  // Guest (virtual CPU) time in jiffies.
+  uint64 guest = 9;
+  // Niced guest time in jiffies.
+  uint64 guest_nice = 10;
+  // Calculated CPU usage percentage (0-100).
+  double usage_percent = 11;
+  // When this sample was taken.
+  google.protobuf.Timestamp timestamp = 12;
+}
+
+// ProcessCPU represents per-process CPU metrics.
+message ProcessCPU {
+  // Process identifier.
+  int32 pid = 1;
+  // Process command name.
+  string name = 2;
+  // User mode CPU time in jiffies.
+  uint64 user = 3;
+  // System (kernel) mode CPU time in jiffies.
+  uint64 system = 4;
+  // User mode CPU time of waited-for children in jiffies.
+  uint64 children_user = 5;
+  // System mode CPU time of waited-for children in jiffies.
+  uint64 children_system = 6;
+  // Process start time (jiffies after system boot).
+  uint64 start_time = 7;
+  // Calculated CPU usage percentage (0-100).
+  double usage_percent = 8;
+  // When this sample was taken.
+  google.protobuf.Timestamp timestamp = 9;
+}
+
+// SystemMemory represents system-wide memory metrics.
+message SystemMemory {
+  // Total physical RAM in bytes.
+  uint64 total = 1;
+  // Memory available for new applications in bytes.
+  uint64 available = 2;
+  // Used memory in bytes (Total - Available).
+  uint64 used = 3;
+  // Free memory in bytes.
+  uint64 free = 4;
+  // Page cache memory in bytes.
+  uint64 cached = 5;
+  // Buffer memory in bytes.
+  uint64 buffers = 6;
+  // Total swap space in bytes.
+  uint64 swap_total = 7;
+  // Used swap space in bytes.
+  uint64 swap_used = 8;
+  // Free swap space in bytes.
+  uint64 swap_free = 9;
+  // Shared memory in bytes.
+  uint64 shared = 10;
+  // Calculated memory usage percentage (0-100).
+  double usage_percent = 11;
+  // When this sample was taken.
+  google.protobuf.Timestamp timestamp = 12;
+}
+
+// ProcessMemory represents per-process memory metrics.
+message ProcessMemory {
+  // Process identifier.
+  int32 pid = 1;
+  // Process command name.
+  string name = 2;
+  // Resident Set Size (physical memory used) in bytes.
+  uint64 rss = 3;
+  // Virtual Memory Size (total virtual memory) in bytes.
+  uint64 vms = 4;
+  // Shared memory in bytes.
+  uint64 shared = 5;
+  // Swap memory used in bytes.
+  uint64 swap = 6;
+  // Data segment size in bytes.
+  uint64 data = 7;
+  // Stack size in bytes.
+  uint64 stack = 8;
+  // Percentage of total system RAM used (0-100).
+  double usage_percent = 9;
+  // When this sample was taken.
+  google.protobuf.Timestamp timestamp = 10;
+}
+
+// ProcessMetrics combines CPU, memory, and state for a process.
+message ProcessMetrics {
+  // Service name this process belongs to.
+  string service_name = 1;
+  // Process identifier.
+  int32 pid = 2;
+  // Process state.
+  ProcessState state = 3;
+  // CPU metrics.
+  ProcessCPU cpu = 4;
+  // Memory metrics.
+  ProcessMemory memory = 5;
+  // Process uptime.
+  google.protobuf.Duration uptime = 6;
+  // Number of times this process has been restarted.
+  int32 restart_count = 7;
+  // When this sample was taken.
+  google.protobuf.Timestamp timestamp = 8;
+}
+
+// ProcessState represents the state of a process.
+enum ProcessState {
+  PROCESS_STATE_UNSPECIFIED = 0;
+  PROCESS_STATE_RUNNING = 1;
+  PROCESS_STATE_STOPPED = 2;
+  PROCESS_STATE_FAILED = 3;
+  PROCESS_STATE_STARTING = 4;
+  PROCESS_STATE_STOPPING = 5;
+}
+
+// MetricsUpdate contains a batch of metrics updates.
+message MetricsUpdate {
+  // System CPU metrics.
+  SystemCPU system_cpu = 1;
+  // System memory metrics.
+  SystemMemory system_memory = 2;
+  // Per-process metrics.
+  repeated ProcessMetrics processes = 3;
+  // Timestamp of this update.
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// StreamMetricsRequest configures metrics streaming.
+message StreamMetricsRequest {
+  // Interval between updates (e.g., "5s").
+  google.protobuf.Duration interval = 1;
+  // Include system-wide metrics.
+  bool include_system = 2;
+  // Include per-process metrics.
+  bool include_processes = 3;
+  // Filter processes by service name (empty = all).
+  repeated string service_filter = 4;
+}
+
+// GetMetricsRequest requests current metrics snapshot.
+message GetMetricsRequest {
+  // Include system-wide metrics.
+  bool include_system = 1;
+  // Include per-process metrics.
+  bool include_processes = 2;
+  // Filter processes by service name (empty = all).
+  repeated string service_filter = 3;
+}
+
+// GetMetricsResponse contains a metrics snapshot.
+message GetMetricsResponse {
+  // Metrics update.
+  MetricsUpdate metrics = 1;
+}
