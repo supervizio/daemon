@@ -97,7 +97,7 @@ func (a *Adapter) initSchema() error {
 }
 
 // WriteSystemCPU persists system CPU metrics.
-func (a *Adapter) WriteSystemCPU(ctx context.Context, m metrics.SystemCPU) error {
+func (a *Adapter) WriteSystemCPU(ctx context.Context, m *metrics.SystemCPU) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func (a *Adapter) WriteSystemCPU(ctx context.Context, m metrics.SystemCPU) error
 }
 
 // WriteSystemMemory persists system memory metrics.
-func (a *Adapter) WriteSystemMemory(ctx context.Context, m metrics.SystemMemory) error {
+func (a *Adapter) WriteSystemMemory(ctx context.Context, m *metrics.SystemMemory) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (a *Adapter) WriteSystemMemory(ctx context.Context, m metrics.SystemMemory)
 }
 
 // WriteProcessMetrics persists process metrics.
-func (a *Adapter) WriteProcessMetrics(ctx context.Context, m metrics.ProcessMetrics) error {
+func (a *Adapter) WriteProcessMetrics(ctx context.Context, m *metrics.ProcessMetrics) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

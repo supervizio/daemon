@@ -13,11 +13,11 @@ import (
 // MetricsStore defines the interface for persisting and querying metrics.
 type MetricsStore interface {
 	// WriteSystemCPU persists system CPU metrics.
-	WriteSystemCPU(ctx context.Context, m metrics.SystemCPU) error
+	WriteSystemCPU(ctx context.Context, m *metrics.SystemCPU) error
 	// WriteSystemMemory persists system memory metrics.
-	WriteSystemMemory(ctx context.Context, m metrics.SystemMemory) error
+	WriteSystemMemory(ctx context.Context, m *metrics.SystemMemory) error
 	// WriteProcessMetrics persists process metrics.
-	WriteProcessMetrics(ctx context.Context, m metrics.ProcessMetrics) error
+	WriteProcessMetrics(ctx context.Context, m *metrics.ProcessMetrics) error
 
 	// GetSystemCPU retrieves system CPU metrics within the time range.
 	GetSystemCPU(ctx context.Context, since, until time.Time) ([]metrics.SystemCPU, error)

@@ -62,7 +62,7 @@ func TestAdapter_WriteAndGetSystemCPU(t *testing.T) {
 		Timestamp: now,
 	}
 
-	err := adapter.WriteSystemCPU(ctx, cpu)
+	err := adapter.WriteSystemCPU(ctx, &cpu)
 	require.NoError(t, err)
 
 	// Get latest
@@ -90,7 +90,7 @@ func TestAdapter_WriteAndGetSystemMemory(t *testing.T) {
 		Timestamp: now,
 	}
 
-	err := adapter.WriteSystemMemory(ctx, mem)
+	err := adapter.WriteSystemMemory(ctx, &mem)
 	require.NoError(t, err)
 
 	// Get latest
@@ -120,7 +120,7 @@ func TestAdapter_WriteAndGetProcessMetrics(t *testing.T) {
 		Timestamp:    now,
 	}
 
-	err := adapter.WriteProcessMetrics(ctx, proc)
+	err := adapter.WriteProcessMetrics(ctx, &proc)
 	require.NoError(t, err)
 
 	// Get latest
@@ -172,7 +172,7 @@ func TestAdapter_MultipleWrites(t *testing.T) {
 			User:      uint64(i * 100),
 			Timestamp: base.Add(time.Duration(i) * time.Second),
 		}
-		err := adapter.WriteSystemCPU(ctx, cpu)
+		err := adapter.WriteSystemCPU(ctx, &cpu)
 		require.NoError(t, err)
 	}
 
@@ -198,8 +198,8 @@ func TestAdapter_Prune(t *testing.T) {
 	oldCPU := metrics.SystemCPU{User: 100, Timestamp: old}
 	newCPU := metrics.SystemCPU{User: 200, Timestamp: recent}
 
-	require.NoError(t, adapter.WriteSystemCPU(ctx, oldCPU))
-	require.NoError(t, adapter.WriteSystemCPU(ctx, newCPU))
+	require.NoError(t, adapter.WriteSystemCPU(ctx, &oldCPU))
+	require.NoError(t, adapter.WriteSystemCPU(ctx, &newCPU))
 
 	// Prune data older than 1 hour
 	deleted, err := adapter.Prune(ctx, time.Hour)
@@ -224,8 +224,8 @@ func TestAdapter_PruneProcessMetrics(t *testing.T) {
 	oldProc := metrics.ProcessMetrics{ServiceName: "svc", PID: 1, Timestamp: old}
 	newProc := metrics.ProcessMetrics{ServiceName: "svc", PID: 2, Timestamp: recent}
 
-	require.NoError(t, adapter.WriteProcessMetrics(ctx, oldProc))
-	require.NoError(t, adapter.WriteProcessMetrics(ctx, newProc))
+	require.NoError(t, adapter.WriteProcessMetrics(ctx, &oldProc))
+	require.NoError(t, adapter.WriteProcessMetrics(ctx, &newProc))
 
 	deleted, err := adapter.Prune(ctx, time.Hour)
 	require.NoError(t, err)
@@ -247,6 +247,6 @@ func TestAdapter_ContextCancellation(t *testing.T) {
 	_, err := adapter.GetSystemCPU(ctx, time.Now(), time.Now())
 	assert.ErrorIs(t, err, context.Canceled)
 
-	err = adapter.WriteSystemCPU(ctx, metrics.SystemCPU{})
+	err = adapter.WriteSystemCPU(ctx, &metrics.SystemCPU{})
 	assert.ErrorIs(t, err, context.Canceled)
 }
