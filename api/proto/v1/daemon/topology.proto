@@ -1,0 +1,163 @@
+// Copyright 2024 supervizio. All rights reserved.
+// Protocol buffer definitions for mesh topology.
+
+syntax = "proto3";
+
+package daemon.v1;
+
+option go_package = "github.com/kodflow/daemon/api/proto/v1/daemon;daemonpb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+// NodeType represents the type of node in the mesh.
+enum NodeType {
+  NODE_TYPE_UNSPECIFIED = 0;
+  NODE_TYPE_DAEMON = 1;
+  NODE_TYPE_IWFS = 2;
+  NODE_TYPE_GATEWAY = 3;
+}
+
+// NodeStatus represents the status of a node.
+enum NodeStatus {
+  NODE_STATUS_UNSPECIFIED = 0;
+  NODE_STATUS_ONLINE = 1;
+  NODE_STATUS_OFFLINE = 2;
+  NODE_STATUS_DEGRADED = 3;
+  NODE_STATUS_UNKNOWN = 4;
+}
+
+// ConnectionState represents the state of a connection.
+enum ConnectionState {
+  CONNECTION_STATE_UNSPECIFIED = 0;
+  CONNECTION_STATE_CONNECTED = 1;
+  CONNECTION_STATE_DISCONNECTED = 2;
+  CONNECTION_STATE_CONNECTING = 3;
+  CONNECTION_STATE_FAILED = 4;
+}
+
+// Node represents a node in the mesh topology.
+message Node {
+  // Unique node identifier.
+  string id = 1;
+  // Node name.
+  string name = 2;
+  // Node type.
+  NodeType type = 3;
+  // Node status.
+  NodeStatus status = 4;
+  // Node address (for connection).
+  string address = 5;
+  // Node version.
+  string version = 6;
+  // Node labels.
+  map<string, string> labels = 7;
+  // Last heartbeat time.
+  google.protobuf.Timestamp last_seen = 8;
+  // Node uptime.
+  google.protobuf.Duration uptime = 9;
+}
+
+// Connection represents a connection between nodes.
+message Connection {
+  // Source node ID.
+  string source_id = 1;
+  // Target node ID.
+  string target_id = 2;
+  // Connection state.
+  ConnectionState state = 3;
+  // Connection latency.
+  google.protobuf.Duration latency = 4;
+  // Bytes sent.
+  uint64 bytes_sent = 5;
+  // Bytes received.
+  uint64 bytes_received = 6;
+  // Connection established time.
+  google.protobuf.Timestamp established_at = 7;
+  // Last activity time.
+  google.protobuf.Timestamp last_activity = 8;
+}
+
+// MeshTopology represents the complete mesh topology.
+message MeshTopology {
+  // All nodes in the mesh.
+  repeated Node nodes = 1;
+  // All connections between nodes.
+  repeated Connection connections = 2;
+  // Local node ID.
+  string local_node_id = 3;
+  // Topology snapshot time.
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// GetTopologyRequest requests current mesh topology.
+message GetTopologyRequest {
+  // Include connection details.
+  bool include_connections = 1;
+  // Filter by node types (empty = all).
+  repeated NodeType node_types = 2;
+  // Filter by node status (empty = all).
+  repeated NodeStatus node_status = 3;
+}
+
+// GetTopologyResponse contains the mesh topology.
+message GetTopologyResponse {
+  // Mesh topology.
+  MeshTopology topology = 1;
+}
+
+// StreamTopologyRequest configures topology streaming.
+message StreamTopologyRequest {
+  // Interval between updates.
+  google.protobuf.Duration interval = 1;
+  // Include connection details.
+  bool include_connections = 2;
+  // Filter by node types (empty = all).
+  repeated NodeType node_types = 3;
+}
+
+// TopologyUpdate represents a topology change.
+message TopologyUpdate {
+  // Nodes that were added.
+  repeated Node added_nodes = 1;
+  // Nodes that were removed (IDs only).
+  repeated string removed_nodes = 2;
+  // Nodes that were updated.
+  repeated Node updated_nodes = 3;
+  // Connections that changed.
+  repeated Connection changed_connections = 4;
+  // Update timestamp.
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+// RegisterNodeRequest registers a node with the mesh.
+message RegisterNodeRequest {
+  // Node information.
+  Node node = 1;
+}
+
+// RegisterNodeResponse confirms node registration.
+message RegisterNodeResponse {
+  // Assigned node ID.
+  string node_id = 1;
+  // Registration successful.
+  bool success = 2;
+  // Error message (if failed).
+  string error = 3;
+}
+
+// HeartbeatRequest sends a heartbeat to the mesh.
+message HeartbeatRequest {
+  // Node ID.
+  string node_id = 1;
+  // Node status.
+  NodeStatus status = 2;
+  // Node labels (optional update).
+  map<string, string> labels = 3;
+}
+
+// HeartbeatResponse acknowledges the heartbeat.
+message HeartbeatResponse {
+  // Heartbeat acknowledged.
+  bool acknowledged = 1;
+}

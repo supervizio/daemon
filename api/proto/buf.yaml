@@ -1,0 +1,15 @@
+# buf.yaml - Buf configuration for protobuf management
+version: v2
+name: buf.build/supervizio/daemon
+modules:
+  - path: .
+lint:
+  use:
+    - DEFAULT
+  except:
+    - PACKAGE_VERSION_SUFFIX
+breaking:
+  use:
+    - FILE
+deps:
+  - buf.build/googleapis/googleapis

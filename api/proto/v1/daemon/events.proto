@@ -1,0 +1,147 @@
+// Copyright 2024 supervizio. All rights reserved.
+// Protocol buffer definitions for events.
+
+syntax = "proto3";
+
+package daemon.v1;
+
+option go_package = "github.com/kodflow/daemon/api/proto/v1/daemon;daemonpb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+// EventType represents the type of event.
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  // Process lifecycle events.
+  EVENT_TYPE_PROCESS_STARTED = 1;
+  EVENT_TYPE_PROCESS_STOPPED = 2;
+  EVENT_TYPE_PROCESS_FAILED = 3;
+  EVENT_TYPE_PROCESS_RESTARTED = 4;
+  // Health check events.
+  EVENT_TYPE_HEALTH_CHANGED = 10;
+  EVENT_TYPE_HEALTH_DEGRADED = 11;
+  EVENT_TYPE_HEALTH_RECOVERED = 12;
+  // Listener events.
+  EVENT_TYPE_LISTENER_READY = 20;
+  EVENT_TYPE_LISTENER_CLOSED = 21;
+  // Service events.
+  EVENT_TYPE_SERVICE_STARTED = 30;
+  EVENT_TYPE_SERVICE_STOPPED = 31;
+  EVENT_TYPE_SERVICE_READY = 32;
+  // Daemon events.
+  EVENT_TYPE_DAEMON_STARTED = 40;
+  EVENT_TYPE_DAEMON_STOPPING = 41;
+  EVENT_TYPE_DAEMON_STOPPED = 42;
+}
+
+// EventSeverity represents the severity level of an event.
+enum EventSeverity {
+  EVENT_SEVERITY_UNSPECIFIED = 0;
+  EVENT_SEVERITY_INFO = 1;
+  EVENT_SEVERITY_WARNING = 2;
+  EVENT_SEVERITY_ERROR = 3;
+  EVENT_SEVERITY_CRITICAL = 4;
+}
+
+// Event represents a system event.
+message Event {
+  // Unique event identifier.
+  string id = 1;
+  // Event type.
+  EventType type = 2;
+  // Event severity.
+  EventSeverity severity = 3;
+  // Event source (e.g., service name, daemon).
+  string source = 4;
+  // Human-readable message.
+  string message = 5;
+  // Additional metadata.
+  map<string, string> metadata = 6;
+  // When the event occurred.
+  google.protobuf.Timestamp timestamp = 7;
+}
+
+// ProcessEvent contains details about a process event.
+message ProcessEvent {
+  // Base event.
+  Event event = 1;
+  // Process identifier.
+  int32 pid = 2;
+  // Service name.
+  string service_name = 3;
+  // Exit code (for stopped/failed events).
+  int32 exit_code = 4;
+  // Exit signal (for killed processes).
+  string exit_signal = 5;
+  // Error message (for failed events).
+  string error = 6;
+}
+
+// HealthEvent contains details about a health change event.
+message HealthEvent {
+  // Base event.
+  Event event = 1;
+  // Service name.
+  string service_name = 2;
+  // Previous health status.
+  string previous_status = 3;
+  // Current health status.
+  string current_status = 4;
+  // Check that triggered the change.
+  string check_name = 5;
+  // Latency of the health check.
+  google.protobuf.Duration latency = 6;
+}
+
+// ListenerEvent contains details about a listener event.
+message ListenerEvent {
+  // Base event.
+  Event event = 1;
+  // Service name.
+  string service_name = 2;
+  // Listener address.
+  string address = 3;
+  // Network type (tcp, udp).
+  string network = 4;
+}
+
+// StreamEventsRequest configures event streaming.
+message StreamEventsRequest {
+  // Filter by event types (empty = all).
+  repeated EventType types = 1;
+  // Filter by severity (empty = all).
+  repeated EventSeverity severities = 2;
+  // Filter by source (empty = all).
+  repeated string sources = 3;
+  // Include historical events from the last N seconds.
+  int32 history_seconds = 4;
+}
+
+// ListEventsRequest requests historical events.
+message ListEventsRequest {
+  // Filter by event types (empty = all).
+  repeated EventType types = 1;
+  // Filter by severity (empty = all).
+  repeated EventSeverity severities = 2;
+  // Filter by source (empty = all).
+  repeated string sources = 3;
+  // Start time for the query.
+  google.protobuf.Timestamp start_time = 4;
+  // End time for the query.
+  google.protobuf.Timestamp end_time = 5;
+  // Maximum number of events to return.
+  int32 limit = 6;
+  // Pagination token.
+  string page_token = 7;
+}
+
+// ListEventsResponse contains historical events.
+message ListEventsResponse {
+  // Events matching the query.
+  repeated Event events = 1;
+  // Token for next page (empty if no more).
+  string next_page_token = 2;
+  // Total count of matching events.
+  int32 total_count = 3;
+}

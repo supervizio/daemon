@@ -1,0 +1,222 @@
+// Copyright 2024 supervizio. All rights reserved.
+// Protocol buffer definitions for Kubernetes integration.
+
+syntax = "proto3";
+
+package daemon.v1;
+
+option go_package = "github.com/kodflow/daemon/api/proto/v1/daemon;daemonpb";
+
+import "google/protobuf/timestamp.proto";
+
+// PodPhase represents the phase of a Kubernetes pod.
+enum PodPhase {
+  POD_PHASE_UNSPECIFIED = 0;
+  POD_PHASE_PENDING = 1;
+  POD_PHASE_RUNNING = 2;
+  POD_PHASE_SUCCEEDED = 3;
+  POD_PHASE_FAILED = 4;
+  POD_PHASE_UNKNOWN = 5;
+}
+
+// ContainerState represents the state of a container.
+enum ContainerState {
+  CONTAINER_STATE_UNSPECIFIED = 0;
+  CONTAINER_STATE_WAITING = 1;
+  CONTAINER_STATE_RUNNING = 2;
+  CONTAINER_STATE_TERMINATED = 3;
+}
+
+// Pod represents a Kubernetes pod.
+message Pod {
+  // Pod name.
+  string name = 1;
+  // Namespace.
+  string namespace = 2;
+  // Pod UID.
+  string uid = 3;
+  // Pod phase.
+  PodPhase phase = 4;
+  // Node name.
+  string node_name = 5;
+  // Pod IP.
+  string pod_ip = 6;
+  // Host IP.
+  string host_ip = 7;
+  // Pod labels.
+  map<string, string> labels = 8;
+  // Pod annotations.
+  map<string, string> annotations = 9;
+  // Creation timestamp.
+  google.protobuf.Timestamp created_at = 10;
+  // Containers in this pod.
+  repeated Container containers = 11;
+}
+
+// Container represents a container within a pod.
+message Container {
+  // Container name.
+  string name = 1;
+  // Container image.
+  string image = 2;
+  // Container state.
+  ContainerState state = 3;
+  // Container ready.
+  bool ready = 4;
+  // Restart count.
+  int32 restart_count = 5;
+  // State message (e.g., waiting reason).
+  string state_message = 6;
+}
+
+// Service represents a Kubernetes service.
+message Service {
+  // Service name.
+  string name = 1;
+  // Namespace.
+  string namespace = 2;
+  // Service UID.
+  string uid = 3;
+  // Service type (ClusterIP, NodePort, LoadBalancer).
+  string type = 4;
+  // Cluster IP.
+  string cluster_ip = 5;
+  // External IPs.
+  repeated string external_ips = 6;
+  // Service labels.
+  map<string, string> labels = 7;
+  // Service ports.
+  repeated ServicePort ports = 8;
+  // Creation timestamp.
+  google.protobuf.Timestamp created_at = 9;
+}
+
+// ServicePort represents a port on a Kubernetes service.
+message ServicePort {
+  // Port name.
+  string name = 1;
+  // Protocol (TCP, UDP).
+  string protocol = 2;
+  // Service port.
+  int32 port = 3;
+  // Target port.
+  int32 target_port = 4;
+  // Node port (for NodePort/LoadBalancer).
+  int32 node_port = 5;
+}
+
+// Namespace represents a Kubernetes namespace.
+message Namespace {
+  // Namespace name.
+  string name = 1;
+  // Namespace UID.
+  string uid = 2;
+  // Namespace labels.
+  map<string, string> labels = 3;
+  // Namespace phase (Active, Terminating).
+  string phase = 4;
+  // Creation timestamp.
+  google.protobuf.Timestamp created_at = 5;
+}
+
+// ListPodsRequest requests pods in a namespace.
+message ListPodsRequest {
+  // Namespace (empty = all namespaces).
+  string namespace = 1;
+  // Label selector (e.g., "app=myapp").
+  string label_selector = 2;
+  // Field selector.
+  string field_selector = 3;
+  // Maximum results.
+  int32 limit = 4;
+  // Pagination token.
+  string continue_token = 5;
+}
+
+// ListPodsResponse contains pods.
+message ListPodsResponse {
+  // Pods matching the query.
+  repeated Pod pods = 1;
+  // Token for next page.
+  string continue_token = 2;
+}
+
+// GetPodRequest requests a specific pod.
+message GetPodRequest {
+  // Pod name.
+  string name = 1;
+  // Namespace.
+  string namespace = 2;
+}
+
+// GetPodResponse contains the pod.
+message GetPodResponse {
+  // The requested pod.
+  Pod pod = 1;
+}
+
+// WatchPodsRequest configures pod watching.
+message WatchPodsRequest {
+  // Namespace (empty = all namespaces).
+  string namespace = 1;
+  // Label selector.
+  string label_selector = 2;
+  // Resource version to watch from.
+  string resource_version = 3;
+}
+
+// PodEvent represents a pod watch event.
+message PodEvent {
+  // Event type (ADDED, MODIFIED, DELETED).
+  string type = 1;
+  // The pod.
+  Pod pod = 2;
+}
+
+// ListServicesRequest requests services in a namespace.
+message ListServicesRequest {
+  // Namespace (empty = all namespaces).
+  string namespace = 1;
+  // Label selector.
+  string label_selector = 2;
+  // Maximum results.
+  int32 limit = 3;
+  // Pagination token.
+  string continue_token = 4;
+}
+
+// ListServicesResponse contains services.
+message ListServicesResponse {
+  // Services matching the query.
+  repeated Service services = 1;
+  // Token for next page.
+  string continue_token = 2;
+}
+
+// GetServiceRequest requests a specific service.
+message GetServiceRequest {
+  // Service name.
+  string name = 1;
+  // Namespace.
+  string namespace = 2;
+}
+
+// GetServiceResponse contains the service.
+message GetServiceResponse {
+  // The requested service.
+  Service service = 1;
+}
+
+// ListNamespacesRequest requests namespaces.
+message ListNamespacesRequest {
+  // Label selector.
+  string label_selector = 1;
+  // Maximum results.
+  int32 limit = 2;
+}
+
+// ListNamespacesResponse contains namespaces.
+message ListNamespacesResponse {
+  // Namespaces matching the query.
+  repeated Namespace namespaces = 1;
+}

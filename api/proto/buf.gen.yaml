@@ -1,0 +1,18 @@
+# buf.gen.yaml - Code generation configuration
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/kodflow/daemon
+plugins:
+  # Generate Go types
+  - remote: buf.build/protocolbuffers/go
+    out: gen/go
+    opt:
+      - paths=source_relative
+  # Generate Go gRPC
+  - remote: buf.build/grpc/go
+    out: gen/go
+    opt:
+      - paths=source_relative

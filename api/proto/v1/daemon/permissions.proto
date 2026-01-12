@@ -1,0 +1,152 @@
+// Copyright 2024 supervizio. All rights reserved.
+// Protocol buffer definitions for Kubernetes RBAC permissions.
+
+syntax = "proto3";
+
+package daemon.v1;
+
+option go_package = "github.com/kodflow/daemon/api/proto/v1/daemon;daemonpb";
+
+// PermissionStatus represents whether a permission is granted.
+enum PermissionStatus {
+  PERMISSION_STATUS_UNSPECIFIED = 0;
+  PERMISSION_STATUS_ALLOWED = 1;
+  PERMISSION_STATUS_DENIED = 2;
+  PERMISSION_STATUS_UNKNOWN = 3;
+}
+
+// Permission represents a Kubernetes RBAC permission.
+message Permission {
+  // API group (e.g., "", "apps", "batch").
+  string api_group = 1;
+  // Resource type (e.g., "pods", "deployments").
+  string resource = 2;
+  // Verb (e.g., "get", "list", "watch", "create", "update", "delete").
+  string verb = 3;
+  // Namespace (empty = cluster-scoped).
+  string namespace = 4;
+  // Resource name (empty = all resources of type).
+  string resource_name = 5;
+  // Permission status.
+  PermissionStatus status = 6;
+  // Reason for the status.
+  string reason = 7;
+}
+
+// PermissionSet represents a set of required permissions.
+message PermissionSet {
+  // Set name (e.g., "pod-reader", "deployment-manager").
+  string name = 1;
+  // Description.
+  string description = 2;
+  // Required permissions.
+  repeated Permission permissions = 3;
+}
+
+// CheckPermissionRequest checks a single permission.
+message CheckPermissionRequest {
+  // API group.
+  string api_group = 1;
+  // Resource type.
+  string resource = 2;
+  // Verb.
+  string verb = 3;
+  // Namespace (optional).
+  string namespace = 4;
+  // Resource name (optional).
+  string resource_name = 5;
+}
+
+// CheckPermissionResponse contains the permission check result.
+message CheckPermissionResponse {
+  // Permission check result.
+  Permission permission = 1;
+}
+
+// CheckPermissionSetRequest checks multiple permissions.
+message CheckPermissionSetRequest {
+  // Permissions to check.
+  repeated Permission permissions = 1;
+}
+
+// CheckPermissionSetResponse contains multiple permission check results.
+message CheckPermissionSetResponse {
+  // Permission check results.
+  repeated Permission permissions = 1;
+  // All permissions granted.
+  bool all_allowed = 2;
+  // Summary message.
+  string summary = 3;
+}
+
+// GetRequiredPermissionsRequest requests the required permissions.
+message GetRequiredPermissionsRequest {
+  // Feature to get permissions for (empty = all).
+  string feature = 1;
+}
+
+// GetRequiredPermissionsResponse contains required permissions.
+message GetRequiredPermissionsResponse {
+  // Required permission sets by feature.
+  map<string, PermissionSet> permission_sets = 1;
+}
+
+// GenerateRBACRequest requests RBAC YAML generation.
+message GenerateRBACRequest {
+  // Namespace for the service account.
+  string namespace = 1;
+  // Service account name.
+  string service_account_name = 2;
+  // Features to include permissions for (empty = all).
+  repeated string features = 3;
+  // Generate ClusterRole instead of Role.
+  bool cluster_scoped = 4;
+}
+
+// GenerateRBACResponse contains generated RBAC YAML.
+message GenerateRBACResponse {
+  // Generated YAML manifests.
+  string yaml = 1;
+  // Included permissions.
+  repeated Permission permissions = 2;
+}
+
+// RBACStatus represents the overall RBAC status.
+message RBACStatus {
+  // Service account name.
+  string service_account = 1;
+  // Service account namespace.
+  string namespace = 2;
+  // Permission sets and their status.
+  map<string, PermissionSetStatus> permission_sets = 3;
+  // All required permissions are granted.
+  bool fully_authorized = 4;
+  // Missing permissions summary.
+  string missing_summary = 5;
+}
+
+// PermissionSetStatus represents the status of a permission set.
+message PermissionSetStatus {
+  // Permission set name.
+  string name = 1;
+  // All permissions granted.
+  bool complete = 2;
+  // Granted permissions count.
+  int32 granted_count = 3;
+  // Total permissions count.
+  int32 total_count = 4;
+  // Missing permissions.
+  repeated Permission missing = 5;
+}
+
+// GetRBACStatusRequest requests current RBAC status.
+message GetRBACStatusRequest {
+  // Features to check (empty = all).
+  repeated string features = 1;
+}
+
+// GetRBACStatusResponse contains RBAC status.
+message GetRBACStatusResponse {
+  // RBAC status.
+  RBACStatus status = 1;
+}
