@@ -11,6 +11,15 @@ engines:
       # The paths are controlled internally (default "/proc") or via constructor for testing
       # No user input reaches these file operations
       - "src/internal/infrastructure/proc/**"
+      # Exclude linter configs - valid YAML structure flagged as duplicate IDs
+      - "**/.golangci.yml"
+      - "**/golangci.yml"
+
+  # Markdownlint configuration
+  markdownlint:
+    exclude_paths:
+      # CLAUDE.md files are AI context files, not user documentation
+      - "**/CLAUDE.md"
 
 exclude_paths:
   # Test files don't need security analysis
