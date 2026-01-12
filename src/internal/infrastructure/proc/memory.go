@@ -216,6 +216,13 @@ func (c *MemoryCollector) collectProcessesFromEntries(
 	var results []metrics.ProcessMemory
 
 	for _, entry := range entries {
+		// Check for context cancellation to allow early abort
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		proc, ok := c.tryCollectProcessEntry(ctx, entry, totalMemory)
 		if ok {
 			results = append(results, proc)

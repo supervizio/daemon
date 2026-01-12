@@ -90,11 +90,9 @@ func (c *CPUCollector) parseCPULine(line string) (metrics.SystemCPU, error) {
 	cpu.Guest = parseField(9)
 	cpu.GuestNice = parseField(10)
 
-	// Calculate usage percentage
-	total := cpu.Total()
-	if total > 0 {
-		cpu.UsagePercent = float64(cpu.Active()) / float64(total) * 100
-	}
+	// Note: UsagePercent requires comparing two snapshots and should be
+	// calculated at the application layer, not from a single sample.
+	// A single sample only gives average usage since boot.
 
 	return cpu, nil
 }
@@ -172,6 +170,13 @@ func (c *CPUCollector) CollectAllProcesses(ctx context.Context) ([]metrics.Proce
 
 	var results []metrics.ProcessCPU
 	for _, entry := range entries {
+		// Check for context cancellation to allow early abort
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		if !entry.IsDir() {
 			continue
 		}
