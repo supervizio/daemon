@@ -311,6 +311,7 @@ func TestServiceConfigDTO_ToDomain(t *testing.T) {
 		expectedDependsOn        []string
 		expectedOneshot          bool
 		expectedHealthCheckLen   int
+		expectedListenerLen      int
 	}{
 		{
 			name: "full service configuration converts correctly",
@@ -345,6 +346,7 @@ func TestServiceConfigDTO_ToDomain(t *testing.T) {
 			expectedDependsOn:        []string{"database"},
 			expectedOneshot:          true,
 			expectedHealthCheckLen:   1,
+			expectedListenerLen:      0,
 		},
 		{
 			name: "minimal service configuration",
@@ -362,6 +364,52 @@ func TestServiceConfigDTO_ToDomain(t *testing.T) {
 			expectedDependsOn:        nil,
 			expectedOneshot:          false,
 			expectedHealthCheckLen:   0,
+			expectedListenerLen:      0,
+		},
+		{
+			name: "service with listeners configuration",
+			dto: &yaml.ServiceConfigDTO{
+				Name:    "listener-service",
+				Command: "/usr/bin/server",
+				Listeners: []yaml.ListenerDTO{
+					{
+						Name:     "http-listener",
+						Port:     8080,
+						Protocol: "tcp",
+						Address:  "0.0.0.0",
+						Probe: yaml.ProbeDTO{
+							Type:             "http",
+							Interval:         yaml.Duration(30 * time.Second),
+							Timeout:          yaml.Duration(5 * time.Second),
+							SuccessThreshold: 1,
+							FailureThreshold: 3,
+							Path:             "/health",
+							Method:           "GET",
+							StatusCode:       200,
+						},
+					},
+					{
+						Name:     "grpc-listener",
+						Port:     9090,
+						Protocol: "tcp",
+						Probe: yaml.ProbeDTO{
+							Type:    "grpc",
+							Service: "my.Service",
+						},
+					},
+				},
+			},
+			expectedName:             "listener-service",
+			expectedCommand:          "/usr/bin/server",
+			expectedArgs:             nil,
+			expectedUser:             "",
+			expectedGroup:            "",
+			expectedWorkingDirectory: "",
+			expectedEnvironment:      nil,
+			expectedDependsOn:        nil,
+			expectedOneshot:          false,
+			expectedHealthCheckLen:   0,
+			expectedListenerLen:      2,
 		},
 	}
 
@@ -383,6 +431,24 @@ func TestServiceConfigDTO_ToDomain(t *testing.T) {
 			assert.Equal(t, testCase.expectedDependsOn, result.DependsOn)
 			assert.Equal(t, testCase.expectedOneshot, result.Oneshot)
 			assert.Len(t, result.HealthChecks, testCase.expectedHealthCheckLen)
+			assert.Len(t, result.Listeners, testCase.expectedListenerLen)
+
+			// Verify listener details for the listeners test case.
+			if testCase.expectedListenerLen > 0 {
+				// Check first listener.
+				assert.Equal(t, "http-listener", result.Listeners[0].Name)
+				assert.Equal(t, 8080, result.Listeners[0].Port)
+				assert.Equal(t, "tcp", result.Listeners[0].Protocol)
+				assert.NotNil(t, result.Listeners[0].Probe)
+				assert.Equal(t, "http", result.Listeners[0].Probe.Type)
+
+				// Check second listener.
+				assert.Equal(t, "grpc-listener", result.Listeners[1].Name)
+				assert.Equal(t, 9090, result.Listeners[1].Port)
+				assert.NotNil(t, result.Listeners[1].Probe)
+				assert.Equal(t, "grpc", result.Listeners[1].Probe.Type)
+				assert.Equal(t, "my.Service", result.Listeners[1].Probe.Service)
+			}
 		})
 	}
 }
