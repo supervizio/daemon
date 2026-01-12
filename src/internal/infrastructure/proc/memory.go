@@ -72,9 +72,13 @@ func (c *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemo
 	mem.SwapFree = values["SwapFree"] * 1024
 	mem.Shared = values["Shmem"] * 1024
 
-	// Calculate derived values
-	mem.SwapUsed = mem.SwapTotal - mem.SwapFree
-	mem.Used = mem.Total - mem.Available
+	// Calculate derived values with underflow protection
+	if mem.SwapTotal >= mem.SwapFree {
+		mem.SwapUsed = mem.SwapTotal - mem.SwapFree
+	}
+	if mem.Total >= mem.Available {
+		mem.Used = mem.Total - mem.Available
+	}
 
 	// Calculate usage percentage
 	if mem.Total > 0 {
@@ -113,6 +117,10 @@ func (c *MemoryCollector) CollectProcess(ctx context.Context, pid int) (metrics.
 	case <-ctx.Done():
 		return metrics.ProcessMemory{}, ctx.Err()
 	default:
+	}
+
+	if pid <= 0 {
+		return metrics.ProcessMemory{}, fmt.Errorf("invalid pid: %d", pid)
 	}
 
 	statusPath := filepath.Join(c.procPath, strconv.Itoa(pid), "status")

@@ -105,6 +105,10 @@ func (c *CPUCollector) CollectProcess(ctx context.Context, pid int) (metrics.Pro
 	default:
 	}
 
+	if pid <= 0 {
+		return metrics.ProcessCPU{}, fmt.Errorf("invalid pid: %d", pid)
+	}
+
 	statPath := filepath.Join(c.procPath, strconv.Itoa(pid), "stat")
 	data, err := os.ReadFile(statPath)
 	if err != nil {
