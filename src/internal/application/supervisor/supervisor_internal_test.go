@@ -416,8 +416,10 @@ func Test_Supervisor_monitorService(t *testing.T) {
 
 			// Start monitor in goroutine.
 			// Goroutine lifecycle:
-			// - Managed by supervisor's WaitGroup
-			// - Terminates when context is cancelled
+			// - Tracks: supervisor's WaitGroup (wg.Add(1) before, wg.Done() via defer in monitorService)
+			// - Terminates when: context is cancelled OR events channel is closed
+			// - Resource cleanup: WaitGroup.Done() called in deferred function within monitorService
+			// - Synchronization: sup.wg.Wait() after cancel() ensures goroutine has exited
 			go sup.monitorService("test", mockMgr)
 
 			// Send an event.
@@ -426,10 +428,10 @@ func Test_Supervisor_monitorService(t *testing.T) {
 			// Give some time for event processing.
 			time.Sleep(10 * time.Millisecond)
 
-			// Cancel context to stop monitoring.
+			// Cancel context to stop monitoring goroutine.
 			cancel()
 
-			// Wait for goroutine to finish.
+			// Wait for goroutine to finish and release resources.
 			sup.wg.Wait()
 		})
 	}
@@ -503,11 +505,12 @@ func Test_Supervisor_handleEvent(t *testing.T) {
 	}
 }
 
-// Test_Supervisor_SetEventHandler tests the SetEventHandler method.
+// Test_handleEvent_calls_event_handler tests that handleEvent calls the registered event handler.
+// This tests the internal interaction between handleEvent and the event handler.
 //
 // Params:
 //   - t: the testing context.
-func Test_Supervisor_SetEventHandler(t *testing.T) {
+func Test_handleEvent_calls_event_handler(t *testing.T) {
 	tests := []struct {
 		// name is the test case name.
 		name string
@@ -544,11 +547,12 @@ func Test_Supervisor_SetEventHandler(t *testing.T) {
 	}
 }
 
-// Test_Supervisor_AllStats tests the AllStats method.
+// Test_handleEvent_updates_stats tests that handleEvent updates statistics correctly.
+// This tests the internal behavior of handleEvent with AllStats verification.
 //
 // Params:
 //   - t: the testing context.
-func Test_Supervisor_AllStats(t *testing.T) {
+func Test_handleEvent_updates_stats(t *testing.T) {
 	tests := []struct {
 		// name is the test case name.
 		name string
@@ -780,9 +784,17 @@ func Test_Supervisor_Start_service_already_running(t *testing.T) {
 }
 
 // Test_Supervisor_monitorService_channel_close tests monitorService with closed channel.
+// This test spawns a goroutine that monitors a mock events channel.
+// The goroutine is managed by the supervisor's WaitGroup and terminates
+// when the events channel is closed.
 //
 // Params:
 //   - t: the testing context.
+//
+// Goroutine lifecycle:
+//   - Spawns one goroutine via monitorService.
+//   - Goroutine terminates when the events channel is closed.
+//   - Method blocks via sup.wg.Wait() until goroutine completes.
 func Test_Supervisor_monitorService_channel_close(t *testing.T) {
 	tests := []struct {
 		// name is the test case name.
@@ -815,14 +827,16 @@ func Test_Supervisor_monitorService_channel_close(t *testing.T) {
 
 			// Start monitor in goroutine.
 			// Goroutine lifecycle:
-			// - Managed by supervisor's WaitGroup
-			// - Terminates when channel is closed
+			// - Tracks: supervisor's WaitGroup (wg.Add(1) before, wg.Done() via defer in monitorService)
+			// - Terminates when: events channel is closed (returns from range loop)
+			// - Resource cleanup: WaitGroup.Done() called in deferred function within monitorService
+			// - Synchronization: sup.wg.Wait() ensures goroutine has exited before test completes
 			go sup.monitorService("test", mockMgr)
 
-			// Close the events channel to trigger exit.
+			// Close the events channel to trigger goroutine exit.
 			close(eventsCh)
 
-			// Wait for goroutine to finish.
+			// Wait for goroutine to finish and release resources.
 			sup.wg.Wait()
 		})
 	}

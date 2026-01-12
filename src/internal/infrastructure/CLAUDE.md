@@ -8,11 +8,11 @@ Adapters implementing domain ports for external systems.
 infrastructure/
 ├── config/
 │   └── yaml/     # YAML configuration loader
-├── health/       # Health check adapters
 ├── kernel/       # OS abstraction layer
 │   ├── adapters/ # Platform-specific implementations
 │   └── ports/    # Kernel interfaces
 ├── logging/      # Log management (writers, capture, rotation)
+├── probe/        # Protocol probers (TCP, UDP, HTTP, gRPC, Exec, ICMP)
 └── process/      # Process executor adapter
 ```
 
@@ -21,9 +21,9 @@ infrastructure/
 | Package | Role |
 |---------|------|
 | `config/yaml` | Loads and parses YAML config files |
-| `health` | HTTP, TCP, Command health checkers |
 | `kernel` | OS abstraction (signals, reaper, credentials) |
 | `logging` | File writers, capture, rotation, timestamps |
+| `probe` | Protocol probers implementing domain.Prober |
 | `process` | Unix process execution |
 
 ## Dependencies
@@ -39,12 +39,6 @@ infrastructure/
 - `ConfigDTO` - YAML data transfer objects
 - `Duration` - YAML duration parsing
 
-### health
-- `HTTPChecker` - HTTP endpoint checks
-- `TCPChecker` - TCP port connectivity
-- `CommandChecker` - Command execution checks
-- `Factory` - Creates checkers by type
-
 ### kernel
 - `SignalManager` - Signal forwarding (ports)
 - `Reaper` - Zombie process reaping (ports)
@@ -58,6 +52,15 @@ infrastructure/
 - `LineWriter` - Line-buffered output
 - `MultiWriter` - Multiple destination writer
 - `TimestampWriter` - Timestamp prefix formatting
+
+### probe
+- `TCPProber` - TCP connection probes
+- `UDPProber` - UDP packet probes
+- `HTTPProber` - HTTP endpoint probes
+- `GRPCProber` - gRPC health probes (TCP fallback)
+- `ExecProber` - Command execution probes
+- `ICMPProber` - ICMP ping probes (TCP fallback)
+- `Factory` - Creates probers by type
 
 ### process
 - `UnixExecutor` - Implements domain.Executor

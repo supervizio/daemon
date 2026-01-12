@@ -9,6 +9,25 @@ import (
 	"github.com/kodflow/daemon/internal/domain/shared"
 )
 
+const (
+	// defaultFailureThreshold defines how many consecutive failures before marking unhealthy.
+	// Three failures provides a balance between quick detection and avoiding false positives
+	// from transient network issues or temporary service hiccups.
+	defaultFailureThreshold int = 3
+
+	// defaultHTTPStatusCode is the expected HTTP response code for healthy endpoints.
+	// HTTP 200 OK is the standard success response indicating the request was successful.
+	defaultHTTPStatusCode int = 200
+
+	// defaultProbeInterval is the default interval between probe executions.
+	// 10 seconds is a reasonable balance between responsiveness and resource usage.
+	defaultProbeInterval time.Duration = 10 * time.Second
+
+	// defaultProbeTimeout is the default timeout for a single probe execution.
+	// 5 seconds allows most network operations to complete without false timeouts.
+	defaultProbeTimeout time.Duration = 5 * time.Second
+)
+
 // Duration is a wrapper around time.Duration for YAML serialization.
 // It enables parsing of human-readable duration strings like "30s" or "5m" from YAML files.
 type Duration time.Duration
@@ -76,9 +95,36 @@ type ServiceConfigDTO struct {
 	Environment      map[string]string `yaml:"environment,omitempty"`
 	Restart          RestartConfigDTO  `yaml:"restart"`
 	HealthChecks     []HealthCheckDTO  `yaml:"health_checks,omitempty"`
+	Listeners        []ListenerDTO     `yaml:"listeners,omitempty"`
 	Logging          ServiceLoggingDTO `yaml:"logging,omitempty"`
 	DependsOn        []string          `yaml:"depends_on,omitempty"`
 	Oneshot          bool              `yaml:"oneshot,omitempty"`
+}
+
+// ListenerDTO is the YAML representation of a network listener.
+// It defines a port with optional health probe configuration.
+type ListenerDTO struct {
+	Name     string   `yaml:"name"`
+	Port     int      `yaml:"port"`
+	Protocol string   `yaml:"protocol,omitempty"`
+	Address  string   `yaml:"address,omitempty"`
+	Probe    ProbeDTO `yaml:"probe,omitempty"`
+}
+
+// ProbeDTO is the YAML representation of a probe configuration.
+// It defines how to probe a listener for health checking.
+type ProbeDTO struct {
+	Type             string   `yaml:"type"`
+	Interval         Duration `yaml:"interval,omitempty"`
+	Timeout          Duration `yaml:"timeout,omitempty"`
+	SuccessThreshold int      `yaml:"success_threshold,omitempty"`
+	FailureThreshold int      `yaml:"failure_threshold,omitempty"`
+	Path             string   `yaml:"path,omitempty"`
+	Method           string   `yaml:"method,omitempty"`
+	StatusCode       int      `yaml:"status_code,omitempty"`
+	Service          string   `yaml:"service,omitempty"`
+	Command          string   `yaml:"command,omitempty"`
+	Args             []string `yaml:"args,omitempty"`
 }
 
 // RestartConfigDTO is the YAML representation of restart configuration.
@@ -182,6 +228,13 @@ func (s *ServiceConfigDTO) ToDomain() service.ServiceConfig {
 		healthChecks = append(healthChecks, s.HealthChecks[i].ToDomain())
 	}
 
+	listeners := make([]service.ListenerConfig, 0, len(s.Listeners))
+
+	// Convert each listener configuration to domain model
+	for i := range s.Listeners {
+		listeners = append(listeners, s.Listeners[i].ToDomain())
+	}
+
 	// Return the fully converted service configuration
 	return service.ServiceConfig{
 		Name:             s.Name,
@@ -196,7 +249,138 @@ func (s *ServiceConfigDTO) ToDomain() service.ServiceConfig {
 		Oneshot:          s.Oneshot,
 		Logging:          s.Logging.ToDomain(),
 		HealthChecks:     healthChecks,
+		Listeners:        listeners,
 	}
+}
+
+// ToDomain converts ListenerDTO to domain ListenerConfig.
+// It maps listener settings from YAML format to the domain model.
+//
+// Returns:
+//   - service.ListenerConfig: the converted domain listener configuration
+func (l *ListenerDTO) ToDomain() service.ListenerConfig {
+	// Determine protocol, default to TCP.
+	protocol := l.Protocol
+	// Fall back to TCP when no protocol is specified in configuration.
+	if protocol == "" {
+		protocol = "tcp"
+	}
+
+	// Create listener config.
+	listener := service.ListenerConfig{
+		Name:     l.Name,
+		Port:     l.Port,
+		Protocol: protocol,
+		Address:  l.Address,
+	}
+
+	// Add probe if configured.
+	if l.Probe.Type != "" {
+		probe := l.Probe.ToDomain()
+		listener.Probe = &probe
+	}
+
+	// Return the converted listener configuration.
+	return listener
+}
+
+// ToDomain converts ProbeDTO to domain ProbeConfig.
+// It maps probe settings from YAML format to the domain model.
+//
+// Returns:
+//   - service.ProbeConfig: the converted domain probe configuration
+func (p *ProbeDTO) ToDomain() service.ProbeConfig {
+	// Get threshold, timing, and HTTP defaults.
+	successThreshold, failureThreshold := p.getThresholdDefaults()
+	interval, timeout := p.getTimingDefaults()
+	method, statusCode := p.getHTTPDefaults()
+
+	// Return the converted probe configuration.
+	return service.ProbeConfig{
+		Type:             p.Type,
+		Interval:         shared.FromTimeDuration(interval),
+		Timeout:          shared.FromTimeDuration(timeout),
+		SuccessThreshold: successThreshold,
+		FailureThreshold: failureThreshold,
+		Path:             p.Path,
+		Method:           method,
+		StatusCode:       statusCode,
+		Service:          p.Service,
+		Command:          p.Command,
+		Args:             p.Args,
+	}
+}
+
+// getThresholdDefaults returns threshold values with defaults applied.
+//
+// Returns:
+//   - int: success threshold (default 1).
+//   - int: failure threshold (default 3).
+func (p *ProbeDTO) getThresholdDefaults() (successThreshold, failureThreshold int) {
+	// Apply default for success threshold.
+	successThreshold = p.SuccessThreshold
+	// Require at least one success to mark healthy when not configured or invalid.
+	if successThreshold <= 0 {
+		successThreshold = 1
+	}
+
+	// Apply default for failure threshold.
+	failureThreshold = p.FailureThreshold
+	// Allow three failures before marking unhealthy when not configured or invalid.
+	if failureThreshold <= 0 {
+		failureThreshold = defaultFailureThreshold
+	}
+
+	// Return both threshold values.
+	return successThreshold, failureThreshold
+}
+
+// getTimingDefaults returns timing values with defaults applied.
+//
+// Returns:
+//   - time.Duration: interval (default 10s).
+//   - time.Duration: timeout (default 5s).
+func (p *ProbeDTO) getTimingDefaults() (interval, timeout time.Duration) {
+	// Apply default for interval.
+	interval = time.Duration(p.Interval)
+	// Use default probe interval when not configured or invalid.
+	if interval <= 0 {
+		interval = defaultProbeInterval
+	}
+
+	// Apply default for timeout.
+	timeout = time.Duration(p.Timeout)
+	// Use default probe timeout when not configured or invalid.
+	if timeout <= 0 {
+		timeout = defaultProbeTimeout
+	}
+
+	// Return both timing values.
+	return interval, timeout
+}
+
+// getHTTPDefaults returns HTTP-specific values with defaults applied.
+//
+// Returns:
+//   - string: HTTP method (default "GET").
+//   - int: expected status code (default 200).
+func (p *ProbeDTO) getHTTPDefaults() (method string, statusCode int) {
+	// Apply default method.
+	method = p.Method
+	// Use GET as the standard HTTP method for health probes when not specified.
+	if method == "" {
+		method = "GET"
+	}
+
+	// Apply default status code.
+	statusCode = p.StatusCode
+	// Expect HTTP 200 OK as the healthy response when not specified.
+	if statusCode == 0 {
+		statusCode = defaultHTTPStatusCode
+	}
+
+	// Return both HTTP values.
+	return method, statusCode
 }
 
 // ToDomain converts RestartConfigDTO to domain RestartConfig.

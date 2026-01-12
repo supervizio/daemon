@@ -549,3 +549,198 @@ func TestLogDefaultsDTO_EdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// Test_ProbeDTO_getThresholdDefaults tests the internal getThresholdDefaults method.
+// It verifies that threshold defaults are correctly applied.
+//
+// Params:
+//   - t: testing context
+func Test_ProbeDTO_getThresholdDefaults(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for table-driven testing.
+	tests := []struct {
+		name                     string
+		dto                      *ProbeDTO
+		expectedSuccessThreshold int
+		expectedFailureThreshold int
+	}{
+		{
+			name:                     "zero_values_get_defaults",
+			dto:                      &ProbeDTO{},
+			expectedSuccessThreshold: 1,
+			expectedFailureThreshold: 3,
+		},
+		{
+			name: "negative_values_get_defaults",
+			dto: &ProbeDTO{
+				SuccessThreshold: -1,
+				FailureThreshold: -1,
+			},
+			expectedSuccessThreshold: 1,
+			expectedFailureThreshold: 3,
+		},
+		{
+			name: "positive_values_preserved",
+			dto: &ProbeDTO{
+				SuccessThreshold: 5,
+				FailureThreshold: 10,
+			},
+			expectedSuccessThreshold: 5,
+			expectedFailureThreshold: 10,
+		},
+		{
+			name: "mixed_values",
+			dto: &ProbeDTO{
+				SuccessThreshold: 0,
+				FailureThreshold: 7,
+			},
+			expectedSuccessThreshold: 1,
+			expectedFailureThreshold: 7,
+		},
+	}
+
+	// Run all test cases.
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Call the internal method.
+			successThreshold, failureThreshold := testCase.dto.getThresholdDefaults()
+
+			// Verify thresholds.
+			assert.Equal(t, testCase.expectedSuccessThreshold, successThreshold)
+			assert.Equal(t, testCase.expectedFailureThreshold, failureThreshold)
+		})
+	}
+}
+
+// Test_ProbeDTO_getTimingDefaults tests the internal getTimingDefaults method.
+// It verifies that timing defaults are correctly applied.
+//
+// Params:
+//   - t: testing context
+func Test_ProbeDTO_getTimingDefaults(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for table-driven testing.
+	tests := []struct {
+		name             string
+		dto              *ProbeDTO
+		expectedInterval time.Duration
+		expectedTimeout  time.Duration
+	}{
+		{
+			name:             "zero_values_get_defaults",
+			dto:              &ProbeDTO{},
+			expectedInterval: 10 * time.Second,
+			expectedTimeout:  5 * time.Second,
+		},
+		{
+			name: "negative_values_get_defaults",
+			dto: &ProbeDTO{
+				Interval: Duration(-1 * time.Second),
+				Timeout:  Duration(-1 * time.Second),
+			},
+			expectedInterval: 10 * time.Second,
+			expectedTimeout:  5 * time.Second,
+		},
+		{
+			name: "positive_values_preserved",
+			dto: &ProbeDTO{
+				Interval: Duration(30 * time.Second),
+				Timeout:  Duration(15 * time.Second),
+			},
+			expectedInterval: 30 * time.Second,
+			expectedTimeout:  15 * time.Second,
+		},
+		{
+			name: "mixed_values",
+			dto: &ProbeDTO{
+				Interval: Duration(0),
+				Timeout:  Duration(20 * time.Second),
+			},
+			expectedInterval: 10 * time.Second,
+			expectedTimeout:  20 * time.Second,
+		},
+	}
+
+	// Run all test cases.
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Call the internal method.
+			interval, timeout := testCase.dto.getTimingDefaults()
+
+			// Verify timing values.
+			assert.Equal(t, testCase.expectedInterval, interval)
+			assert.Equal(t, testCase.expectedTimeout, timeout)
+		})
+	}
+}
+
+// Test_ProbeDTO_getHTTPDefaults tests the internal getHTTPDefaults method.
+// It verifies that HTTP defaults are correctly applied.
+//
+// Params:
+//   - t: testing context
+func Test_ProbeDTO_getHTTPDefaults(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for table-driven testing.
+	tests := []struct {
+		name               string
+		dto                *ProbeDTO
+		expectedMethod     string
+		expectedStatusCode int
+	}{
+		{
+			name:               "empty_values_get_defaults",
+			dto:                &ProbeDTO{},
+			expectedMethod:     "GET",
+			expectedStatusCode: 200,
+		},
+		{
+			name: "custom_method_preserved",
+			dto: &ProbeDTO{
+				Method:     "POST",
+				StatusCode: 0,
+			},
+			expectedMethod:     "POST",
+			expectedStatusCode: 200,
+		},
+		{
+			name: "custom_status_code_preserved",
+			dto: &ProbeDTO{
+				Method:     "",
+				StatusCode: 201,
+			},
+			expectedMethod:     "GET",
+			expectedStatusCode: 201,
+		},
+		{
+			name: "all_custom_values_preserved",
+			dto: &ProbeDTO{
+				Method:     "PUT",
+				StatusCode: 204,
+			},
+			expectedMethod:     "PUT",
+			expectedStatusCode: 204,
+		},
+	}
+
+	// Run all test cases.
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Call the internal method.
+			method, statusCode := testCase.dto.getHTTPDefaults()
+
+			// Verify HTTP values.
+			assert.Equal(t, testCase.expectedMethod, method)
+			assert.Equal(t, testCase.expectedStatusCode, statusCode)
+		})
+	}
+}

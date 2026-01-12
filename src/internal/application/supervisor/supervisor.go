@@ -40,18 +40,6 @@ var (
 // It is called when a service emits a lifecycle event.
 type EventHandler func(serviceName string, event *domain.Event)
 
-// ServiceStats holds statistics for a single service.
-type ServiceStats struct {
-	// StartCount is the number of times the service has started.
-	StartCount int
-	// StopCount is the number of times the service has stopped normally.
-	StopCount int
-	// FailCount is the number of times the service has failed.
-	FailCount int
-	// RestartCount is the number of times the service has restarted.
-	RestartCount int
-}
-
 // Supervisor manages multiple services and their lifecycle.
 // It coordinates starting, stopping, and monitoring of all configured services.
 type Supervisor struct {
@@ -113,7 +101,7 @@ func NewSupervisor(cfg *service.Config, loader appconfig.Loader, executor domain
 	for i := range cfg.Services {
 		svc := &cfg.Services[i]
 		s.managers[svc.Name] = appprocess.NewManager(svc, executor)
-		s.stats[svc.Name] = &ServiceStats{}
+		s.stats[svc.Name] = NewServiceStats()
 	}
 
 	// Return the configured supervisor.
@@ -239,20 +227,34 @@ func (s *Supervisor) stopAll() {
 // Returns:
 //   - error: an error if the reload fails.
 func (s *Supervisor) Reload() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Check state and get config path without holding lock during I/O.
+	s.mu.RLock()
+	state := s.state
+	configPath := s.config.ConfigPath
+	s.mu.RUnlock()
 
 	// Check if the supervisor is running.
-	if s.state != StateRunning {
+	if state != StateRunning {
 		// Return error when not running.
 		return ErrNotRunning
 	}
 
-	newCfg, err := s.loader.Load(s.config.ConfigPath)
+	// Load configuration without holding lock (I/O operation).
+	newCfg, err := s.loader.Load(configPath)
 	// Handle configuration load error.
 	if err != nil {
 		// Return wrapped error on load failure.
 		return fmt.Errorf("failed to reload config: %w", err)
+	}
+
+	// Acquire write lock for state updates.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Re-check state after acquiring lock (may have changed).
+	if s.state != StateRunning {
+		// Return error when no longer running.
+		return ErrNotRunning
 	}
 
 	s.updateServices(newCfg)
@@ -349,21 +351,27 @@ func (s *Supervisor) handleEvent(name string, event *domain.Event) {
 	s.mu.Lock()
 	// Get or create stats for this service.
 	stats, ok := s.stats[name]
+	// Create new stats entry if service not tracked yet.
 	if !ok {
-		stats = &ServiceStats{}
+		stats = NewServiceStats()
 		s.stats[name] = stats
 	}
 
 	// Update statistics based on event type.
 	switch event.Type {
+	// Started: service successfully started.
 	case domain.EventStarted:
 		stats.StartCount++
+	// Stopped: service stopped normally.
 	case domain.EventStopped:
 		stats.StopCount++
+	// Failed: service exited with error.
 	case domain.EventFailed:
 		stats.FailCount++
+	// Restarting: service is restarting after exit.
 	case domain.EventRestarting:
 		stats.RestartCount++
+	// Health events: tracked by health monitor, not stats.
 	case domain.EventHealthy, domain.EventUnhealthy:
 		// Health events are tracked by the health monitor, not stats.
 	}
@@ -398,8 +406,10 @@ func (s *Supervisor) Stats(name string) *ServiceStats {
 	// Return a copy to avoid race conditions.
 	if stats, ok := s.stats[name]; ok {
 		statsCopy := *stats
+		// Return copy of stats for the requested service.
 		return &statsCopy
 	}
+	// Service not found, return nil.
 	return nil
 }
 
@@ -412,10 +422,12 @@ func (s *Supervisor) AllStats() map[string]*ServiceStats {
 	defer s.mu.RUnlock()
 	// Return a copy of all stats.
 	result := make(map[string]*ServiceStats, len(s.stats))
+	// Copy each service's stats to avoid race conditions.
 	for name, stats := range s.stats {
 		statsCopy := *stats
 		result[name] = &statsCopy
 	}
+	// Return the copied stats map.
 	return result
 }
 

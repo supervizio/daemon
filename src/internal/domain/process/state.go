@@ -70,3 +70,48 @@ func (s State) IsActive() bool {
 	// Check if the state indicates the process is actively running or starting up.
 	return s == StateStarting || s == StateRunning
 }
+
+// IsRunning returns true if the process is in running state.
+//
+// Returns:
+//   - bool: true if the process is currently running
+func (s State) IsRunning() bool {
+	// Check if the state is specifically running.
+	return s == StateRunning
+}
+
+// IsStopping returns true if the process is stopping.
+//
+// Returns:
+//   - bool: true if the process is currently stopping
+func (s State) IsStopping() bool {
+	// Check if the state is stopping.
+	return s == StateStopping
+}
+
+// IsStarting returns true if the process is starting.
+//
+// Returns:
+//   - bool: true if the process is currently starting
+func (s State) IsStarting() bool {
+	// Check if the state is starting.
+	return s == StateStarting
+}
+
+// IsFailed returns true if the process has failed.
+//
+// Returns:
+//   - bool: true if the process is in failed state
+func (s State) IsFailed() bool {
+	// Check if the state is failed.
+	return s == StateFailed
+}
+
+// IsStopped returns true if the process is stopped.
+//
+// Returns:
+//   - bool: true if the process is in stopped state
+func (s State) IsStopped() bool {
+	// Check if the state is stopped.
+	return s == StateStopped
+}

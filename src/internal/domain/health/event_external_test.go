@@ -67,6 +67,64 @@ func TestNewEvent(t *testing.T) {
 	}
 }
 
+// TestNewEventAt tests the NewEventAt constructor with explicit timestamp.
+//
+// Params:
+//   - t: testing context for assertions and error reporting
+func TestNewEventAt(t *testing.T) {
+	// Define test cases for table-driven testing.
+	tests := []struct {
+		name      string
+		checker   string
+		status    health.Status
+		message   string
+		duration  time.Duration
+		timestamp time.Time
+	}{
+		{
+			name:      "specific_timestamp",
+			checker:   "http-checker",
+			status:    health.StatusHealthy,
+			message:   "OK",
+			duration:  50 * time.Millisecond,
+			timestamp: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+		},
+		{
+			name:      "past_timestamp",
+			checker:   "tcp-checker",
+			status:    health.StatusUnhealthy,
+			message:   "connection refused",
+			duration:  100 * time.Millisecond,
+			timestamp: time.Date(2020, 6, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:      "zero_timestamp",
+			checker:   "cmd-checker",
+			status:    health.StatusUnknown,
+			message:   "timeout",
+			duration:  5 * time.Second,
+			timestamp: time.Time{},
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a health result for testing.
+			result := health.NewHealthyResult(tt.message, tt.duration)
+
+			// Create event with explicit timestamp.
+			event := health.NewEventAt(tt.checker, tt.status, result, tt.timestamp)
+
+			// Assert event fields match expected values.
+			assert.Equal(t, tt.checker, event.Checker)
+			assert.Equal(t, tt.status, event.Status)
+			assert.Equal(t, result.Message, event.Result.Message)
+			assert.Equal(t, tt.timestamp, event.Timestamp)
+		})
+	}
+}
+
 // TestEvent_Fields tests the Event struct field assignments.
 //
 // Params:

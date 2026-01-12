@@ -28,12 +28,27 @@ type Result struct {
 // Returns:
 //   - Result: a new result with StatusHealthy and current timestamp
 func NewHealthyResult(message string, duration time.Duration) Result {
-	// Build and return the healthy result with current timestamp.
+	// Delegate to NewHealthyResultAt with current time.
+	return NewHealthyResultAt(message, duration, time.Now())
+}
+
+// NewHealthyResultAt creates a healthy result with a specific timestamp.
+// This is useful for testing or reconstructing results from stored data.
+//
+// Params:
+//   - message: human-readable description of the healthy state
+//   - duration: how long the health check took to complete
+//   - timestamp: the timestamp to use for this result
+//
+// Returns:
+//   - Result: a new result with StatusHealthy and specified timestamp
+func NewHealthyResultAt(message string, duration time.Duration, timestamp time.Time) Result {
+	// Build and return the healthy result with specified timestamp.
 	return Result{
 		Status:    StatusHealthy,
 		Message:   message,
 		Duration:  duration,
-		Timestamp: time.Now(),
+		Timestamp: timestamp,
 	}
 }
 
@@ -48,12 +63,28 @@ func NewHealthyResult(message string, duration time.Duration) Result {
 // Returns:
 //   - Result: a new result with StatusUnhealthy and current timestamp
 func NewUnhealthyResult(message string, duration time.Duration, err error) Result {
-	// Build and return the unhealthy result with current timestamp and error.
+	// Delegate to NewUnhealthyResultAt with current time.
+	return NewUnhealthyResultAt(message, duration, err, time.Now())
+}
+
+// NewUnhealthyResultAt creates an unhealthy result with a specific timestamp.
+// This is useful for testing or reconstructing results from stored data.
+//
+// Params:
+//   - message: human-readable description of the unhealthy state
+//   - duration: how long the health check took to complete
+//   - err: the error that caused the health check to fail
+//   - timestamp: the timestamp to use for this result
+//
+// Returns:
+//   - Result: a new result with StatusUnhealthy and specified timestamp
+func NewUnhealthyResultAt(message string, duration time.Duration, err error, timestamp time.Time) Result {
+	// Build and return the unhealthy result with specified timestamp and error.
 	return Result{
 		Status:    StatusUnhealthy,
 		Message:   message,
 		Duration:  duration,
-		Timestamp: time.Now(),
+		Timestamp: timestamp,
 		Error:     err,
 	}
 }
