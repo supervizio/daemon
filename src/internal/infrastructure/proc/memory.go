@@ -204,29 +204,51 @@ func (c *MemoryCollector) CollectAllProcesses(ctx context.Context) ([]metrics.Pr
 		return nil, fmt.Errorf("read /proc: %w", err)
 	}
 
+	return c.collectProcessesFromEntries(ctx, entries, sysMem.Total)
+}
+
+// collectProcessesFromEntries iterates over /proc entries and collects memory metrics.
+func (c *MemoryCollector) collectProcessesFromEntries(
+	ctx context.Context,
+	entries []os.DirEntry,
+	totalMemory uint64,
+) ([]metrics.ProcessMemory, error) {
 	var results []metrics.ProcessMemory
+
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+		proc, ok := c.tryCollectProcessEntry(ctx, entry, totalMemory)
+		if ok {
+			results = append(results, proc)
 		}
-
-		pid, err := strconv.Atoi(entry.Name())
-		if err != nil {
-			continue // Not a PID directory
-		}
-
-		proc, err := c.CollectProcess(ctx, pid)
-		if err != nil {
-			continue // Process may have exited
-		}
-
-		// Calculate usage percentage relative to total system memory
-		if sysMem.Total > 0 {
-			proc.UsagePercent = float64(proc.RSS) / float64(sysMem.Total) * 100
-		}
-
-		results = append(results, proc)
 	}
 
 	return results, nil
+}
+
+// tryCollectProcessEntry attempts to collect memory metrics for a single /proc entry.
+// Returns the metrics and true if successful, zero value and false otherwise.
+func (c *MemoryCollector) tryCollectProcessEntry(
+	ctx context.Context,
+	entry os.DirEntry,
+	totalMemory uint64,
+) (metrics.ProcessMemory, bool) {
+	if !entry.IsDir() {
+		return metrics.ProcessMemory{}, false
+	}
+
+	pid, err := strconv.Atoi(entry.Name())
+	if err != nil {
+		return metrics.ProcessMemory{}, false
+	}
+
+	proc, err := c.CollectProcess(ctx, pid)
+	if err != nil {
+		return metrics.ProcessMemory{}, false
+	}
+
+	if totalMemory > 0 {
+		proc.UsagePercent = float64(proc.RSS) / float64(totalMemory) * 100
+	}
+
+	return proc, true
 }
