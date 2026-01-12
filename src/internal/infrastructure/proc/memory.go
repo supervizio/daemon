@@ -40,27 +40,41 @@ func (c *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemo
 	default:
 	}
 
+	values, err := c.readMemInfo()
+	if err != nil {
+		return metrics.SystemMemory{}, err
+	}
+
+	return c.buildSystemMemory(values), nil
+}
+
+// readMemInfo reads and parses /proc/meminfo into a key-value map.
+func (c *MemoryCollector) readMemInfo() (map[string]uint64, error) {
 	file, err := os.Open(filepath.Join(c.procPath, "meminfo"))
 	if err != nil {
-		return metrics.SystemMemory{}, fmt.Errorf("open /proc/meminfo: %w", err)
+		return nil, fmt.Errorf("open /proc/meminfo: %w", err)
 	}
 	defer func() { _ = file.Close() }()
 
-	mem := metrics.SystemMemory{Timestamp: time.Now()}
 	values := make(map[string]uint64)
-
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		line := scanner.Text()
-		key, value := c.parseMemInfoLine(line)
+		key, value := c.parseMemInfoLine(scanner.Text())
 		if key != "" {
 			values[key] = value
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return metrics.SystemMemory{}, fmt.Errorf("scan /proc/meminfo: %w", err)
+		return nil, fmt.Errorf("scan /proc/meminfo: %w", err)
 	}
+
+	return values, nil
+}
+
+// buildSystemMemory constructs SystemMemory from parsed meminfo values.
+func (c *MemoryCollector) buildSystemMemory(values map[string]uint64) metrics.SystemMemory {
+	mem := metrics.SystemMemory{Timestamp: time.Now()}
 
 	// Map values to struct (values are in kB, convert to bytes)
 	mem.Total = values["MemTotal"] * 1024
@@ -85,7 +99,7 @@ func (c *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemo
 		mem.UsagePercent = float64(mem.Used) / float64(mem.Total) * 100
 	}
 
-	return mem, nil
+	return mem
 }
 
 // parseMemInfoLine parses a single line from /proc/meminfo.
