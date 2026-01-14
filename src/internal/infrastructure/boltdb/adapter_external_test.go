@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kodflow/daemon/internal/domain/metrics"
+	"github.com/kodflow/daemon/internal/domain/probe"
 	"github.com/kodflow/daemon/internal/domain/storage"
 	"github.com/kodflow/daemon/internal/infrastructure/boltdb"
 )
@@ -55,7 +55,7 @@ func TestAdapter_WriteAndGetSystemCPU(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now()
-	cpu := metrics.SystemCPU{
+	cpu := probe.SystemCPU{
 		User:      1000,
 		System:    500,
 		Idle:      5000,
@@ -84,7 +84,7 @@ func TestAdapter_WriteAndGetSystemMemory(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now()
-	mem := metrics.SystemMemory{
+	mem := probe.SystemMemory{
 		Total:     16 * 1024 * 1024 * 1024,
 		Available: 8 * 1024 * 1024 * 1024,
 		Timestamp: now,
@@ -111,10 +111,10 @@ func TestAdapter_WriteAndGetProcessMetrics(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now()
-	proc := metrics.ProcessMetrics{
+	proc := probe.ProcessMetrics{
 		ServiceName:  "test-service",
 		PID:          1234,
-		State:        metrics.ProcessStateRunning,
+		State:        probe.ProcessStateRunning,
 		Healthy:      true,
 		RestartCount: 0,
 		Timestamp:    now,
@@ -168,7 +168,7 @@ func TestAdapter_MultipleWrites(t *testing.T) {
 
 	base := time.Now()
 	for i := 0; i < 10; i++ {
-		cpu := metrics.SystemCPU{
+		cpu := probe.SystemCPU{
 			User:      uint64(i * 100),
 			Timestamp: base.Add(time.Duration(i) * time.Second),
 		}
@@ -195,8 +195,8 @@ func TestAdapter_Prune(t *testing.T) {
 	old := time.Now().Add(-2 * time.Hour)
 	recent := time.Now()
 
-	oldCPU := metrics.SystemCPU{User: 100, Timestamp: old}
-	newCPU := metrics.SystemCPU{User: 200, Timestamp: recent}
+	oldCPU := probe.SystemCPU{User: 100, Timestamp: old}
+	newCPU := probe.SystemCPU{User: 200, Timestamp: recent}
 
 	require.NoError(t, adapter.WriteSystemCPU(ctx, &oldCPU))
 	require.NoError(t, adapter.WriteSystemCPU(ctx, &newCPU))
@@ -221,8 +221,8 @@ func TestAdapter_PruneProcessMetrics(t *testing.T) {
 	old := time.Now().Add(-2 * time.Hour)
 	recent := time.Now()
 
-	oldProc := metrics.ProcessMetrics{ServiceName: "svc", PID: 1, Timestamp: old}
-	newProc := metrics.ProcessMetrics{ServiceName: "svc", PID: 2, Timestamp: recent}
+	oldProc := probe.ProcessMetrics{ServiceName: "svc", PID: 1, Timestamp: old}
+	newProc := probe.ProcessMetrics{ServiceName: "svc", PID: 2, Timestamp: recent}
 
 	require.NoError(t, adapter.WriteProcessMetrics(ctx, &oldProc))
 	require.NoError(t, adapter.WriteProcessMetrics(ctx, &newProc))
@@ -247,6 +247,6 @@ func TestAdapter_ContextCancellation(t *testing.T) {
 	_, err := adapter.GetSystemCPU(ctx, time.Now(), time.Now())
 	assert.ErrorIs(t, err, context.Canceled)
 
-	err = adapter.WriteSystemCPU(ctx, &metrics.SystemCPU{})
+	err = adapter.WriteSystemCPU(ctx, &probe.SystemCPU{})
 	assert.ErrorIs(t, err, context.Canceled)
 }

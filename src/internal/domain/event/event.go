@@ -1,5 +1,3 @@
-//go:build linux
-
 // Package event provides domain types for event handling.
 package event
 

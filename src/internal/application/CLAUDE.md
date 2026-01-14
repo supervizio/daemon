@@ -7,7 +7,8 @@ Use case implementations coordinating domain and infrastructure.
 ```
 application/
 ├── config/       # Configuration port interface
-├── health/       # Health monitoring with ProbeMonitor
+├── healthcheck/  # Service reachability monitoring (TCP, HTTP, etc.)
+├── probe/        # System metrics tracking (CPU, RAM, etc.)
 ├── process/      # Process lifecycle management
 └── supervisor/   # Service orchestration
 ```
@@ -17,9 +18,15 @@ application/
 | Package | Role |
 |---------|------|
 | `config` | Loader interface (port) |
-| `health` | ProbeMonitor coordinates listener probes |
+| `healthcheck` | ProbeMonitor coordinates service health checks |
+| `probe` | Tracker monitors process/system metrics |
 | `process` | ProcessManager handles lifecycle |
 | `supervisor` | Supervisor orchestrates services |
+
+## Terminology
+
+- **healthcheck**: Service reachability verification (TCP, HTTP, ICMP, gRPC, UDP, Exec)
+- **probe**: System metrics collection (CPU, RAM, DISK, NET, I/O)
 
 ## Dependencies
 
@@ -31,6 +38,7 @@ application/
 
 - `Supervisor` - Main service orchestrator
 - `ProcessManager` - Per-service process management
-- `ProbeMonitor` - Multi-protocol health probing
-- `Creator` - Port for creating probers
+- `ProbeMonitor` - Multi-protocol health checking
+- `Tracker` - Process metrics tracking
+- `Creator` - Port for creating health checkers
 - `Loader` - Config loading interface

@@ -1,5 +1,3 @@
-//go:build linux
-
 // Package storage provides domain interfaces for metrics persistence.
 package storage
 
@@ -7,31 +5,31 @@ import (
 	"context"
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/metrics"
+	"github.com/kodflow/daemon/internal/domain/probe"
 )
 
-// MetricsStore defines the interface for persisting and querying metrics.
+// MetricsStore defines the interface for persisting and querying probe.
 type MetricsStore interface {
-	// WriteSystemCPU persists system CPU metrics.
-	WriteSystemCPU(ctx context.Context, m *metrics.SystemCPU) error
-	// WriteSystemMemory persists system memory metrics.
-	WriteSystemMemory(ctx context.Context, m *metrics.SystemMemory) error
-	// WriteProcessMetrics persists process metrics.
-	WriteProcessMetrics(ctx context.Context, m *metrics.ProcessMetrics) error
+	// WriteSystemCPU persists system CPU probe.
+	WriteSystemCPU(ctx context.Context, m *probe.SystemCPU) error
+	// WriteSystemMemory persists system memory probe.
+	WriteSystemMemory(ctx context.Context, m *probe.SystemMemory) error
+	// WriteProcessMetrics persists process probe.
+	WriteProcessMetrics(ctx context.Context, m *probe.ProcessMetrics) error
 
 	// GetSystemCPU retrieves system CPU metrics within the time range.
-	GetSystemCPU(ctx context.Context, since, until time.Time) ([]metrics.SystemCPU, error)
+	GetSystemCPU(ctx context.Context, since, until time.Time) ([]probe.SystemCPU, error)
 	// GetSystemMemory retrieves system memory metrics within the time range.
-	GetSystemMemory(ctx context.Context, since, until time.Time) ([]metrics.SystemMemory, error)
+	GetSystemMemory(ctx context.Context, since, until time.Time) ([]probe.SystemMemory, error)
 	// GetProcessMetrics retrieves process metrics for a service within the time range.
-	GetProcessMetrics(ctx context.Context, serviceName string, since, until time.Time) ([]metrics.ProcessMetrics, error)
+	GetProcessMetrics(ctx context.Context, serviceName string, since, until time.Time) ([]probe.ProcessMetrics, error)
 
-	// GetLatestSystemCPU retrieves the most recent system CPU metrics.
-	GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, error)
-	// GetLatestSystemMemory retrieves the most recent system memory metrics.
-	GetLatestSystemMemory(ctx context.Context) (metrics.SystemMemory, error)
+	// GetLatestSystemCPU retrieves the most recent system CPU probe.
+	GetLatestSystemCPU(ctx context.Context) (probe.SystemCPU, error)
+	// GetLatestSystemMemory retrieves the most recent system memory probe.
+	GetLatestSystemMemory(ctx context.Context) (probe.SystemMemory, error)
 	// GetLatestProcessMetrics retrieves the most recent process metrics for a service.
-	GetLatestProcessMetrics(ctx context.Context, serviceName string) (metrics.ProcessMetrics, error)
+	GetLatestProcessMetrics(ctx context.Context, serviceName string) (probe.ProcessMetrics, error)
 
 	// Prune removes metrics older than the specified duration.
 	// Returns the number of deleted entries.
@@ -45,7 +43,7 @@ type MetricsStore interface {
 type StoreConfig struct {
 	// Path is the file path for the database.
 	Path string
-	// Retention is how long to keep metrics.
+	// Retention is how long to keep probe.
 	Retention time.Duration
 	// PruneInterval is how often to run automatic pruning.
 	PruneInterval time.Duration
@@ -54,7 +52,7 @@ type StoreConfig struct {
 // DefaultStoreConfig returns the default storage configuration.
 func DefaultStoreConfig() StoreConfig {
 	return StoreConfig{
-		Path:          "/var/lib/supervizio/metrics.db",
+		Path:          "/var/lib/supervizio/probe.db",
 		Retention:     24 * time.Hour,
 		PruneInterval: time.Hour,
 	}

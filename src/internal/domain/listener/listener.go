@@ -5,7 +5,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/kodflow/daemon/internal/domain/probe"
+	"github.com/kodflow/daemon/internal/domain/healthcheck"
 )
 
 // maxValidPort is the maximum valid TCP/UDP port number.
@@ -34,7 +34,7 @@ type Listener struct {
 
 	// ProbeConfig contains the probe configuration for this listener.
 	// May be nil if no probing is configured.
-	ProbeConfig *probe.Config
+	ProbeConfig *healthcheck.Config
 
 	// ProbeType specifies the probe type for this listener.
 	// Examples: "tcp", "http", "grpc".
@@ -43,7 +43,7 @@ type Listener struct {
 	// ProbeTarget contains additional probe target configuration.
 	// For HTTP: path, method, status code.
 	// For gRPC: service name.
-	ProbeTarget probe.Target
+	ProbeTarget healthcheck.Target
 }
 
 // NewListener creates a new listener with default state.
@@ -104,7 +104,7 @@ func NewUDP(name, address string, port int) *Listener {
 //
 // Returns:
 //   - *Listener: the listener with probe configured.
-func (l *Listener) WithProbe(probeType string, config probe.Config, target probe.Target) *Listener {
+func (l *Listener) WithProbe(probeType string, config healthcheck.Config, target healthcheck.Target) *Listener {
 	// Set probe configuration.
 	l.ProbeType = probeType
 	l.ProbeConfig = &config

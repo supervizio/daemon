@@ -1,5 +1,3 @@
-//go:build linux
-
 // Package state provides domain types for daemon state representation.
 package state
 

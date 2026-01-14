@@ -1,162 +1,74 @@
-// Package probe provides infrastructure adapters for service probing.
+// Package probe provides platform detection and factory for metrics collectors.
 package probe
 
 import (
-	"errors"
-	"time"
+	"os"
+	"runtime"
 
 	"github.com/kodflow/daemon/internal/domain/probe"
+	"github.com/kodflow/daemon/internal/infrastructure/probe/scratch"
 )
 
-// proberConstructor is a function that creates a prober with a given timeout.
-type proberConstructor func(timeout time.Duration) probe.Prober
-
-var (
-	// ErrUnknownProberType indicates an unknown prober type was requested.
-	ErrUnknownProberType error = errors.New("unknown prober type")
-
-	// proberConstructors maps prober types to their constructor functions.
-	proberConstructors map[string]proberConstructor = map[string]proberConstructor{
-		proberTypeTCP:  func(t time.Duration) probe.Prober { return NewTCPProber(t) },
-		proberTypeUDP:  func(t time.Duration) probe.Prober { return NewUDPProber(t) },
-		proberTypeHTTP: func(t time.Duration) probe.Prober { return NewHTTPProber(t) },
-		proberTypeGRPC: func(t time.Duration) probe.Prober { return NewGRPCProber(t) },
-		proberTypeExec: func(t time.Duration) probe.Prober { return NewExecProber(t) },
-		proberTypeICMP: func(t time.Duration) probe.Prober { return NewICMPProber(t) },
-	}
-)
-
-// Factory creates probers based on type.
-// It provides a centralized way to create prober instances.
-type Factory struct {
-	// defaultTimeout is the default timeout for probers.
-	defaultTimeout time.Duration
-}
-
-// NewFactory creates a new prober factory.
+// NewSystemCollector creates a SystemCollector appropriate for the current platform.
+// It automatically detects the best available implementation.
 //
-// Params:
-//   - defaultTimeout: the default timeout for created probers.
-//
-// Returns:
-//   - *Factory: a factory for creating probers.
-func NewFactory(defaultTimeout time.Duration) *Factory {
-	// Return configured factory.
-	return &Factory{
-		defaultTimeout: defaultTimeout,
+// Detection order:
+// 1. Linux with /proc filesystem -> linux.LinuxProbe
+// 2. FreeBSD/OpenBSD/NetBSD -> bsd.BSDProbe (TODO)
+// 3. Darwin (macOS) -> darwin.DarwinProbe (TODO)
+// 4. Fallback -> scratch.ScratchProbe
+func NewSystemCollector() probe.SystemCollector {
+	switch {
+	case hasProc() && runtime.GOOS == "linux":
+		// Linux with /proc filesystem available
+		// Note: The linux adapter only partially implements the interface.
+		// For now, fall through to scratch as a placeholder.
+		// TODO: Return linux.NewLinuxProbe() when fully implemented.
+		return scratch.NewScratchProbe()
+
+	case isBSD():
+		// BSD family (FreeBSD, OpenBSD, NetBSD)
+		// TODO: Return bsd.NewBSDProbe() when implemented.
+		return scratch.NewScratchProbe()
+
+	case runtime.GOOS == "darwin":
+		// macOS
+		// TODO: Return darwin.NewDarwinProbe() when implemented.
+		return scratch.NewScratchProbe()
+
+	default:
+		// Fallback for scratch containers, Windows, or unknown platforms
+		return scratch.NewScratchProbe()
 	}
 }
 
-// Create creates a prober of the specified type.
-//
-// Params:
-//   - proberType: the type of prober to create (tcp, udp, http, grpc, exec, icmp).
-//   - timeout: the timeout for the prober (uses default if zero).
-//
-// Returns:
-//   - probe.Prober: the created prober.
-//   - error: ErrUnknownProberType if the type is not recognized.
-func (f *Factory) Create(proberType string, timeout time.Duration) (probe.Prober, error) {
-	// Normalize timeout using helper.
-	timeout = f.normalizeTimeout(timeout)
+// hasProc checks if the /proc filesystem is available and readable.
+func hasProc() bool {
+	_, err := os.Stat("/proc/stat")
+	return err == nil
+}
 
-	// Look up constructor in map.
-	constructor, exists := proberConstructors[proberType]
-	// Check if prober type is recognized.
-	if !exists {
-		// Return error for unrecognized prober type.
-		return nil, ErrUnknownProberType
+// isBSD returns true if running on a BSD variant.
+func isBSD() bool {
+	switch runtime.GOOS {
+	case "freebsd", "openbsd", "netbsd", "dragonfly":
+		return true
+	default:
+		return false
 	}
-
-	// Create prober using constructor.
-	return constructor(timeout), nil
 }
 
-// normalizeTimeout returns a valid timeout value.
-//
-// Params:
-//   - timeout: the input timeout duration.
-//
-// Returns:
-//   - time.Duration: the input timeout or factory default if zero/negative.
-func (f *Factory) normalizeTimeout(timeout time.Duration) time.Duration {
-	// Use factory default timeout if not specified or invalid.
-	if timeout <= 0 {
-		// Return factory default.
-		return f.defaultTimeout
+// DetectedPlatform returns a string describing the detected platform.
+// This is useful for logging and diagnostics.
+func DetectedPlatform() string {
+	switch {
+	case hasProc() && runtime.GOOS == "linux":
+		return "linux-proc"
+	case isBSD():
+		return "bsd-" + runtime.GOOS
+	case runtime.GOOS == "darwin":
+		return "darwin"
+	default:
+		return "scratch-" + runtime.GOOS
 	}
-	// Return input timeout.
-	return timeout
-}
-
-// CreateTCP creates a TCP prober.
-//
-// Params:
-//   - timeout: the timeout for the prober (uses default if zero).
-//
-// Returns:
-//   - *TCPProber: the created TCP prober.
-func (f *Factory) CreateTCP(timeout time.Duration) *TCPProber {
-	// Return TCP prober with normalized timeout.
-	return NewTCPProber(f.normalizeTimeout(timeout))
-}
-
-// CreateUDP creates a UDP prober.
-//
-// Params:
-//   - timeout: the timeout for the prober (uses default if zero).
-//
-// Returns:
-//   - *UDPProber: the created UDP prober.
-func (f *Factory) CreateUDP(timeout time.Duration) *UDPProber {
-	// Return UDP prober with normalized timeout.
-	return NewUDPProber(f.normalizeTimeout(timeout))
-}
-
-// CreateHTTP creates an HTTP prober.
-//
-// Params:
-//   - timeout: the timeout for the prober (uses default if zero).
-//
-// Returns:
-//   - *HTTPProber: the created HTTP prober.
-func (f *Factory) CreateHTTP(timeout time.Duration) *HTTPProber {
-	// Return HTTP prober with normalized timeout.
-	return NewHTTPProber(f.normalizeTimeout(timeout))
-}
-
-// CreateGRPC creates a gRPC prober.
-//
-// Params:
-//   - timeout: the timeout for the prober (uses default if zero).
-//
-// Returns:
-//   - *GRPCProber: the created gRPC prober.
-func (f *Factory) CreateGRPC(timeout time.Duration) *GRPCProber {
-	// Return gRPC prober with normalized timeout.
-	return NewGRPCProber(f.normalizeTimeout(timeout))
-}
-
-// CreateExec creates an exec prober.
-//
-// Params:
-//   - timeout: the timeout for the prober (uses default if zero).
-//
-// Returns:
-//   - *ExecProber: the created exec prober.
-func (f *Factory) CreateExec(timeout time.Duration) *ExecProber {
-	// Return exec prober with normalized timeout.
-	return NewExecProber(f.normalizeTimeout(timeout))
-}
-
-// CreateICMP creates an ICMP prober.
-//
-// Params:
-//   - timeout: the timeout for the prober (uses default if zero).
-//
-// Returns:
-//   - *ICMPProber: the created ICMP prober.
-func (f *Factory) CreateICMP(timeout time.Duration) *ICMPProber {
-	// Return ICMP prober with normalized timeout.
-	return NewICMPProber(f.normalizeTimeout(timeout))
 }

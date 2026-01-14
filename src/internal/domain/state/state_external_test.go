@@ -1,5 +1,3 @@
-//go:build linux
-
 // Package state_test provides external tests for the state package.
 package state_test
 
@@ -9,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kodflow/daemon/internal/domain/metrics"
+	"github.com/kodflow/daemon/internal/domain/probe"
 	"github.com/kodflow/daemon/internal/domain/state"
 )
 
@@ -43,7 +41,7 @@ func TestDaemonState_ProcessCount(t *testing.T) {
 		t.Parallel()
 
 		state := state.DaemonState{
-			Processes: []metrics.ProcessMetrics{
+			Processes: []probe.ProcessMetrics{
 				{ServiceName: "service1"},
 				{ServiceName: "service2"},
 				{ServiceName: "service3"},
@@ -68,11 +66,11 @@ func TestDaemonState_RunningProcessCount(t *testing.T) {
 		t.Parallel()
 
 		state := state.DaemonState{
-			Processes: []metrics.ProcessMetrics{
-				{ServiceName: "service1", State: metrics.ProcessStateRunning},
-				{ServiceName: "service2", State: metrics.ProcessStateStopped},
-				{ServiceName: "service3", State: metrics.ProcessStateRunning},
-				{ServiceName: "service4", State: metrics.ProcessStateFailed},
+			Processes: []probe.ProcessMetrics{
+				{ServiceName: "service1", State: probe.ProcessStateRunning},
+				{ServiceName: "service2", State: probe.ProcessStateStopped},
+				{ServiceName: "service3", State: probe.ProcessStateRunning},
+				{ServiceName: "service4", State: probe.ProcessStateFailed},
 			},
 		}
 
@@ -87,7 +85,7 @@ func TestDaemonState_HealthyProcessCount(t *testing.T) {
 		t.Parallel()
 
 		state := state.DaemonState{
-			Processes: []metrics.ProcessMetrics{
+			Processes: []probe.ProcessMetrics{
 				{ServiceName: "service1", Healthy: true},
 				{ServiceName: "service2", Healthy: false},
 				{ServiceName: "service3", Healthy: true},
@@ -110,12 +108,12 @@ func TestDaemonState_Fields(t *testing.T) {
 			Arch:          "amd64",
 			DaemonVersion: "1.0.0",
 		},
-		Processes: []metrics.ProcessMetrics{
+		Processes: []probe.ProcessMetrics{
 			{ServiceName: "test-service"},
 		},
 		System: state.SystemState{
-			CPU:    metrics.SystemCPU{User: 100},
-			Memory: metrics.SystemMemory{Total: 1024},
+			CPU:    probe.SystemCPU{User: 100},
+			Memory: probe.SystemMemory{Total: 1024},
 		},
 	}
 

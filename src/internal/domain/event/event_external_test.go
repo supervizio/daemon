@@ -1,5 +1,3 @@
-//go:build linux
-
 // Package event_test provides external tests for the event package.
 package event_test
 

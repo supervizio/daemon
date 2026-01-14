@@ -90,10 +90,19 @@ type CredentialsResolver interface {
 ```go
 import "github.com/kodflow/daemon/internal/kernel"
 
-// Use default kernel instance
+// Use default kernel instance (standard Unix)
 kernel.Default.Signals.Handle(ctx, ch)
 kernel.Default.Credentials.ResolveCredentials(user, group)
 kernel.Default.Reaper.Start()
+
+// With automatic scratch detection
+k := kernel.NewWithScratchDetection()
+// Uses ScratchCredentialManager if /etc/passwd is missing
+
+// Check if running in scratch environment
+if kernel.IsScratchEnvironment() {
+    // Only numeric UIDs/GIDs supported
+}
 ```
 
 ## Related Directories

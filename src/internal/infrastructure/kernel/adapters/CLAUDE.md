@@ -6,13 +6,14 @@ Platform-specific implementations.
 
 ```
 adapters/
-├── signals_linux.go     # Linux signal handling
-├── signals_unix.go      # Unix base implementation
-├── signals_bsd.go       # BSD variants
-├── signals_darwin.go    # macOS specific
-├── reaper_unix.go       # Zombie reaping (all Unix)
-├── process_unix.go      # Process groups (all Unix)
-└── credentials_unix.go  # User/group (all Unix)
+├── signals_linux.go         # Linux signal handling
+├── signals_unix.go          # Unix base implementation
+├── signals_bsd.go           # BSD variants
+├── signals_darwin.go        # macOS specific
+├── reaper_unix.go           # Zombie reaping (all Unix)
+├── process_unix.go          # Process groups (all Unix)
+├── credentials_unix.go      # User/group (standard Unix with /etc/passwd)
+└── credentials_scratch.go   # User/group (scratch containers, numeric only)
 ```
 
 ## Build Tags
@@ -59,6 +60,27 @@ func ResolveCredentials(user, group string) (*Credentials, error) {
     u, _ := user.Lookup(user)
     g, _ := user.LookupGroup(group)
     return &Credentials{Uid: u.Uid, Gid: g.Gid}, nil
+}
+```
+
+### credentials_scratch.go
+
+For scratch containers without `/etc/passwd`:
+
+```go
+// Only supports numeric UIDs/GIDs
+func (m *ScratchCredentialManager) LookupUser(nameOrID string) (*ports.User, error) {
+    uid, err := strconv.ParseUint(nameOrID, 10, 32)
+    if err != nil {
+        return nil, ErrScratchNameLookup // name lookup not available
+    }
+    return &ports.User{UID: uint32(uid), GID: uint32(uid)}, nil
+}
+
+// Detect scratch environment
+func IsScratchEnvironment() bool {
+    _, err := os.Stat("/etc/passwd")
+    return err != nil
 }
 ```
 

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kodflow/daemon/internal/domain/listener"
-	"github.com/kodflow/daemon/internal/domain/probe"
+	"github.com/kodflow/daemon/internal/domain/healthcheck"
 )
 
 // TestNewListener tests listener creation.
@@ -134,26 +134,26 @@ func TestListener_WithProbe(t *testing.T) {
 	tests := []struct {
 		name      string
 		probeType string
-		config    probe.Config
-		target    probe.Target
+		config    healthcheck.Config
+		target    healthcheck.Target
 	}{
 		{
 			name:      "tcp_probe",
 			probeType: "tcp",
-			config:    probe.NewConfig(),
-			target:    probe.NewTCPTarget("localhost:8080"),
+			config:    healthcheck.NewConfig(),
+			target:    healthcheck.NewTCPTarget("localhost:8080"),
 		},
 		{
 			name:      "http_probe",
 			probeType: "http",
-			config:    probe.NewConfig().WithTimeout(10 * time.Second),
-			target:    probe.NewHTTPTarget("http://localhost:8080/health", "GET", 200),
+			config:    healthcheck.NewConfig().WithTimeout(10 * time.Second),
+			target:    healthcheck.NewHTTPTarget("http://localhost:8080/health", "GET", 200),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create listener with probe.
+			// Create listener with healthcheck.
 			l := listener.NewTCP("http", "localhost", 8080)
 			l.WithProbe(tt.probeType, tt.config, tt.target)
 
@@ -344,7 +344,7 @@ func TestListener_HasProbe(t *testing.T) {
 		{
 			name: "with_probe",
 			setup: func(l *listener.Listener) {
-				l.WithProbe("tcp", probe.NewConfig(), probe.NewTCPTarget("localhost:8080"))
+				l.WithProbe("tcp", healthcheck.NewConfig(), healthcheck.NewTCPTarget("localhost:8080"))
 			},
 			expected: true,
 		},
