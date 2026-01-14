@@ -78,7 +78,7 @@ func TestTCPProber_Probe(t *testing.T) {
 		t.Fatalf("failed to create listener: %v", err)
 		return
 	}
-	defer listener.Close() //nolint:errcheck // cleanup in test
+	defer func() { _ = listener.Close() }()
 
 	// Accept connections in background goroutine.
 	// Goroutine terminates when listener.Accept returns error on Close.

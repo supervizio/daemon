@@ -1,4 +1,4 @@
-// Package health provides internal tests for probe_monitor.go.
+// Package healthcheck provides internal tests for probe_monitor.go.
 // It tests internal implementation details using white-box testing.
 package healthcheck
 
@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	domain "github.com/kodflow/daemon/internal/domain/health"
-	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/process"
 )
 
@@ -165,7 +165,7 @@ func Test_ProbeMonitor_findOrCreateListenerStatus(t *testing.T) {
 		{
 			name: "finds_existing_listener",
 			existingListeners: []domain.ListenerStatus{
-				{Name: "test-listener", State: listener.Ready},
+				{Name: "test-listener", State: listener.StateReady},
 			},
 			listenerName: "test-listener",
 			expectedNew:  false,
@@ -173,7 +173,7 @@ func Test_ProbeMonitor_findOrCreateListenerStatus(t *testing.T) {
 		{
 			name: "creates_new_when_not_found",
 			existingListeners: []domain.ListenerStatus{
-				{Name: "other-listener", State: listener.Ready},
+				{Name: "other-listener", State: listener.StateReady},
 			},
 			listenerName: "test-listener",
 			expectedNew:  true,
@@ -181,9 +181,9 @@ func Test_ProbeMonitor_findOrCreateListenerStatus(t *testing.T) {
 		{
 			name: "finds_first_match_in_multiple",
 			existingListeners: []domain.ListenerStatus{
-				{Name: "first-listener", State: listener.Listening},
-				{Name: "test-listener", State: listener.Ready},
-				{Name: "third-listener", State: listener.Listening},
+				{Name: "first-listener", State: listener.StateListening},
+				{Name: "test-listener", State: listener.StateReady},
+				{Name: "third-listener", State: listener.StateListening},
 			},
 			listenerName: "test-listener",
 			expectedNew:  false,
@@ -422,22 +422,22 @@ func Test_ProbeMonitor_sendEventIfChanged(t *testing.T) {
 	}{
 		{
 			name:            "no_event_when_state_unchanged",
-			prevState:       listener.Listening,
-			newState:        listener.Listening,
+			prevState:       listener.StateListening,
+			newState:        listener.StateListening,
 			hasEventChannel: true,
 			expectEvent:     false,
 		},
 		{
 			name:            "event_when_state_changed",
-			prevState:       listener.Listening,
-			newState:        listener.Ready,
+			prevState:       listener.StateListening,
+			newState:        listener.StateReady,
 			hasEventChannel: true,
 			expectEvent:     true,
 		},
 		{
 			name:            "no_event_when_no_channel",
-			prevState:       listener.Listening,
-			newState:        listener.Ready,
+			prevState:       listener.StateListening,
+			newState:        listener.StateReady,
 			hasEventChannel: false,
 			expectEvent:     false,
 		},
@@ -728,36 +728,36 @@ func Test_ProbeMonitor_updateListenerState(t *testing.T) {
 		{
 			name:              "success_increments_and_transitions_to_ready",
 			result:            healthcheck.Result{Success: true},
-			initialState:      listener.Listening,
+			initialState:      listener.StateListening,
 			initialSuccesses:  0,
 			initialFailures:   0,
 			successThreshold:  1,
 			failureThreshold:  1,
-			expectedState:     listener.Ready,
+			expectedState:     listener.StateReady,
 			expectedSuccesses: 1,
 			expectedFailures:  0,
 		},
 		{
 			name:              "failure_increments_and_transitions_to_listening",
 			result:            healthcheck.Result{Success: false},
-			initialState:      listener.Ready,
+			initialState:      listener.StateReady,
 			initialSuccesses:  0,
 			initialFailures:   0,
 			successThreshold:  1,
 			failureThreshold:  1,
-			expectedState:     listener.Listening,
+			expectedState:     listener.StateListening,
 			expectedSuccesses: 0,
 			expectedFailures:  1,
 		},
 		{
 			name:              "success_below_threshold_no_transition",
 			result:            healthcheck.Result{Success: true},
-			initialState:      listener.Listening,
+			initialState:      listener.StateListening,
 			initialSuccesses:  0,
 			initialFailures:   0,
 			successThreshold:  3,
 			failureThreshold:  3,
-			expectedState:     listener.Listening,
+			expectedState:     listener.StateListening,
 			expectedSuccesses: 1,
 			expectedFailures:  0,
 		},

@@ -1,9 +1,9 @@
-// Package health provides the application service for health monitoring.
+// Package healthcheck provides the application service for health monitoring.
 package healthcheck
 
 import (
-	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/listener"
 )
 
 // ListenerProbe represents a listener with its probe configuration.

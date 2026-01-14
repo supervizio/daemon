@@ -1,4 +1,4 @@
-// Package health provides the application service for health monitoring.
+// Package healthcheck provides the application service for health monitoring.
 package healthcheck
 
 import (
@@ -9,8 +9,8 @@ import (
 	"time"
 
 	domain "github.com/kodflow/daemon/internal/domain/health"
-	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/process"
 )
 
@@ -407,7 +407,7 @@ func (m *ProbeMonitor) updateListenerState(lp *ListenerProbe, ls *domain.Listene
 		if ls.ConsecutiveSuccesses >= successThreshold {
 			// Check return value to prevent state divergence.
 			if lp.Listener.MarkReady() {
-				ls.State = listener.Ready
+				ls.State = listener.StateReady
 			} else {
 				// Sync state if transition failed.
 				ls.State = lp.Listener.State
@@ -422,7 +422,7 @@ func (m *ProbeMonitor) updateListenerState(lp *ListenerProbe, ls *domain.Listene
 		if ls.ConsecutiveFailures >= failureThreshold {
 			// Check return value to prevent state divergence.
 			if lp.Listener.MarkListening() {
-				ls.State = listener.Listening
+				ls.State = listener.StateListening
 			} else {
 				// Sync state if transition failed.
 				ls.State = lp.Listener.State

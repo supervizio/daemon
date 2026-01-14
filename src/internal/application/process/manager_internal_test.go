@@ -242,7 +242,7 @@ func Test_Manager_startProcess(t *testing.T) {
 		},
 		{
 			name:          "returns_error_on_start_failure",
-			startError:    domain.ErrEmptyCommand,
+			startError:    shared.ErrEmptyCommand,
 			expectError:   true,
 			expectedState: domain.StateFailed,
 		},
@@ -529,7 +529,7 @@ func Test_Manager_runOnce(t *testing.T) {
 		},
 		{
 			name:              "sends_failed_on_start_error",
-			startError:        domain.ErrEmptyCommand,
+			startError:        shared.ErrEmptyCommand,
 			exitCode:          0,
 			expectedEventType: domain.EventFailed,
 		},
@@ -623,7 +623,7 @@ func Test_Manager_runWithRestart(t *testing.T) {
 		{
 			name:              "exits_when_start_fails_with_never_policy",
 			cancelBeforeStart: false,
-			startError:        domain.ErrEmptyCommand,
+			startError:        shared.ErrEmptyCommand,
 			exitCode:          0,
 			expectedRestarts:  0,
 		},
@@ -688,7 +688,7 @@ func Test_Manager_tryStartProcess(t *testing.T) {
 		},
 		{
 			name:          "returns_false_on_error_with_never_policy",
-			startError:    domain.ErrEmptyCommand,
+			startError:    shared.ErrEmptyCommand,
 			restartPolicy: service.RestartNever,
 			expected:      false,
 		},
@@ -869,14 +869,14 @@ func Test_Manager_tryStartProcess_with_restart(t *testing.T) {
 	}{
 		{
 			name:          "returns_true_on_error_with_always_policy_and_restart",
-			startError:    domain.ErrEmptyCommand,
+			startError:    shared.ErrEmptyCommand,
 			restartPolicy: service.RestartAlways,
 			maxRetries:    3,
 			expected:      true,
 		},
 		{
 			name:             "returns_false_on_error_when_cancelled_during_wait",
-			startError:       domain.ErrEmptyCommand,
+			startError:       shared.ErrEmptyCommand,
 			restartPolicy:    service.RestartAlways,
 			maxRetries:       3,
 			cancelDuringWait: true,

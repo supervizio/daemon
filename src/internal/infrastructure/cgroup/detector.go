@@ -89,7 +89,7 @@ func IsContainerized() bool {
 
 	content := string(data)
 	// Docker/containerd typically have paths like /docker/<id> or /kubepods/<id>
-	return len(content) > 0 && (strings.Contains(content, "/docker/") ||
+	return content != "" && (strings.Contains(content, "/docker/") ||
 		strings.Contains(content, "/kubepods/") ||
 		strings.Contains(content, "/lxc/") ||
 		strings.Contains(content, "/containerd/"))

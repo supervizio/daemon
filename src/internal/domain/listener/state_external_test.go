@@ -18,17 +18,17 @@ func TestState_String(t *testing.T) {
 	}{
 		{
 			name:     "closed",
-			state:    listener.Closed,
+			state:    listener.StateClosed,
 			expected: "closed",
 		},
 		{
 			name:     "listening",
-			state:    listener.Listening,
+			state:    listener.StateListening,
 			expected: "listening",
 		},
 		{
 			name:     "ready",
-			state:    listener.Ready,
+			state:    listener.StateReady,
 			expected: "ready",
 		},
 		{
@@ -55,17 +55,17 @@ func TestState_IsClosed(t *testing.T) {
 	}{
 		{
 			name:     "closed",
-			state:    listener.Closed,
+			state:    listener.StateClosed,
 			expected: true,
 		},
 		{
 			name:     "listening",
-			state:    listener.Listening,
+			state:    listener.StateListening,
 			expected: false,
 		},
 		{
 			name:     "ready",
-			state:    listener.Ready,
+			state:    listener.StateReady,
 			expected: false,
 		},
 	}
@@ -87,17 +87,17 @@ func TestState_IsListening(t *testing.T) {
 	}{
 		{
 			name:     "closed",
-			state:    listener.Closed,
+			state:    listener.StateClosed,
 			expected: false,
 		},
 		{
 			name:     "listening",
-			state:    listener.Listening,
+			state:    listener.StateListening,
 			expected: true,
 		},
 		{
 			name:     "ready",
-			state:    listener.Ready,
+			state:    listener.StateReady,
 			expected: true,
 		},
 	}
@@ -119,17 +119,17 @@ func TestState_IsReady(t *testing.T) {
 	}{
 		{
 			name:     "closed",
-			state:    listener.Closed,
+			state:    listener.StateClosed,
 			expected: false,
 		},
 		{
 			name:     "listening",
-			state:    listener.Listening,
+			state:    listener.StateListening,
 			expected: false,
 		},
 		{
 			name:     "ready",
-			state:    listener.Ready,
+			state:    listener.StateReady,
 			expected: true,
 		},
 	}
@@ -152,38 +152,38 @@ func TestState_CanTransitionTo(t *testing.T) {
 	}{
 		{
 			name:     "closed_to_listening",
-			from:     listener.Closed,
-			to:       listener.Listening,
+			from:     listener.StateClosed,
+			to:       listener.StateListening,
 			expected: true,
 		},
 		{
 			name:     "closed_to_ready",
-			from:     listener.Closed,
-			to:       listener.Ready,
+			from:     listener.StateClosed,
+			to:       listener.StateReady,
 			expected: false,
 		},
 		{
 			name:     "listening_to_ready",
-			from:     listener.Listening,
-			to:       listener.Ready,
+			from:     listener.StateListening,
+			to:       listener.StateReady,
 			expected: true,
 		},
 		{
 			name:     "listening_to_closed",
-			from:     listener.Listening,
-			to:       listener.Closed,
+			from:     listener.StateListening,
+			to:       listener.StateClosed,
 			expected: true,
 		},
 		{
 			name:     "ready_to_listening",
-			from:     listener.Ready,
-			to:       listener.Listening,
+			from:     listener.StateReady,
+			to:       listener.StateListening,
 			expected: true,
 		},
 		{
 			name:     "ready_to_closed",
-			from:     listener.Ready,
-			to:       listener.Closed,
+			from:     listener.StateReady,
+			to:       listener.StateClosed,
 			expected: true,
 		},
 	}

@@ -114,7 +114,7 @@ func TestICMPProber_Probe(t *testing.T) {
 		t.Fatalf("failed to create listener: %v", err)
 		return
 	}
-	defer listener.Close() //nolint:errcheck // cleanup in test
+	defer func() { _ = listener.Close() }()
 
 	// Get the port number.
 	_, portStr, err := net.SplitHostPort(listener.Addr().String())

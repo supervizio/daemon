@@ -1,4 +1,4 @@
-// Package probe_test provides black-box tests for the probe package.
+// Package healthcheck_test provides black-box tests for the healthcheck package.
 package healthcheck_test
 
 import (

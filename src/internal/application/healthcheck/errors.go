@@ -1,4 +1,4 @@
-// Package health provides the application service for health monitoring.
+// Package healthcheck provides the application service for health monitoring.
 package healthcheck
 
 import "errors"

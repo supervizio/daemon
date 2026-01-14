@@ -4,15 +4,15 @@ package state
 import (
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/probe"
+	"github.com/kodflow/daemon/internal/domain/metrics"
 )
 
-// SystemState contains system-wide resource probe.
+// SystemState contains system-wide resource metrics.
 type SystemState struct {
-	// CPU contains system CPU probe.
-	CPU probe.SystemCPU `json:"cpu"`
-	// Memory contains system memory probe.
-	Memory probe.SystemMemory `json:"memory"`
+	// CPU contains system CPU metrics.
+	CPU metrics.SystemCPU `json:"cpu"`
+	// Memory contains system memory metrics.
+	Memory metrics.SystemMemory `json:"memory"`
 }
 
 // DaemonState represents the complete state of the daemon.
@@ -22,8 +22,8 @@ type DaemonState struct {
 	// Host contains host system information.
 	Host HostInfo `json:"host"`
 	// Processes contains metrics for all supervised processes.
-	Processes []probe.ProcessMetrics `json:"processes"`
-	// System contains system-wide resource probe.
+	Processes []metrics.ProcessMetrics `json:"processes"`
+	// System contains system-wide resource metrics.
 	System SystemState `json:"system"`
 	// Mesh contains mesh topology if available (optional).
 	Mesh *MeshTopology `json:"mesh,omitempty"`
@@ -103,15 +103,15 @@ type KubernetesPod struct {
 }
 
 // ProcessCount returns the number of supervised processes.
-func (d DaemonState) ProcessCount() int {
+func (d *DaemonState) ProcessCount() int {
 	return len(d.Processes)
 }
 
 // RunningProcessCount returns the number of running processes.
-func (d DaemonState) RunningProcessCount() int {
+func (d *DaemonState) RunningProcessCount() int {
 	count := 0
-	for _, p := range d.Processes {
-		if p.IsRunning() {
+	for i := range d.Processes {
+		if d.Processes[i].IsRunning() {
 			count++
 		}
 	}
@@ -119,10 +119,10 @@ func (d DaemonState) RunningProcessCount() int {
 }
 
 // HealthyProcessCount returns the number of healthy processes.
-func (d DaemonState) HealthyProcessCount() int {
+func (d *DaemonState) HealthyProcessCount() int {
 	count := 0
-	for _, p := range d.Processes {
-		if p.Healthy {
+	for i := range d.Processes {
+		if d.Processes[i].Healthy {
 			count++
 		}
 	}

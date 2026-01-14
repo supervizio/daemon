@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/shared"
 )
 
 // proberTypeICMP is the type identifier for ICMP probers.
@@ -17,9 +18,6 @@ const proberTypeICMP string = "icmp"
 // defaultTCPFallbackPort is the default port for TCP fallback probes.
 // Port 80 (HTTP) is commonly open and suitable for connectivity checks.
 const defaultTCPFallbackPort int = 80
-
-// maxValidPort is the maximum valid TCP/UDP port number.
-const maxValidPort int = 65535
 
 // ICMPProber performs ICMP ping probes for latency measurement.
 // It falls back to TCP probe when ICMP is not available (no CAP_NET_RAW).
@@ -123,7 +121,7 @@ func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) 
 	// Validate and normalize TCP port.
 	tcpPort := p.tcpPort
 	// Apply default port when not configured or invalid.
-	if tcpPort <= 0 || tcpPort > maxValidPort {
+	if tcpPort <= 0 || tcpPort > shared.MaxValidPort {
 		tcpPort = defaultTCPFallbackPort
 	}
 

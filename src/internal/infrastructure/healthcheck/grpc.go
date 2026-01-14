@@ -5,8 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/status"
 
 	"github.com/kodflow/daemon/internal/domain/healthcheck"
 )
@@ -22,17 +27,12 @@ var (
 	ErrGRPCServiceUnknown error = errors.New("service unknown")
 )
 
-// GRPCProber performs gRPC health check probes.
-// It uses the standard gRPC health/v1 protocol.
-//
-// Note: This is a simplified implementation that performs TCP connectivity check.
-// For full gRPC health checking, google.golang.org/grpc/health/grpc_health_v1
-// would be required as a dependency.
+// GRPCProber performs gRPC health check probes using the standard health/v1 protocol.
 type GRPCProber struct {
 	// timeout is the maximum duration for the healthcheck.
 	timeout time.Duration
 	// insecure enables insecure connections (no TLS).
-	insecure bool
+	insecureMode bool
 }
 
 // NewGRPCProber creates a new gRPC health prober.
@@ -45,8 +45,8 @@ type GRPCProber struct {
 func NewGRPCProber(timeout time.Duration) *GRPCProber {
 	// Return configured gRPC prober.
 	return &GRPCProber{
-		timeout:  timeout,
-		insecure: true,
+		timeout:      timeout,
+		insecureMode: true,
 	}
 }
 
@@ -60,8 +60,8 @@ func NewGRPCProber(timeout time.Duration) *GRPCProber {
 func NewGRPCProberSecure(timeout time.Duration) *GRPCProber {
 	// Return configured gRPC prober with TLS.
 	return &GRPCProber{
-		timeout:  timeout,
-		insecure: false,
+		timeout:      timeout,
+		insecureMode: false,
 	}
 }
 
@@ -74,9 +74,7 @@ func (p *GRPCProber) Type() string {
 	return proberTypeGRPC
 }
 
-// Probe performs a gRPC health check.
-// Currently implements TCP connectivity as a proxy for gRPC health.
-// Full gRPC health protocol requires google.golang.org/grpc dependency.
+// Probe performs a gRPC health check using the standard health/v1 protocol.
 //
 // Params:
 //   - ctx: context for cancellation and timeout control.
@@ -87,41 +85,106 @@ func (p *GRPCProber) Type() string {
 func (p *GRPCProber) Probe(ctx context.Context, target healthcheck.Target) healthcheck.Result {
 	start := time.Now()
 
-	// Currently we perform TCP connectivity check.
-	// TODO: Implement full gRPC health protocol when grpc dependency is added.
+	// Create context with timeout.
+	ctx, cancel := context.WithTimeout(ctx, p.timeout)
+	defer cancel()
 
-	// Create dialer with configured timeout.
-	dialer := &net.Dialer{
-		Timeout: p.timeout,
+	// Build dial options.
+	// Note: WithBlock and DialContext are deprecated but supported throughout gRPC 1.x.
+	// They provide blocking behavior required for health check probing.
+	opts := []grpc.DialOption{
+		grpc.WithBlock(), //nolint:staticcheck // supported throughout 1.x, needed for blocking
 	}
 
-	// Attempt to establish TCP connection to gRPC server.
-	conn, err := dialer.DialContext(ctx, "tcp", target.Address)
-	latency := time.Since(start)
+	// Add transport credentials.
+	if p.insecureMode {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
 
-	// Handle connection failure.
+	// Establish gRPC connection.
+	conn, err := grpc.DialContext(ctx, target.Address, opts...) //nolint:staticcheck // supported throughout 1.x
 	if err != nil {
-		// Return failure result.
+		latency := time.Since(start)
 		return healthcheck.NewFailureResult(
 			latency,
 			fmt.Sprintf("gRPC connection failed: %v", err),
 			err,
 		)
 	}
-	// Close the connection.
-	_ = conn.Close()
+	defer func() { _ = conn.Close() }()
 
-	// Build output message.
-	service := target.Service
-	// Check if service name was specified.
-	if service == "" {
-		// Default to server overall health check.
-		service = "(server)"
+	// Create health client.
+	client := grpc_health_v1.NewHealthClient(conn)
+
+	// Build health check request.
+	req := &grpc_health_v1.HealthCheckRequest{
+		Service: target.Service,
 	}
 
-	// Return success result.
-	return healthcheck.NewSuccessResult(
-		latency,
-		fmt.Sprintf("gRPC %s reachable at %s", service, target.Address),
-	)
+	// Perform health check.
+	resp, err := client.Check(ctx, req)
+	latency := time.Since(start)
+
+	// Handle RPC errors.
+	if err != nil {
+		st, ok := status.FromError(err)
+		if ok {
+			switch st.Code() {
+			case codes.NotFound:
+				return healthcheck.NewFailureResult(
+					latency,
+					fmt.Sprintf("gRPC service %q unknown", target.Service),
+					ErrGRPCServiceUnknown,
+				)
+			case codes.DeadlineExceeded:
+				return healthcheck.NewFailureResult(
+					latency,
+					"gRPC health check timeout",
+					err,
+				)
+			default:
+				return healthcheck.NewFailureResult(
+					latency,
+					fmt.Sprintf("gRPC health check failed: %s", st.Message()),
+					err,
+				)
+			}
+		}
+		return healthcheck.NewFailureResult(
+			latency,
+			fmt.Sprintf("gRPC health check failed: %v", err),
+			err,
+		)
+	}
+
+	// Check response status.
+	switch resp.Status {
+	case grpc_health_v1.HealthCheckResponse_SERVING:
+		service := target.Service
+		if service == "" {
+			service = "(server)"
+		}
+		return healthcheck.NewSuccessResult(
+			latency,
+			fmt.Sprintf("gRPC %s serving at %s", service, target.Address),
+		)
+	case grpc_health_v1.HealthCheckResponse_NOT_SERVING:
+		return healthcheck.NewFailureResult(
+			latency,
+			fmt.Sprintf("gRPC service %q not serving", target.Service),
+			ErrGRPCNotServing,
+		)
+	case grpc_health_v1.HealthCheckResponse_SERVICE_UNKNOWN:
+		return healthcheck.NewFailureResult(
+			latency,
+			fmt.Sprintf("gRPC service %q unknown", target.Service),
+			ErrGRPCServiceUnknown,
+		)
+	default:
+		return healthcheck.NewFailureResult(
+			latency,
+			fmt.Sprintf("gRPC service %q status unknown: %v", target.Service, resp.Status),
+			errors.New("unknown health status"),
+		)
+	}
 }

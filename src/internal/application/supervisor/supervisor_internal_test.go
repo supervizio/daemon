@@ -579,7 +579,7 @@ func Test_handleEvent_updates_stats(t *testing.T) {
 	}
 }
 
-// mockReaper implements ports.ZombieReaper for testing.
+// mockReaper implements kernel.ZombieReaper for testing.
 // It provides a mock implementation for zombie process reaping.
 type mockReaper struct {
 	// startCalled indicates if Start was called.

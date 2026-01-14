@@ -59,12 +59,12 @@ func TestAggregatedHealth_AddListener(t *testing.T) {
 		{
 			name:          "closed_listener",
 			listenerName:  "http",
-			listenerState: listener.Closed,
+			listenerState: listener.StateClosed,
 		},
 		{
 			name:          "ready_listener",
 			listenerName:  "grpc",
-			listenerState: listener.Ready,
+			listenerState: listener.StateReady,
 		},
 	}
 
@@ -167,7 +167,7 @@ func TestAggregatedHealth_Status(t *testing.T) {
 		{
 			name:           "healthy_running_ready_listeners",
 			processState:   process.StateRunning,
-			listeners:      []listener.State{listener.Ready, listener.Ready},
+			listeners:      []listener.State{listener.StateReady, listener.StateReady},
 			customStatus:   "",
 			expectedStatus: health.StatusHealthy,
 		},
@@ -181,21 +181,21 @@ func TestAggregatedHealth_Status(t *testing.T) {
 		{
 			name:           "degraded_listening",
 			processState:   process.StateRunning,
-			listeners:      []listener.State{listener.Listening},
+			listeners:      []listener.State{listener.StateListening},
 			customStatus:   "",
 			expectedStatus: health.StatusDegraded,
 		},
 		{
 			name:           "degraded_custom_status",
 			processState:   process.StateRunning,
-			listeners:      []listener.State{listener.Ready},
+			listeners:      []listener.State{listener.StateReady},
 			customStatus:   "DRAINING",
 			expectedStatus: health.StatusDegraded,
 		},
 		{
 			name:           "healthy_with_healthy_custom",
 			processState:   process.StateRunning,
-			listeners:      []listener.State{listener.Ready},
+			listeners:      []listener.State{listener.StateReady},
 			customStatus:   "HEALTHY",
 			expectedStatus: health.StatusHealthy,
 		},
@@ -276,7 +276,7 @@ func TestAggregatedHealth_IsDegraded(t *testing.T) {
 		{
 			name:         "degraded_listener_listening",
 			processState: process.StateRunning,
-			listeners:    []listener.State{listener.Listening},
+			listeners:    []listener.State{listener.StateListening},
 			customStatus: "",
 			expected:     true,
 		},
@@ -332,13 +332,13 @@ func TestAggregatedHealth_IsUnhealthy(t *testing.T) {
 		{
 			name:         "unhealthy_all_closed",
 			processState: process.StateRunning,
-			listeners:    []listener.State{listener.Closed},
+			listeners:    []listener.State{listener.StateClosed},
 			expected:     true,
 		},
 		{
 			name:         "degraded_not_unhealthy",
 			processState: process.StateRunning,
-			listeners:    []listener.State{listener.Listening},
+			listeners:    []listener.State{listener.StateListening},
 			expected:     false,
 		},
 	}
@@ -374,12 +374,12 @@ func TestAggregatedHealth_AllListenersReady(t *testing.T) {
 		},
 		{
 			name:      "all_ready",
-			listeners: []listener.State{listener.Ready, listener.Ready},
+			listeners: []listener.State{listener.StateReady, listener.StateReady},
 			expected:  true,
 		},
 		{
 			name:      "some_listening",
-			listeners: []listener.State{listener.Ready, listener.Listening},
+			listeners: []listener.State{listener.StateReady, listener.StateListening},
 			expected:  false,
 		},
 	}
@@ -414,12 +414,12 @@ func TestAggregatedHealth_ReadyListenerCount(t *testing.T) {
 		},
 		{
 			name:      "two_ready",
-			listeners: []listener.State{listener.Ready, listener.Ready},
+			listeners: []listener.State{listener.StateReady, listener.StateReady},
 			expected:  2,
 		},
 		{
 			name:      "one_ready_one_listening",
-			listeners: []listener.State{listener.Ready, listener.Listening},
+			listeners: []listener.State{listener.StateReady, listener.StateListening},
 			expected:  1,
 		},
 	}
@@ -454,7 +454,7 @@ func TestAggregatedHealth_TotalListenerCount(t *testing.T) {
 		},
 		{
 			name:      "three_listeners",
-			listeners: []listener.State{listener.Ready, listener.Listening, listener.Closed},
+			listeners: []listener.State{listener.StateReady, listener.StateListening, listener.StateClosed},
 			expected:  3,
 		},
 	}

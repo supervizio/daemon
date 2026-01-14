@@ -39,51 +39,35 @@ const (
 	TypeDaemonConfigReloaded
 )
 
+// typeStrings maps event types to their string representations.
+var typeStrings = map[Type]string{
+	TypeUnknown:              unknownString,
+	TypeProcessStarted:       "process.started",
+	TypeProcessStopped:       "process.stopped",
+	TypeProcessFailed:        "process.failed",
+	TypeProcessRestarted:     "process.restarted",
+	TypeProcessHealthy:       "process.healthy",
+	TypeProcessUnhealthy:     "process.unhealthy",
+	TypeMeshNodeUp:           "mesh.node.up",
+	TypeMeshNodeDown:         "mesh.node.down",
+	TypeMeshLeaderChanged:    "mesh.leader.changed",
+	TypeMeshTopologyChanged:  "mesh.topology.changed",
+	TypeK8sPodCreated:        "k8s.pod.created",
+	TypeK8sPodDeleted:        "k8s.pod.deleted",
+	TypeK8sPodReady:          "k8s.pod.ready",
+	TypeK8sPodFailed:         "k8s.pod.failed",
+	TypeSystemHighCPU:        "system.cpu.high",
+	TypeSystemHighMemory:     "system.memory.high",
+	TypeSystemDiskFull:       "system.disk.full",
+	TypeDaemonStarted:        "daemon.started",
+	TypeDaemonStopping:       "daemon.stopping",
+	TypeDaemonConfigReloaded: "daemon.config.reloaded",
+}
+
 // String returns the string representation of the event type.
 func (t Type) String() string {
-	switch t {
-	case TypeUnknown:
-		return unknownString
-	case TypeProcessStarted:
-		return "process.started"
-	case TypeProcessStopped:
-		return "process.stopped"
-	case TypeProcessFailed:
-		return "process.failed"
-	case TypeProcessRestarted:
-		return "process.restarted"
-	case TypeProcessHealthy:
-		return "process.healthy"
-	case TypeProcessUnhealthy:
-		return "process.unhealthy"
-	case TypeMeshNodeUp:
-		return "mesh.node.up"
-	case TypeMeshNodeDown:
-		return "mesh.node.down"
-	case TypeMeshLeaderChanged:
-		return "mesh.leader.changed"
-	case TypeMeshTopologyChanged:
-		return "mesh.topology.changed"
-	case TypeK8sPodCreated:
-		return "k8s.pod.created"
-	case TypeK8sPodDeleted:
-		return "k8s.pod.deleted"
-	case TypeK8sPodReady:
-		return "k8s.pod.ready"
-	case TypeK8sPodFailed:
-		return "k8s.pod.failed"
-	case TypeSystemHighCPU:
-		return "system.cpu.high"
-	case TypeSystemHighMemory:
-		return "system.memory.high"
-	case TypeSystemDiskFull:
-		return "system.disk.full"
-	case TypeDaemonStarted:
-		return "daemon.started"
-	case TypeDaemonStopping:
-		return "daemon.stopping"
-	case TypeDaemonConfigReloaded:
-		return "daemon.config.reloaded"
+	if s, ok := typeStrings[t]; ok {
+		return s
 	}
 	return unknownString
 }

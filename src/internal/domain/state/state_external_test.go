@@ -7,7 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kodflow/daemon/internal/domain/probe"
+	"github.com/kodflow/daemon/internal/domain/metrics"
+	"github.com/kodflow/daemon/internal/domain/process"
 	"github.com/kodflow/daemon/internal/domain/state"
 )
 
@@ -41,7 +42,7 @@ func TestDaemonState_ProcessCount(t *testing.T) {
 		t.Parallel()
 
 		state := state.DaemonState{
-			Processes: []probe.ProcessMetrics{
+			Processes: []metrics.ProcessMetrics{
 				{ServiceName: "service1"},
 				{ServiceName: "service2"},
 				{ServiceName: "service3"},
@@ -66,11 +67,11 @@ func TestDaemonState_RunningProcessCount(t *testing.T) {
 		t.Parallel()
 
 		state := state.DaemonState{
-			Processes: []probe.ProcessMetrics{
-				{ServiceName: "service1", State: probe.ProcessStateRunning},
-				{ServiceName: "service2", State: probe.ProcessStateStopped},
-				{ServiceName: "service3", State: probe.ProcessStateRunning},
-				{ServiceName: "service4", State: probe.ProcessStateFailed},
+			Processes: []metrics.ProcessMetrics{
+				{ServiceName: "service1", State: process.StateRunning},
+				{ServiceName: "service2", State: process.StateStopped},
+				{ServiceName: "service3", State: process.StateRunning},
+				{ServiceName: "service4", State: process.StateFailed},
 			},
 		}
 
@@ -85,7 +86,7 @@ func TestDaemonState_HealthyProcessCount(t *testing.T) {
 		t.Parallel()
 
 		state := state.DaemonState{
-			Processes: []probe.ProcessMetrics{
+			Processes: []metrics.ProcessMetrics{
 				{ServiceName: "service1", Healthy: true},
 				{ServiceName: "service2", Healthy: false},
 				{ServiceName: "service3", Healthy: true},
@@ -108,12 +109,12 @@ func TestDaemonState_Fields(t *testing.T) {
 			Arch:          "amd64",
 			DaemonVersion: "1.0.0",
 		},
-		Processes: []probe.ProcessMetrics{
+		Processes: []metrics.ProcessMetrics{
 			{ServiceName: "test-service"},
 		},
 		System: state.SystemState{
-			CPU:    probe.SystemCPU{User: 100},
-			Memory: probe.SystemMemory{Total: 1024},
+			CPU:    metrics.SystemCPU{User: 100},
+			Memory: metrics.SystemMemory{Total: 1024},
 		},
 	}
 

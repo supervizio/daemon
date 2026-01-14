@@ -1,4 +1,4 @@
-// Package health provides internal tests for probe_monitor_config.go.
+// Package healthcheck provides internal tests for probe_monitor_config.go.
 // It tests internal implementation details using white-box testing.
 package healthcheck
 

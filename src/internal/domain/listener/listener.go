@@ -6,10 +6,8 @@ import (
 	"strconv"
 
 	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/shared"
 )
-
-// maxValidPort is the maximum valid TCP/UDP port number.
-const maxValidPort int = 65535
 
 // Listener represents a network listener endpoint.
 // It tracks the listener's state and associated probe configuration.
@@ -55,15 +53,15 @@ type Listener struct {
 //   - port: the listen port number.
 //
 // Returns:
-//   - *Listener: a new listener in Closed state.
+//   - *Listener: a new listener in StateClosed state.
 func NewListener(name, protocol, address string, port int) *Listener {
-	// Return new listener with Closed state.
+	// Return new listener with StateClosed state.
 	return &Listener{
 		Name:     name,
 		Protocol: protocol,
 		Address:  address,
 		Port:     port,
-		State:    Closed,
+		State:    StateClosed,
 	}
 }
 
@@ -75,7 +73,7 @@ func NewListener(name, protocol, address string, port int) *Listener {
 //   - port: the listen port number.
 //
 // Returns:
-//   - *Listener: a new TCP listener in Closed state.
+//   - *Listener: a new TCP listener in StateClosed state.
 func NewTCP(name, address string, port int) *Listener {
 	// Return new TCP listener.
 	return NewListener(name, "tcp", address, port)
@@ -89,7 +87,7 @@ func NewTCP(name, address string, port int) *Listener {
 //   - port: the listen port number.
 //
 // Returns:
-//   - *Listener: a new UDP listener in Closed state.
+//   - *Listener: a new UDP listener in StateClosed state.
 func NewUDP(name, address string, port int) *Listener {
 	// Return new UDP listener.
 	return NewListener(name, "udp", address, port)
@@ -132,31 +130,31 @@ func (l *Listener) SetState(state State) bool {
 	return true
 }
 
-// MarkListening transitions the listener to Listening state.
+// MarkListening transitions the listener to StateListening state.
 //
 // Returns:
 //   - bool: true if transition was successful.
 func (l *Listener) MarkListening() bool {
-	// Transition to Listening state.
-	return l.SetState(Listening)
+	// Transition to StateListening state.
+	return l.SetState(StateListening)
 }
 
-// MarkReady transitions the listener to Ready state.
+// MarkReady transitions the listener to StateReady state.
 //
 // Returns:
 //   - bool: true if transition was successful.
 func (l *Listener) MarkReady() bool {
-	// Transition to Ready state.
-	return l.SetState(Ready)
+	// Transition to StateReady state.
+	return l.SetState(StateReady)
 }
 
-// MarkClosed transitions the listener to Closed state.
+// MarkClosed transitions the listener to StateClosed state.
 //
 // Returns:
 //   - bool: true if transition was successful.
 func (l *Listener) MarkClosed() bool {
-	// Transition to Closed state.
-	return l.SetState(Closed)
+	// Transition to StateClosed state.
+	return l.SetState(StateClosed)
 }
 
 // HasProbe returns true if probing is configured.
@@ -192,7 +190,7 @@ func (l *Listener) ProbeAddress() string {
 	}
 
 	// Validate port is within valid range to avoid invalid addresses.
-	if l.Port <= 0 || l.Port > maxValidPort {
+	if l.Port <= 0 || l.Port > shared.MaxValidPort {
 		// Return empty string for invalid port.
 		return ""
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	domain "github.com/kodflow/daemon/internal/domain/process"
+	"github.com/kodflow/daemon/internal/domain/shared"
 	"github.com/kodflow/daemon/internal/infrastructure/kernel"
 	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 )
@@ -132,13 +133,13 @@ func Test_UnixExecutor_buildCommand(t *testing.T) {
 			name:        "empty string returns error",
 			spec:        domain.Spec{Command: ""},
 			wantErr:     true,
-			expectedErr: domain.ErrEmptyCommand,
+			expectedErr: shared.ErrEmptyCommand,
 		},
 		{
 			name:        "whitespace only returns error",
 			spec:        domain.Spec{Command: "   "},
 			wantErr:     true,
-			expectedErr: domain.ErrEmptyCommand,
+			expectedErr: shared.ErrEmptyCommand,
 		},
 		{
 			name:         "simple command",

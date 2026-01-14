@@ -84,5 +84,5 @@ See `infrastructure/healthcheck/CLAUDE.md` for implementations.
 | Package | Relation |
 |---------|----------|
 | `infrastructure/healthcheck/` | Implements Prober interface |
-| `application/health/` | Orchestrates health checks |
-| `domain/metrics/` | System metrics (CPU, RAM) - different concern |
+| `application/healthcheck/` | Orchestrates health checks |
+| `domain/probe/` | System metrics (CPU, RAM) - different concern |

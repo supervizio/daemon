@@ -2,6 +2,7 @@
 package kernel
 
 import (
+	"github.com/kodflow/daemon/internal/domain/kernel"
 	"github.com/kodflow/daemon/internal/infrastructure/kernel/adapters"
 	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 )
@@ -16,7 +17,7 @@ type Kernel struct {
 	// Process handles process group operations.
 	Process ports.ProcessControl
 	// Reaper handles zombie process cleanup.
-	Reaper ports.ZombieReaper
+	Reaper kernel.ZombieReaper
 }
 
 // New creates a new Kernel with platform-specific implementations.

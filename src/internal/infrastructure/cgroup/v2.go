@@ -119,7 +119,7 @@ type CPUStat struct {
 // readCPUStat parses cpu.stat.
 func (r *V2Reader) readCPUStat() (CPUStat, error) {
 	statPath := filepath.Join(r.path, "cpu.stat")
-	file, err := os.Open(statPath) //nolint:gosec // Path is constructed from validated cgroup path
+	file, err := os.Open(statPath)
 	if err != nil {
 		return CPUStat{}, fmt.Errorf("open cpu.stat: %w", err)
 	}
@@ -213,6 +213,22 @@ type MemoryStat struct {
 	Pgmajfault uint64
 }
 
+// memoryStatFieldMap returns the field mapping for MemoryStat parsing.
+func (stat *MemoryStat) fieldMap() map[string]*uint64 {
+	return map[string]*uint64{
+		"anon":       &stat.Anon,
+		"file":       &stat.File,
+		"kernel":     &stat.Kernel,
+		"slab":       &stat.Slab,
+		"sock":       &stat.Sock,
+		"shmem":      &stat.Shmem,
+		"mapped":     &stat.Mapped,
+		"dirty":      &stat.Dirty,
+		"pgfault":    &stat.Pgfault,
+		"pgmajfault": &stat.Pgmajfault,
+	}
+}
+
 // ReadMemoryStat parses memory.stat.
 func (r *V2Reader) ReadMemoryStat(ctx context.Context) (MemoryStat, error) {
 	if err := ctx.Err(); err != nil {
@@ -220,13 +236,15 @@ func (r *V2Reader) ReadMemoryStat(ctx context.Context) (MemoryStat, error) {
 	}
 
 	statPath := filepath.Join(r.path, "memory.stat")
-	file, err := os.Open(statPath) //nolint:gosec // Path is constructed from validated cgroup path
+	file, err := os.Open(statPath)
 	if err != nil {
 		return MemoryStat{}, fmt.Errorf("open memory.stat: %w", err)
 	}
 	defer func() { _ = file.Close() }()
 
 	var stat MemoryStat
+	fields := stat.fieldMap()
+
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -235,32 +253,10 @@ func (r *V2Reader) ReadMemoryStat(ctx context.Context) (MemoryStat, error) {
 			continue
 		}
 
-		value, err := strconv.ParseUint(parts[1], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		switch parts[0] {
-		case "anon":
-			stat.Anon = value
-		case "file":
-			stat.File = value
-		case "kernel":
-			stat.Kernel = value
-		case "slab":
-			stat.Slab = value
-		case "sock":
-			stat.Sock = value
-		case "shmem":
-			stat.Shmem = value
-		case "mapped":
-			stat.Mapped = value
-		case "dirty":
-			stat.Dirty = value
-		case "pgfault":
-			stat.Pgfault = value
-		case "pgmajfault":
-			stat.Pgmajfault = value
+		if field, ok := fields[parts[0]]; ok {
+			if value, err := strconv.ParseUint(parts[1], 10, 64); err == nil {
+				*field = value
+			}
 		}
 	}
 

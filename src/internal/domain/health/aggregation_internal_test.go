@@ -25,24 +25,24 @@ func Test_AggregatedHealth_computeListenerStatus(t *testing.T) {
 		{
 			name: "all_ready_healthy",
 			listeners: []ListenerStatus{
-				{Name: "http", State: listener.Ready},
-				{Name: "grpc", State: listener.Ready},
+				{Name: "http", State: listener.StateReady},
+				{Name: "grpc", State: listener.StateReady},
 			},
 			expectedStatus: StatusHealthy,
 		},
 		{
 			name: "some_listening_degraded",
 			listeners: []ListenerStatus{
-				{Name: "http", State: listener.Ready},
-				{Name: "grpc", State: listener.Listening},
+				{Name: "http", State: listener.StateReady},
+				{Name: "grpc", State: listener.StateListening},
 			},
 			expectedStatus: StatusDegraded,
 		},
 		{
 			name: "all_closed_unhealthy",
 			listeners: []ListenerStatus{
-				{Name: "http", State: listener.Closed},
-				{Name: "grpc", State: listener.Closed},
+				{Name: "http", State: listener.StateClosed},
+				{Name: "grpc", State: listener.StateClosed},
 			},
 			expectedStatus: StatusUnhealthy,
 		},
@@ -81,16 +81,16 @@ func Test_AggregatedHealth_hasAnyListenerListening(t *testing.T) {
 		{
 			name: "none_listening",
 			listeners: []ListenerStatus{
-				{Name: "http", State: listener.Closed},
-				{Name: "grpc", State: listener.Closed},
+				{Name: "http", State: listener.StateClosed},
+				{Name: "grpc", State: listener.StateClosed},
 			},
 			expected: false,
 		},
 		{
 			name: "some_listening",
 			listeners: []ListenerStatus{
-				{Name: "http", State: listener.Listening},
-				{Name: "grpc", State: listener.Ready},
+				{Name: "http", State: listener.StateListening},
+				{Name: "grpc", State: listener.StateReady},
 			},
 			expected: true,
 		},

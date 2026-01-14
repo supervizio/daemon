@@ -13,6 +13,7 @@ import (
 	"time"
 
 	domain "github.com/kodflow/daemon/internal/domain/process"
+	"github.com/kodflow/daemon/internal/domain/shared"
 	"github.com/kodflow/daemon/internal/infrastructure/kernel"
 )
 
@@ -259,7 +260,7 @@ func (e *UnixExecutor) buildCommand(ctx context.Context, spec domain.Spec) (*exe
 	// Check if command is empty
 	if len(parts) == 0 {
 		// Return error for empty command
-		return nil, domain.ErrEmptyCommand
+		return nil, shared.ErrEmptyCommand
 	}
 
 	// Initialize args slice with command parts after executable

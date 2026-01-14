@@ -39,9 +39,9 @@ Note: This is different from **probe/metrics** which collect system telemetry (C
 - Uses `http.RoundTrip` (no redirect following)
 
 ### GRPCProber
-- Currently: TCP connectivity check
-- TODO: Full gRPC health/v1 protocol
-- Requires `google.golang.org/grpc` for full support
+- Uses gRPC health/v1 protocol for health checks
+- Supports both insecure and TLS connections
+- Returns service status (SERVING, NOT_SERVING, UNKNOWN)
 
 ### ExecProber
 - Executes command via `TrustedCommand`
@@ -74,4 +74,4 @@ Supported types: `tcp`, `udp`, `http`, `grpc`, `exec`, `icmp`
 |---------|----------|
 | `domain/healthcheck/` | Port interface definition |
 | `application/health/` | Orchestrates health checks |
-| `infrastructure/probe/` | System metrics collection (different concern) |
+| `infrastructure/metrics/` | System metrics collection (different concern) |

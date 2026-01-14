@@ -1,4 +1,4 @@
-// Package probe provides domain abstractions for service probing.
+// Package healthcheck provides domain abstractions for service probing.
 package healthcheck
 
 // Target represents the target of a probe.

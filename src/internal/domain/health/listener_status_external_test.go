@@ -20,17 +20,17 @@ func TestNewListenerStatus(t *testing.T) {
 		{
 			name:          "closed_listener",
 			listenerName:  "http",
-			listenerState: listener.Closed,
+			listenerState: listener.StateClosed,
 		},
 		{
 			name:          "listening_listener",
 			listenerName:  "grpc",
-			listenerState: listener.Listening,
+			listenerState: listener.StateListening,
 		},
 		{
 			name:          "ready_listener",
 			listenerName:  "admin",
-			listenerState: listener.Ready,
+			listenerState: listener.StateReady,
 		},
 	}
 
@@ -62,21 +62,21 @@ func TestListenerStatus_SetLastProbeResult(t *testing.T) {
 		{
 			name:           "set_healthy_result",
 			listenerName:   "http",
-			listenerState:  listener.Ready,
+			listenerState:  listener.StateReady,
 			result:         health.NewHealthyResult("OK", 100),
 			expectedStatus: health.StatusHealthy,
 		},
 		{
 			name:           "set_unhealthy_result",
 			listenerName:   "grpc",
-			listenerState:  listener.Listening,
+			listenerState:  listener.StateListening,
 			result:         health.NewUnhealthyResult("Connection refused", 100, nil),
 			expectedStatus: health.StatusUnhealthy,
 		},
 		{
 			name:           "set_healthy_result_on_closed_listener",
 			listenerName:   "admin",
-			listenerState:  listener.Closed,
+			listenerState:  listener.StateClosed,
 			result:         health.NewHealthyResult("OK", 50),
 			expectedStatus: health.StatusHealthy,
 		},
@@ -147,7 +147,7 @@ func TestListenerStatus_IncrementSuccesses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create listener status with initial state.
-			ls := health.NewListenerStatus("http", listener.Listening)
+			ls := health.NewListenerStatus("http", listener.StateListening)
 			ls.ConsecutiveFailures = tt.initialFailures
 			ls.ConsecutiveSuccesses = tt.initialSuccesses
 
@@ -211,7 +211,7 @@ func TestListenerStatus_IncrementFailures(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create listener status with initial state.
-			ls := health.NewListenerStatus("http", listener.Ready)
+			ls := health.NewListenerStatus("http", listener.StateReady)
 			ls.ConsecutiveSuccesses = tt.initialSuccesses
 			ls.ConsecutiveFailures = tt.initialFailures
 
@@ -236,17 +236,17 @@ func TestListenerStatus_IsReady(t *testing.T) {
 	}{
 		{
 			name:     "closed_not_ready",
-			state:    listener.Closed,
+			state:    listener.StateClosed,
 			expected: false,
 		},
 		{
 			name:     "listening_not_ready",
-			state:    listener.Listening,
+			state:    listener.StateListening,
 			expected: false,
 		},
 		{
 			name:     "ready_is_ready",
-			state:    listener.Ready,
+			state:    listener.StateReady,
 			expected: true,
 		},
 	}
@@ -272,17 +272,17 @@ func TestListenerStatus_IsListening(t *testing.T) {
 	}{
 		{
 			name:     "closed_not_listening",
-			state:    listener.Closed,
+			state:    listener.StateClosed,
 			expected: false,
 		},
 		{
 			name:     "listening_is_listening",
-			state:    listener.Listening,
+			state:    listener.StateListening,
 			expected: true,
 		},
 		{
 			name:     "ready_is_also_listening",
-			state:    listener.Ready,
+			state:    listener.StateReady,
 			expected: true,
 		},
 	}

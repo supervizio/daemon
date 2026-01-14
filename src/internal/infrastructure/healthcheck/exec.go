@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/shared"
 	"github.com/kodflow/daemon/internal/infrastructure/process"
 )
 
@@ -68,7 +69,7 @@ func (p *ExecProber) Probe(ctx context.Context, target healthcheck.Target) healt
 		return healthcheck.NewFailureResult(
 			time.Since(start),
 			"empty command",
-			healthcheck.ErrEmptyCommand,
+			shared.ErrEmptyCommand,
 		)
 	}
 

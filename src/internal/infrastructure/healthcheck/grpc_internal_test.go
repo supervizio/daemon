@@ -53,7 +53,7 @@ func TestGRPCProber_internalFields(t *testing.T) {
 
 			// Verify internal fields.
 			assert.Equal(t, tt.expectedTimeout, prober.timeout)
-			assert.Equal(t, tt.expectedInsecure, prober.insecure)
+			assert.Equal(t, tt.expectedInsecure, prober.insecureMode)
 		})
 	}
 }

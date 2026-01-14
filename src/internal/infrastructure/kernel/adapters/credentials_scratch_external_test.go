@@ -7,9 +7,10 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/kodflow/daemon/internal/infrastructure/kernel/adapters"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kodflow/daemon/internal/infrastructure/kernel/adapters"
 )
 
 // TestNewScratchCredentialManager verifies constructor returns non-nil instance.
@@ -249,12 +250,12 @@ func TestScratchCredentialManager_ApplyCredentials(t *testing.T) {
 	manager := adapters.NewScratchCredentialManager()
 
 	tests := []struct {
-		name           string
-		uid            uint32
-		gid            uint32
-		expectCreds    bool
-		expectedUID    uint32
-		expectedGID    uint32
+		name        string
+		uid         uint32
+		gid         uint32
+		expectCreds bool
+		expectedUID uint32
+		expectedGID uint32
 	}{
 		{
 			name:        "zero credentials skipped",

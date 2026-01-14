@@ -13,7 +13,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/kodflow/daemon/internal/domain/probe"
+	"github.com/kodflow/daemon/internal/domain/metrics"
 	"github.com/kodflow/daemon/internal/domain/storage"
 )
 
@@ -96,8 +96,8 @@ func (a *Adapter) initSchema() error {
 	})
 }
 
-// WriteSystemCPU persists system CPU probe.
-func (a *Adapter) WriteSystemCPU(ctx context.Context, m *probe.SystemCPU) error {
+// WriteSystemCPU persists system CPU metrics.
+func (a *Adapter) WriteSystemCPU(ctx context.Context, m *metrics.SystemCPU) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -113,8 +113,8 @@ func (a *Adapter) WriteSystemCPU(ctx context.Context, m *probe.SystemCPU) error 
 	})
 }
 
-// WriteSystemMemory persists system memory probe.
-func (a *Adapter) WriteSystemMemory(ctx context.Context, m *probe.SystemMemory) error {
+// WriteSystemMemory persists system memory metrics.
+func (a *Adapter) WriteSystemMemory(ctx context.Context, m *metrics.SystemMemory) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -130,8 +130,8 @@ func (a *Adapter) WriteSystemMemory(ctx context.Context, m *probe.SystemMemory) 
 	})
 }
 
-// WriteProcessMetrics persists process probe.
-func (a *Adapter) WriteProcessMetrics(ctx context.Context, m *probe.ProcessMetrics) error {
+// WriteProcessMetrics persists process metrics.
+func (a *Adapter) WriteProcessMetrics(ctx context.Context, m *metrics.ProcessMetrics) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -157,12 +157,12 @@ func (a *Adapter) WriteProcessMetrics(ctx context.Context, m *probe.ProcessMetri
 // GetSystemCPU retrieves system CPU metrics within the time range.
 //
 //nolint:dupl // Intentional type-specific implementation for SystemCPU
-func (a *Adapter) GetSystemCPU(ctx context.Context, since, until time.Time) ([]probe.SystemCPU, error) {
+func (a *Adapter) GetSystemCPU(ctx context.Context, since, until time.Time) ([]metrics.SystemCPU, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	var result []probe.SystemCPU
+	var result []metrics.SystemCPU
 	err := a.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketSystemCPU)
 		c := b.Cursor()
@@ -171,7 +171,7 @@ func (a *Adapter) GetSystemCPU(ctx context.Context, since, until time.Time) ([]p
 		untilKey := timeToKey(until)
 
 		for k, v := c.Seek(sinceKey); k != nil && bytes.Compare(k, untilKey) <= 0; k, v = c.Next() {
-			var m probe.SystemCPU
+			var m metrics.SystemCPU
 			if err := decode(v, &m); err != nil {
 				return err
 			}
@@ -185,12 +185,12 @@ func (a *Adapter) GetSystemCPU(ctx context.Context, since, until time.Time) ([]p
 // GetSystemMemory retrieves system memory metrics within the time range.
 //
 //nolint:dupl // Intentional type-specific implementation for SystemMemory
-func (a *Adapter) GetSystemMemory(ctx context.Context, since, until time.Time) ([]probe.SystemMemory, error) {
+func (a *Adapter) GetSystemMemory(ctx context.Context, since, until time.Time) ([]metrics.SystemMemory, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	var result []probe.SystemMemory
+	var result []metrics.SystemMemory
 	err := a.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketSystemMemory)
 		c := b.Cursor()
@@ -199,7 +199,7 @@ func (a *Adapter) GetSystemMemory(ctx context.Context, since, until time.Time) (
 		untilKey := timeToKey(until)
 
 		for k, v := c.Seek(sinceKey); k != nil && bytes.Compare(k, untilKey) <= 0; k, v = c.Next() {
-			var m probe.SystemMemory
+			var m metrics.SystemMemory
 			if err := decode(v, &m); err != nil {
 				return err
 			}
@@ -211,12 +211,12 @@ func (a *Adapter) GetSystemMemory(ctx context.Context, since, until time.Time) (
 }
 
 // GetProcessMetrics retrieves process metrics for a service within the time range.
-func (a *Adapter) GetProcessMetrics(ctx context.Context, serviceName string, since, until time.Time) ([]probe.ProcessMetrics, error) {
+func (a *Adapter) GetProcessMetrics(ctx context.Context, serviceName string, since, until time.Time) ([]metrics.ProcessMetrics, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	var result []probe.ProcessMetrics
+	var result []metrics.ProcessMetrics
 	err := a.db.View(func(tx *bolt.Tx) error {
 		parent := tx.Bucket(bucketProcessMetrics)
 		b := parent.Bucket([]byte(serviceName))
@@ -229,7 +229,7 @@ func (a *Adapter) GetProcessMetrics(ctx context.Context, serviceName string, sin
 		untilKey := timeToKey(until)
 
 		for k, v := c.Seek(sinceKey); k != nil && bytes.Compare(k, untilKey) <= 0; k, v = c.Next() {
-			var m probe.ProcessMetrics
+			var m metrics.ProcessMetrics
 			if err := decode(v, &m); err != nil {
 				return err
 			}
@@ -240,17 +240,18 @@ func (a *Adapter) GetProcessMetrics(ctx context.Context, serviceName string, sin
 	return result, err
 }
 
-// GetLatestSystemCPU retrieves the most recent system CPU probe.
-func (a *Adapter) GetLatestSystemCPU(ctx context.Context) (probe.SystemCPU, error) {
+// getLatest is a generic helper to retrieve the most recent entry from a bucket.
+func getLatest[T any](ctx context.Context, a *Adapter, bucket []byte, notFoundMsg string) (T, error) {
+	var zero T
 	if err := ctx.Err(); err != nil {
-		return probe.SystemCPU{}, err
+		return zero, err
 	}
 
-	var result probe.SystemCPU
+	var result T
 	var found bool
 
 	err := a.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketSystemCPU)
+		b := tx.Bucket(bucket)
 		c := b.Cursor()
 		k, v := c.Last()
 		if k == nil {
@@ -261,50 +262,31 @@ func (a *Adapter) GetLatestSystemCPU(ctx context.Context) (probe.SystemCPU, erro
 	})
 
 	if err != nil {
-		return probe.SystemCPU{}, err
+		return zero, err
 	}
 	if !found {
-		return probe.SystemCPU{}, fmt.Errorf("no system CPU metrics found")
+		return zero, fmt.Errorf("%s", notFoundMsg)
 	}
 	return result, nil
 }
 
-// GetLatestSystemMemory retrieves the most recent system memory probe.
-func (a *Adapter) GetLatestSystemMemory(ctx context.Context) (probe.SystemMemory, error) {
-	if err := ctx.Err(); err != nil {
-		return probe.SystemMemory{}, err
-	}
+// GetLatestSystemCPU retrieves the most recent system CPU metrics.
+func (a *Adapter) GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, error) {
+	return getLatest[metrics.SystemCPU](ctx, a, bucketSystemCPU, "no system CPU metrics found")
+}
 
-	var result probe.SystemMemory
-	var found bool
-
-	err := a.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketSystemMemory)
-		c := b.Cursor()
-		k, v := c.Last()
-		if k == nil {
-			return nil
-		}
-		found = true
-		return decode(v, &result)
-	})
-
-	if err != nil {
-		return probe.SystemMemory{}, err
-	}
-	if !found {
-		return probe.SystemMemory{}, fmt.Errorf("no system memory metrics found")
-	}
-	return result, nil
+// GetLatestSystemMemory retrieves the most recent system memory metrics.
+func (a *Adapter) GetLatestSystemMemory(ctx context.Context) (metrics.SystemMemory, error) {
+	return getLatest[metrics.SystemMemory](ctx, a, bucketSystemMemory, "no system memory metrics found")
 }
 
 // GetLatestProcessMetrics retrieves the most recent process metrics for a service.
-func (a *Adapter) GetLatestProcessMetrics(ctx context.Context, serviceName string) (probe.ProcessMetrics, error) {
+func (a *Adapter) GetLatestProcessMetrics(ctx context.Context, serviceName string) (metrics.ProcessMetrics, error) {
 	if err := ctx.Err(); err != nil {
-		return probe.ProcessMetrics{}, err
+		return metrics.ProcessMetrics{}, err
 	}
 
-	var result probe.ProcessMetrics
+	var result metrics.ProcessMetrics
 	var found bool
 
 	err := a.db.View(func(tx *bolt.Tx) error {
@@ -324,10 +306,10 @@ func (a *Adapter) GetLatestProcessMetrics(ctx context.Context, serviceName strin
 	})
 
 	if err != nil {
-		return probe.ProcessMetrics{}, err
+		return metrics.ProcessMetrics{}, err
 	}
 	if !found {
-		return probe.ProcessMetrics{}, fmt.Errorf("no process metrics found for %s", serviceName)
+		return metrics.ProcessMetrics{}, fmt.Errorf("no process metrics found for %s", serviceName)
 	}
 	return result, nil
 }

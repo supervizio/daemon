@@ -1,0 +1,253 @@
+// Protocol Buffer definitions for the daemon gRPC API.
+syntax = "proto3";
+
+package daemon.v1;
+
+option go_package = "github.com/kodflow/daemon/api/proto/v1/daemon;daemonpb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+
+// DaemonService provides daemon state and process management.
+service DaemonService {
+  // GetState returns the current daemon state.
+  rpc GetState(google.protobuf.Empty) returns (DaemonState);
+
+  // StreamState streams daemon state updates.
+  rpc StreamState(StreamStateRequest) returns (stream DaemonState);
+
+  // ListProcesses returns all supervised processes.
+  rpc ListProcesses(google.protobuf.Empty) returns (ListProcessesResponse);
+
+  // GetProcess returns a specific process by name.
+  rpc GetProcess(GetProcessRequest) returns (ProcessMetrics);
+
+  // StreamProcessMetrics streams metrics for a specific process.
+  rpc StreamProcessMetrics(StreamProcessMetricsRequest) returns (stream ProcessMetrics);
+}
+
+// MetricsService provides system and process metrics streaming.
+service MetricsService {
+  // GetSystemMetrics returns current system metrics.
+  rpc GetSystemMetrics(google.protobuf.Empty) returns (SystemMetrics);
+
+  // StreamSystemMetrics streams system metrics at specified interval.
+  rpc StreamSystemMetrics(StreamMetricsRequest) returns (stream SystemMetrics);
+
+  // StreamProcessMetrics streams process metrics at specified interval.
+  rpc StreamProcessMetrics(StreamProcessMetricsRequest) returns (stream ProcessMetrics);
+
+  // StreamAllProcessMetrics streams metrics for all processes.
+  rpc StreamAllProcessMetrics(StreamMetricsRequest) returns (stream ProcessMetrics);
+}
+
+// StreamStateRequest configures state streaming.
+message StreamStateRequest {
+  // Minimum interval between updates.
+  google.protobuf.Duration interval = 1;
+}
+
+// StreamMetricsRequest configures metrics streaming.
+message StreamMetricsRequest {
+  // Interval between metric snapshots.
+  google.protobuf.Duration interval = 1;
+}
+
+// StreamProcessMetricsRequest configures process metrics streaming.
+message StreamProcessMetricsRequest {
+  // Service name to stream metrics for.
+  string service_name = 1;
+  // Interval between metric snapshots.
+  google.protobuf.Duration interval = 2;
+}
+
+// GetProcessRequest identifies a process to retrieve.
+message GetProcessRequest {
+  // Service name.
+  string service_name = 1;
+}
+
+// ListProcessesResponse contains all process metrics.
+message ListProcessesResponse {
+  // All supervised process metrics.
+  repeated ProcessMetrics processes = 1;
+}
+
+// DaemonState represents the complete daemon state.
+message DaemonState {
+  // Daemon version.
+  string version = 1;
+  // Daemon start time.
+  google.protobuf.Timestamp start_time = 2;
+  // Daemon uptime.
+  google.protobuf.Duration uptime = 3;
+  // Overall daemon health.
+  bool healthy = 4;
+  // All supervised processes.
+  repeated ProcessMetrics processes = 5;
+  // System metrics snapshot.
+  SystemMetrics system = 6;
+  // Host information.
+  HostInfo host = 7;
+  // Kubernetes information (if running in k8s).
+  KubernetesInfo kubernetes = 8;
+}
+
+// HostInfo contains host system information.
+message HostInfo {
+  // Hostname.
+  string hostname = 1;
+  // Operating system.
+  string os = 2;
+  // Architecture.
+  string arch = 3;
+  // Number of CPUs.
+  int32 num_cpus = 4;
+}
+
+// KubernetesInfo contains Kubernetes pod information.
+message KubernetesInfo {
+  // Pod name.
+  string pod_name = 1;
+  // Namespace.
+  string namespace = 2;
+  // Node name.
+  string node_name = 3;
+  // Pod labels.
+  map<string, string> labels = 4;
+}
+
+// ProcessState represents process lifecycle state.
+enum ProcessState {
+  PROCESS_STATE_UNSPECIFIED = 0;
+  PROCESS_STATE_STOPPED = 1;
+  PROCESS_STATE_STARTING = 2;
+  PROCESS_STATE_RUNNING = 3;
+  PROCESS_STATE_STOPPING = 4;
+  PROCESS_STATE_FAILED = 5;
+}
+
+// ProcessMetrics contains metrics for a supervised process.
+message ProcessMetrics {
+  // Service name from configuration.
+  string service_name = 1;
+  // Current process ID (0 if not running).
+  int32 pid = 2;
+  // Current lifecycle state.
+  ProcessState state = 3;
+  // Health status.
+  bool healthy = 4;
+  // CPU metrics.
+  ProcessCPU cpu = 5;
+  // Memory metrics.
+  ProcessMemory memory = 6;
+  // Process start time.
+  google.protobuf.Timestamp start_time = 7;
+  // Process uptime.
+  google.protobuf.Duration uptime = 8;
+  // Number of restarts.
+  int32 restart_count = 9;
+  // Last error message (if failed).
+  string last_error = 10;
+  // Metrics collection timestamp.
+  google.protobuf.Timestamp timestamp = 11;
+}
+
+// ProcessCPU contains CPU metrics for a process.
+message ProcessCPU {
+  // User mode CPU time in nanoseconds.
+  uint64 user_time_ns = 1;
+  // System mode CPU time in nanoseconds.
+  uint64 system_time_ns = 2;
+  // Total CPU time in nanoseconds.
+  uint64 total_time_ns = 3;
+  // CPU usage percentage (0-100 per core).
+  double usage_percent = 4;
+}
+
+// ProcessMemory contains memory metrics for a process.
+message ProcessMemory {
+  // Resident set size in bytes.
+  uint64 rss_bytes = 1;
+  // Virtual memory size in bytes.
+  uint64 vms_bytes = 2;
+  // Swap usage in bytes.
+  uint64 swap_bytes = 3;
+  // Shared memory in bytes.
+  uint64 shared_bytes = 4;
+  // Data segment size in bytes.
+  uint64 data_bytes = 5;
+  // Stack size in bytes.
+  uint64 stack_bytes = 6;
+}
+
+// SystemMetrics contains system-wide metrics.
+message SystemMetrics {
+  // System CPU metrics.
+  SystemCPU cpu = 1;
+  // System memory metrics.
+  SystemMemory memory = 2;
+  // Load average.
+  LoadAverage load = 3;
+  // Collection timestamp.
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// SystemCPU contains system-wide CPU metrics.
+message SystemCPU {
+  // User mode time in nanoseconds.
+  uint64 user_ns = 1;
+  // Nice time in nanoseconds.
+  uint64 nice_ns = 2;
+  // System mode time in nanoseconds.
+  uint64 system_ns = 3;
+  // Idle time in nanoseconds.
+  uint64 idle_ns = 4;
+  // I/O wait time in nanoseconds.
+  uint64 iowait_ns = 5;
+  // IRQ time in nanoseconds.
+  uint64 irq_ns = 6;
+  // Soft IRQ time in nanoseconds.
+  uint64 softirq_ns = 7;
+  // Steal time in nanoseconds.
+  uint64 steal_ns = 8;
+  // Overall CPU usage percentage.
+  double usage_percent = 9;
+}
+
+// SystemMemory contains system-wide memory metrics.
+message SystemMemory {
+  // Total memory in bytes.
+  uint64 total_bytes = 1;
+  // Available memory in bytes.
+  uint64 available_bytes = 2;
+  // Used memory in bytes.
+  uint64 used_bytes = 3;
+  // Free memory in bytes.
+  uint64 free_bytes = 4;
+  // Buffer memory in bytes.
+  uint64 buffers_bytes = 5;
+  // Cached memory in bytes.
+  uint64 cached_bytes = 6;
+  // Shared memory in bytes.
+  uint64 shared_bytes = 7;
+  // Total swap in bytes.
+  uint64 swap_total_bytes = 8;
+  // Used swap in bytes.
+  uint64 swap_used_bytes = 9;
+  // Free swap in bytes.
+  uint64 swap_free_bytes = 10;
+  // Memory usage percentage.
+  double usage_percent = 11;
+}
+
+// LoadAverage contains system load averages.
+message LoadAverage {
+  // 1-minute load average.
+  double load1 = 1;
+  // 5-minute load average.
+  double load5 = 2;
+  // 15-minute load average.
+  double load15 = 3;
+}

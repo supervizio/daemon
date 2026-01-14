@@ -1,4 +1,4 @@
-// Package health_test provides black-box tests for the health package.
+// Package healthcheck_test provides black-box tests for the healthcheck package.
 package healthcheck_test
 
 import (

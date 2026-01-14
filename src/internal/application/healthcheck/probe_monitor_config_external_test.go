@@ -1,4 +1,4 @@
-// Package health_test provides black-box tests for probe_monitor_config.go.
+// Package healthcheck_test provides black-box tests for probe_monitor_config.go.
 package healthcheck_test
 
 import (

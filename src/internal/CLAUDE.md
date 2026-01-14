@@ -8,7 +8,7 @@ Private internal packages following hexagonal architecture.
 internal/
 ├── application/          # Application layer (use cases)
 │   ├── config/           # Configuration port interface
-│   ├── health/           # Health monitoring with ProbeMonitor
+│   ├── healthcheck/      # Health monitoring with ProbeMonitor
 │   ├── process/          # Process lifecycle management
 │   └── supervisor/       # Service orchestration
 ├── domain/               # Domain layer (entities, ports)
@@ -34,7 +34,7 @@ internal/
 |-------|---------|------|
 | Application | `supervisor` | Service lifecycle orchestration |
 | Application | `process` | Process manager with restart logic |
-| Application | `health` | ProbeMonitor - health orchestration |
+| Application | `healthcheck` | ProbeMonitor - health orchestration |
 | Application | `config` | Configuration port interface |
 | Domain | `service` | Service configuration entities |
 | Domain | `process` | Process entities, states, events |

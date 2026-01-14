@@ -1,4 +1,4 @@
-// Package health provides internal tests for listener_healthcheck.go.
+// Package healthcheck provides internal tests for listener_probe.go.
 // It tests internal implementation details using white-box testing.
 package healthcheck
 
@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/listener"
 )
 
 // testProber is a mock prober for internal testing.

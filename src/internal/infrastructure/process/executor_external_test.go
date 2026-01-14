@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	domain "github.com/kodflow/daemon/internal/domain/process"
+	"github.com/kodflow/daemon/internal/domain/shared"
 	"github.com/kodflow/daemon/internal/infrastructure/process"
 )
 
@@ -200,7 +201,7 @@ func TestUnixExecutor_Start_EmptyCommand(t *testing.T) {
 			// Verify error is returned for empty command.
 			assert.Error(t, err)
 			// Verify the specific error type.
-			assert.ErrorIs(t, err, domain.ErrEmptyCommand)
+			assert.ErrorIs(t, err, shared.ErrEmptyCommand)
 		})
 	}
 }

@@ -1,4 +1,4 @@
-// Package probe provides domain abstractions for service probing.
+// Package healthcheck provides domain abstractions for service probing.
 package healthcheck
 
 import "errors"
@@ -27,8 +27,4 @@ var (
 	// ErrConnectionRefused indicates the connection was refused.
 	// Returned when the target actively refuses the connection attempt.
 	ErrConnectionRefused error = errors.New("connection refused")
-
-	// ErrEmptyCommand indicates the command is empty.
-	// Returned when an exec probe has no command specified.
-	ErrEmptyCommand error = errors.New("empty command")
 )
