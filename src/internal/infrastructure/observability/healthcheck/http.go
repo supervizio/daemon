@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 )
 
 // proberTypeHTTP is the type identifier for HTTP probers.
@@ -44,7 +44,7 @@ type HTTPProber struct {
 func NewHTTPProber(timeout time.Duration) *HTTPProber {
 	// Ensure timeout is always positive to prevent indefinite hangs.
 	if timeout <= 0 {
-		timeout = healthcheck.DefaultTimeout
+		timeout = health.DefaultTimeout
 	}
 
 	// Configure transport with timeout.
@@ -79,8 +79,8 @@ func (p *HTTPProber) Type() string {
 //   - target: the target to healthcheck.
 //
 // Returns:
-//   - healthcheck.Result: the probe result with latency and status code.
-func (p *HTTPProber) Probe(ctx context.Context, target healthcheck.Target) healthcheck.Result {
+//   - health.CheckResult: the probe result with latency and status code.
+func (p *HTTPProber) Probe(ctx context.Context, target health.Target) health.CheckResult {
 	start := time.Now()
 
 	// Determine HTTP method.
@@ -106,7 +106,7 @@ func (p *HTTPProber) Probe(ctx context.Context, target healthcheck.Target) healt
 	// Handle request errors.
 	if err != nil {
 		// Return failure result with error details.
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("request failed: %v", err),
 			err,
@@ -116,7 +116,7 @@ func (p *HTTPProber) Probe(ctx context.Context, target healthcheck.Target) healt
 	// Check if status code matches expected.
 	if statusCode != expectedStatus {
 		// Return failure result for status mismatch.
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("unexpected status code: %d (expected %d)", statusCode, expectedStatus),
 			ErrHTTPStatusMismatch,
@@ -124,7 +124,7 @@ func (p *HTTPProber) Probe(ctx context.Context, target healthcheck.Target) healt
 	}
 
 	// Return success result with status code.
-	return healthcheck.NewSuccessResult(
+	return health.NewSuccessCheckResult(
 		latency,
 		fmt.Sprintf("HTTP %d", statusCode),
 	)

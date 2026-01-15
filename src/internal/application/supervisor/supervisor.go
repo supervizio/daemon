@@ -8,10 +8,10 @@ import (
 	"sync"
 
 	appconfig "github.com/kodflow/daemon/internal/application/config"
-	appprocess "github.com/kodflow/daemon/internal/application/process"
+	applifecycle "github.com/kodflow/daemon/internal/application/lifecycle"
+	domainconfig "github.com/kodflow/daemon/internal/domain/config"
+	domainlifecycle "github.com/kodflow/daemon/internal/domain/lifecycle"
 	domain "github.com/kodflow/daemon/internal/domain/process"
-	domainreaper "github.com/kodflow/daemon/internal/domain/reaper"
-	"github.com/kodflow/daemon/internal/domain/service"
 )
 
 // State represents the supervisor state.
@@ -46,15 +46,15 @@ type Supervisor struct {
 	// mu is the mutex for thread-safe access.
 	mu sync.RWMutex
 	// config is the service configuration.
-	config *service.Config
+	config *domainconfig.Config
 	// loader is the configuration loader.
 	loader appconfig.Loader
 	// executor is the process execution.
 	executor domain.Executor
 	// managers is the map of service managers.
-	managers map[string]*appprocess.Manager
+	managers map[string]*applifecycle.Manager
 	// reaper is the zombie process reaper (domain port).
-	reaper domainreaper.Reaper
+	reaper domainlifecycle.Reaper
 	// state is the current supervisor state.
 	state State
 	// ctx is the context for cancellation.
@@ -80,7 +80,7 @@ type Supervisor struct {
 // Returns:
 //   - *Supervisor: the new supervisor instance.
 //   - error: an error if configuration is invalid.
-func NewSupervisor(cfg *service.Config, loader appconfig.Loader, executor domain.Executor, reaper domainreaper.Reaper) (*Supervisor, error) {
+func NewSupervisor(cfg *domainconfig.Config, loader appconfig.Loader, executor domain.Executor, reaper domainlifecycle.Reaper) (*Supervisor, error) {
 	// Validate the configuration before creating the supervisor.
 	if err := cfg.Validate(); err != nil {
 		// Return nil supervisor and validation error.
@@ -91,7 +91,7 @@ func NewSupervisor(cfg *service.Config, loader appconfig.Loader, executor domain
 		config:   cfg,
 		loader:   loader,
 		executor: executor,
-		managers: make(map[string]*appprocess.Manager, len(cfg.Services)),
+		managers: make(map[string]*applifecycle.Manager, len(cfg.Services)),
 		reaper:   reaper,
 		state:    StateStopped,
 		stats:    make(map[string]*ServiceStats, len(cfg.Services)),
@@ -100,7 +100,7 @@ func NewSupervisor(cfg *service.Config, loader appconfig.Loader, executor domain
 	// Create a manager for each configured service.
 	for i := range cfg.Services {
 		svc := &cfg.Services[i]
-		s.managers[svc.Name] = appprocess.NewManager(svc, executor)
+		s.managers[svc.Name] = applifecycle.NewManager(svc, executor)
 		s.stats[svc.Name] = NewServiceStats()
 	}
 
@@ -274,18 +274,18 @@ func (s *Supervisor) Reload() error {
 //   - May spawn new goroutines for monitoring newly added services.
 //   - Goroutines run until Stop is called or context is cancelled.
 //   - Use Stop() to terminate all monitoring goroutines.
-func (s *Supervisor) updateServices(newCfg *service.Config) {
+func (s *Supervisor) updateServices(newCfg *domainconfig.Config) {
 	// Iterate through all services in the new configuration.
 	for i := range newCfg.Services {
 		svc := &newCfg.Services[i]
 		// Check if the service already exists.
 		if mgr, exists := s.managers[svc.Name]; exists {
 			_ = mgr.Stop()
-			s.managers[svc.Name] = appprocess.NewManager(svc, s.executor)
+			s.managers[svc.Name] = applifecycle.NewManager(svc, s.executor)
 			_ = s.managers[svc.Name].Start()
 		} else {
 			// Create and start a new manager for the new service.
-			s.managers[svc.Name] = appprocess.NewManager(svc, s.executor)
+			s.managers[svc.Name] = applifecycle.NewManager(svc, s.executor)
 			_ = s.managers[svc.Name].Start()
 			s.wg.Add(1)
 			go s.monitorService(svc.Name, s.managers[svc.Name])
@@ -297,7 +297,7 @@ func (s *Supervisor) updateServices(newCfg *service.Config) {
 //
 // Params:
 //   - newCfg: the new service configuration.
-func (s *Supervisor) removeDeletedServices(newCfg *service.Config) {
+func (s *Supervisor) removeDeletedServices(newCfg *domainconfig.Config) {
 	newServices := make(map[string]bool, len(newCfg.Services))
 	// Build a map of services in the new configuration.
 	for i := range newCfg.Services {
@@ -477,9 +477,9 @@ func (s *Supervisor) Services() map[string]ServiceInfo {
 //   - name: the service name.
 //
 // Returns:
-//   - *appprocess.Manager: the manager if found.
+//   - *applifecycle.Manager: the manager if found.
 //   - bool: true if the service was found.
-func (s *Supervisor) Service(name string) (*appprocess.Manager, bool) {
+func (s *Supervisor) Service(name string) (*applifecycle.Manager, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	mgr, ok := s.managers[name]

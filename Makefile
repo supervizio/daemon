@@ -35,7 +35,7 @@ test: generate ## Run tests with race detection
 lint: generate ## Run linters (ktn-linter + golangci-lint)
 	@echo "==> Running linters..."
 	@cd $(SRC_DIR) && golangci-lint run
-	@ktn-linter lint -c $(SRC_DIR)/.ktn-linter.yaml ./...
+	@ktn-linter lint ./...
 
 clean: ## Clean build artifacts and generated files
 	@echo "==> Cleaning..."

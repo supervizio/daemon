@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	domainhealthcheck "github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/infrastructure/observability/healthcheck"
 )
 
@@ -136,13 +136,13 @@ func TestUDPProber_Probe(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		target        domainhealthcheck.Target
+		target        health.Target
 		timeout       time.Duration
 		expectSuccess bool
 	}{
 		{
 			name: "successful_with_response",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: conn.LocalAddr().String(),
 			},
 			timeout:       time.Second,
@@ -150,7 +150,7 @@ func TestUDPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "successful_with_explicit_network",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: conn.LocalAddr().String(),
 				Network: "udp",
 			},
@@ -159,7 +159,7 @@ func TestUDPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "unreachable_port",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "127.0.0.1:1",
 			},
 			timeout:       50 * time.Millisecond,
@@ -167,7 +167,7 @@ func TestUDPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "invalid_address",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "invalid:address:format",
 			},
 			timeout:       100 * time.Millisecond,
@@ -247,7 +247,7 @@ func TestUDPProber_Probe_WithCustomPayload(t *testing.T) {
 			// Create UDP prober with custom payload.
 			prober := healthcheck.NewUDPProberWithPayload(time.Second, tt.payload)
 
-			target := domainhealthcheck.Target{
+			target := health.Target{
 				Address: conn.LocalAddr().String(),
 			}
 

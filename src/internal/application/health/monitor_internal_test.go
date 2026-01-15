@@ -1,0 +1,1001 @@
+// Package health provides internal tests for monitor.go.
+// It tests internal implementation details using white-box testing.
+package health
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	domain "github.com/kodflow/daemon/internal/domain/health"
+	"github.com/kodflow/daemon/internal/domain/listener"
+	"github.com/kodflow/daemon/internal/domain/process"
+)
+
+// internalTestProber is a mock prober for internal testing.
+//
+// internalTestProber provides a controllable prober implementation for
+// testing internal ProbeMonitor behavior.
+type internalTestProber struct {
+	probeType  string
+	result     domain.CheckResult
+	probeCount int
+}
+
+// Probe returns the configured test result and increments probe count.
+//
+// Params:
+//   - ctx: the context for cancellation.
+//   - target: the probe target.
+//
+// Returns:
+//   - domain.CheckResult: the configured test result.
+func (p *internalTestProber) Probe(_ context.Context, _ domain.Target) domain.CheckResult {
+	// Increment probe count for verification.
+	p.probeCount++
+	// Return the pre-configured result for testing.
+	return p.result
+}
+
+// Type returns the prober type.
+//
+// Returns:
+//   - string: the prober type identifier.
+func (p *internalTestProber) Type() string {
+	// Return the configured prober type.
+	return p.probeType
+}
+
+// internalTestCreator is a mock factory for internal testing.
+//
+// internalTestCreator provides a controllable factory implementation
+// for testing internal ProbeMonitor behavior.
+type internalTestCreator struct {
+	probers map[string]*internalTestProber
+	err     error
+}
+
+// Create returns a mock prober for the given type.
+//
+// Params:
+//   - proberType: the type of prober to create.
+//   - timeout: the timeout for the prober.
+//
+// Returns:
+//   - domain.Prober: the created prober.
+//   - error: if creation fails.
+func (f *internalTestCreator) Create(proberType string, _ time.Duration) (domain.Prober, error) {
+	// Return error if factory is configured to fail.
+	if f.err != nil {
+		return nil, f.err
+	}
+
+	// Return existing prober if available.
+	if p, ok := f.probers[proberType]; ok {
+		return p, nil
+	}
+
+	// Return default successful prober.
+	return &internalTestProber{
+		probeType: proberType,
+		result:    domain.CheckResult{Success: true},
+	}, nil
+}
+
+// Test_ProbeMonitor_resultToStatus tests the resultToStatus method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_resultToStatus(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// result is the probe result to convert.
+		result domain.CheckResult
+		// expected is the expected health status.
+		expected domain.Status
+	}{
+		{
+			name:     "success_maps_to_healthy",
+			result:   domain.CheckResult{Success: true},
+			expected: domain.StatusHealthy,
+		},
+		{
+			name:     "failure_maps_to_unhealthy",
+			result:   domain.CheckResult{Success: false},
+			expected: domain.StatusUnhealthy,
+		},
+		{
+			name: "success_with_output_maps_to_healthy",
+			result: domain.CheckResult{
+				Success: true,
+				Output:  "OK",
+			},
+			expected: domain.StatusHealthy,
+		},
+		{
+			name: "failure_with_error_maps_to_unhealthy",
+			result: domain.CheckResult{
+				Success: false,
+				Output:  "connection refused",
+			},
+			expected: domain.StatusUnhealthy,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			monitor := NewProbeMonitor(ProbeMonitorConfig{})
+
+			status := monitor.resultToStatus(tt.result)
+
+			// Verify the expected status.
+			assert.Equal(t, tt.expected, status)
+		})
+	}
+}
+
+// Test_ProbeMonitor_findOrCreateSubjectStatus tests findOrCreateSubjectStatus.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_findOrCreateSubjectStatus(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// existingSubjects are subjects already in health.
+		existingSubjects []domain.SubjectStatus
+		// listenerName is the name to find or create.
+		listenerName string
+		// expectedNew indicates if a new status should be created.
+		expectedNew bool
+	}{
+		{
+			name:             "creates_new_for_empty_list",
+			existingSubjects: nil,
+			listenerName:     "test-listener",
+			expectedNew:      true,
+		},
+		{
+			name: "finds_existing_subject",
+			existingSubjects: []domain.SubjectStatus{
+				{Name: "test-listener", State: domain.SubjectReady},
+			},
+			listenerName: "test-listener",
+			expectedNew:  false,
+		},
+		{
+			name: "creates_new_when_not_found",
+			existingSubjects: []domain.SubjectStatus{
+				{Name: "other-listener", State: domain.SubjectReady},
+			},
+			listenerName: "test-listener",
+			expectedNew:  true,
+		},
+		{
+			name: "finds_first_match_in_multiple",
+			existingSubjects: []domain.SubjectStatus{
+				{Name: "first-listener", State: domain.SubjectListening},
+				{Name: "test-listener", State: domain.SubjectReady},
+				{Name: "third-listener", State: domain.SubjectListening},
+			},
+			listenerName: "test-listener",
+			expectedNew:  false,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			monitor := NewProbeMonitor(ProbeMonitorConfig{})
+
+			// Set up existing subjects.
+			if tt.existingSubjects != nil {
+				monitor.health.Subjects = tt.existingSubjects
+			}
+			initialLen := len(monitor.health.Subjects)
+
+			// Create listener probe.
+			lp := &ListenerProbe{
+				Listener: listener.NewListener(tt.listenerName, "tcp", "localhost", 8080),
+			}
+
+			status := monitor.findOrCreateSubjectStatus(lp)
+
+			// Verify status was returned.
+			require.NotNil(t, status)
+			// Verify listener name matches.
+			assert.Equal(t, tt.listenerName, status.Name)
+
+			// Verify list grew if new was expected.
+			if tt.expectedNew {
+				assert.Len(t, monitor.health.Subjects, initialLen+1)
+			} else {
+				// Verify list size unchanged.
+				assert.Len(t, monitor.health.Subjects, initialLen)
+			}
+		})
+	}
+}
+
+// Test_ProbeMonitor_performProbe tests the performProbe method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_performProbe(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// probeSuccess indicates if probe should succeed.
+		probeSuccess bool
+		// bindingTimeout is the configured timeout.
+		bindingTimeout time.Duration
+		// targetAddress is the target address.
+		targetAddress string
+	}{
+		{
+			name:           "successful_probe",
+			probeSuccess:   true,
+			bindingTimeout: time.Second,
+			targetAddress:  "localhost:8080",
+		},
+		{
+			name:           "failed_probe",
+			probeSuccess:   false,
+			bindingTimeout: time.Second,
+			targetAddress:  "localhost:8080",
+		},
+		{
+			name:           "probe_with_default_timeout",
+			probeSuccess:   true,
+			bindingTimeout: 0,
+			targetAddress:  "",
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			prober := &internalTestProber{
+				probeType: "tcp",
+				result:    domain.CheckResult{Success: tt.probeSuccess},
+			}
+
+			monitor := NewProbeMonitor(ProbeMonitorConfig{
+				Factory:        &internalTestCreator{},
+				DefaultTimeout: 5 * time.Second,
+			})
+
+			// Create listener probe with binding.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			binding := &ProbeBinding{
+				ListenerName: "test",
+				Type:         ProbeTCP,
+				Target: ProbeTarget{
+					Address: tt.targetAddress,
+				},
+				Config: ProbeConfig{
+					Timeout:          tt.bindingTimeout,
+					SuccessThreshold: 1,
+					FailureThreshold: 1,
+				},
+			}
+			lp := &ListenerProbe{
+				Listener: l,
+				Prober:   prober,
+				Binding:  binding,
+			}
+
+			// Add to monitor's listeners.
+			monitor.listeners = append(monitor.listeners, lp)
+
+			// Perform probe.
+			ctx := context.Background()
+			monitor.performProbe(ctx, lp)
+
+			// Verify probe was called.
+			assert.Equal(t, 1, prober.probeCount)
+		})
+	}
+}
+
+// Test_ProbeMonitor_updateProbeResult tests the updateProbeResult method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_updateProbeResult(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// result is the probe result.
+		result domain.CheckResult
+		// successThreshold is the success threshold.
+		successThreshold int
+		// failureThreshold is the failure threshold.
+		failureThreshold int
+		// initialSuccesses is the initial consecutive successes.
+		initialSuccesses int
+		// initialFailures is the initial consecutive failures.
+		initialFailures int
+		// expectedSuccesses is the expected consecutive successes.
+		expectedSuccesses int
+		// expectedFailures is the expected consecutive failures.
+		expectedFailures int
+	}{
+		{
+			name:              "success_increments_successes",
+			result:            domain.CheckResult{Success: true},
+			successThreshold:  3,
+			failureThreshold:  3,
+			initialSuccesses:  0,
+			initialFailures:   0,
+			expectedSuccesses: 1,
+			expectedFailures:  0,
+		},
+		{
+			name:              "failure_increments_failures",
+			result:            domain.CheckResult{Success: false},
+			successThreshold:  3,
+			failureThreshold:  3,
+			initialSuccesses:  0,
+			initialFailures:   0,
+			expectedSuccesses: 0,
+			expectedFailures:  1,
+		},
+		{
+			name:              "success_resets_failures",
+			result:            domain.CheckResult{Success: true},
+			successThreshold:  3,
+			failureThreshold:  3,
+			initialSuccesses:  0,
+			initialFailures:   2,
+			expectedSuccesses: 1,
+			expectedFailures:  0,
+		},
+		{
+			name:              "failure_resets_successes",
+			result:            domain.CheckResult{Success: false},
+			successThreshold:  3,
+			failureThreshold:  3,
+			initialSuccesses:  2,
+			initialFailures:   0,
+			expectedSuccesses: 0,
+			expectedFailures:  1,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			monitor := NewProbeMonitor(ProbeMonitorConfig{})
+
+			// Create listener probe with binding.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			binding := &ProbeBinding{
+				ListenerName: "test",
+				Type:         ProbeTCP,
+				Config: ProbeConfig{
+					SuccessThreshold: tt.successThreshold,
+					FailureThreshold: tt.failureThreshold,
+				},
+			}
+			lp := &ListenerProbe{
+				Listener: l,
+				Prober:   &internalTestProber{probeType: "tcp"},
+				Binding:  binding,
+			}
+
+			// Set up initial subject status.
+			monitor.health.Subjects = []domain.SubjectStatus{
+				{
+					Name:                 "test",
+					ConsecutiveSuccesses: tt.initialSuccesses,
+					ConsecutiveFailures:  tt.initialFailures,
+				},
+			}
+
+			// Update with probe result.
+			monitor.updateProbeResult(lp, tt.result)
+
+			// Verify counters.
+			assert.Equal(t, tt.expectedSuccesses, monitor.health.Subjects[0].ConsecutiveSuccesses)
+			assert.Equal(t, tt.expectedFailures, monitor.health.Subjects[0].ConsecutiveFailures)
+		})
+	}
+}
+
+// Test_ProbeMonitor_sendEventIfChanged tests the sendEventIfChanged method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_sendEventIfChanged(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// prevState is the previous listener state.
+		prevState listener.State
+		// newSubjectState is the new subject state.
+		newSubjectState domain.SubjectState
+		// hasEventChannel indicates if event channel exists.
+		hasEventChannel bool
+		// expectEvent indicates if an event should be sent.
+		expectEvent bool
+	}{
+		{
+			name:            "no_event_when_state_unchanged",
+			prevState:       listener.StateListening,
+			newSubjectState: domain.SubjectListening,
+			hasEventChannel: true,
+			expectEvent:     false,
+		},
+		{
+			name:            "event_when_state_changed",
+			prevState:       listener.StateListening,
+			newSubjectState: domain.SubjectReady,
+			hasEventChannel: true,
+			expectEvent:     true,
+		},
+		{
+			name:            "no_event_when_no_channel",
+			prevState:       listener.StateListening,
+			newSubjectState: domain.SubjectReady,
+			hasEventChannel: false,
+			expectEvent:     false,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			var eventCh chan domain.Event
+			// Create event channel if requested.
+			if tt.hasEventChannel {
+				eventCh = make(chan domain.Event, 1)
+			}
+
+			monitor := NewProbeMonitor(ProbeMonitorConfig{
+				Events: eventCh,
+			})
+
+			// Create listener probe.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			lp := &ListenerProbe{
+				Listener: l,
+			}
+
+			// Create subject status with matching state.
+			ls := &domain.SubjectStatus{
+				Name:            "test",
+				State:           tt.newSubjectState,
+				LastProbeResult: &domain.Result{},
+			}
+
+			// Call method.
+			result := domain.CheckResult{Success: true}
+			monitor.sendEventIfChanged(lp, ls, tt.prevState, result)
+
+			// Verify event was sent or not.
+			if tt.expectEvent {
+				select {
+				case event := <-eventCh:
+					assert.Equal(t, "test", event.Checker)
+				// Timeout after short duration.
+				case <-time.After(100 * time.Millisecond):
+					t.Fatal("expected event not received")
+				}
+			} else if eventCh != nil {
+				// Verify no event if channel exists.
+				select {
+				case <-eventCh:
+					t.Fatal("unexpected event received")
+				// Default case for non-blocking read.
+				default:
+					// No event as expected.
+				}
+			}
+		})
+	}
+}
+
+// Test_ProbeMonitor_struct tests the ProbeMonitor struct fields.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_struct(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// config is the monitor configuration.
+		config ProbeMonitorConfig
+		// expectedTimeout is the expected default timeout.
+		expectedTimeout time.Duration
+		// expectedInterval is the expected default interval.
+		expectedInterval time.Duration
+	}{
+		{
+			name:             "default_config",
+			config:           ProbeMonitorConfig{},
+			expectedTimeout:  domain.DefaultTimeout,
+			expectedInterval: domain.DefaultInterval,
+		},
+		{
+			name: "custom_timeout",
+			config: ProbeMonitorConfig{
+				DefaultTimeout: 10 * time.Second,
+			},
+			expectedTimeout:  10 * time.Second,
+			expectedInterval: domain.DefaultInterval,
+		},
+		{
+			name: "custom_interval",
+			config: ProbeMonitorConfig{
+				DefaultInterval: 30 * time.Second,
+			},
+			expectedTimeout:  domain.DefaultTimeout,
+			expectedInterval: 30 * time.Second,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			monitor := NewProbeMonitor(tt.config)
+
+			// Verify default timeout.
+			assert.Equal(t, tt.expectedTimeout, monitor.defaultTimeout)
+			// Verify default interval.
+			assert.Equal(t, tt.expectedInterval, monitor.defaultInterval)
+			// Verify initial process state.
+			assert.Equal(t, process.StateStopped, monitor.processState)
+			// Verify not running.
+			assert.False(t, monitor.running)
+		})
+	}
+}
+
+// Test_ProbeMonitor_createProberFromBinding tests the createProberFromBinding method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_createProberFromBinding(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// hasFactory indicates if factory is configured.
+		hasFactory bool
+		// probeType is the binding probe type.
+		probeType ProbeType
+		// expectError indicates if an error is expected.
+		expectError bool
+		// expectedErr is the expected error.
+		expectedErr error
+	}{
+		{
+			name:        "creates_prober_successfully",
+			hasFactory:  true,
+			probeType:   ProbeTCP,
+			expectError: false,
+		},
+		{
+			name:        "error_when_factory_missing",
+			hasFactory:  false,
+			probeType:   ProbeTCP,
+			expectError: true,
+			expectedErr: ErrProberFactoryMissing,
+		},
+		{
+			name:        "error_when_probe_type_empty",
+			hasFactory:  true,
+			probeType:   "",
+			expectError: true,
+			expectedErr: ErrEmptyProbeType,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			config := ProbeMonitorConfig{
+				DefaultTimeout: 5 * time.Second,
+			}
+			// Configure factory if requested.
+			if tt.hasFactory {
+				config.Factory = &internalTestCreator{}
+			}
+
+			monitor := NewProbeMonitor(config)
+
+			// Create binding.
+			binding := &ProbeBinding{
+				ListenerName: "test",
+				Type:         tt.probeType,
+				Config: ProbeConfig{
+					Timeout: time.Second,
+				},
+			}
+
+			prober, err := monitor.createProberFromBinding(binding)
+
+			// Verify error expectation.
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.ErrorIs(t, err, tt.expectedErr)
+				}
+				assert.Nil(t, prober)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, prober)
+			}
+		})
+	}
+}
+
+// Test_ProbeMonitor_normalizeThresholds tests the normalizeThresholds method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_normalizeThresholds(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// successThreshold is the input success threshold.
+		successThreshold int
+		// failureThreshold is the input failure threshold.
+		failureThreshold int
+		// expectedSuccess is the expected normalized success threshold.
+		expectedSuccess int
+		// expectedFailure is the expected normalized failure threshold.
+		expectedFailure int
+	}{
+		{
+			name:             "positive_thresholds_unchanged",
+			successThreshold: 3,
+			failureThreshold: 5,
+			expectedSuccess:  3,
+			expectedFailure:  5,
+		},
+		{
+			name:             "zero_thresholds_normalized_to_one",
+			successThreshold: 0,
+			failureThreshold: 0,
+			expectedSuccess:  1,
+			expectedFailure:  1,
+		},
+		{
+			name:             "negative_thresholds_normalized_to_one",
+			successThreshold: -1,
+			failureThreshold: -2,
+			expectedSuccess:  1,
+			expectedFailure:  1,
+		},
+		{
+			name:             "mixed_thresholds",
+			successThreshold: 2,
+			failureThreshold: 0,
+			expectedSuccess:  2,
+			expectedFailure:  1,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			monitor := NewProbeMonitor(ProbeMonitorConfig{})
+
+			config := domain.CheckConfig{
+				SuccessThreshold: tt.successThreshold,
+				FailureThreshold: tt.failureThreshold,
+			}
+
+			success, failure := monitor.normalizeThresholds(config)
+
+			// Verify normalized thresholds.
+			assert.Equal(t, tt.expectedSuccess, success)
+			assert.Equal(t, tt.expectedFailure, failure)
+		})
+	}
+}
+
+// Test_ProbeMonitor_updateListenerState tests the updateListenerState method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_updateListenerState(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// result is the probe result.
+		result domain.CheckResult
+		// initialListenerState is the initial listener state.
+		initialListenerState listener.State
+		// initialSubjectState is the initial subject state.
+		initialSubjectState domain.SubjectState
+		// initialSuccesses is initial consecutive successes.
+		initialSuccesses int
+		// initialFailures is initial consecutive failures.
+		initialFailures int
+		// successThreshold is the success threshold.
+		successThreshold int
+		// failureThreshold is the failure threshold.
+		failureThreshold int
+		// expectedSubjectState is the expected final subject state.
+		expectedSubjectState domain.SubjectState
+		// expectedSuccesses is expected consecutive successes.
+		expectedSuccesses int
+		// expectedFailures is expected consecutive failures.
+		expectedFailures int
+	}{
+		{
+			name:                 "success_increments_and_transitions_to_ready",
+			result:               domain.CheckResult{Success: true},
+			initialListenerState: listener.StateListening,
+			initialSubjectState:  domain.SubjectListening,
+			initialSuccesses:     0,
+			initialFailures:      0,
+			successThreshold:     1,
+			failureThreshold:     1,
+			expectedSubjectState: domain.SubjectReady,
+			expectedSuccesses:    1,
+			expectedFailures:     0,
+		},
+		{
+			name:                 "failure_increments_and_transitions_to_listening",
+			result:               domain.CheckResult{Success: false},
+			initialListenerState: listener.StateReady,
+			initialSubjectState:  domain.SubjectReady,
+			initialSuccesses:     0,
+			initialFailures:      0,
+			successThreshold:     1,
+			failureThreshold:     1,
+			expectedSubjectState: domain.SubjectListening,
+			expectedSuccesses:    0,
+			expectedFailures:     1,
+		},
+		{
+			name:                 "success_below_threshold_no_transition",
+			result:               domain.CheckResult{Success: true},
+			initialListenerState: listener.StateListening,
+			initialSubjectState:  domain.SubjectListening,
+			initialSuccesses:     0,
+			initialFailures:      0,
+			successThreshold:     3,
+			failureThreshold:     3,
+			expectedSubjectState: domain.SubjectListening,
+			expectedSuccesses:    1,
+			expectedFailures:     0,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			monitor := NewProbeMonitor(ProbeMonitorConfig{})
+
+			// Create listener probe.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			l.State = tt.initialListenerState
+			lp := &ListenerProbe{
+				Listener: l,
+				Prober:   &internalTestProber{probeType: "tcp"},
+			}
+
+			// Create subject status.
+			ls := &domain.SubjectStatus{
+				Name:                 "test",
+				State:                tt.initialSubjectState,
+				ConsecutiveSuccesses: tt.initialSuccesses,
+				ConsecutiveFailures:  tt.initialFailures,
+			}
+
+			// Call method.
+			monitor.updateListenerState(lp, ls, tt.result, tt.successThreshold, tt.failureThreshold)
+
+			// Verify results.
+			assert.Equal(t, tt.expectedSubjectState, ls.State)
+			assert.Equal(t, tt.expectedSuccesses, ls.ConsecutiveSuccesses)
+			assert.Equal(t, tt.expectedFailures, ls.ConsecutiveFailures)
+		})
+	}
+}
+
+// Test_ProbeMonitor_storeProbeResult tests the storeProbeResult method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_storeProbeResult(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// result is the probe result to store.
+		result domain.CheckResult
+		// expectedStatus is the expected stored status.
+		expectedStatus domain.Status
+	}{
+		{
+			name: "stores_successful_result",
+			result: domain.CheckResult{
+				Success: true,
+				Latency: 10 * time.Millisecond,
+				Output:  "OK",
+			},
+			expectedStatus: domain.StatusHealthy,
+		},
+		{
+			name: "stores_failed_result",
+			result: domain.CheckResult{
+				Success: false,
+				Latency: 50 * time.Millisecond,
+				Output:  "connection refused",
+			},
+			expectedStatus: domain.StatusUnhealthy,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			monitor := NewProbeMonitor(ProbeMonitorConfig{})
+
+			// Create subject status.
+			ls := &domain.SubjectStatus{
+				Name: "test",
+			}
+
+			// Call method.
+			monitor.storeProbeResult(ls, tt.result)
+
+			// Verify result was stored.
+			require.NotNil(t, ls.LastProbeResult)
+			assert.Equal(t, tt.expectedStatus, ls.LastProbeResult.Status)
+			assert.Equal(t, tt.result.Output, ls.LastProbeResult.Message)
+			assert.Equal(t, tt.result.Latency, ls.LastProbeResult.Duration)
+			// Verify latency was updated in health.
+			assert.Equal(t, tt.result.Latency, monitor.health.Latency)
+		})
+	}
+}
+
+// Test_ProbeMonitor_runProber tests the runProber method.
+// This test spawns a goroutine that runs the prober in a loop.
+// The goroutine terminates when the context is cancelled.
+// Resources are cleaned up via deferred ticker.Stop() in runProber.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_runProber(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// interval is the probe interval.
+		interval time.Duration
+		// cancelAfter is how long to wait before canceling.
+		cancelAfter time.Duration
+		// minProbes is the minimum expected probes.
+		minProbes int
+	}{
+		{
+			name:        "performs_initial_probe",
+			interval:    100 * time.Millisecond,
+			cancelAfter: 50 * time.Millisecond,
+			minProbes:   1,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			prober := &internalTestProber{
+				probeType: "tcp",
+				result:    domain.CheckResult{Success: true},
+			}
+
+			monitor := NewProbeMonitor(ProbeMonitorConfig{
+				Factory:         &internalTestCreator{},
+				DefaultInterval: tt.interval,
+			})
+
+			// Create listener probe with binding.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			binding := &ProbeBinding{
+				ListenerName: "test",
+				Type:         ProbeTCP,
+				Config: ProbeConfig{
+					Interval: tt.interval,
+				},
+			}
+			lp := &ListenerProbe{
+				Listener: l,
+				Prober:   prober,
+				Binding:  binding,
+			}
+
+			// Create context with cancel.
+			ctx, cancel := context.WithCancel(context.Background())
+
+			// Start monitor to initialize stopCh.
+			monitor.running = true
+			stopCh := make(chan struct{})
+			monitor.stopCh = stopCh
+
+			// Run prober in goroutine.
+			done := make(chan struct{})
+			go func() {
+				monitor.runProber(ctx, stopCh, lp)
+				close(done)
+			}()
+
+			// Wait and cancel.
+			time.Sleep(tt.cancelAfter)
+			cancel()
+
+			// Wait for goroutine to finish.
+			<-done
+
+			// Verify minimum probes.
+			assert.GreaterOrEqual(t, prober.probeCount, tt.minProbes)
+		})
+	}
+}
+
+// Test_listenerStateToSubjectState tests the state conversion helper.
+//
+// Params:
+//   - t: the testing context.
+func Test_listenerStateToSubjectState(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// input is the listener state.
+		input listener.State
+		// expected is the expected subject state.
+		expected domain.SubjectState
+	}{
+		{
+			name:     "ready_to_subject_ready",
+			input:    listener.StateReady,
+			expected: domain.SubjectReady,
+		},
+		{
+			name:     "listening_to_subject_listening",
+			input:    listener.StateListening,
+			expected: domain.SubjectListening,
+		},
+		{
+			name:     "closed_to_subject_closed",
+			input:    listener.StateClosed,
+			expected: domain.SubjectClosed,
+		},
+		{
+			name:     "unknown_to_subject_unknown",
+			input:    listener.State(99),
+			expected: domain.SubjectUnknown,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			result := listenerStateToSubjectState(tt.input)
+
+			// Verify the expected state.
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kodflow/daemon/internal/domain/service"
+	"github.com/kodflow/daemon/internal/domain/config"
 )
 
 // Test_applyDefaults tests the applyDefaults function.
@@ -263,7 +263,7 @@ func Test_applyServiceDefaults(t *testing.T) {
 			svc: ServiceConfigDTO{
 				Name: "health-svc",
 				HealthChecks: []HealthCheckDTO{
-					{Type: string(service.HealthCheckHTTP)},
+					{Type: string(config.HealthCheckHTTP)},
 				},
 			},
 			logging: LoggingConfigDTO{
@@ -347,7 +347,7 @@ func Test_applyRestartDefaults(t *testing.T) {
 		{
 			name:               "empty_restart_gets_defaults",
 			restart:            RestartConfigDTO{},
-			expectedPolicy:     string(service.RestartOnFailure),
+			expectedPolicy:     string(config.RestartOnFailure),
 			expectedMaxRetries: defaultMaxRetries,
 		},
 		{
@@ -363,7 +363,7 @@ func Test_applyRestartDefaults(t *testing.T) {
 			restart: RestartConfigDTO{
 				MaxRetries: 10,
 			},
-			expectedPolicy:     string(service.RestartOnFailure),
+			expectedPolicy:     string(config.RestartOnFailure),
 			expectedMaxRetries: 10,
 		},
 	}
@@ -404,7 +404,7 @@ func Test_applyHealthCheckDefaults(t *testing.T) {
 		{
 			name: "http_health_check_gets_http_defaults",
 			hc: HealthCheckDTO{
-				Type: string(service.HealthCheckHTTP),
+				Type: string(config.HealthCheckHTTP),
 			},
 			expectedRetries:    defaultHealthRetries,
 			expectedMethod:     defaultHTTPMethod,
@@ -413,7 +413,7 @@ func Test_applyHealthCheckDefaults(t *testing.T) {
 		{
 			name: "http_with_custom_method_preserved",
 			hc: HealthCheckDTO{
-				Type:   string(service.HealthCheckHTTP),
+				Type:   string(config.HealthCheckHTTP),
 				Method: "POST",
 			},
 			expectedRetries:    defaultHealthRetries,
@@ -423,7 +423,7 @@ func Test_applyHealthCheckDefaults(t *testing.T) {
 		{
 			name: "tcp_health_check_no_http_defaults",
 			hc: HealthCheckDTO{
-				Type: string(service.HealthCheckTCP),
+				Type: string(config.HealthCheckTCP),
 			},
 			expectedRetries:    defaultHealthRetries,
 			expectedMethod:     "",

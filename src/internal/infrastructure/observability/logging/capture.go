@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/kodflow/daemon/internal/domain/service"
+	"github.com/kodflow/daemon/internal/domain/config"
 )
 
 // GetServiceLogPather defines the interface for configuration access.
@@ -21,9 +21,9 @@ type GetServiceLogPather interface {
 // It provides access to stdout and stderr stream configurations.
 type serviceLogging interface {
 	// StdoutConfig returns a mutable pointer to the stdout configuration.
-	StdoutConfig() *service.LogStreamConfig
+	StdoutConfig() *config.LogStreamConfig
 	// StderrConfig returns a mutable pointer to the stderr configuration.
-	StderrConfig() *service.LogStreamConfig
+	StderrConfig() *config.LogStreamConfig
 }
 
 // Capture captures stdout and stderr for a service.

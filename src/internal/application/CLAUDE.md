@@ -7,38 +7,73 @@ Use case implementations coordinating domain and infrastructure.
 ```
 application/
 ├── config/       # Configuration port interface
-├── healthcheck/  # Service reachability monitoring (TCP, HTTP, etc.)
-├── probe/        # System metrics tracking (CPU, RAM, etc.)
-├── process/      # Process lifecycle management
+├── health/       # Service health monitoring (renamed from healthcheck/)
+├── lifecycle/    # Process lifecycle management (renamed from process/)
+├── metrics/      # Process metrics tracking
 └── supervisor/   # Service orchestration
 ```
 
 ## Packages
 
-| Package | Role |
-|---------|------|
-| `config` | Loader interface (port) |
-| `healthcheck` | ProbeMonitor coordinates service health checks |
-| `probe` | Tracker monitors process/system metrics |
-| `process` | ProcessManager handles lifecycle |
-| `supervisor` | Supervisor orchestrates services |
+| Package | Role | See |
+|---------|------|-----|
+| `config` | Loader interface (port) | `config/CLAUDE.md` |
+| `health` | ProbeMonitor coordinates service health checks | `health/CLAUDE.md` |
+| `lifecycle` | Manager handles process lifecycle with restart | `lifecycle/CLAUDE.md` |
+| `metrics` | Tracker monitors process CPU/memory metrics | `metrics/CLAUDE.md` |
+| `supervisor` | Supervisor orchestrates multiple services | `supervisor/CLAUDE.md` |
 
 ## Terminology
 
-- **healthcheck**: Service reachability verification (TCP, HTTP, ICMP, gRPC, UDP, Exec)
-- **probe**: System metrics collection (CPU, RAM, DISK, NET, I/O)
+| Term | Description |
+|------|-------------|
+| **health** | Service reachability monitoring via probes (TCP, HTTP, etc.) |
+| **metrics** | Process metrics collection (CPU, RAM per process) |
+| **lifecycle** | Process lifecycle management (start, stop, restart) |
 
 ## Dependencies
 
 - Depends on: `domain`
-- Used by: `cmd/daemon`
-- May use: `infrastructure/kernel` (for OS abstractions via ports)
+- Used by: `cmd/daemon`, `bootstrap`
+- May use: `infrastructure` (via ports/interfaces)
 
 ## Key Types
 
-- `Supervisor` - Main service orchestrator
-- `ProcessManager` - Per-service process management
-- `ProbeMonitor` - Multi-protocol health checking
-- `Tracker` - Process metrics tracking
-- `Creator` - Port for creating health checkers
-- `Loader` - Config loading interface
+| Package | Type | Description |
+|---------|------|-------------|
+| `supervisor` | `Supervisor` | Main service orchestrator |
+| `lifecycle` | `Manager` | Per-service process lifecycle management |
+| `health` | `ProbeMonitor` | Multi-protocol health probing |
+| `metrics` | `Tracker` | Process metrics tracking |
+| `config` | `Loader` | Configuration loading interface |
+| `config` | `Reloader` | Configuration reloading interface |
+| `health` | `Creator` | Prober factory interface |
+| `metrics` | `Collector` | Metrics collection interface |
+
+## Data Flow
+
+```
+Supervisor
+    │
+    ├── Manager (per service)
+    │       │
+    │       └── Executor.Start()    [domain port]
+    │
+    ├── ProbeMonitor
+    │       │
+    │       └── Prober.Probe()      [domain port]
+    │
+    └── Tracker
+            │
+            └── Collector.Collect() [application port]
+```
+
+## Port Interfaces
+
+Application layer defines these ports for infrastructure to implement:
+
+| Port | Package | Implemented By |
+|------|---------|----------------|
+| `Loader` | `config` | `infrastructure/persistence/config/yaml` |
+| `Creator` | `health` | `infrastructure/observability/healthcheck` |
+| `Collector` | `metrics` | `infrastructure/resources/metrics/*` |

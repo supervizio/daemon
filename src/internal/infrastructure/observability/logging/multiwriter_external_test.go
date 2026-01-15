@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kodflow/daemon/internal/domain/service"
+	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/infrastructure/observability/logging"
 )
 
@@ -86,7 +86,7 @@ func readFileAsString(path string) (string, error) {
 type mockMultiWriterConfig struct {
 	filePath        string
 	timestampFormat string
-	rotation        service.RotationConfig
+	rotation        config.RotationConfig
 }
 
 // File returns the file path.
@@ -100,7 +100,7 @@ func (m *mockMultiWriterConfig) TimestampFormat() string {
 }
 
 // Rotation returns the rotation configuration.
-func (m *mockMultiWriterConfig) Rotation() service.RotationConfig {
+func (m *mockMultiWriterConfig) Rotation() config.RotationConfig {
 	return m.rotation
 }
 
@@ -114,7 +114,7 @@ func (m *mockMultiWriterConfig) Rotation() service.RotationConfig {
 //   - *mockMultiWriterConfig: the configured mock config.
 func createMultiWriterConfig(maxSize string, maxFiles int) *mockMultiWriterConfig {
 	return &mockMultiWriterConfig{
-		rotation: service.RotationConfig{
+		rotation: config.RotationConfig{
 			MaxSize:  maxSize,
 			MaxFiles: maxFiles,
 		},

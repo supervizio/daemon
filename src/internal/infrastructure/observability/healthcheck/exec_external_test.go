@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	domainhealthcheck "github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/infrastructure/observability/healthcheck"
 )
 
@@ -74,13 +74,13 @@ func TestExecProber_Type(t *testing.T) {
 func TestExecProber_Probe(t *testing.T) {
 	tests := []struct {
 		name          string
-		target        domainhealthcheck.Target
+		target        health.Target
 		timeout       time.Duration
 		expectSuccess bool
 	}{
 		{
 			name: "successful_true_command",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Command: "true",
 			},
 			timeout:       time.Second,
@@ -88,7 +88,7 @@ func TestExecProber_Probe(t *testing.T) {
 		},
 		{
 			name: "successful_echo_command",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Command: "echo",
 				Args:    []string{"hello"},
 			},
@@ -97,7 +97,7 @@ func TestExecProber_Probe(t *testing.T) {
 		},
 		{
 			name: "failure_command_with_whitespace_requires_args",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Command: "echo hello world",
 			},
 			timeout:       time.Second,
@@ -105,7 +105,7 @@ func TestExecProber_Probe(t *testing.T) {
 		},
 		{
 			name: "failure_false_command",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Command: "false",
 			},
 			timeout:       time.Second,
@@ -113,7 +113,7 @@ func TestExecProber_Probe(t *testing.T) {
 		},
 		{
 			name: "failure_nonexistent_command",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Command: "nonexistent_command_12345",
 			},
 			timeout:       time.Second,
@@ -121,7 +121,7 @@ func TestExecProber_Probe(t *testing.T) {
 		},
 		{
 			name: "failure_empty_command",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Command: "",
 			},
 			timeout:       time.Second,
@@ -129,7 +129,7 @@ func TestExecProber_Probe(t *testing.T) {
 		},
 		{
 			name: "failure_whitespace_only_command",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Command: "   ",
 			},
 			timeout:       time.Second,
@@ -175,7 +175,7 @@ func TestExecProber_Probe_Timeout(t *testing.T) {
 			// Create prober with short timeout.
 			prober := healthcheck.NewExecProber(50 * time.Millisecond)
 
-			target := domainhealthcheck.Target{
+			target := health.Target{
 				Command: "sleep",
 				Args:    []string{"10"},
 			}
@@ -206,7 +206,7 @@ func TestExecProber_Probe_ContextCancellation(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
-			target := domainhealthcheck.Target{
+			target := health.Target{
 				Command: "sleep",
 				Args:    []string{"10"},
 			}
@@ -245,7 +245,7 @@ func TestExecProber_Probe_OutputCapture(t *testing.T) {
 			// Create Exec prober.
 			prober := healthcheck.NewExecProber(time.Second)
 
-			target := domainhealthcheck.Target{
+			target := health.Target{
 				Command: tt.command,
 				Args:    tt.args,
 			}

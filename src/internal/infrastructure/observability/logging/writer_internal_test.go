@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kodflow/daemon/internal/domain/service"
+	"github.com/kodflow/daemon/internal/domain/config"
 )
 
 // Test_openLogFile tests the openLogFile helper function.
@@ -1076,8 +1076,8 @@ func (c *testWriterConfig) TimestampFormat() string {
 }
 
 // Rotation returns the rotation configuration.
-func (c *testWriterConfig) Rotation() service.RotationConfig {
-	return service.RotationConfig{
+func (c *testWriterConfig) Rotation() config.RotationConfig {
+	return config.RotationConfig{
 		MaxSize:  c.rotation.maxSize,
 		MaxFiles: c.rotation.maxFiles,
 		Compress: c.rotation.compress,

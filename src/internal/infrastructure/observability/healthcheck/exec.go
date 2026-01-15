@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/domain/shared"
 	"github.com/kodflow/daemon/internal/infrastructure/process/executor"
 )
@@ -59,14 +59,14 @@ func (p *ExecProber) Type() string {
 //   - target: the target containing command and args.
 //
 // Returns:
-//   - healthcheck.Result: the probe result with output and exit status.
-func (p *ExecProber) Probe(ctx context.Context, target healthcheck.Target) healthcheck.Result {
+//   - health.CheckResult: the probe result with output and exit status.
+func (p *ExecProber) Probe(ctx context.Context, target health.Target) health.CheckResult {
 	start := time.Now()
 
 	// Validate command is not empty.
 	if target.Command == "" {
 		// Return failure for missing command configuration.
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			time.Since(start),
 			"empty command",
 			shared.ErrEmptyCommand,
@@ -81,7 +81,7 @@ func (p *ExecProber) Probe(ctx context.Context, target healthcheck.Target) healt
 	// This avoids incorrect parsing of quoted/escaped arguments.
 	if len(args) == 0 && strings.ContainsAny(command, " \t\n") {
 		// Return failure for unsafe command format requiring explicit args.
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			time.Since(start),
 			"command contains whitespace; provide args explicitly via Args field",
 			ErrInvalidCommandFormat,
@@ -101,8 +101,8 @@ func (p *ExecProber) Probe(ctx context.Context, target healthcheck.Target) healt
 //   - start: the start time for latency measurement.
 //
 // Returns:
-//   - healthcheck.Result: the probe result with output and exit status.
-func (p *ExecProber) executeCommand(ctx context.Context, command string, args []string, start time.Time) healthcheck.Result {
+//   - health.CheckResult: the probe result with output and exit status.
+func (p *ExecProber) executeCommand(ctx context.Context, command string, args []string, start time.Time) health.CheckResult {
 	// Create context with timeout only if timeout is positive.
 	// Zero or negative timeout would create an already-canceled context.
 	execCtx := ctx
@@ -137,7 +137,7 @@ func (p *ExecProber) executeCommand(ctx context.Context, command string, args []
 		}
 
 		// Return failure result with error details and bounded output.
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			latency,
 			msg,
 			err,
@@ -145,7 +145,7 @@ func (p *ExecProber) executeCommand(ctx context.Context, command string, args []
 	}
 
 	// Return success result with trimmed command output.
-	return healthcheck.NewSuccessResult(
+	return health.NewSuccessCheckResult(
 		latency,
 		strings.TrimSpace(string(output)),
 	)

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/service"
+	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/domain/shared"
 )
 
@@ -68,7 +68,7 @@ type writerConfig interface {
 	// TimestampFormat returns the timestamp format for log entries.
 	TimestampFormat() string
 	// Rotation returns the rotation configuration.
-	Rotation() service.RotationConfig
+	Rotation() config.RotationConfig
 }
 
 // NewWriterFromConfig creates a new log writer from a generic config interface.

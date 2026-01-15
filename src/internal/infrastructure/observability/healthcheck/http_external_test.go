@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	domainhealthcheck "github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/infrastructure/observability/healthcheck"
 )
 
@@ -89,13 +89,13 @@ func TestHTTPProber_Probe(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		target        domainhealthcheck.Target
+		target        health.Target
 		timeout       time.Duration
 		expectSuccess bool
 	}{
 		{
 			name: "successful_ok_response",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: serverOK.URL,
 			},
 			timeout:       time.Second,
@@ -103,7 +103,7 @@ func TestHTTPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "successful_with_explicit_method",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: serverOK.URL,
 				Method:  http.MethodGet,
 			},
@@ -112,7 +112,7 @@ func TestHTTPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "successful_with_explicit_status",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address:    serverCreated.URL,
 				StatusCode: http.StatusCreated,
 			},
@@ -121,7 +121,7 @@ func TestHTTPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "failure_status_mismatch",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: serverNotFound.URL,
 			},
 			timeout:       time.Second,
@@ -129,7 +129,7 @@ func TestHTTPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "failure_expected_different_status",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address:    serverOK.URL,
 				StatusCode: http.StatusCreated,
 			},
@@ -138,7 +138,7 @@ func TestHTTPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "failure_invalid_url",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "http://invalid.local:99999",
 			},
 			timeout:       100 * time.Millisecond,
@@ -146,7 +146,7 @@ func TestHTTPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "failure_malformed_url",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "://invalid",
 			},
 			timeout:       100 * time.Millisecond,
@@ -210,7 +210,7 @@ func TestHTTPProber_Probe_Methods(t *testing.T) {
 			// Create HTTP prober.
 			prober := healthcheck.NewHTTPProber(time.Second)
 
-			target := domainhealthcheck.Target{
+			target := health.Target{
 				Address: server.URL,
 				Method:  tt.method,
 			}
@@ -243,7 +243,7 @@ func TestHTTPProber_Probe_ContextCancellation(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
-			target := domainhealthcheck.Target{
+			target := health.Target{
 				Address: "http://example.com",
 			}
 

@@ -8,7 +8,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 )
 
 // proberTypeTCP is the type identifier for TCP probers.
@@ -52,8 +52,8 @@ func (p *TCPProber) Type() string {
 //   - target: the target to healthcheck.
 //
 // Returns:
-//   - healthcheck.Result: the probe result with latency and connection status.
-func (p *TCPProber) Probe(ctx context.Context, target healthcheck.Target) healthcheck.Result {
+//   - health.CheckResult: the probe result with latency and connection status.
+func (p *TCPProber) Probe(ctx context.Context, target health.Target) health.CheckResult {
 	start := time.Now()
 
 	// Determine the network type.
@@ -76,7 +76,7 @@ func (p *TCPProber) Probe(ctx context.Context, target healthcheck.Target) health
 	// Handle connection failure.
 	if err != nil {
 		// Return failure result with connection error.
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("connection failed: %v", err),
 			err,
@@ -86,7 +86,7 @@ func (p *TCPProber) Probe(ctx context.Context, target healthcheck.Target) health
 	_ = conn.Close()
 
 	// Return success result with connection details.
-	return healthcheck.NewSuccessResult(
+	return health.NewSuccessCheckResult(
 		latency,
 		fmt.Sprintf("connected to %s", target.Address),
 	)

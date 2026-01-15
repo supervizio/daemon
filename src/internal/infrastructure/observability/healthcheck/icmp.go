@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/domain/shared"
 )
 
@@ -84,8 +84,8 @@ func (p *ICMPProber) Type() string {
 //   - target: the target to healthcheck.
 //
 // Returns:
-//   - healthcheck.Result: the probe result with latency measurement.
-func (p *ICMPProber) Probe(ctx context.Context, target healthcheck.Target) healthcheck.Result {
+//   - health.CheckResult: the probe result with latency measurement.
+func (p *ICMPProber) Probe(ctx context.Context, target health.Target) health.CheckResult {
 	start := time.Now()
 
 	// Resolve the target address.
@@ -116,8 +116,8 @@ func (p *ICMPProber) Probe(ctx context.Context, target healthcheck.Target) healt
 //   - start: the start time for latency measurement.
 //
 // Returns:
-//   - healthcheck.Result: the probe result with latency.
-func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) healthcheck.Result {
+//   - health.CheckResult: the probe result with latency.
+func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) health.CheckResult {
 	// Validate and normalize TCP port.
 	tcpPort := p.tcpPort
 	// Apply default port when not configured or invalid.
@@ -140,7 +140,7 @@ func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) 
 	// Handle connection failure.
 	if err != nil {
 		// Return failure result.
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("ping failed: %v", err),
 			err,
@@ -150,7 +150,7 @@ func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) 
 	_ = conn.Close()
 
 	// Return success result with latency.
-	return healthcheck.NewSuccessResult(
+	return health.NewSuccessCheckResult(
 		latency,
 		fmt.Sprintf("ping %s: latency=%s (tcp fallback)", host, latency),
 	)

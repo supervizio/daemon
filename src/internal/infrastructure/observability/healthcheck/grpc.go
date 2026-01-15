@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
-	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 )
 
 // proberTypeGRPC is the type identifier for gRPC probers.
@@ -81,8 +81,8 @@ func (p *GRPCProber) Type() string {
 //   - target: the target to probe, including service name.
 //
 // Returns:
-//   - healthcheck.Result: the probe result with latency and status.
-func (p *GRPCProber) Probe(ctx context.Context, target healthcheck.Target) healthcheck.Result {
+//   - health.CheckResult: the probe result with latency and status.
+func (p *GRPCProber) Probe(ctx context.Context, target health.Target) health.CheckResult {
 	start := time.Now()
 
 	// Create context with timeout.
@@ -105,7 +105,7 @@ func (p *GRPCProber) Probe(ctx context.Context, target healthcheck.Target) healt
 	conn, err := grpc.DialContext(ctx, target.Address, opts...) //nolint:staticcheck // supported throughout 1.x
 	if err != nil {
 		latency := time.Since(start)
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("gRPC connection failed: %v", err),
 			err,
@@ -131,26 +131,26 @@ func (p *GRPCProber) Probe(ctx context.Context, target healthcheck.Target) healt
 		if ok {
 			switch st.Code() {
 			case codes.NotFound:
-				return healthcheck.NewFailureResult(
+				return health.NewFailureCheckResult(
 					latency,
 					fmt.Sprintf("gRPC service %q unknown", target.Service),
 					ErrGRPCServiceUnknown,
 				)
 			case codes.DeadlineExceeded:
-				return healthcheck.NewFailureResult(
+				return health.NewFailureCheckResult(
 					latency,
 					"gRPC health check timeout",
 					err,
 				)
 			default:
-				return healthcheck.NewFailureResult(
+				return health.NewFailureCheckResult(
 					latency,
 					fmt.Sprintf("gRPC health check failed: %s", st.Message()),
 					err,
 				)
 			}
 		}
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("gRPC health check failed: %v", err),
 			err,
@@ -164,24 +164,24 @@ func (p *GRPCProber) Probe(ctx context.Context, target healthcheck.Target) healt
 		if service == "" {
 			service = "(server)"
 		}
-		return healthcheck.NewSuccessResult(
+		return health.NewSuccessCheckResult(
 			latency,
 			fmt.Sprintf("gRPC %s serving at %s", service, target.Address),
 		)
 	case grpc_health_v1.HealthCheckResponse_NOT_SERVING:
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("gRPC service %q not serving", target.Service),
 			ErrGRPCNotServing,
 		)
 	case grpc_health_v1.HealthCheckResponse_SERVICE_UNKNOWN:
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("gRPC service %q unknown", target.Service),
 			ErrGRPCServiceUnknown,
 		)
 	default:
-		return healthcheck.NewFailureResult(
+		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("gRPC service %q status unknown: %v", target.Service, resp.Status),
 			errors.New("unknown health status"),

@@ -12,15 +12,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kodflow/daemon/internal/domain/config"
 	domain "github.com/kodflow/daemon/internal/domain/process"
-	"github.com/kodflow/daemon/internal/domain/service"
 )
 
 // mockLoader implements appconfig.Loader for testing.
 // It provides a mock implementation that returns predefined configurations.
 type mockLoader struct {
 	// cfg is the configuration to return.
-	cfg *service.Config
+	cfg *config.Config
 	// err is the error to return.
 	err error
 }
@@ -31,9 +31,9 @@ type mockLoader struct {
 //   - path: the configuration path (unused).
 //
 // Returns:
-//   - *service.Config: the mock configuration.
+//   - *config.Config: the mock configuration.
 //   - error: the mock error.
-func (ml *mockLoader) Load(_ string) (*service.Config, error) {
+func (ml *mockLoader) Load(_ string) (*config.Config, error) {
 	// Return the configured mock values.
 	return ml.cfg, ml.err
 }
@@ -115,12 +115,12 @@ func (ev *mockEventser) Events() <-chan domain.Event {
 // createTestConfig creates a valid configuration for internal testing.
 //
 // Returns:
-//   - *service.Config: a valid test configuration.
-func createTestConfig() *service.Config {
+//   - *config.Config: a valid test configuration.
+func createTestConfig() *config.Config {
 	// Return a valid test configuration.
-	return &service.Config{
+	return &config.Config{
 		ConfigPath: "/test/config.yaml",
-		Services: []service.ServiceConfig{
+		Services: []config.ServiceConfig{
 			{
 				Name:    "test-service",
 				Command: "/bin/echo",
@@ -138,7 +138,7 @@ func createTestConfig() *service.Config {
 //
 // Returns:
 //   - *Supervisor: the created supervisor.
-func createTestSupervisor(t *testing.T, cfg *service.Config) *Supervisor {
+func createTestSupervisor(t *testing.T, cfg *config.Config) *Supervisor {
 	t.Helper()
 
 	loader := &mockLoader{cfg: cfg}
@@ -199,18 +199,18 @@ func Test_Supervisor_updateServices(t *testing.T) {
 		// name is the test case name.
 		name string
 		// initialConfig is the initial configuration.
-		initialConfig *service.Config
+		initialConfig *config.Config
 		// newConfig is the new configuration to apply.
-		newConfig *service.Config
+		newConfig *config.Config
 		// expectedServices is the list of expected service names after update.
 		expectedServices []string
 	}{
 		{
 			name:          "add_new_service",
 			initialConfig: createTestConfig(),
-			newConfig: &service.Config{
+			newConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{
 						Name:    "test-service",
 						Command: "/bin/echo",
@@ -260,9 +260,9 @@ func Test_Supervisor_removeDeletedServices(t *testing.T) {
 		// name is the test case name.
 		name string
 		// initialConfig is the initial configuration.
-		initialConfig *service.Config
+		initialConfig *config.Config
 		// newConfig is the new configuration to apply.
-		newConfig *service.Config
+		newConfig *config.Config
 		// keptServices is the list of services that should still exist.
 		keptServices []string
 		// removedServices is the list of services that should be removed.
@@ -270,16 +270,16 @@ func Test_Supervisor_removeDeletedServices(t *testing.T) {
 	}{
 		{
 			name: "remove_one_service",
-			initialConfig: &service.Config{
+			initialConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-1", Command: "/bin/echo", Args: []string{"one"}},
 					{Name: "service-2", Command: "/bin/echo", Args: []string{"two"}},
 				},
 			},
-			newConfig: &service.Config{
+			newConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-1", Command: "/bin/echo", Args: []string{"one"}},
 				},
 			},
@@ -288,17 +288,17 @@ func Test_Supervisor_removeDeletedServices(t *testing.T) {
 		},
 		{
 			name: "remove_multiple_services",
-			initialConfig: &service.Config{
+			initialConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-a", Command: "/bin/echo", Args: []string{"a"}},
 					{Name: "service-b", Command: "/bin/echo", Args: []string{"b"}},
 					{Name: "service-c", Command: "/bin/echo", Args: []string{"c"}},
 				},
 			},
-			newConfig: &service.Config{
+			newConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-a", Command: "/bin/echo", Args: []string{"a"}},
 				},
 			},
@@ -307,16 +307,16 @@ func Test_Supervisor_removeDeletedServices(t *testing.T) {
 		},
 		{
 			name: "no_services_removed_all_kept",
-			initialConfig: &service.Config{
+			initialConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-x", Command: "/bin/echo", Args: []string{"x"}},
 					{Name: "service-y", Command: "/bin/echo", Args: []string{"y"}},
 				},
 			},
-			newConfig: &service.Config{
+			newConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-x", Command: "/bin/echo", Args: []string{"x"}},
 					{Name: "service-y", Command: "/bin/echo", Args: []string{"y"}},
 				},
@@ -326,13 +326,13 @@ func Test_Supervisor_removeDeletedServices(t *testing.T) {
 		},
 		{
 			name: "remove_all_services_empty_new_config",
-			initialConfig: &service.Config{
+			initialConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-only", Command: "/bin/echo", Args: []string{"only"}},
 				},
 			},
-			newConfig: &service.Config{
+			newConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
 				Services:   nil,
 			},

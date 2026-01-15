@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kodflow/daemon/internal/domain/service"
+	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/infrastructure/observability/logging"
 )
 
@@ -23,7 +23,7 @@ type mockCaptureConfig struct {
 // GetServiceLogPath returns the full path for a service log file.
 //
 // Params:
-//   - serviceName: the name of the service.
+//   - serviceName: the name of the config.
 //   - logFile: the log file name.
 //
 // Returns:
@@ -35,17 +35,17 @@ func (m *mockCaptureConfig) GetServiceLogPath(serviceName, logFile string) strin
 
 // mockServiceLogging implements serviceLogging interface for testing.
 type mockServiceLogging struct {
-	stdout service.LogStreamConfig
-	stderr service.LogStreamConfig
+	stdout config.LogStreamConfig
+	stderr config.LogStreamConfig
 }
 
 // StdoutConfig returns the stdout configuration.
-func (m *mockServiceLogging) StdoutConfig() *service.LogStreamConfig {
+func (m *mockServiceLogging) StdoutConfig() *config.LogStreamConfig {
 	return &m.stdout
 }
 
 // StderrConfig returns the stderr configuration.
-func (m *mockServiceLogging) StderrConfig() *service.LogStreamConfig {
+func (m *mockServiceLogging) StderrConfig() *config.LogStreamConfig {
 	return &m.stderr
 }
 
@@ -59,8 +59,8 @@ func (m *mockServiceLogging) StderrConfig() *service.LogStreamConfig {
 //   - *mockServiceLogging: the configured service logging.
 func createServiceLogging(stdoutFile, stderrFile string) *mockServiceLogging {
 	return &mockServiceLogging{
-		stdout: service.LogStreamConfig{FilePath: stdoutFile},
-		stderr: service.LogStreamConfig{FilePath: stderrFile},
+		stdout: config.LogStreamConfig{FilePath: stdoutFile},
+		stderr: config.LogStreamConfig{FilePath: stderrFile},
 	}
 }
 

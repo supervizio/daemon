@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	domainhealthcheck "github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 )
 
 // TestHTTPProber_internalFields tests internal struct fields.
@@ -29,7 +29,7 @@ func TestHTTPProber_internalFields(t *testing.T) {
 		{
 			name:            "zero_timeout_normalized_to_default",
 			timeout:         0,
-			expectedTimeout: domainhealthcheck.DefaultTimeout,
+			expectedTimeout: health.DefaultTimeout,
 		},
 	}
 

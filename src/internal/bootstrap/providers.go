@@ -3,8 +3,8 @@ package bootstrap
 import (
 	appconfig "github.com/kodflow/daemon/internal/application/config"
 	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
-	domainreaper "github.com/kodflow/daemon/internal/domain/reaper"
-	"github.com/kodflow/daemon/internal/domain/service"
+	domainconfig "github.com/kodflow/daemon/internal/domain/config"
+	"github.com/kodflow/daemon/internal/domain/lifecycle"
 	infrareaper "github.com/kodflow/daemon/internal/infrastructure/process/reaper"
 )
 
@@ -15,8 +15,8 @@ import (
 //   - r: the reaper instance from infrastructure.
 //
 // Returns:
-//   - domainreaper.Reaper: the reaper if PID 1, nil otherwise.
-func ProvideReaper(r *infrareaper.Reaper) domainreaper.Reaper {
+//   - lifecycle.Reaper: the reaper if PID 1, nil otherwise.
+func ProvideReaper(r *infrareaper.Reaper) lifecycle.Reaper {
 	// Check if the process is running as PID 1.
 	if r.IsPID1() {
 		// Return the reaper for zombie cleanup.
@@ -33,9 +33,9 @@ func ProvideReaper(r *infrareaper.Reaper) domainreaper.Reaper {
 //   - configPath: the path to the configuration file.
 //
 // Returns:
-//   - *service.Config: the loaded configuration.
+//   - *domainconfig.Config: the loaded configuration.
 //   - error: any error during loading.
-func LoadConfig(loader appconfig.Loader, configPath string) (*service.Config, error) {
+func LoadConfig(loader appconfig.Loader, configPath string) (*domainconfig.Config, error) {
 	// Load and return the configuration from the specified path.
 	return loader.Load(configPath)
 }

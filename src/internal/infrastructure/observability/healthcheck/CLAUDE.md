@@ -33,9 +33,9 @@ httpProber := factory.CreateHTTP(10 * time.Second)
 ## Interface Implémentée
 
 ```go
-// domain/healthcheck/prober.go
+// domain/health/prober.go
 type Prober interface {
-    Probe(ctx context.Context, target Target) Result
+    Probe(ctx context.Context, target Target) CheckResult
 }
 ```
 

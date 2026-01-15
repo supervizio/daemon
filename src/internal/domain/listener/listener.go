@@ -1,16 +1,8 @@
 // Package listener provides domain entities for network listeners.
 package listener
 
-import (
-	"net"
-	"strconv"
-
-	"github.com/kodflow/daemon/internal/domain/healthcheck"
-	"github.com/kodflow/daemon/internal/domain/shared"
-)
-
 // Listener represents a network listener endpoint.
-// It tracks the listener's state and associated probe configuration.
+// It tracks the listener's state using a finite state machine.
 type Listener struct {
 	// Name is the unique identifier for this listener.
 	// Example: "http", "admin", "grpc".
@@ -29,19 +21,6 @@ type Listener struct {
 
 	// State is the current listener state.
 	State State
-
-	// ProbeConfig contains the probe configuration for this listener.
-	// May be nil if no probing is configured.
-	ProbeConfig *healthcheck.Config
-
-	// ProbeType specifies the probe type for this listener.
-	// Examples: "tcp", "http", "grpc".
-	ProbeType string
-
-	// ProbeTarget contains additional probe target configuration.
-	// For HTTP: path, method, status code.
-	// For gRPC: service name.
-	ProbeTarget healthcheck.Target
 }
 
 // NewListener creates a new listener with default state.
@@ -93,24 +72,6 @@ func NewUDP(name, address string, port int) *Listener {
 	return NewListener(name, "udp", address, port)
 }
 
-// WithProbe configures probing for this listener.
-//
-// Params:
-//   - probeType: the probe type (tcp, http, grpc).
-//   - config: the probe configuration.
-//   - target: the probe target configuration.
-//
-// Returns:
-//   - *Listener: the listener with probe configured.
-func (l *Listener) WithProbe(probeType string, config healthcheck.Config, target healthcheck.Target) *Listener {
-	// Set probe configuration.
-	l.ProbeType = probeType
-	l.ProbeConfig = &config
-	l.ProbeTarget = target
-	// Return self for chaining.
-	return l
-}
-
 // SetState transitions the listener to a new state.
 //
 // Params:
@@ -155,58 +116,4 @@ func (l *Listener) MarkReady() bool {
 func (l *Listener) MarkClosed() bool {
 	// Transition to StateClosed state.
 	return l.SetState(StateClosed)
-}
-
-// HasProbe returns true if probing is configured.
-//
-// Returns:
-//   - bool: true if ProbeConfig is not nil.
-func (l *Listener) HasProbe() bool {
-	// Return true if probe config exists.
-	return l.ProbeConfig != nil
-}
-
-// ProbeAddress returns the address for probing.
-// It combines the listener's address and port for network probes.
-// Uses net.JoinHostPort for proper IPv6 address handling.
-//
-// Returns:
-//   - string: the address in host:port format.
-func (l *Listener) ProbeAddress() string {
-	// Normalize non-routable bind addresses to loopback for probing.
-	addr := l.Address
-
-	// Check if address is non-routable and needs normalization.
-	switch addr {
-	// Empty address defaults to IPv4 loopback.
-	case "":
-		addr = "127.0.0.1"
-	// IPv4 any-address defaults to IPv4 loopback.
-	case "0.0.0.0":
-		addr = "127.0.0.1"
-	// IPv6 any-address defaults to IPv6 loopback.
-	case "::":
-		addr = "::1"
-	}
-
-	// Validate port is within valid range to avoid invalid addresses.
-	if l.Port <= 0 || l.Port > shared.MaxValidPort {
-		// Return empty string for invalid port.
-		return ""
-	}
-
-	// Use net.JoinHostPort for proper IPv6 address handling.
-	return net.JoinHostPort(addr, formatPort(l.Port))
-}
-
-// formatPort converts a port number to string.
-//
-// Params:
-//   - port: the port number to format.
-//
-// Returns:
-//   - string: the port as a decimal string.
-func formatPort(port int) string {
-	// Use strconv for efficient integer to string conversion.
-	return strconv.Itoa(port)
 }

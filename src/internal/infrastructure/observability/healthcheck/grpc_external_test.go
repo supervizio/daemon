@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
+	grpchealth "google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 
-	domainhealthcheck "github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/infrastructure/observability/healthcheck"
 )
 
@@ -107,7 +107,7 @@ func startTestGRPCServer(t *testing.T, serviceStatus grpc_health_v1.HealthCheckR
 	require.NoError(t, err)
 
 	server := grpc.NewServer()
-	healthServer := health.NewServer()
+	healthServer := grpchealth.NewServer()
 	grpc_health_v1.RegisterHealthServer(server, healthServer)
 
 	// Set the health status for the test service.
@@ -136,7 +136,7 @@ func TestGRPCProber_Probe(t *testing.T) {
 		prober := healthcheck.NewGRPCProber(5 * time.Second)
 		ctx := context.Background()
 
-		target := domainhealthcheck.Target{
+		target := health.Target{
 			Address: addr,
 			Service: "",
 		}
@@ -155,7 +155,7 @@ func TestGRPCProber_Probe(t *testing.T) {
 		prober := healthcheck.NewGRPCProber(5 * time.Second)
 		ctx := context.Background()
 
-		target := domainhealthcheck.Target{
+		target := health.Target{
 			Address: addr,
 			Service: "test.Service",
 		}
@@ -174,7 +174,7 @@ func TestGRPCProber_Probe(t *testing.T) {
 		prober := healthcheck.NewGRPCProber(5 * time.Second)
 		ctx := context.Background()
 
-		target := domainhealthcheck.Target{
+		target := health.Target{
 			Address: addr,
 			Service: "test.Service",
 		}
@@ -189,7 +189,7 @@ func TestGRPCProber_Probe(t *testing.T) {
 		prober := healthcheck.NewGRPCProber(100 * time.Millisecond)
 		ctx := context.Background()
 
-		target := domainhealthcheck.Target{
+		target := health.Target{
 			Address: "127.0.0.1:1",
 		}
 
@@ -202,7 +202,7 @@ func TestGRPCProber_Probe(t *testing.T) {
 		prober := healthcheck.NewGRPCProber(50 * time.Millisecond)
 		ctx := context.Background()
 
-		target := domainhealthcheck.Target{
+		target := health.Target{
 			Address: "192.0.2.1:50051",
 		}
 
@@ -230,7 +230,7 @@ func TestGRPCProber_Probe_ContextCancellation(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
-			target := domainhealthcheck.Target{
+			target := health.Target{
 				Address: "192.0.2.1:50051",
 			}
 

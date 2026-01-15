@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	domainhealthcheck "github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 )
 
 // TestUDPProber_internalFields tests internal struct fields.
@@ -123,14 +123,14 @@ func TestDefaultUDPPayload(t *testing.T) {
 func Test_UDPProber_dialUDP(t *testing.T) {
 	tests := []struct {
 		name          string
-		target        domainhealthcheck.Target
+		target        health.Target
 		timeout       time.Duration
 		expectConn    bool
 		expectSuccess bool
 	}{
 		{
 			name: "valid_address",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "127.0.0.1:12345",
 			},
 			timeout:       time.Second,
@@ -139,7 +139,7 @@ func Test_UDPProber_dialUDP(t *testing.T) {
 		},
 		{
 			name: "valid_address_with_network",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "127.0.0.1:12345",
 				Network: "udp",
 			},
@@ -149,7 +149,7 @@ func Test_UDPProber_dialUDP(t *testing.T) {
 		},
 		{
 			name: "invalid_address_format",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "invalid:address:format:extra",
 			},
 			timeout:       time.Second,

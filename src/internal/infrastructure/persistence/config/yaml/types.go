@@ -5,7 +5,7 @@ package yaml
 import (
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/service"
+	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/domain/shared"
 )
 
@@ -84,7 +84,7 @@ type ConfigDTO struct {
 }
 
 // ServiceConfigDTO is the YAML representation of a service configuration.
-// It contains all settings needed to define and manage a supervised service.
+// It contains all settings needed to define and manage a supervised config.
 type ServiceConfigDTO struct {
 	Name             string            `yaml:"name"`
 	Command          string            `yaml:"command"`
@@ -197,9 +197,9 @@ type LogStreamConfigDTO struct {
 //   - configPath: the filesystem path of the loaded configuration file
 //
 // Returns:
-//   - *service.Config: the converted domain configuration object
-func (c *ConfigDTO) ToDomain(configPath string) *service.Config {
-	services := make([]service.ServiceConfig, 0, len(c.Services))
+//   - *config.Config: the converted domain configuration object
+func (c *ConfigDTO) ToDomain(configPath string) *config.Config {
+	services := make([]config.ServiceConfig, 0, len(c.Services))
 
 	// Convert each service configuration to domain model
 	for i := range c.Services {
@@ -207,7 +207,7 @@ func (c *ConfigDTO) ToDomain(configPath string) *service.Config {
 	}
 
 	// Return the fully converted configuration
-	return &service.Config{
+	return &config.Config{
 		Version:    c.Version,
 		ConfigPath: configPath,
 		Logging:    c.Logging.ToDomain(),
@@ -219,16 +219,16 @@ func (c *ConfigDTO) ToDomain(configPath string) *service.Config {
 // It maps all service settings from YAML format to the domain model.
 //
 // Returns:
-//   - service.ServiceConfig: the converted domain service configuration
-func (s *ServiceConfigDTO) ToDomain() service.ServiceConfig {
-	healthChecks := make([]service.HealthCheckConfig, 0, len(s.HealthChecks))
+//   - config.ServiceConfig: the converted domain service configuration
+func (s *ServiceConfigDTO) ToDomain() config.ServiceConfig {
+	healthChecks := make([]config.HealthCheckConfig, 0, len(s.HealthChecks))
 
 	// Convert each health check configuration to domain model
 	for i := range s.HealthChecks {
 		healthChecks = append(healthChecks, s.HealthChecks[i].ToDomain())
 	}
 
-	listeners := make([]service.ListenerConfig, 0, len(s.Listeners))
+	listeners := make([]config.ListenerConfig, 0, len(s.Listeners))
 
 	// Convert each listener configuration to domain model
 	for i := range s.Listeners {
@@ -236,7 +236,7 @@ func (s *ServiceConfigDTO) ToDomain() service.ServiceConfig {
 	}
 
 	// Return the fully converted service configuration
-	return service.ServiceConfig{
+	return config.ServiceConfig{
 		Name:             s.Name,
 		Command:          s.Command,
 		Args:             s.Args,
@@ -257,8 +257,8 @@ func (s *ServiceConfigDTO) ToDomain() service.ServiceConfig {
 // It maps listener settings from YAML format to the domain model.
 //
 // Returns:
-//   - service.ListenerConfig: the converted domain listener configuration
-func (l *ListenerDTO) ToDomain() service.ListenerConfig {
+//   - config.ListenerConfig: the converted domain listener configuration
+func (l *ListenerDTO) ToDomain() config.ListenerConfig {
 	// Determine protocol, default to TCP.
 	protocol := l.Protocol
 	// Fall back to TCP when no protocol is specified in configuration.
@@ -267,7 +267,7 @@ func (l *ListenerDTO) ToDomain() service.ListenerConfig {
 	}
 
 	// Create listener config.
-	listener := service.ListenerConfig{
+	listener := config.ListenerConfig{
 		Name:     l.Name,
 		Port:     l.Port,
 		Protocol: protocol,
@@ -288,15 +288,15 @@ func (l *ListenerDTO) ToDomain() service.ListenerConfig {
 // It maps probe settings from YAML format to the domain model.
 //
 // Returns:
-//   - service.ProbeConfig: the converted domain probe configuration
-func (p *ProbeDTO) ToDomain() service.ProbeConfig {
+//   - config.ProbeConfig: the converted domain probe configuration
+func (p *ProbeDTO) ToDomain() config.ProbeConfig {
 	// Get threshold, timing, and HTTP defaults.
 	successThreshold, failureThreshold := p.getThresholdDefaults()
 	interval, timeout := p.getTimingDefaults()
 	method, statusCode := p.getHTTPDefaults()
 
 	// Return the converted probe configuration.
-	return service.ProbeConfig{
+	return config.ProbeConfig{
 		Type:             p.Type,
 		Interval:         shared.FromTimeDuration(interval),
 		Timeout:          shared.FromTimeDuration(timeout),
@@ -387,11 +387,11 @@ func (p *ProbeDTO) getHTTPDefaults() (method string, statusCode int) {
 // It transforms restart policy settings to the domain model format.
 //
 // Returns:
-//   - service.RestartConfig: the converted domain restart configuration
-func (r *RestartConfigDTO) ToDomain() service.RestartConfig {
+//   - config.RestartConfig: the converted domain restart configuration
+func (r *RestartConfigDTO) ToDomain() config.RestartConfig {
 	// Return the converted restart configuration with policy and timing
-	return service.RestartConfig{
-		Policy:     service.RestartPolicy(r.Policy),
+	return config.RestartConfig{
+		Policy:     config.RestartPolicy(r.Policy),
 		MaxRetries: r.MaxRetries,
 		Delay:      shared.FromTimeDuration(time.Duration(r.Delay)),
 		DelayMax:   shared.FromTimeDuration(time.Duration(r.DelayMax)),
@@ -402,12 +402,12 @@ func (r *RestartConfigDTO) ToDomain() service.RestartConfig {
 // It maps health check parameters from YAML format to the domain model.
 //
 // Returns:
-//   - service.HealthCheckConfig: the converted domain health check configuration
-func (h *HealthCheckDTO) ToDomain() service.HealthCheckConfig {
+//   - config.HealthCheckConfig: the converted domain health check configuration
+func (h *HealthCheckDTO) ToDomain() config.HealthCheckConfig {
 	// Return the converted health check with all parameters
-	return service.HealthCheckConfig{
+	return config.HealthCheckConfig{
 		Name:       h.Name,
-		Type:       service.HealthCheckType(h.Type),
+		Type:       config.HealthCheckType(h.Type),
 		Interval:   shared.FromTimeDuration(time.Duration(h.Interval)),
 		Timeout:    shared.FromTimeDuration(time.Duration(h.Timeout)),
 		Retries:    h.Retries,
@@ -424,10 +424,10 @@ func (h *HealthCheckDTO) ToDomain() service.HealthCheckConfig {
 // It transforms global logging settings to the domain model format.
 //
 // Returns:
-//   - service.LoggingConfig: the converted domain logging configuration
-func (l *LoggingConfigDTO) ToDomain() service.LoggingConfig {
+//   - config.LoggingConfig: the converted domain logging configuration
+func (l *LoggingConfigDTO) ToDomain() config.LoggingConfig {
 	// Return the converted logging configuration with base directory and defaults
-	return service.LoggingConfig{
+	return config.LoggingConfig{
 		BaseDir:  l.BaseDir,
 		Defaults: l.Defaults.ToDomain(),
 	}
@@ -437,10 +437,10 @@ func (l *LoggingConfigDTO) ToDomain() service.LoggingConfig {
 // It maps default logging parameters to the domain model format.
 //
 // Returns:
-//   - service.LogDefaults: the converted domain log defaults
-func (l *LogDefaultsDTO) ToDomain() service.LogDefaults {
+//   - config.LogDefaults: the converted domain log defaults
+func (l *LogDefaultsDTO) ToDomain() config.LogDefaults {
 	// Return the converted log defaults with format and rotation settings
-	return service.LogDefaults{
+	return config.LogDefaults{
 		TimestampFormat: l.TimestampFormat,
 		Rotation:        l.Rotation.ToDomain(),
 	}
@@ -450,10 +450,10 @@ func (l *LogDefaultsDTO) ToDomain() service.LogDefaults {
 // It transforms log rotation settings to the domain model format.
 //
 // Returns:
-//   - service.RotationConfig: the converted domain rotation configuration
-func (r *RotationConfigDTO) ToDomain() service.RotationConfig {
+//   - config.RotationConfig: the converted domain rotation configuration
+func (r *RotationConfigDTO) ToDomain() config.RotationConfig {
 	// Return the converted rotation configuration with size and retention limits
-	return service.RotationConfig{
+	return config.RotationConfig{
 		MaxSize:  r.MaxSize,
 		MaxAge:   r.MaxAge,
 		MaxFiles: r.MaxFiles,
@@ -465,10 +465,10 @@ func (r *RotationConfigDTO) ToDomain() service.RotationConfig {
 // It maps service-specific logging settings to the domain model format.
 //
 // Returns:
-//   - service.ServiceLogging: the converted domain service logging configuration
-func (s *ServiceLoggingDTO) ToDomain() service.ServiceLogging {
+//   - config.ServiceLogging: the converted domain service logging configuration
+func (s *ServiceLoggingDTO) ToDomain() config.ServiceLogging {
 	// Return the converted service logging with stdout and stderr streams
-	return service.ServiceLogging{
+	return config.ServiceLogging{
 		Stdout: s.Stdout.ToDomain(),
 		Stderr: s.Stderr.ToDomain(),
 	}
@@ -478,10 +478,10 @@ func (s *ServiceLoggingDTO) ToDomain() service.ServiceLogging {
 // It transforms individual log stream settings to the domain model format.
 //
 // Returns:
-//   - service.LogStreamConfig: the converted domain log stream configuration
-func (l *LogStreamConfigDTO) ToDomain() service.LogStreamConfig {
+//   - config.LogStreamConfig: the converted domain log stream configuration
+func (l *LogStreamConfigDTO) ToDomain() config.LogStreamConfig {
 	// Return the converted log stream with file path, format, and rotation
-	return service.LogStreamConfig{
+	return config.LogStreamConfig{
 		FilePath:       l.File,
 		Format:         l.TimestampFormat,
 		RotationConfig: l.Rotation.ToDomain(),

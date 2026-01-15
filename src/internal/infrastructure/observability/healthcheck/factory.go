@@ -5,11 +5,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 )
 
 // proberConstructor is a function that creates a prober with a given timeout.
-type proberConstructor func(timeout time.Duration) healthcheck.Prober
+type proberConstructor func(timeout time.Duration) health.Prober
 
 var (
 	// ErrUnknownProberType indicates an unknown prober type was requested.
@@ -17,12 +17,12 @@ var (
 
 	// proberConstructors maps prober types to their constructor functions.
 	proberConstructors map[string]proberConstructor = map[string]proberConstructor{
-		proberTypeTCP:  func(t time.Duration) healthcheck.Prober { return NewTCPProber(t) },
-		proberTypeUDP:  func(t time.Duration) healthcheck.Prober { return NewUDPProber(t) },
-		proberTypeHTTP: func(t time.Duration) healthcheck.Prober { return NewHTTPProber(t) },
-		proberTypeGRPC: func(t time.Duration) healthcheck.Prober { return NewGRPCProber(t) },
-		proberTypeExec: func(t time.Duration) healthcheck.Prober { return NewExecProber(t) },
-		proberTypeICMP: func(t time.Duration) healthcheck.Prober { return NewICMPProber(t) },
+		proberTypeTCP:  func(t time.Duration) health.Prober { return NewTCPProber(t) },
+		proberTypeUDP:  func(t time.Duration) health.Prober { return NewUDPProber(t) },
+		proberTypeHTTP: func(t time.Duration) health.Prober { return NewHTTPProber(t) },
+		proberTypeGRPC: func(t time.Duration) health.Prober { return NewGRPCProber(t) },
+		proberTypeExec: func(t time.Duration) health.Prober { return NewExecProber(t) },
+		proberTypeICMP: func(t time.Duration) health.Prober { return NewICMPProber(t) },
 	}
 )
 
@@ -54,9 +54,9 @@ func NewFactory(defaultTimeout time.Duration) *Factory {
 //   - timeout: the timeout for the prober (uses default if zero).
 //
 // Returns:
-//   - healthcheck.Prober: the created prober.
+//   - health.Prober: the created prober.
 //   - error: ErrUnknownProberType if the type is not recognized.
-func (f *Factory) Create(proberType string, timeout time.Duration) (healthcheck.Prober, error) {
+func (f *Factory) Create(proberType string, timeout time.Duration) (health.Prober, error) {
 	// Normalize timeout using helper.
 	timeout = f.normalizeTimeout(timeout)
 

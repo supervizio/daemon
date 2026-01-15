@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	domainhealthcheck "github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/infrastructure/observability/healthcheck"
 )
 
@@ -97,13 +97,13 @@ func TestTCPProber_Probe(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		target        domainhealthcheck.Target
+		target        health.Target
 		timeout       time.Duration
 		expectSuccess bool
 	}{
 		{
 			name: "successful_connection",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: listener.Addr().String(),
 			},
 			timeout:       time.Second,
@@ -111,7 +111,7 @@ func TestTCPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "successful_with_explicit_network",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: listener.Addr().String(),
 				Network: "tcp",
 			},
@@ -120,7 +120,7 @@ func TestTCPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "connection_refused",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "127.0.0.1:1",
 			},
 			timeout:       100 * time.Millisecond,
@@ -128,7 +128,7 @@ func TestTCPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "invalid_address",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "invalid:address:format",
 			},
 			timeout:       100 * time.Millisecond,
@@ -136,7 +136,7 @@ func TestTCPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "timeout_on_unreachable",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "192.0.2.1:80",
 			},
 			timeout:       50 * time.Millisecond,
@@ -188,7 +188,7 @@ func TestTCPProber_Probe_ContextCancellation(t *testing.T) {
 			cancel()
 
 			// Create target for unreachable address.
-			target := domainhealthcheck.Target{
+			target := health.Target{
 				Address: "192.0.2.1:80",
 			}
 

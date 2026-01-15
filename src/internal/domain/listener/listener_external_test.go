@@ -3,12 +3,10 @@ package listener_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kodflow/daemon/internal/domain/healthcheck"
 	"github.com/kodflow/daemon/internal/domain/listener"
 )
 
@@ -125,42 +123,6 @@ func TestNewUDP(t *testing.T) {
 			require.NotNil(t, l)
 			assert.Equal(t, "udp", l.Protocol)
 			assert.Equal(t, tt.listenerName, l.Name)
-		})
-	}
-}
-
-// TestListener_WithProbe tests probe configuration.
-func TestListener_WithProbe(t *testing.T) {
-	tests := []struct {
-		name      string
-		probeType string
-		config    healthcheck.Config
-		target    healthcheck.Target
-	}{
-		{
-			name:      "tcp_probe",
-			probeType: "tcp",
-			config:    healthcheck.NewConfig(),
-			target:    healthcheck.NewTCPTarget("localhost:8080"),
-		},
-		{
-			name:      "http_probe",
-			probeType: "http",
-			config:    healthcheck.NewConfig().WithTimeout(10 * time.Second),
-			target:    healthcheck.NewHTTPTarget("http://localhost:8080/health", "GET", 200),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create listener with healthcheck.
-			l := listener.NewTCP("http", "localhost", 8080)
-			l.WithProbe(tt.probeType, tt.config, tt.target)
-
-			// Verify probe configuration.
-			assert.True(t, l.HasProbe())
-			assert.Equal(t, tt.probeType, l.ProbeType)
-			require.NotNil(t, l.ProbeConfig)
 		})
 	}
 }
@@ -323,86 +285,6 @@ func TestListener_MarkClosed(t *testing.T) {
 			// Verify result.
 			assert.Equal(t, tt.shouldSucceed, result)
 			assert.Equal(t, tt.expectedState, l.State)
-		})
-	}
-}
-
-// TestListener_HasProbe tests HasProbe method.
-func TestListener_HasProbe(t *testing.T) {
-	tests := []struct {
-		name     string
-		setup    func(*listener.Listener)
-		expected bool
-	}{
-		{
-			name: "without_probe",
-			setup: func(_ *listener.Listener) {
-				// No setup needed.
-			},
-			expected: false,
-		},
-		{
-			name: "with_probe",
-			setup: func(l *listener.Listener) {
-				l.WithProbe("tcp", healthcheck.NewConfig(), healthcheck.NewTCPTarget("localhost:8080"))
-			},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create listener and apply setup.
-			l := listener.NewListener("test", "tcp", "localhost", 8080)
-			tt.setup(l)
-
-			// Verify HasProbe.
-			assert.Equal(t, tt.expected, l.HasProbe())
-		})
-	}
-}
-
-// TestListener_ProbeAddress tests ProbeAddress method.
-func TestListener_ProbeAddress(t *testing.T) {
-	tests := []struct {
-		name     string
-		address  string
-		port     int
-		expected string
-	}{
-		{
-			name:     "localhost",
-			address:  "localhost",
-			port:     8080,
-			expected: "localhost:8080",
-		},
-		{
-			name:     "empty_address",
-			address:  "",
-			port:     9090,
-			expected: "127.0.0.1:9090",
-		},
-		{
-			name:     "any_address",
-			address:  "0.0.0.0",
-			port:     80,
-			expected: "127.0.0.1:80",
-		},
-		{
-			name:     "ip_address",
-			address:  "192.168.1.1",
-			port:     443,
-			expected: "192.168.1.1:443",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create listener.
-			l := listener.NewListener("test", "tcp", tt.address, tt.port)
-
-			// Verify probe address.
-			assert.Equal(t, tt.expected, l.ProbeAddress())
 		})
 	}
 }

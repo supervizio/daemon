@@ -17,9 +17,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	daemonpb "github.com/kodflow/daemon/api/proto/v1/daemon"
+	"github.com/kodflow/daemon/internal/domain/lifecycle"
 	"github.com/kodflow/daemon/internal/domain/metrics"
 	"github.com/kodflow/daemon/internal/domain/process"
-	"github.com/kodflow/daemon/internal/domain/state"
 )
 
 // DefaultStreamInterval is the default interval for streaming updates.
@@ -78,10 +78,10 @@ type MetricsProvider interface {
 	Unsubscribe(ch <-chan metrics.ProcessMetrics)
 }
 
-// StateProvider provides access to daemon state.
+// StateProvider provides access to daemon lifecycle.
 type StateProvider interface {
-	// GetState returns the current daemon state.
-	GetState() state.DaemonState
+	// GetState returns the current daemon lifecycle.
+	GetState() lifecycle.DaemonState
 }
 
 // Server implements the gRPC daemon services.
@@ -102,7 +102,7 @@ type Server struct {
 //
 // Params:
 //   - metricsProvider: provider for process metrics.
-//   - stateProvider: provider for daemon state.
+//   - stateProvider: provider for daemon lifecycle.
 //
 // Returns:
 //   - *Server: configured gRPC server.
@@ -301,7 +301,7 @@ func (s *Server) StreamAllProcessMetrics(req *daemonpb.StreamMetricsRequest, str
 }
 
 // convertDaemonState converts domain state to protobuf.
-func (s *Server) convertDaemonState(ds *state.DaemonState) *daemonpb.DaemonState {
+func (s *Server) convertDaemonState(ds *lifecycle.DaemonState) *daemonpb.DaemonState {
 	processes := make([]*daemonpb.ProcessMetrics, 0, len(ds.Processes))
 	for i := range ds.Processes {
 		processes = append(processes, s.convertProcessMetrics(&ds.Processes[i]))
@@ -379,7 +379,7 @@ func (s *Server) convertProcessMemory(mem *metrics.ProcessMemory) *daemonpb.Proc
 }
 
 // convertSystemMetrics converts daemon state to system metrics protobuf.
-func (s *Server) convertSystemMetrics(ds *state.DaemonState) *daemonpb.SystemMetrics {
+func (s *Server) convertSystemMetrics(ds *lifecycle.DaemonState) *daemonpb.SystemMetrics {
 	return &daemonpb.SystemMetrics{
 		Cpu: &daemonpb.SystemCPU{
 			UserNs:    ds.System.CPU.User,
@@ -408,7 +408,7 @@ func (s *Server) convertSystemMetrics(ds *state.DaemonState) *daemonpb.SystemMet
 }
 
 // convertHostInfo converts domain host info to protobuf.
-func (s *Server) convertHostInfo(host *state.HostInfo) *daemonpb.HostInfo {
+func (s *Server) convertHostInfo(host *lifecycle.HostInfo) *daemonpb.HostInfo {
 	return &daemonpb.HostInfo{
 		Hostname: host.Hostname,
 		Os:       host.OS,
@@ -417,7 +417,7 @@ func (s *Server) convertHostInfo(host *state.HostInfo) *daemonpb.HostInfo {
 }
 
 // convertKubernetesInfo converts domain k8s state to protobuf.
-func (s *Server) convertKubernetesInfo(k8s *state.KubernetesState) *daemonpb.KubernetesInfo {
+func (s *Server) convertKubernetesInfo(k8s *lifecycle.KubernetesState) *daemonpb.KubernetesInfo {
 	if k8s == nil || k8s.PodName == "" {
 		return nil
 	}

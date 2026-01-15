@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	domainhealthcheck "github.com/kodflow/daemon/internal/domain/healthcheck"
+	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/infrastructure/observability/healthcheck"
 )
 
@@ -140,14 +140,14 @@ func TestICMPProber_Probe(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		target        domainhealthcheck.Target
+		target        health.Target
 		tcpPort       int
 		timeout       time.Duration
 		expectSuccess bool
 	}{
 		{
 			name: "successful_tcp_fallback",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "127.0.0.1",
 			},
 			tcpPort:       mustParsePort(portStr),
@@ -156,7 +156,7 @@ func TestICMPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "successful_with_port_in_address",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: listener.Addr().String(),
 			},
 			tcpPort:       mustParsePort(portStr),
@@ -165,7 +165,7 @@ func TestICMPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "failure_unreachable_port",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "127.0.0.1",
 			},
 			tcpPort:       1, // Port 1 should be unreachable.
@@ -174,7 +174,7 @@ func TestICMPProber_Probe(t *testing.T) {
 		},
 		{
 			name: "failure_unreachable_host",
-			target: domainhealthcheck.Target{
+			target: health.Target{
 				Address: "192.0.2.1",
 			},
 			tcpPort:       80,
@@ -226,7 +226,7 @@ func TestICMPProber_Probe_ContextCancellation(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
-			target := domainhealthcheck.Target{
+			target := health.Target{
 				Address: "192.0.2.1",
 			}
 

@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kodflow/daemon/internal/domain/health"
-	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/process"
 )
 
@@ -43,7 +42,7 @@ func TestNewAggregatedHealth(t *testing.T) {
 			// Verify fields.
 			require.NotNil(t, h)
 			assert.Equal(t, tt.processState, h.ProcessState)
-			assert.Empty(t, h.Listeners)
+			assert.Empty(t, h.Subjects)
 			assert.Empty(t, h.CustomStatus)
 		})
 	}
@@ -54,17 +53,17 @@ func TestAggregatedHealth_AddListener(t *testing.T) {
 	tests := []struct {
 		name          string
 		listenerName  string
-		listenerState listener.State
+		listenerState health.SubjectState
 	}{
 		{
 			name:          "closed_listener",
 			listenerName:  "http",
-			listenerState: listener.StateClosed,
+			listenerState: health.SubjectClosed,
 		},
 		{
 			name:          "ready_listener",
 			listenerName:  "grpc",
-			listenerState: listener.StateReady,
+			listenerState: health.SubjectReady,
 		},
 	}
 
@@ -77,9 +76,9 @@ func TestAggregatedHealth_AddListener(t *testing.T) {
 			h.AddListener(tt.listenerName, tt.listenerState)
 
 			// Verify listener was added.
-			require.Len(t, h.Listeners, 1)
-			assert.Equal(t, tt.listenerName, h.Listeners[0].Name)
-			assert.Equal(t, tt.listenerState, h.Listeners[0].State)
+			require.Len(t, h.Subjects, 1)
+			assert.Equal(t, tt.listenerName, h.Subjects[0].Name)
+			assert.Equal(t, tt.listenerState, h.Subjects[0].State)
 		})
 	}
 }
@@ -153,7 +152,7 @@ func TestAggregatedHealth_Status(t *testing.T) {
 	tests := []struct {
 		name           string
 		processState   process.State
-		listeners      []listener.State
+		listeners      []health.SubjectState
 		customStatus   string
 		expectedStatus health.Status
 	}{
@@ -167,7 +166,7 @@ func TestAggregatedHealth_Status(t *testing.T) {
 		{
 			name:           "healthy_running_ready_listeners",
 			processState:   process.StateRunning,
-			listeners:      []listener.State{listener.StateReady, listener.StateReady},
+			listeners:      []health.SubjectState{health.SubjectReady, health.SubjectReady},
 			customStatus:   "",
 			expectedStatus: health.StatusHealthy,
 		},
@@ -181,21 +180,21 @@ func TestAggregatedHealth_Status(t *testing.T) {
 		{
 			name:           "degraded_listening",
 			processState:   process.StateRunning,
-			listeners:      []listener.State{listener.StateListening},
+			listeners:      []health.SubjectState{health.SubjectListening},
 			customStatus:   "",
 			expectedStatus: health.StatusDegraded,
 		},
 		{
 			name:           "degraded_custom_status",
 			processState:   process.StateRunning,
-			listeners:      []listener.State{listener.StateReady},
+			listeners:      []health.SubjectState{health.SubjectReady},
 			customStatus:   "DRAINING",
 			expectedStatus: health.StatusDegraded,
 		},
 		{
 			name:           "healthy_with_healthy_custom",
 			processState:   process.StateRunning,
-			listeners:      []listener.State{listener.StateReady},
+			listeners:      []health.SubjectState{health.SubjectReady},
 			customStatus:   "HEALTHY",
 			expectedStatus: health.StatusHealthy,
 		},
@@ -255,7 +254,7 @@ func TestAggregatedHealth_IsDegraded(t *testing.T) {
 	tests := []struct {
 		name         string
 		processState process.State
-		listeners    []listener.State
+		listeners    []health.SubjectState
 		customStatus string
 		expected     bool
 	}{
@@ -276,7 +275,7 @@ func TestAggregatedHealth_IsDegraded(t *testing.T) {
 		{
 			name:         "degraded_listener_listening",
 			processState: process.StateRunning,
-			listeners:    []listener.State{listener.StateListening},
+			listeners:    []health.SubjectState{health.SubjectListening},
 			customStatus: "",
 			expected:     true,
 		},
@@ -314,7 +313,7 @@ func TestAggregatedHealth_IsUnhealthy(t *testing.T) {
 	tests := []struct {
 		name         string
 		processState process.State
-		listeners    []listener.State
+		listeners    []health.SubjectState
 		expected     bool
 	}{
 		{
@@ -332,13 +331,13 @@ func TestAggregatedHealth_IsUnhealthy(t *testing.T) {
 		{
 			name:         "unhealthy_all_closed",
 			processState: process.StateRunning,
-			listeners:    []listener.State{listener.StateClosed},
+			listeners:    []health.SubjectState{health.SubjectClosed},
 			expected:     true,
 		},
 		{
 			name:         "degraded_not_unhealthy",
 			processState: process.StateRunning,
-			listeners:    []listener.State{listener.StateListening},
+			listeners:    []health.SubjectState{health.SubjectListening},
 			expected:     false,
 		},
 	}
@@ -364,7 +363,7 @@ func TestAggregatedHealth_IsUnhealthy(t *testing.T) {
 func TestAggregatedHealth_AllListenersReady(t *testing.T) {
 	tests := []struct {
 		name      string
-		listeners []listener.State
+		listeners []health.SubjectState
 		expected  bool
 	}{
 		{
@@ -374,12 +373,12 @@ func TestAggregatedHealth_AllListenersReady(t *testing.T) {
 		},
 		{
 			name:      "all_ready",
-			listeners: []listener.State{listener.StateReady, listener.StateReady},
+			listeners: []health.SubjectState{health.SubjectReady, health.SubjectReady},
 			expected:  true,
 		},
 		{
 			name:      "some_listening",
-			listeners: []listener.State{listener.StateReady, listener.StateListening},
+			listeners: []health.SubjectState{health.SubjectReady, health.SubjectListening},
 			expected:  false,
 		},
 	}
@@ -404,7 +403,7 @@ func TestAggregatedHealth_AllListenersReady(t *testing.T) {
 func TestAggregatedHealth_ReadyListenerCount(t *testing.T) {
 	tests := []struct {
 		name      string
-		listeners []listener.State
+		listeners []health.SubjectState
 		expected  int
 	}{
 		{
@@ -414,12 +413,12 @@ func TestAggregatedHealth_ReadyListenerCount(t *testing.T) {
 		},
 		{
 			name:      "two_ready",
-			listeners: []listener.State{listener.StateReady, listener.StateReady},
+			listeners: []health.SubjectState{health.SubjectReady, health.SubjectReady},
 			expected:  2,
 		},
 		{
 			name:      "one_ready_one_listening",
-			listeners: []listener.State{listener.StateReady, listener.StateListening},
+			listeners: []health.SubjectState{health.SubjectReady, health.SubjectListening},
 			expected:  1,
 		},
 	}
@@ -444,7 +443,7 @@ func TestAggregatedHealth_ReadyListenerCount(t *testing.T) {
 func TestAggregatedHealth_TotalListenerCount(t *testing.T) {
 	tests := []struct {
 		name      string
-		listeners []listener.State
+		listeners []health.SubjectState
 		expected  int
 	}{
 		{
@@ -454,7 +453,7 @@ func TestAggregatedHealth_TotalListenerCount(t *testing.T) {
 		},
 		{
 			name:      "three_listeners",
-			listeners: []listener.State{listener.StateReady, listener.StateListening, listener.StateClosed},
+			listeners: []health.SubjectState{health.SubjectReady, health.SubjectListening, health.SubjectClosed},
 			expected:  3,
 		},
 	}

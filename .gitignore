@@ -60,6 +60,13 @@ vendor/
 *.test
 *.out
 
+# Generated Go files (optional - uncomment if you don't want to commit them)
+# Note: It's generally recommended to commit generated files for reproducible builds
+# Uncomment the lines below if you prefer to exclude them:
+# **/wire_gen.go
+# **/*.pb.go
+# **/*_grpc.pb.go
+
 # Rust
 target/
 Cargo.lock

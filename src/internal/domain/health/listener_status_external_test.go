@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/kodflow/daemon/internal/domain/health"
-	"github.com/kodflow/daemon/internal/domain/listener"
 )
 
 // TestNewListenerStatus tests ListenerStatus creation.
@@ -15,22 +14,22 @@ func TestNewListenerStatus(t *testing.T) {
 	tests := []struct {
 		name          string
 		listenerName  string
-		listenerState listener.State
+		listenerState health.SubjectState
 	}{
 		{
 			name:          "closed_listener",
 			listenerName:  "http",
-			listenerState: listener.StateClosed,
+			listenerState: health.SubjectClosed,
 		},
 		{
 			name:          "listening_listener",
 			listenerName:  "grpc",
-			listenerState: listener.StateListening,
+			listenerState: health.SubjectListening,
 		},
 		{
 			name:          "ready_listener",
 			listenerName:  "admin",
-			listenerState: listener.StateReady,
+			listenerState: health.SubjectReady,
 		},
 	}
 
@@ -55,28 +54,28 @@ func TestListenerStatus_SetLastProbeResult(t *testing.T) {
 	tests := []struct {
 		name           string
 		listenerName   string
-		listenerState  listener.State
+		listenerState  health.SubjectState
 		result         health.Result
 		expectedStatus health.Status
 	}{
 		{
 			name:           "set_healthy_result",
 			listenerName:   "http",
-			listenerState:  listener.StateReady,
+			listenerState:  health.SubjectReady,
 			result:         health.NewHealthyResult("OK", 100),
 			expectedStatus: health.StatusHealthy,
 		},
 		{
 			name:           "set_unhealthy_result",
 			listenerName:   "grpc",
-			listenerState:  listener.StateListening,
+			listenerState:  health.SubjectListening,
 			result:         health.NewUnhealthyResult("Connection refused", 100, nil),
 			expectedStatus: health.StatusUnhealthy,
 		},
 		{
 			name:           "set_healthy_result_on_closed_listener",
 			listenerName:   "admin",
-			listenerState:  listener.StateClosed,
+			listenerState:  health.SubjectClosed,
 			result:         health.NewHealthyResult("OK", 50),
 			expectedStatus: health.StatusHealthy,
 		},
@@ -147,7 +146,7 @@ func TestListenerStatus_IncrementSuccesses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create listener status with initial state.
-			ls := health.NewListenerStatus("http", listener.StateListening)
+			ls := health.NewListenerStatus("http", health.SubjectListening)
 			ls.ConsecutiveFailures = tt.initialFailures
 			ls.ConsecutiveSuccesses = tt.initialSuccesses
 
@@ -211,7 +210,7 @@ func TestListenerStatus_IncrementFailures(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create listener status with initial state.
-			ls := health.NewListenerStatus("http", listener.StateReady)
+			ls := health.NewListenerStatus("http", health.SubjectReady)
 			ls.ConsecutiveSuccesses = tt.initialSuccesses
 			ls.ConsecutiveFailures = tt.initialFailures
 
@@ -231,22 +230,22 @@ func TestListenerStatus_IncrementFailures(t *testing.T) {
 func TestListenerStatus_IsReady(t *testing.T) {
 	tests := []struct {
 		name     string
-		state    listener.State
+		state    health.SubjectState
 		expected bool
 	}{
 		{
 			name:     "closed_not_ready",
-			state:    listener.StateClosed,
+			state:    health.SubjectClosed,
 			expected: false,
 		},
 		{
 			name:     "listening_not_ready",
-			state:    listener.StateListening,
+			state:    health.SubjectListening,
 			expected: false,
 		},
 		{
 			name:     "ready_is_ready",
-			state:    listener.StateReady,
+			state:    health.SubjectReady,
 			expected: true,
 		},
 	}
@@ -267,22 +266,22 @@ func TestListenerStatus_IsReady(t *testing.T) {
 func TestListenerStatus_IsListening(t *testing.T) {
 	tests := []struct {
 		name     string
-		state    listener.State
+		state    health.SubjectState
 		expected bool
 	}{
 		{
 			name:     "closed_not_listening",
-			state:    listener.StateClosed,
+			state:    health.SubjectClosed,
 			expected: false,
 		},
 		{
 			name:     "listening_is_listening",
-			state:    listener.StateListening,
+			state:    health.SubjectListening,
 			expected: true,
 		},
 		{
 			name:     "ready_is_also_listening",
-			state:    listener.StateReady,
+			state:    health.SubjectReady,
 			expected: true,
 		},
 	}

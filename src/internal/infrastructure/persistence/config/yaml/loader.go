@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/kodflow/daemon/internal/domain/service"
+	"github.com/kodflow/daemon/internal/domain/config"
 )
 
 // Default configuration values.
@@ -60,9 +60,9 @@ func New() *Loader {
 //   - path: absolute or relative path to the YAML configuration file
 //
 // Returns:
-//   - *service.Config: parsed and validated configuration
+//   - *config.Config: parsed and validated configuration
 //   - error: any error during reading, parsing, or validation
-func (l *Loader) Load(path string) (*service.Config, error) {
+func (l *Loader) Load(path string) (*config.Config, error) {
 	data, err := os.ReadFile(path) // #nosec G304 - config path is trusted input
 	// Check if file reading failed.
 	if err != nil {
@@ -92,9 +92,9 @@ func (l *Loader) Load(path string) (*service.Config, error) {
 //   - data: raw YAML configuration bytes
 //
 // Returns:
-//   - *service.Config: parsed and validated configuration
+//   - *config.Config: parsed and validated configuration
 //   - error: any error during parsing or validation
-func (l *Loader) Parse(data []byte) (*service.Config, error) {
+func (l *Loader) Parse(data []byte) (*config.Config, error) {
 	var dto ConfigDTO
 
 	// Unmarshal YAML data into the DTO structure.
@@ -110,7 +110,7 @@ func (l *Loader) Parse(data []byte) (*service.Config, error) {
 	cfg := dto.ToDomain("")
 
 	// Validate the configuration against domain rules.
-	if err := service.Validate(cfg); err != nil {
+	if err := config.Validate(cfg); err != nil {
 		// Return wrapped validation error.
 		return nil, fmt.Errorf("validating config: %w", err)
 	}
@@ -122,9 +122,9 @@ func (l *Loader) Parse(data []byte) (*service.Config, error) {
 // Reload reloads configuration from the last loaded path.
 //
 // Returns:
-//   - *service.Config: reloaded and validated configuration
+//   - *config.Config: reloaded and validated configuration
 //   - error: error if no configuration was previously loaded or reload fails
-func (l *Loader) Reload() (*service.Config, error) {
+func (l *Loader) Reload() (*config.Config, error) {
 	// Check if a configuration was previously loaded.
 	if l.lastPath == "" {
 		// Return error when no previous load exists.
@@ -218,7 +218,7 @@ func applyServiceDefaults(svc *ServiceConfigDTO, logging *LoggingConfigDTO) {
 func applyRestartDefaults(restart *RestartConfigDTO) {
 	// Set default restart policy if not specified.
 	if restart.Policy == "" {
-		restart.Policy = string(service.RestartOnFailure)
+		restart.Policy = string(config.RestartOnFailure)
 	}
 
 	// Set default maximum retries if not specified.
@@ -244,12 +244,12 @@ func applyHealthCheckDefaults(hc *HealthCheckDTO) {
 	}
 
 	// Set default HTTP method for HTTP health checks if not specified.
-	if hc.Method == "" && hc.Type == string(service.HealthCheckHTTP) {
+	if hc.Method == "" && hc.Type == string(config.HealthCheckHTTP) {
 		hc.Method = defaultHTTPMethod
 	}
 
 	// Set default expected status code for HTTP health checks if not specified.
-	if hc.StatusCode == 0 && hc.Type == string(service.HealthCheckHTTP) {
+	if hc.StatusCode == 0 && hc.Type == string(config.HealthCheckHTTP) {
 		hc.StatusCode = defaultHTTPStatus
 	}
 }
