@@ -4,6 +4,9 @@ package lifecycle
 import "time"
 
 // HostInfo contains information about the host system.
+//
+// This provides metadata about the daemon's execution environment,
+// including OS details, daemon identity, and start time.
 type HostInfo struct {
 	// Hostname is the system hostname.
 	Hostname string `json:"hostname"`
@@ -22,9 +25,15 @@ type HostInfo struct {
 }
 
 // Uptime returns the duration since the daemon started.
+//
+// Returns:
+//   - time.Duration: time elapsed since StartTime, or 0 if StartTime is zero
 func (h HostInfo) Uptime() time.Duration {
+	// Check if start time is zero (not set)
 	if h.StartTime.IsZero() {
+		// Return zero duration for unset start time
 		return 0
 	}
+	// Calculate time since start
 	return time.Since(h.StartTime)
 }

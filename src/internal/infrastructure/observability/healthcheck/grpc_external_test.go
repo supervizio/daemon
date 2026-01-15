@@ -98,15 +98,14 @@ func TestGRPCProber_Type(t *testing.T) {
 	}
 }
 
-// startTestGRPCServer starts a gRPC server with health checking for testing.
-// Returns the server address and a cleanup function.
-func startTestGRPCServer(t *testing.T, serviceStatus grpc_health_v1.HealthCheckResponse_ServingStatus) (addr string, cleanup func()) {
-	t.Helper()
-
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-
+// setupTestGRPCServer configures and starts a gRPC health server on the given listener.
+// Returns a cleanup function that must be deferred by the caller.
+//
+// Goroutine lifecycle: The spawned goroutine runs server.Serve(listener) which
+// blocks until the returned cleanup function calls server.GracefulStop().
+func setupTestGRPCServer(listener net.Listener, serviceStatus grpc_health_v1.HealthCheckResponse_ServingStatus) func() {
 	server := grpc.NewServer()
+
 	healthServer := grpchealth.NewServer()
 	grpc_health_v1.RegisterHealthServer(server, healthServer)
 
@@ -115,100 +114,119 @@ func startTestGRPCServer(t *testing.T, serviceStatus grpc_health_v1.HealthCheckR
 	// Set overall server health.
 	healthServer.SetServingStatus("", serviceStatus)
 
+	// Start server in goroutine. Terminates when GracefulStop() is called.
 	go func() {
 		_ = server.Serve(listener)
 	}()
 
-	cleanup = func() {
+	return func() {
 		server.GracefulStop()
 	}
-
-	addr = listener.Addr().String()
-	return addr, cleanup
 }
 
 // TestGRPCProber_Probe tests gRPC probing functionality with real gRPC health server.
 func TestGRPCProber_Probe(t *testing.T) {
-	t.Run("successful_health_check", func(t *testing.T) {
-		addr, cleanup := startTestGRPCServer(t, grpc_health_v1.HealthCheckResponse_SERVING)
-		defer cleanup()
+	tests := []struct {
+		name           string
+		serverStatus   grpc_health_v1.HealthCheckResponse_ServingStatus
+		useServer      bool
+		timeout        time.Duration
+		targetAddress  string
+		targetService  string
+		expectSuccess  bool
+		expectError    error
+		outputContains string
+	}{
+		{
+			name:           "successful_health_check",
+			serverStatus:   grpc_health_v1.HealthCheckResponse_SERVING,
+			useServer:      true,
+			timeout:        5 * time.Second,
+			targetService:  "",
+			expectSuccess:  true,
+			outputContains: "serving",
+		},
+		{
+			name:           "successful_with_service_name",
+			serverStatus:   grpc_health_v1.HealthCheckResponse_SERVING,
+			useServer:      true,
+			timeout:        5 * time.Second,
+			targetService:  "test.Service",
+			expectSuccess:  true,
+			outputContains: "test.Service",
+		},
+		{
+			name:           "not_serving",
+			serverStatus:   grpc_health_v1.HealthCheckResponse_NOT_SERVING,
+			useServer:      true,
+			timeout:        5 * time.Second,
+			targetService:  "test.Service",
+			expectSuccess:  false,
+			expectError:    healthcheck.ErrGRPCNotServing,
+			outputContains: "not serving",
+		},
+		{
+			name:          "connection_refused",
+			useServer:     false,
+			timeout:       100 * time.Millisecond,
+			targetAddress: "127.0.0.1:1",
+			expectSuccess: false,
+		},
+		{
+			name:          "timeout_on_unreachable",
+			useServer:     false,
+			timeout:       50 * time.Millisecond,
+			targetAddress: "192.0.2.1:50051",
+			expectSuccess: false,
+		},
+	}
 
-		prober := healthcheck.NewGRPCProber(5 * time.Second)
-		ctx := context.Background()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var addr string
 
-		target := health.Target{
-			Address: addr,
-			Service: "",
-		}
+			// Start test server if needed.
+			if tt.useServer {
+				listener, err := net.Listen("tcp", "127.0.0.1:0")
+				require.NoError(t, err)
+				defer func() { _ = listener.Close() }()
 
-		result := prober.Probe(ctx, target)
-		assert.True(t, result.Success)
-		assert.NoError(t, result.Error)
-		assert.Contains(t, result.Output, "serving")
-		assert.Greater(t, result.Latency, time.Duration(0))
-	})
+				addr = listener.Addr().String()
+				cleanup := setupTestGRPCServer(listener, tt.serverStatus)
+				defer cleanup()
+			} else {
+				addr = tt.targetAddress
+			}
 
-	t.Run("successful_with_service_name", func(t *testing.T) {
-		addr, cleanup := startTestGRPCServer(t, grpc_health_v1.HealthCheckResponse_SERVING)
-		defer cleanup()
+			// Create prober and target.
+			prober := healthcheck.NewGRPCProber(tt.timeout)
+			ctx := context.Background()
 
-		prober := healthcheck.NewGRPCProber(5 * time.Second)
-		ctx := context.Background()
+			target := health.Target{
+				Address: addr,
+				Service: tt.targetService,
+			}
 
-		target := health.Target{
-			Address: addr,
-			Service: "test.Service",
-		}
+			// Execute probe.
+			result := prober.Probe(ctx, target)
 
-		result := prober.Probe(ctx, target)
-		assert.True(t, result.Success)
-		assert.NoError(t, result.Error)
-		assert.Contains(t, result.Output, "test.Service")
-		assert.Greater(t, result.Latency, time.Duration(0))
-	})
+			// Verify success status.
+			assert.Equal(t, tt.expectSuccess, result.Success)
 
-	t.Run("not_serving", func(t *testing.T) {
-		addr, cleanup := startTestGRPCServer(t, grpc_health_v1.HealthCheckResponse_NOT_SERVING)
-		defer cleanup()
+			// Verify error if expected.
+			if tt.expectError != nil {
+				assert.ErrorIs(t, result.Error, tt.expectError)
+			}
 
-		prober := healthcheck.NewGRPCProber(5 * time.Second)
-		ctx := context.Background()
+			// Verify output contains expected string.
+			if tt.outputContains != "" {
+				assert.Contains(t, result.Output, tt.outputContains)
+			}
 
-		target := health.Target{
-			Address: addr,
-			Service: "test.Service",
-		}
-
-		result := prober.Probe(ctx, target)
-		assert.False(t, result.Success)
-		assert.ErrorIs(t, result.Error, healthcheck.ErrGRPCNotServing)
-		assert.Contains(t, result.Output, "not serving")
-	})
-
-	t.Run("connection_refused", func(t *testing.T) {
-		prober := healthcheck.NewGRPCProber(100 * time.Millisecond)
-		ctx := context.Background()
-
-		target := health.Target{
-			Address: "127.0.0.1:1",
-		}
-
-		result := prober.Probe(ctx, target)
-		assert.False(t, result.Success)
-		assert.Greater(t, result.Latency, time.Duration(0))
-	})
-
-	t.Run("timeout_on_unreachable", func(t *testing.T) {
-		prober := healthcheck.NewGRPCProber(50 * time.Millisecond)
-		ctx := context.Background()
-
-		target := health.Target{
-			Address: "192.0.2.1:50051",
-		}
-
-		result := prober.Probe(ctx, target)
-		assert.False(t, result.Success)
-	})
+			// Verify latency is recorded.
+			assert.Greater(t, result.Latency, time.Duration(0))
+		})
+	}
 }
 
 // TestGRPCProber_Probe_ContextCancellation tests context cancellation.

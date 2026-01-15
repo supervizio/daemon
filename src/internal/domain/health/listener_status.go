@@ -110,6 +110,13 @@ type ListenerStatus = SubjectStatus
 
 // NewListenerStatus creates a new listener status (backward compatibility).
 // Deprecated: Use NewSubjectStatusFromState instead.
+//
+// Params:
+//   - name: the listener name.
+//   - state: the listener's current state.
+//
+// Returns:
+//   - SubjectStatus: a new subject status for the listener.
 func NewListenerStatus(name string, state SubjectState) SubjectStatus {
 	// Delegate to new function.
 	return NewSubjectStatusFromState(name, state)

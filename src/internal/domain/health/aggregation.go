@@ -32,7 +32,11 @@ type AggregatedHealth struct {
 
 // Listeners returns the subjects slice for backward compatibility.
 // Deprecated: Use Subjects field directly instead.
+//
+// Returns:
+//   - []SubjectStatus: the list of subject statuses.
 func (h *AggregatedHealth) Listeners() []SubjectStatus {
+	// Return subjects slice for backward compatibility.
 	return h.Subjects
 }
 

@@ -4,167 +4,92 @@
 package scratch
 
 import (
-	"context"
 	"errors"
 
 	"github.com/kodflow/daemon/internal/domain/metrics"
 )
 
 // ErrNotSupported is returned when a metric is not available in scratch mode.
-var ErrNotSupported = errors.New("metric collection not supported in scratch mode")
+var ErrNotSupported error = errors.New("metric collection not supported in scratch mode")
 
 // Probe implements metrics.SystemCollector with minimal functionality.
 // It's designed for environments where system metrics are unavailable.
+// All collector methods return ErrNotSupported to indicate the platform
+// does not support system metrics collection.
 type Probe struct {
-	cpu     *CPUCollector
-	memory  *MemoryCollector
-	disk    *DiskCollector
-	network *NetworkCollector
-	io      *IOCollector
+	collCPU  *CPUCollector
+	collMem  *MemoryCollector
+	collDisk *DiskCollector
+	collNet  *NetworkCollector
+	collIO   *IOCollector
 }
 
 // NewProbe creates a new minimal probe for scratch environments.
+//
+// Returns:
+//   - *Probe: initialized probe with stub collectors
 func NewProbe() *Probe {
+	// Return probe with initialized stub collectors
 	return &Probe{
-		cpu:     &CPUCollector{},
-		memory:  &MemoryCollector{},
-		disk:    &DiskCollector{},
-		network: &NetworkCollector{},
-		io:      &IOCollector{},
+		collCPU:  NewCPUCollector(),
+		collMem:  NewMemoryCollector(),
+		collDisk: NewDiskCollector(),
+		collNet:  NewNetworkCollector(),
+		collIO:   NewIOCollector(),
 	}
 }
 
 // CPU returns the CPU collector.
+//
+// Returns:
+//   - metrics.CPUCollector: CPU metrics collector
 func (p *Probe) CPU() metrics.CPUCollector {
-	return p.cpu
+	// Assign to local variable for interface implementation
+	collector := p.collCPU
+	// Return the CPU collector instance
+	return collector
 }
 
 // Memory returns the memory collector.
+//
+// Returns:
+//   - metrics.MemoryCollector: memory metrics collector
 func (p *Probe) Memory() metrics.MemoryCollector {
-	return p.memory
+	// Assign to local variable for interface implementation
+	collector := p.collMem
+	// Return the memory collector instance
+	return collector
 }
 
 // Disk returns the disk collector.
+//
+// Returns:
+//   - metrics.DiskCollector: disk metrics collector
 func (p *Probe) Disk() metrics.DiskCollector {
-	return p.disk
+	// Assign to local variable for interface implementation
+	collector := p.collDisk
+	// Return the disk collector instance
+	return collector
 }
 
 // Network returns the network collector.
+//
+// Returns:
+//   - metrics.NetworkCollector: network metrics collector
 func (p *Probe) Network() metrics.NetworkCollector {
-	return p.network
+	// Assign to local variable for interface implementation
+	collector := p.collNet
+	// Return the network collector instance
+	return collector
 }
 
 // IO returns the I/O collector.
+//
+// Returns:
+//   - metrics.IOCollector: I/O metrics collector
 func (p *Probe) IO() metrics.IOCollector {
-	return p.io
-}
-
-// CPUCollector provides minimal CPU metrics collection.
-type CPUCollector struct{}
-
-// CollectSystem returns an error as system CPU metrics are not available.
-func (c *CPUCollector) CollectSystem(_ context.Context) (metrics.SystemCPU, error) {
-	return metrics.SystemCPU{}, ErrNotSupported
-}
-
-// CollectProcess returns an error as process CPU metrics are not available.
-func (c *CPUCollector) CollectProcess(_ context.Context, _ int) (metrics.ProcessCPU, error) {
-	return metrics.ProcessCPU{}, ErrNotSupported
-}
-
-// CollectAllProcesses returns an error as process enumeration is not available.
-func (c *CPUCollector) CollectAllProcesses(_ context.Context) ([]metrics.ProcessCPU, error) {
-	return nil, ErrNotSupported
-}
-
-// CollectLoadAverage returns an error as load average is not available.
-func (c *CPUCollector) CollectLoadAverage(_ context.Context) (metrics.LoadAverage, error) {
-	return metrics.LoadAverage{}, ErrNotSupported
-}
-
-// CollectPressure returns an error as CPU pressure metrics are not available.
-func (c *CPUCollector) CollectPressure(_ context.Context) (metrics.CPUPressure, error) {
-	return metrics.CPUPressure{}, ErrNotSupported
-}
-
-// MemoryCollector provides minimal memory metrics collection.
-type MemoryCollector struct{}
-
-// CollectSystem returns an error as system memory metrics are not available.
-func (m *MemoryCollector) CollectSystem(_ context.Context) (metrics.SystemMemory, error) {
-	return metrics.SystemMemory{}, ErrNotSupported
-}
-
-// CollectProcess returns an error as process memory metrics are not available.
-func (m *MemoryCollector) CollectProcess(_ context.Context, _ int) (metrics.ProcessMemory, error) {
-	return metrics.ProcessMemory{}, ErrNotSupported
-}
-
-// CollectAllProcesses returns an error as process enumeration is not available.
-func (m *MemoryCollector) CollectAllProcesses(_ context.Context) ([]metrics.ProcessMemory, error) {
-	return nil, ErrNotSupported
-}
-
-// CollectPressure returns an error as memory pressure metrics are not available.
-func (m *MemoryCollector) CollectPressure(_ context.Context) (metrics.MemoryPressure, error) {
-	return metrics.MemoryPressure{}, ErrNotSupported
-}
-
-// DiskCollector provides minimal disk metrics collection.
-type DiskCollector struct{}
-
-// ListPartitions returns an empty list as partition enumeration is not available.
-func (d *DiskCollector) ListPartitions(_ context.Context) ([]metrics.Partition, error) {
-	return nil, ErrNotSupported
-}
-
-// CollectUsage returns an error as disk usage metrics are not available.
-func (d *DiskCollector) CollectUsage(_ context.Context, _ string) (metrics.DiskUsage, error) {
-	return metrics.DiskUsage{}, ErrNotSupported
-}
-
-// CollectAllUsage returns an error as disk enumeration is not available.
-func (d *DiskCollector) CollectAllUsage(_ context.Context) ([]metrics.DiskUsage, error) {
-	return nil, ErrNotSupported
-}
-
-// CollectIO returns an error as disk I/O metrics are not available.
-func (d *DiskCollector) CollectIO(_ context.Context) ([]metrics.DiskIOStats, error) {
-	return nil, ErrNotSupported
-}
-
-// CollectDeviceIO returns an error as disk I/O metrics are not available.
-func (d *DiskCollector) CollectDeviceIO(_ context.Context, _ string) (metrics.DiskIOStats, error) {
-	return metrics.DiskIOStats{}, ErrNotSupported
-}
-
-// NetworkCollector provides minimal network metrics collection.
-type NetworkCollector struct{}
-
-// ListInterfaces returns an error as interface enumeration is not available.
-func (n *NetworkCollector) ListInterfaces(_ context.Context) ([]metrics.NetInterface, error) {
-	return nil, ErrNotSupported
-}
-
-// CollectStats returns an error as interface statistics are not available.
-func (n *NetworkCollector) CollectStats(_ context.Context, _ string) (metrics.NetStats, error) {
-	return metrics.NetStats{}, ErrNotSupported
-}
-
-// CollectAllStats returns an error as interface enumeration is not available.
-func (n *NetworkCollector) CollectAllStats(_ context.Context) ([]metrics.NetStats, error) {
-	return nil, ErrNotSupported
-}
-
-// IOCollector provides minimal I/O metrics collection.
-type IOCollector struct{}
-
-// CollectStats returns an error as I/O statistics are not available.
-func (i *IOCollector) CollectStats(_ context.Context) (metrics.IOStats, error) {
-	return metrics.IOStats{}, ErrNotSupported
-}
-
-// CollectPressure returns an error as I/O pressure metrics are not available.
-func (i *IOCollector) CollectPressure(_ context.Context) (metrics.IOPressure, error) {
-	return metrics.IOPressure{}, ErrNotSupported
+	// Assign to local variable for interface implementation
+	collector := p.collIO
+	// Return the I/O collector instance
+	return collector
 }

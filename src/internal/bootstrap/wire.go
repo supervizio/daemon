@@ -26,7 +26,7 @@ import (
 func InitializeApp(configPath string) (*App, error) {
 	wire.Build(
 		// Infrastructure: Configuration loader.
-		infraconfig.New,
+		infraconfig.NewLoader,
 		wire.Bind(new(appconfig.Loader), new(*infraconfig.Loader)),
 
 		// Infrastructure: Process credentials manager.
@@ -39,6 +39,7 @@ func InitializeApp(configPath string) (*App, error) {
 
 		// Infrastructure: Zombie reaper (conditional via ProvideReaper).
 		infrareaper.New,
+		wire.Bind(new(reaper), new(*infrareaper.Reaper)),
 
 		// Infrastructure: Process executor.
 		executor.NewWithDeps,

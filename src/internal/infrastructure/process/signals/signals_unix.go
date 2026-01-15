@@ -16,6 +16,28 @@ type Manager struct {
 	signalMap map[string]os.Signal
 }
 
+// NewManager creates a new SignalManager for the current platform.
+//
+// Returns:
+//   - *Manager: a new signal manager instance with common Unix signals registered
+func NewManager() *Manager {
+	sm := &Manager{
+		signalMap: map[string]os.Signal{
+			"SIGHUP":  syscall.SIGHUP,
+			"SIGINT":  syscall.SIGINT,
+			"SIGQUIT": syscall.SIGQUIT,
+			"SIGTERM": syscall.SIGTERM,
+			"SIGKILL": syscall.SIGKILL,
+			"SIGUSR1": syscall.SIGUSR1,
+			"SIGUSR2": syscall.SIGUSR2,
+			"SIGCHLD": syscall.SIGCHLD,
+		},
+	}
+	// Platform-specific signals are added via init() in *_linux.go, etc.
+	// Return the configured signal manager instance.
+	return sm
+}
+
 // New creates a new SignalManager for the current platform.
 //
 // Returns:
@@ -34,6 +56,7 @@ func New() *Manager {
 		},
 	}
 	// Platform-specific signals are added via init() in *_linux.go, etc.
+	// Return the configured signal manager instance.
 	return sm
 }
 

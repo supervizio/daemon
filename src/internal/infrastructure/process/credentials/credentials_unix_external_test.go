@@ -22,9 +22,24 @@ import (
 // Returns:
 //   - (none, test function)
 func TestNew(t *testing.T) {
-	manager := credentials.New()
-	// Check if the manager is not nil.
-	assert.NotNil(t, manager, "New should return a non-nil instance")
+	// Define test cases for New constructor.
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns non-nil manager instance",
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			manager := credentials.New()
+			// Check if the manager is not nil.
+			assert.NotNil(t, manager, "New should return a non-nil instance")
+		})
+	}
 }
 
 // TestManager_LookupUser tests the LookupUser method with various inputs.

@@ -1,3 +1,6 @@
+// Package bootstrap provides Wire dependency injection for the daemon.
+// This file contains custom providers that require conditional logic
+// or special handling beyond simple constructor calls.
 package bootstrap
 
 import (
@@ -5,8 +8,15 @@ import (
 	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
 	domainconfig "github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/domain/lifecycle"
-	infrareaper "github.com/kodflow/daemon/internal/infrastructure/process/reaper"
 )
+
+// ReaperMinimal defines the minimal interface needed for PID1 detection.
+// This interface accepts any implementation with IsPID1 capability,
+// satisfying the KTN-API-MINIF requirement.
+// Exported for testing purposes.
+type ReaperMinimal interface {
+	lifecycle.Reaper
+}
 
 // ProvideReaper returns the zombie reaper only if running as PID 1.
 // When not running as PID 1, zombie reaping is not needed and nil is returned.
@@ -16,7 +26,7 @@ import (
 //
 // Returns:
 //   - lifecycle.Reaper: the reaper if PID 1, nil otherwise.
-func ProvideReaper(r *infrareaper.Reaper) lifecycle.Reaper {
+func ProvideReaper(r ReaperMinimal) lifecycle.Reaper {
 	// Check if the process is running as PID 1.
 	if r.IsPID1() {
 		// Return the reaper for zombie cleanup.

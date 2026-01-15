@@ -19,15 +19,15 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/process/executor"
 )
 
-// TestNew tests the NewUnixExecutor constructor.
+// TestNewExecutor tests the NewExecutor constructor.
 //
 // Params:
 //   - t: the testing context
 //
 // Returns:
 //   - (none, test function)
-func TestNew(t *testing.T) {
-	// Define test cases for NewUnixExecutor.
+func TestNewExecutor(t *testing.T) {
+	// Define test cases for NewExecutor.
 	tests := []struct {
 		name string
 	}{
@@ -38,9 +38,35 @@ func TestNew(t *testing.T) {
 	for _, tt := range tests {
 		// Run each test case as a subtest.
 		t.Run(tt.name, func(t *testing.T) {
-			executor := executor.New()
+			exec := executor.NewExecutor()
 			// Verify executor is not nil.
-			assert.NotNil(t, executor, "NewUnixExecutor should return a non-nil instance")
+			assert.NotNil(t, exec, "NewExecutor should return a non-nil instance")
+		})
+	}
+}
+
+// TestNew tests the New constructor.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestNew(t *testing.T) {
+	// Define test cases for New.
+	tests := []struct {
+		name string
+	}{
+		{name: "returns non-nil executor"},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			exec := executor.New()
+			// Verify executor is not nil.
+			assert.NotNil(t, exec, "New should return a non-nil instance")
 		})
 	}
 }

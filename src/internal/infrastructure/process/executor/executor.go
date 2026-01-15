@@ -1,3 +1,5 @@
+//go:build unix
+
 // Package executor provides infrastructure adapters for OS process execution.
 // It implements the domain process interfaces using Unix system calls.
 package executor
@@ -45,11 +47,25 @@ type Executor struct {
 	findProcess ProcessFinder
 }
 
+// NewExecutor creates a new Unix process executor with default dependencies.
+//
+// Returns:
+//   - *Executor: a configured executor instance.
+func NewExecutor() *Executor {
+	// Create and return executor with default dependencies.
+	return &Executor{
+		credentials: credentials.New(),
+		process:     control.New(),
+		findProcess: defaultFindProcess,
+	}
+}
+
 // New creates a new Unix process executor with default dependencies.
 //
 // Returns:
 //   - *Executor: a configured executor instance.
 func New() *Executor {
+	// Create and return executor with default dependencies.
 	return &Executor{
 		credentials: credentials.New(),
 		process:     control.New(),
@@ -67,6 +83,7 @@ func New() *Executor {
 // Returns:
 //   - *Executor: a configured executor instance.
 func NewWithDeps(creds credentials.CredentialManager, proc control.ProcessControl) *Executor {
+	// Create and return executor with injected dependencies.
 	return &Executor{
 		credentials: creds,
 		process:     proc,
@@ -85,6 +102,7 @@ func NewWithDeps(creds credentials.CredentialManager, proc control.ProcessContro
 // Returns:
 //   - *Executor: a configured executor instance.
 func NewWithOptions(creds credentials.CredentialManager, proc control.ProcessControl, finder ProcessFinder) *Executor {
+	// Create and return executor with custom options for testing.
 	return &Executor{
 		credentials: creds,
 		process:     proc,

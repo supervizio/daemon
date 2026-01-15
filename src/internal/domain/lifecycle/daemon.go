@@ -8,6 +8,8 @@ import (
 )
 
 // SystemState contains system-wide resource metrics.
+//
+// This aggregates CPU and memory metrics for the entire system.
 type SystemState struct {
 	// CPU contains system CPU metrics.
 	CPU metrics.SystemCPU `json:"cpu"`
@@ -16,6 +18,10 @@ type SystemState struct {
 }
 
 // DaemonState represents the complete state of the daemon.
+//
+// This is a snapshot of all daemon state at a specific point in time,
+// including host info, supervised processes, system metrics, and optional
+// mesh/Kubernetes topology when available.
 type DaemonState struct {
 	// Timestamp is when this state snapshot was taken.
 	Timestamp time.Time `json:"timestamp"`
@@ -32,7 +38,9 @@ type DaemonState struct {
 }
 
 // MeshTopology represents the mesh network topology.
-// Populated from IWFS mesh when available.
+//
+// Populated from IWFS mesh when available, containing information about
+// all known nodes, their connections, and the current leader.
 type MeshTopology struct {
 	// LocalNodeID is the ID of this node in the mesh.
 	LocalNodeID string `json:"local_node_id"`
@@ -47,6 +55,8 @@ type MeshTopology struct {
 }
 
 // MeshNode represents a node in the mesh network.
+//
+// Contains information about a single node's identity, state, and last contact.
 type MeshNode struct {
 	// ID is the unique node identifier.
 	ID string `json:"id"`
@@ -61,6 +71,9 @@ type MeshNode struct {
 }
 
 // MeshConnection represents a connection between mesh nodes.
+//
+// Contains information about a directed connection from one node to another,
+// including latency and connection state.
 type MeshConnection struct {
 	// FromNodeID is the source node ID.
 	FromNodeID string `json:"from_node_id"`
@@ -73,6 +86,9 @@ type MeshConnection struct {
 }
 
 // KubernetesState represents Kubernetes-related state.
+//
+// Contains information about the current K8s context, including namespace,
+// pod identity, and discovered pods.
 type KubernetesState struct {
 	// Namespace is the current namespace.
 	Namespace string `json:"namespace"`
@@ -87,6 +103,8 @@ type KubernetesState struct {
 }
 
 // KubernetesPod represents a Kubernetes pod.
+//
+// Contains information about a single pod's identity, state, and location.
 type KubernetesPod struct {
 	// Name is the pod name.
 	Name string `json:"name"`
@@ -103,28 +121,46 @@ type KubernetesPod struct {
 }
 
 // ProcessCount returns the number of supervised processes.
+//
+// Returns:
+//   - int: total count of processes in this daemon state
 func (d *DaemonState) ProcessCount() int {
+	// Return length of processes slice
 	return len(d.Processes)
 }
 
 // RunningProcessCount returns the number of running processes.
+//
+// Returns:
+//   - int: count of processes currently in running state
 func (d *DaemonState) RunningProcessCount() int {
+	// Initialize counter
 	count := 0
+	// Iterate over all processes
 	for i := range d.Processes {
+		// Check if process is running
 		if d.Processes[i].IsRunning() {
 			count++
 		}
 	}
+	// Return total running count
 	return count
 }
 
 // HealthyProcessCount returns the number of healthy processes.
+//
+// Returns:
+//   - int: count of processes currently marked as healthy
 func (d *DaemonState) HealthyProcessCount() int {
+	// Initialize counter
 	count := 0
+	// Iterate over all processes
 	for i := range d.Processes {
+		// Check if process is healthy
 		if d.Processes[i].Healthy {
 			count++
 		}
 	}
+	// Return total healthy count
 	return count
 }

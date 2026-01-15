@@ -45,11 +45,11 @@ type Loader struct {
 	lastPath string
 }
 
-// New creates a new YAML configuration loader.
+// NewLoader creates a new YAML configuration loader.
 //
 // Returns:
 //   - *Loader: a new loader instance ready to load configurations
-func New() *Loader {
+func NewLoader() *Loader {
 	// Initialize and return a new loader with default state.
 	return &Loader{}
 }

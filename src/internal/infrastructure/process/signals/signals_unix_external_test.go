@@ -13,6 +13,34 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/process/signals"
 )
 
+// TestNewManager tests the NewManager constructor.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestNewManager(t *testing.T) {
+	// Define test cases for NewManager.
+	tests := []struct {
+		name string
+	}{
+		{name: "returns non-nil signal manager"},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			sm := signals.NewManager()
+			// Check if the signal manager is not nil.
+			if sm == nil {
+				t.Error("NewManager should return a non-nil instance")
+			}
+		})
+	}
+}
+
 // TestNew tests the New constructor.
 //
 // Params:

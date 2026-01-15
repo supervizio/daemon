@@ -8,6 +8,11 @@ import (
 	"github.com/kodflow/daemon/internal/domain/metrics"
 )
 
+const (
+	// DefaultRetentionHours is the default number of hours to retain metrics.
+	DefaultRetentionHours int = 24
+)
+
 // MetricsStore defines the interface for persisting and querying metrics.
 type MetricsStore interface {
 	// WriteSystemCPU persists system CPU metrics.
@@ -40,6 +45,8 @@ type MetricsStore interface {
 }
 
 // StoreConfig contains configuration for metrics storage.
+// It defines the persistence location, retention policy, and automatic
+// pruning behavior for time-series metrics data.
 type StoreConfig struct {
 	// Path is the file path for the database.
 	Path string
@@ -50,10 +57,14 @@ type StoreConfig struct {
 }
 
 // DefaultStoreConfig returns the default storage configuration.
+//
+// Returns:
+//   - StoreConfig: configuration with default database path, 24-hour retention, and hourly pruning
 func DefaultStoreConfig() StoreConfig {
+	// Returns standard defaults for production use.
 	return StoreConfig{
 		Path:          "/var/lib/supervizio/metrics.db",
-		Retention:     24 * time.Hour,
+		Retention:     time.Duration(DefaultRetentionHours) * time.Hour,
 		PruneInterval: time.Hour,
 	}
 }

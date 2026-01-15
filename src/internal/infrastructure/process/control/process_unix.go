@@ -1,6 +1,6 @@
 //go:build unix
 
-// Package process provides platform-specific implementations of kernel interfaces.
+// Package control provides platform-specific implementations of process control interfaces.
 // This file implements process control functionality for Unix systems.
 package control
 
@@ -14,6 +14,15 @@ import (
 // Control implements ProcessControl for Unix systems.
 // It provides process group management capabilities using Unix syscalls.
 type Control struct{}
+
+// NewControl creates a new process Control instance.
+//
+// Returns:
+//   - *Control: a new process control instance
+func NewControl() *Control {
+	// Return a new instance of Control.
+	return &Control{}
+}
 
 // New creates a new process Control instance.
 //

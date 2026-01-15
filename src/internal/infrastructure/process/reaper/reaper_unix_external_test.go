@@ -12,6 +12,34 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/process/reaper"
 )
 
+// TestNewReaper tests the NewReaper constructor.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestNewReaper(t *testing.T) {
+	// Define test cases for NewReaper.
+	tests := []struct {
+		name string
+	}{
+		{name: "returns non-nil zombie reaper"},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			r := reaper.NewReaper()
+			// Check if the zombie reaper is not nil.
+			if r == nil {
+				t.Error("NewReaper should return a non-nil instance")
+			}
+		})
+	}
+}
+
 // TestNew tests the New constructor.
 //
 // Params:
@@ -31,9 +59,9 @@ func TestNew(t *testing.T) {
 	for _, tt := range tests {
 		// Run each test case as a subtest.
 		t.Run(tt.name, func(t *testing.T) {
-			reaper := reaper.New()
+			r := reaper.New()
 			// Check if the zombie reaper is not nil.
-			if reaper == nil {
+			if r == nil {
 				t.Error("New should return a non-nil instance")
 			}
 		})

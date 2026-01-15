@@ -44,13 +44,13 @@ type YAMLService struct {
 ## Constructeur
 
 ```go
-New() *Loader
+NewLoader() *Loader
 ```
 
 ## Usage
 
 ```go
-loader := yaml.New()
+loader := yaml.NewLoader()
 cfg, err := loader.Load("/etc/daemon/config.yaml")
 ```
 

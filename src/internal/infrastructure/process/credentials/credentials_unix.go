@@ -26,6 +26,15 @@ const (
 // and applying them to processes via syscall.Credential.
 type Manager struct{}
 
+// NewManager creates a new credential Manager instance.
+//
+// Returns:
+//   - *Manager: a new credential manager instance
+func NewManager() *Manager {
+	// Return a new empty instance of Manager.
+	return &Manager{}
+}
+
 // New creates a new credential Manager instance.
 //
 // Returns:

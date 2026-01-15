@@ -9,32 +9,10 @@ import (
 // Sentinel errors for credential operations.
 var (
 	// ErrUserNotFound indicates that the specified user could not be found.
-	ErrUserNotFound = errors.New("user not found")
+	ErrUserNotFound error = errors.New("user not found")
 	// ErrGroupNotFound indicates that the specified group could not be found.
-	ErrGroupNotFound = errors.New("group not found")
+	ErrGroupNotFound error = errors.New("group not found")
 )
-
-// User represents a system user.
-// It contains identification and profile information from the OS user database.
-type User struct {
-	// UID is the numeric user identifier.
-	UID uint32
-	// GID is the numeric primary group identifier for this user.
-	GID uint32
-	// Username is the login name of the user.
-	Username string
-	// HomeDir is the path to the user's home directory.
-	HomeDir string
-}
-
-// Group represents a system group.
-// It contains identification information from the OS group database.
-type Group struct {
-	// GID is the numeric group identifier.
-	GID uint32
-	// Name is the name of the group.
-	Name string
-}
 
 // CredentialManager handles user and group credential operations.
 type CredentialManager interface {

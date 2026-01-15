@@ -24,6 +24,18 @@ type Reaper struct {
 	doneCh chan struct{}
 }
 
+// NewReaper creates a new ZombieReaper.
+//
+// Returns:
+//   - *Reaper: a new zombie reaper instance
+func NewReaper() *Reaper {
+	// Return a new instance with initialized channels.
+	return &Reaper{
+		stopCh: make(chan struct{}),
+		doneCh: make(chan struct{}),
+	}
+}
+
 // New creates a new ZombieReaper.
 //
 // Returns:

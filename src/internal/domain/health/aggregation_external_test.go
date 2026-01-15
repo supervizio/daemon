@@ -473,3 +473,97 @@ func TestAggregatedHealth_TotalListenerCount(t *testing.T) {
 		})
 	}
 }
+
+// TestAggregatedHealth_Listeners tests Listeners backward compatibility method.
+func TestAggregatedHealth_Listeners(t *testing.T) {
+	tests := []struct {
+		name           string
+		listeners      []health.SubjectState
+		expectedLength int
+	}{
+		{
+			name:           "empty",
+			listeners:      nil,
+			expectedLength: 0,
+		},
+		{
+			name:           "two_listeners",
+			listeners:      []health.SubjectState{health.SubjectReady, health.SubjectListening},
+			expectedLength: 2,
+		},
+		{
+			name:           "three_listeners",
+			listeners:      []health.SubjectState{health.SubjectReady, health.SubjectListening, health.SubjectClosed},
+			expectedLength: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create aggregated health.
+			h := health.NewAggregatedHealth(process.StateRunning)
+
+			// Add listeners.
+			for i, state := range tt.listeners {
+				h.AddListener(listenerName(i), state)
+			}
+
+			// Verify Listeners returns subjects slice.
+			listeners := h.Listeners()
+			assert.Len(t, listeners, tt.expectedLength)
+
+			// Verify Listeners returns the same slice as Subjects.
+			assert.Equal(t, h.Subjects, listeners)
+		})
+	}
+}
+
+// TestAggregatedHealth_AddSubject tests AddSubject method.
+func TestAggregatedHealth_AddSubject(t *testing.T) {
+	tests := []struct {
+		name          string
+		snapshot      health.SubjectSnapshot
+		expectedName  string
+		expectedState health.SubjectState
+	}{
+		{
+			name:          "listener_ready",
+			snapshot:      health.NewSubjectSnapshot("http", "listener", health.SubjectReady),
+			expectedName:  "http",
+			expectedState: health.SubjectReady,
+		},
+		{
+			name:          "listener_listening",
+			snapshot:      health.NewSubjectSnapshot("grpc", "listener", health.SubjectListening),
+			expectedName:  "grpc",
+			expectedState: health.SubjectListening,
+		},
+		{
+			name:          "process_running",
+			snapshot:      health.NewSubjectSnapshot("worker", "process", health.SubjectRunning),
+			expectedName:  "worker",
+			expectedState: health.SubjectRunning,
+		},
+		{
+			name:          "process_stopped",
+			snapshot:      health.NewSubjectSnapshot("api", "process", health.SubjectStopped),
+			expectedName:  "api",
+			expectedState: health.SubjectStopped,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create aggregated health.
+			h := health.NewAggregatedHealth(process.StateRunning)
+
+			// Add subject from snapshot.
+			h.AddSubject(tt.snapshot)
+
+			// Verify subject was added.
+			require.Len(t, h.Subjects, 1)
+			assert.Equal(t, tt.expectedName, h.Subjects[0].Name)
+			assert.Equal(t, tt.expectedState, h.Subjects[0].State)
+		})
+	}
+}

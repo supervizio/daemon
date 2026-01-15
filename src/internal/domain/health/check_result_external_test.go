@@ -11,6 +11,67 @@ import (
 	"github.com/kodflow/daemon/internal/domain/health"
 )
 
+// TestNewCheckResult tests generic check result creation.
+//
+// Params:
+//   - t: the testing context.
+func TestNewCheckResult(t *testing.T) {
+	tests := []struct {
+		name            string
+		success         bool
+		latency         time.Duration
+		output          string
+		err             error
+		expectedSuccess bool
+	}{
+		{
+			name:            "success_with_output",
+			success:         true,
+			latency:         100 * time.Millisecond,
+			output:          "OK",
+			err:             nil,
+			expectedSuccess: true,
+		},
+		{
+			name:            "success_without_output",
+			success:         true,
+			latency:         50 * time.Millisecond,
+			output:          "",
+			err:             nil,
+			expectedSuccess: true,
+		},
+		{
+			name:            "failure_with_error",
+			success:         false,
+			latency:         200 * time.Millisecond,
+			output:          "",
+			err:             errors.New("connection refused"),
+			expectedSuccess: false,
+		},
+		{
+			name:            "failure_timeout",
+			success:         false,
+			latency:         5 * time.Second,
+			output:          "partial output",
+			err:             health.ErrProbeTimeout,
+			expectedSuccess: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create result.
+			result := health.NewCheckResult(tt.success, tt.latency, tt.output, tt.err)
+
+			// Verify fields.
+			assert.Equal(t, tt.expectedSuccess, result.Success)
+			assert.Equal(t, tt.latency, result.Latency)
+			assert.Equal(t, tt.output, result.Output)
+			assert.Equal(t, tt.err, result.Error)
+		})
+	}
+}
+
 // TestNewSuccessCheckResult tests successful result creation.
 func TestNewSuccessCheckResult(t *testing.T) {
 	tests := []struct {

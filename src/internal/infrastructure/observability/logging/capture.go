@@ -14,7 +14,7 @@ import (
 // It provides the method needed to get service log paths.
 type GetServiceLogPather interface {
 	// GetServiceLogPath returns the full path for a service log file.
-	GetServiceLogPath(serviceName string, logFile string) string
+	GetServiceLogPath(serviceName, logFile string) string
 }
 
 // serviceLogging defines the interface for service logging configuration.

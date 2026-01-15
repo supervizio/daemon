@@ -83,14 +83,23 @@ func NewProbeMonitor(config ProbeMonitorConfig) *ProbeMonitor {
 // Returns:
 //   - domain.SubjectState: the equivalent subject state.
 func listenerStateToSubjectState(state listener.State) domain.SubjectState {
+	// Map listener state to corresponding subject state.
 	switch state {
+	// Listener is ready (passed healthcheck).
 	case listener.StateReady:
+		// Return subject ready state.
 		return domain.SubjectReady
+	// Listener is listening but not yet ready.
 	case listener.StateListening:
+		// Return subject listening state.
 		return domain.SubjectListening
+	// Listener is closed or stopped.
 	case listener.StateClosed:
+		// Return subject closed state.
 		return domain.SubjectClosed
+	// Unrecognized or invalid listener state.
 	default:
+		// Return unknown subject state for safety.
 		return domain.SubjectUnknown
 	}
 }

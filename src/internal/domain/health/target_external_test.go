@@ -9,6 +9,64 @@ import (
 	"github.com/kodflow/daemon/internal/domain/health"
 )
 
+// TestNewTarget tests generic target creation.
+func TestNewTarget(t *testing.T) {
+	tests := []struct {
+		name            string
+		network         string
+		address         string
+		expectedNetwork string
+		expectedAddress string
+	}{
+		{
+			name:            "tcp_localhost",
+			network:         "tcp",
+			address:         "localhost:8080",
+			expectedNetwork: "tcp",
+			expectedAddress: "localhost:8080",
+		},
+		{
+			name:            "tcp4_ip",
+			network:         "tcp4",
+			address:         "192.168.1.1:9090",
+			expectedNetwork: "tcp4",
+			expectedAddress: "192.168.1.1:9090",
+		},
+		{
+			name:            "tcp6_ip",
+			network:         "tcp6",
+			address:         "[::1]:8080",
+			expectedNetwork: "tcp6",
+			expectedAddress: "[::1]:8080",
+		},
+		{
+			name:            "udp_localhost",
+			network:         "udp",
+			address:         "localhost:5353",
+			expectedNetwork: "udp",
+			expectedAddress: "localhost:5353",
+		},
+		{
+			name:            "icmp_ip",
+			network:         "icmp",
+			address:         "192.168.1.1",
+			expectedNetwork: "icmp",
+			expectedAddress: "192.168.1.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create target.
+			target := health.NewTarget(tt.network, tt.address)
+
+			// Verify fields.
+			assert.Equal(t, tt.expectedNetwork, target.Network)
+			assert.Equal(t, tt.expectedAddress, target.Address)
+		})
+	}
+}
+
 // TestNewTCPTarget tests TCP target creation.
 func TestNewTCPTarget(t *testing.T) {
 	tests := []struct {

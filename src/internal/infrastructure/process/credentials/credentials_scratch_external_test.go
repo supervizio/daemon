@@ -13,13 +13,70 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/process/credentials"
 )
 
+// TestNewScratchManager verifies constructor returns non-nil instance.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestNewScratchManager(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for NewScratchManager constructor.
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns non-nil manager instance",
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			manager := credentials.NewScratchManager()
+
+			// Check if the manager is not nil.
+			assert.NotNil(t, manager)
+		})
+	}
+}
+
 // TestNewScratch verifies constructor returns non-nil instance.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
 func TestNewScratch(t *testing.T) {
 	t.Parallel()
 
-	manager := credentials.NewScratch()
+	// Define test cases for NewScratch constructor.
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns non-nil manager instance",
+		},
+	}
 
-	assert.NotNil(t, manager)
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			manager := credentials.NewScratch()
+
+			// Check if the manager is not nil.
+			assert.NotNil(t, manager)
+		})
+	}
 }
 
 // TestScratchManager_LookupUser tests user lookup behavior.
@@ -318,20 +375,50 @@ func TestScratchManager_ApplyCredentials(t *testing.T) {
 func TestIsScratchEnvironment(t *testing.T) {
 	t.Parallel()
 
-	// This test documents the behavior without being flaky.
-	// In a real scratch container, /etc/passwd doesn't exist.
-	// In development environment, it typically does.
-	result := credentials.IsScratchEnvironment()
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns boolean without panicking",
+		},
+	}
 
-	// We can't assert a specific value as it depends on the environment.
-	// Just verify it returns a boolean without panicking.
-	assert.IsType(t, true, result)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// This test documents the behavior without being flaky.
+			// In a real scratch container, /etc/passwd doesn't exist.
+			// In development environment, it typically does.
+			result := credentials.IsScratchEnvironment()
+
+			// We can't assert a specific value as it depends on the environment.
+			// Just verify it returns a boolean without panicking.
+			assert.IsType(t, true, result)
+		})
+	}
 }
 
 // TestErrScratchNameLookup verifies the error is properly exported.
 func TestErrScratchNameLookup(t *testing.T) {
 	t.Parallel()
 
-	assert.NotNil(t, credentials.ErrScratchNameLookup)
-	assert.Contains(t, credentials.ErrScratchNameLookup.Error(), "scratch mode")
+	tests := []struct {
+		name        string
+		errContains string
+	}{
+		{
+			name:        "error is not nil and contains scratch mode",
+			errContains: "scratch mode",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.NotNil(t, credentials.ErrScratchNameLookup)
+			assert.Contains(t, credentials.ErrScratchNameLookup.Error(), tt.errContains)
+		})
+	}
 }

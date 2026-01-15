@@ -11,13 +11,13 @@ import (
 // It aggregates CPU and memory metrics per supervised process and publishes updates.
 type ProcessTracker interface {
 	// Track starts tracking metrics for a service with the given PID.
-	Track(ctx context.Context, serviceName string, pid int) error
+	Track(serviceName string, pid int) error
 	// Untrack stops tracking metrics for a service.
 	Untrack(serviceName string)
 	// Get returns the current metrics for a service.
 	Get(serviceName string) (domainmetrics.ProcessMetrics, bool)
-	// GetAll returns metrics for all tracked services.
-	GetAll() []domainmetrics.ProcessMetrics
+	// All returns metrics for all tracked services.
+	All() []domainmetrics.ProcessMetrics
 	// Subscribe returns a channel that receives metrics updates.
 	Subscribe() <-chan domainmetrics.ProcessMetrics
 	// Unsubscribe removes a subscription channel.

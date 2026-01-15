@@ -12,11 +12,11 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/persistence/config/yaml"
 )
 
-// TestNew tests the New constructor function.
+// TestNewLoader tests the NewLoader constructor function.
 //
 // Params:
 //   - t: testing context for assertions and error reporting
-func TestNew(t *testing.T) {
+func TestNewLoader(t *testing.T) {
 	// Define test cases for table-driven testing.
 	tests := []struct {
 		name string
@@ -30,7 +30,7 @@ func TestNew(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a new loader instance.
-			loader := yaml.New()
+			loader := yaml.NewLoader()
 
 			// Assert the loader is not nil.
 			assert.NotNil(t, loader)
@@ -109,7 +109,7 @@ services:
 			require.NoError(t, err)
 
 			// Create a new loader and load the configuration.
-			loader := yaml.New()
+			loader := yaml.NewLoader()
 			cfg, err := loader.Load(configPath)
 
 			// Check error expectation.
@@ -149,7 +149,7 @@ func TestLoader_Load_FileNotFound(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a new loader instance.
-			loader := yaml.New()
+			loader := yaml.NewLoader()
 
 			// Attempt to load a non-existent file.
 			cfg, err := loader.Load(tt.path)
@@ -201,7 +201,7 @@ services:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a new loader instance.
-			loader := yaml.New()
+			loader := yaml.NewLoader()
 
 			// Parse the YAML data.
 			cfg, err := loader.Parse(tt.data)
@@ -251,7 +251,7 @@ func TestLoader_Reload(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a new loader instance.
-			loader := yaml.New()
+			loader := yaml.NewLoader()
 
 			// Load a configuration first if required.
 			if tt.loadFirst {
@@ -336,7 +336,7 @@ services:
 			require.NoError(t, err)
 
 			// Create a new loader and load the configuration.
-			loader := yaml.New()
+			loader := yaml.NewLoader()
 			cfg, err := loader.Load(configPath)
 
 			// Assert no error occurred.
@@ -387,7 +387,7 @@ services:
 			require.NoError(t, err)
 
 			// Create a new loader and load the configuration.
-			loader := yaml.New()
+			loader := yaml.NewLoader()
 			cfg, err := loader.Load(configPath)
 
 			// Assert no error occurred.

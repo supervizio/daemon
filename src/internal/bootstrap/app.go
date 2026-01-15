@@ -30,8 +30,9 @@ type App struct {
 	Cleanup func()
 }
 
-// signalHandler defines the interface for supervisor signal handling operations.
-type signalHandler interface {
+// SignalHandler defines the interface for supervisor signal handling operations.
+// Exported for testing purposes.
+type SignalHandler interface {
 	Reload() error
 	Stop() error
 }
@@ -49,24 +50,43 @@ func Run() int {
 	// Check if version flag was provided to display version and exit.
 	if *showVersion {
 		fmt.Printf("daemon %s\n", version)
+		// Return success exit code after displaying version.
 		return 0
 	}
 
 	// Run the main application logic and handle any errors.
-	if err := run(); err != nil {
+	if err := run(configPath); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		// Return failure exit code due to application error.
 		return 1
 	}
+	// Return success exit code after clean shutdown.
 	return 0
+}
+
+// RunWithConfig executes the main application logic with a specified config path.
+// This function is exported for testing purposes.
+//
+// Params:
+//   - cfgPath: the path to the configuration file.
+//
+// Returns:
+//   - error: nil on success, error on failure.
+func RunWithConfig(cfgPath string) error {
+	// Delegate to internal run function.
+	return run(cfgPath)
 }
 
 // run executes the main application logic.
 //
+// Params:
+//   - cfgPath: the path to the configuration file.
+//
 // Returns:
 //   - error: nil on success, error on failure.
-func run() error {
+func run(cfgPath string) error {
 	// Initialize the application using Wire-generated code.
-	app, err := InitializeApp(configPath)
+	app, err := InitializeApp(cfgPath)
 	// Check if initialization failed.
 	if err != nil {
 		// Return error with context about initialization failure.
@@ -91,10 +111,11 @@ func run() error {
 	}
 
 	// Return the result of waiting for signals.
-	return waitForSignals(ctx, cancel, sigCh, app.Supervisor)
+	return WaitForSignals(ctx, cancel, sigCh, app.Supervisor)
 }
 
-// waitForSignals handles OS signals in a continuous loop until shutdown.
+// WaitForSignals handles OS signals in a continuous loop until shutdown.
+// Exported for testing purposes.
 //
 // Params:
 //   - ctx: the context for cancellation.
@@ -104,7 +125,7 @@ func run() error {
 //
 // Returns:
 //   - error: nil on success, error on failure.
-func waitForSignals(ctx context.Context, cancel context.CancelFunc, sigCh <-chan os.Signal, sup signalHandler) error {
+func WaitForSignals(ctx context.Context, cancel context.CancelFunc, sigCh <-chan os.Signal, sup SignalHandler) error {
 	// Loop forever until a shutdown signal is received.
 	for {
 		// Select on signal channel or context done.

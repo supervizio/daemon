@@ -3,6 +3,8 @@ package metrics
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -12,23 +14,18 @@ import (
 
 // Default configuration values.
 const (
-	defaultCollectionInterval = 5 * time.Second
-	defaultSubscriberBuffer   = 64
+	defaultCollectionInterval time.Duration = 5 * time.Second
+	defaultSubscriberBuffer   int           = 64
+	collectionTimeoutDivisor  int           = 2
+	defaultProcessMapCap      int           = 16
+	defaultSubscriberMapCap   int           = 4
 )
 
-// trackedProcess holds the state for a single tracked process.
-type trackedProcess struct {
-	serviceName  string
-	pid          int
-	state        process.State
-	healthy      bool
-	startTime    time.Time
-	restartCount int
-	lastError    string
-	lastMetrics  domainmetrics.ProcessMetrics
-}
-
 // Tracker implements ProcessTracker using infrastructure collectors.
+//
+// It periodically collects CPU and memory metrics for tracked processes,
+// maintains process state, and publishes updates to subscribers.
+// The collection loop runs in a background goroutine started by Start().
 type Tracker struct {
 	mu          sync.RWMutex
 	collector   Collector
@@ -45,8 +42,16 @@ type Tracker struct {
 type TrackerOption func(*Tracker)
 
 // WithCollectionInterval sets the metrics collection interval.
+//
+// Params:
+//   - d: collection interval (must be > 0, ignored if <= 0)
+//
+// Returns:
+//   - TrackerOption: option that sets the interval
 func WithCollectionInterval(d time.Duration) TrackerOption {
+	// Return option that sets interval if valid.
 	return func(t *Tracker) {
+		// Only set interval if positive.
 		if d > 0 {
 			t.interval = d
 		}
@@ -54,26 +59,45 @@ func WithCollectionInterval(d time.Duration) TrackerOption {
 }
 
 // NewTracker creates a new process metrics tracker.
+//
+// Params:
+//   - collector: infrastructure adapter for collecting process metrics
+//   - opts: optional configuration functions
+//
+// Returns:
+//   - *Tracker: configured tracker instance
 func NewTracker(collector Collector, opts ...TrackerOption) *Tracker {
 	t := &Tracker{
 		collector:   collector,
-		processes:   make(map[string]*trackedProcess),
+		processes:   make(map[string]*trackedProcess, defaultProcessMapCap),
 		interval:    defaultCollectionInterval,
-		subscribers: make(map[chan domainmetrics.ProcessMetrics]struct{}),
+		subscribers: make(map[chan domainmetrics.ProcessMetrics]struct{}, defaultSubscriberMapCap),
 	}
 
+	// Apply all options.
 	for _, opt := range opts {
 		opt(t)
 	}
 
+	// Return configured tracker.
 	return t
 }
 
-// Start begins the metrics collection loop.
+// Start begins the metrics collection loop in a background goroutine.
+// The goroutine exits when ctx is cancelled or Stop() is called.
+// Safe to call multiple times (idempotent).
+//
+// Params:
+//   - ctx: parent context for lifecycle management; cancelled to stop collection
+//
+// Returns:
+//   - error: always nil (reserved for future use)
 func (t *Tracker) Start(ctx context.Context) error {
 	t.mu.Lock()
+	// Check if already running.
 	if t.running {
 		t.mu.Unlock()
+		// Already running, no-op.
 		return nil
 	}
 	t.ctx, t.cancel = context.WithCancel(ctx)
@@ -81,6 +105,7 @@ func (t *Tracker) Start(ctx context.Context) error {
 	t.mu.Unlock()
 
 	go t.collectLoop()
+	// Success.
 	return nil
 }
 
@@ -89,10 +114,13 @@ func (t *Tracker) Stop() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	// Check if running.
 	if !t.running {
+		// Not running, no-op.
 		return
 	}
 
+	// Cancel context to stop goroutine.
 	if t.cancel != nil {
 		t.cancel()
 	}
@@ -100,12 +128,20 @@ func (t *Tracker) Stop() {
 }
 
 // Track starts tracking metrics for a service with the given PID.
-func (t *Tracker) Track(_ context.Context, serviceName string, pid int) error {
+//
+// Params:
+//   - serviceName: unique service identifier
+//   - pid: process ID to track
+//
+// Returns:
+//   - error: always nil (reserved for future use)
+func (t *Tracker) Track(serviceName string, pid int) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	now := time.Now()
 	existing, exists := t.processes[serviceName]
+	// Check if service already tracked.
 	if exists {
 		// Same service, new PID = restart
 		existing.pid = pid
@@ -130,11 +166,19 @@ func (t *Tracker) Track(_ context.Context, serviceName string, pid int) error {
 		t.processes[serviceName] = proc
 	}
 
+	// Success.
 	return nil
 }
 
 // buildMetrics creates a ProcessMetrics from tracked process state.
 // Must be called with t.mu held.
+//
+// Params:
+//   - proc: tracked process state
+//   - now: current timestamp
+//
+// Returns:
+//   - ProcessMetrics: snapshot of process metrics
 func (t *Tracker) buildMetrics(proc *trackedProcess, now time.Time) domainmetrics.ProcessMetrics {
 	m := domainmetrics.ProcessMetrics{
 		ServiceName:  proc.serviceName,
@@ -149,14 +193,19 @@ func (t *Tracker) buildMetrics(proc *trackedProcess, now time.Time) domainmetric
 		Timestamp:    now,
 	}
 
+	// Calculate uptime if process is running.
 	if !proc.startTime.IsZero() && proc.pid > 0 {
 		m.Uptime = now.Sub(proc.startTime)
 	}
 
+	// Return built metrics.
 	return m
 }
 
 // Untrack stops tracking metrics for a service.
+//
+// Params:
+//   - serviceName: service to stop tracking
 func (t *Tracker) Untrack(serviceName string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -164,31 +213,49 @@ func (t *Tracker) Untrack(serviceName string) {
 }
 
 // Get returns the current metrics for a service.
+//
+// Params:
+//   - serviceName: service to query
+//
+// Returns:
+//   - ProcessMetrics: current metrics snapshot
+//   - bool: true if service found, false otherwise
 func (t *Tracker) Get(serviceName string) (domainmetrics.ProcessMetrics, bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
 	proc, exists := t.processes[serviceName]
+	// Check if service exists.
 	if !exists {
+		// Service not found.
 		return domainmetrics.ProcessMetrics{}, false
 	}
 
+	// Return cached metrics.
 	return proc.lastMetrics, true
 }
 
-// GetAll returns metrics for all tracked services.
-func (t *Tracker) GetAll() []domainmetrics.ProcessMetrics {
+// All returns metrics for all tracked services.
+//
+// Returns:
+//   - []ProcessMetrics: metrics for all tracked processes
+func (t *Tracker) All() []domainmetrics.ProcessMetrics {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
 	result := make([]domainmetrics.ProcessMetrics, 0, len(t.processes))
+	// Collect all lastMetrics.
 	for _, proc := range t.processes {
 		result = append(result, proc.lastMetrics)
 	}
+	// Return all metrics.
 	return result
 }
 
 // Subscribe returns a channel that receives metrics updates.
+//
+// Returns:
+//   - <-chan ProcessMetrics: receive-only channel for updates
 func (t *Tracker) Subscribe() <-chan domainmetrics.ProcessMetrics {
 	ch := make(chan domainmetrics.ProcessMetrics, defaultSubscriberBuffer)
 
@@ -196,14 +263,20 @@ func (t *Tracker) Subscribe() <-chan domainmetrics.ProcessMetrics {
 	t.subscribers[ch] = struct{}{}
 	t.subsMu.Unlock()
 
+	// Return receive-only channel.
 	return ch
 }
 
 // Unsubscribe removes a subscription channel.
+//
+// Params:
+//   - ch: channel to unsubscribe
 func (t *Tracker) Unsubscribe(ch <-chan domainmetrics.ProcessMetrics) {
-	// Type assert to get the sendable channel
-	sendCh, ok := interface{}(ch).(chan domainmetrics.ProcessMetrics)
+	// Type assert to get the sendable channel.
+	sendCh, ok := any(ch).(chan domainmetrics.ProcessMetrics)
+	// Check type assertion.
 	if !ok {
+		// Invalid channel type.
 		return
 	}
 
@@ -215,19 +288,28 @@ func (t *Tracker) Unsubscribe(ch <-chan domainmetrics.ProcessMetrics) {
 }
 
 // UpdateState updates the state of a tracked process.
+//
+// Params:
+//   - serviceName: service to update
+//   - state: new process state
+//   - lastError: error message (empty if no error)
 func (t *Tracker) UpdateState(serviceName string, state process.State, lastError string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	proc, exists := t.processes[serviceName]
+	// Check if service exists.
 	if !exists {
+		// Service not found, no-op.
 		return
 	}
 
 	proc.state = state
+	// Update error if provided.
 	if lastError != "" {
 		proc.lastError = lastError
 	}
+	// Clear PID if process failed or stopped.
 	if state == process.StateFailed || state == process.StateStopped {
 		proc.pid = 0
 	}
@@ -236,12 +318,18 @@ func (t *Tracker) UpdateState(serviceName string, state process.State, lastError
 }
 
 // UpdateHealth updates the health status of a tracked process.
+//
+// Params:
+//   - serviceName: service to update
+//   - healthy: new health status
 func (t *Tracker) UpdateHealth(serviceName string, healthy bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	proc, exists := t.processes[serviceName]
+	// Check if service exists.
 	if !exists {
+		// Service not found, no-op.
 		return
 	}
 
@@ -255,9 +343,11 @@ func (t *Tracker) collectLoop() {
 	ticker := time.NewTicker(t.interval)
 	defer ticker.Stop()
 
+	// Main collection loop.
 	for {
 		select {
 		case <-t.ctx.Done():
+			// Context cancelled, exit.
 			return
 		case <-ticker.C:
 			t.collectAll()
@@ -268,33 +358,39 @@ func (t *Tracker) collectLoop() {
 // collectAll collects metrics for all tracked processes.
 func (t *Tracker) collectAll() {
 	t.mu.Lock()
-	processes := make([]*trackedProcess, 0, len(t.processes))
-	for _, proc := range t.processes {
-		processes = append(processes, proc)
-	}
+	// Collect process snapshots to avoid holding lock during collection.
+	processes := slices.Collect(maps.Values(t.processes))
 	t.mu.Unlock()
 
+	// Collect metrics for each process.
 	for _, proc := range processes {
 		t.collectProcess(proc)
 	}
 }
 
 // collectProcess collects metrics for a single process.
+//
+// Params:
+//   - proc: process to collect metrics for
 func (t *Tracker) collectProcess(proc *trackedProcess) {
+	// Check if process has valid PID.
 	if proc.pid <= 0 {
 		t.updateProcessMetrics(proc, domainmetrics.ProcessCPU{}, domainmetrics.ProcessMemory{})
+		// No PID, skip collection.
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(t.ctx, t.interval/2)
+	ctx, cancel := context.WithTimeout(t.ctx, t.interval/time.Duration(collectionTimeoutDivisor))
 	defer cancel()
 
 	cpu, cpuErr := t.collector.CollectCPU(ctx, proc.pid)
 	mem, memErr := t.collector.CollectMemory(ctx, proc.pid)
 
 	// If both fail, process may have exited
+	// Check if both collections failed.
 	if cpuErr != nil && memErr != nil {
 		t.UpdateState(proc.serviceName, process.StateFailed, "process not found")
+		// Process likely dead.
 		return
 	}
 
@@ -302,6 +398,11 @@ func (t *Tracker) collectProcess(proc *trackedProcess) {
 }
 
 // updateProcessMetrics updates and publishes metrics for a process.
+//
+// Params:
+//   - proc: process to update
+//   - cpu: collected CPU metrics
+//   - mem: collected memory metrics
 func (t *Tracker) updateProcessMetrics(proc *trackedProcess, cpu domainmetrics.ProcessCPU, mem domainmetrics.ProcessMemory) {
 	t.mu.Lock()
 	now := time.Now()
@@ -319,6 +420,7 @@ func (t *Tracker) updateProcessMetrics(proc *trackedProcess, cpu domainmetrics.P
 		Timestamp:    now,
 	}
 
+	// Calculate uptime if process is running.
 	if !proc.startTime.IsZero() && proc.pid > 0 {
 		m.Uptime = now.Sub(proc.startTime)
 	}
@@ -330,10 +432,14 @@ func (t *Tracker) updateProcessMetrics(proc *trackedProcess, cpu domainmetrics.P
 }
 
 // publish sends metrics to all subscribers.
+//
+// Params:
+//   - m: metrics to publish
 func (t *Tracker) publish(m *domainmetrics.ProcessMetrics) {
 	t.subsMu.RLock()
 	defer t.subsMu.RUnlock()
 
+	// Send to all subscribers.
 	for ch := range t.subscribers {
 		select {
 		case ch <- *m:

@@ -10,6 +10,9 @@ import (
 	"strings"
 )
 
+// DefaultCgroupPath is the default cgroup filesystem path.
+const DefaultCgroupPath string = "/sys/fs/cgroup"
+
 // Version represents the cgroup version.
 type Version int
 
@@ -22,33 +25,54 @@ const (
 )
 
 // String returns the string representation of the version.
+//
+// Returns:
+//   - string: human-readable version name ("unknown", "v1", "v2", "hybrid")
 func (v Version) String() string {
+	// Match version constant to its string representation
 	switch v {
+	// Handle unknown version
 	case VersionUnknown:
+		// Return unknown identifier
 		return "unknown"
+	// Handle v1 legacy cgroups
 	case VersionV1:
+		// Return v1 identifier
 		return "v1"
+	// Handle v2 unified hierarchy
 	case VersionV2:
+		// Return v2 identifier
 		return "v2"
+	// Handle hybrid mode (v1 + v2 coexistence)
 	case VersionHybrid:
+		// Return hybrid identifier
 		return "hybrid"
 	}
+	// Return default for unrecognized values
 	return "unknown"
 }
 
-// DefaultCgroupPath is the default cgroup filesystem path.
-const DefaultCgroupPath = "/sys/fs/cgroup"
-
 // Detect detects the cgroup version in use.
+//
+// Returns:
+//   - Version: detected cgroup version (VersionV1, VersionV2, VersionHybrid, or VersionUnknown)
 func Detect() Version {
+	// Use default cgroup path for detection
 	return DetectWithPath(DefaultCgroupPath)
 }
 
 // DetectWithPath detects the cgroup version using a custom path.
+//
+// Params:
+//   - cgroupPath: filesystem path to cgroup root
+//
+// Returns:
+//   - Version: detected cgroup version
 func DetectWithPath(cgroupPath string) Version {
 	// Check for cgroup v2 (unified hierarchy)
 	// In v2, /sys/fs/cgroup/cgroup.controllers exists
 	controllersPath := filepath.Join(cgroupPath, "cgroup.controllers")
+	// Test if controllers file exists (v2 marker)
 	if _, err := os.Stat(controllersPath); err == nil {
 		// Check if this is pure v2 or hybrid
 		// In hybrid mode, v1 controllers exist alongside v2
@@ -58,37 +82,51 @@ func DetectWithPath(cgroupPath string) Version {
 		cpuInfo, cpuErr := os.Stat(cpuPath)
 		memInfo, memErr := os.Stat(memoryPath)
 
+		// Both v1 controllers exist as directories means hybrid mode
 		if cpuErr == nil && cpuInfo.IsDir() && memErr == nil && memInfo.IsDir() {
+			// Return hybrid version (v1 + v2 coexist)
 			return VersionHybrid
 		}
+		// Only v2 controllers exist (pure unified hierarchy)
 		return VersionV2
 	}
 
 	// Check for cgroup v1
 	// In v1, /sys/fs/cgroup/cpu and /sys/fs/cgroup/memory exist
 	cpuPath := filepath.Join(cgroupPath, "cpu")
+	// Test if cpu controller directory exists (v1 marker)
 	if _, err := os.Stat(cpuPath); err == nil {
+		// Return v1 legacy version
 		return VersionV1
 	}
 
+	// No recognizable cgroup structure found
 	return VersionUnknown
 }
 
 // IsContainerized attempts to detect if we're running in a container.
+//
+// Returns:
+//   - bool: true if running in a container, false otherwise
 func IsContainerized() bool {
 	// Check for /.dockerenv
+	// Docker marker file exists in all Docker containers
 	if _, err := os.Stat("/.dockerenv"); err == nil {
+		// Found Docker marker file
 		return true
 	}
 
 	// Check /proc/1/cgroup for container indicators
 	data, err := os.ReadFile("/proc/1/cgroup")
+	// File read failed (not fatal for detection)
 	if err != nil {
+		// Assume not containerized if can't read cgroup info
 		return false
 	}
 
 	content := string(data)
 	// Docker/containerd typically have paths like /docker/<id> or /kubepods/<id>
+	// Return true if container runtime markers found in cgroup path
 	return content != "" && (strings.Contains(content, "/docker/") ||
 		strings.Contains(content, "/kubepods/") ||
 		strings.Contains(content, "/lxc/") ||
@@ -116,22 +154,42 @@ type Reader interface {
 
 // NewReader creates a cgroup reader based on the detected version.
 // Returns an error if the cgroup version is not supported.
+//
+// Returns:
+//   - Reader: cgroup reader instance
+//   - error: ErrUnknownVersion if cgroup version cannot be detected
 func NewReader() (Reader, error) {
+	// Use auto-detection with empty path
 	return NewReaderWithPath("")
 }
 
 // NewReaderWithPath creates a cgroup reader for the specified path.
 // If path is empty, it auto-detects the current cgroup.
+//
+// Params:
+//   - path: cgroup path (empty for auto-detection)
+//
+// Returns:
+//   - Reader: cgroup reader instance
+//   - error: ErrUnknownVersion if cgroup version is not supported
 func NewReaderWithPath(path string) (Reader, error) {
 	version := Detect()
+	// Select reader implementation based on detected version
 	switch version {
+	// Unified hierarchy (v2) or hybrid mode
 	case VersionV2, VersionHybrid:
+		// Create v2 reader (handles both v2 and hybrid)
 		return NewV2Reader(path)
+	// Legacy cgroups (v1)
 	case VersionV1:
 		// For V1, path is ignored - we auto-detect CPU and memory paths
+		// Create v1 reader with auto-detected paths
 		return NewV1Reader("", "")
+	// Unknown version cannot be handled
 	case VersionUnknown:
+		// Return error for unknown version
 		return nil, ErrUnknownVersion
 	}
+	// Fallback return (should never reach here)
 	return nil, ErrUnknownVersion
 }

@@ -8,7 +8,7 @@ import (
 )
 
 // ErrSignalNotSupported indicates that the signal is not supported on this platform.
-var ErrSignalNotSupported = errors.New("signal not supported on this platform")
+var ErrSignalNotSupported error = errors.New("signal not supported on this platform")
 
 // SignalManager handles signal operations across platforms.
 type SignalManager interface {
