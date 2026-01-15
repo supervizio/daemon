@@ -9,8 +9,8 @@ import (
 
 	appconfig "github.com/kodflow/daemon/internal/application/config"
 	appprocess "github.com/kodflow/daemon/internal/application/process"
-	"github.com/kodflow/daemon/internal/domain/kernel"
 	domain "github.com/kodflow/daemon/internal/domain/process"
+	domainreaper "github.com/kodflow/daemon/internal/domain/reaper"
 	"github.com/kodflow/daemon/internal/domain/service"
 )
 
@@ -53,8 +53,8 @@ type Supervisor struct {
 	executor domain.Executor
 	// managers is the map of service managers.
 	managers map[string]*appprocess.Manager
-	// reaper is the zombie process reaper.
-	reaper kernel.ZombieReaper
+	// reaper is the zombie process reaper (domain port).
+	reaper domainreaper.Reaper
 	// state is the current supervisor state.
 	state State
 	// ctx is the context for cancellation.
@@ -80,7 +80,7 @@ type Supervisor struct {
 // Returns:
 //   - *Supervisor: the new supervisor instance.
 //   - error: an error if configuration is invalid.
-func NewSupervisor(cfg *service.Config, loader appconfig.Loader, executor domain.Executor, reaper kernel.ZombieReaper) (*Supervisor, error) {
+func NewSupervisor(cfg *service.Config, loader appconfig.Loader, executor domain.Executor, reaper domainreaper.Reaper) (*Supervisor, error) {
 	// Validate the configuration before creating the supervisor.
 	if err := cfg.Validate(); err != nil {
 		// Return nil supervisor and validation error.

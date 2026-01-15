@@ -7,12 +7,11 @@ import (
 	appconfig "github.com/kodflow/daemon/internal/application/config"
 	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
 	domainprocess "github.com/kodflow/daemon/internal/domain/process"
-	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 	infraconfig "github.com/kodflow/daemon/internal/infrastructure/persistence/config/yaml"
 	"github.com/kodflow/daemon/internal/infrastructure/process/control"
 	"github.com/kodflow/daemon/internal/infrastructure/process/credentials"
 	"github.com/kodflow/daemon/internal/infrastructure/process/executor"
-	"github.com/kodflow/daemon/internal/infrastructure/process/reaper"
+	infrareaper "github.com/kodflow/daemon/internal/infrastructure/process/reaper"
 )
 
 // InitializeApp creates the application with all dependencies wired.
@@ -32,14 +31,14 @@ func InitializeApp(configPath string) (*App, error) {
 
 		// Infrastructure: Process credentials manager.
 		credentials.New,
-		wire.Bind(new(ports.CredentialManager), new(*credentials.Manager)),
+		wire.Bind(new(credentials.CredentialManager), new(*credentials.Manager)),
 
 		// Infrastructure: Process control.
 		control.New,
-		wire.Bind(new(ports.ProcessControl), new(*control.Control)),
+		wire.Bind(new(control.ProcessControl), new(*control.Control)),
 
 		// Infrastructure: Zombie reaper (conditional via ProvideReaper).
-		reaper.New,
+		infrareaper.New,
 
 		// Infrastructure: Process executor.
 		executor.NewWithDeps,

@@ -3,20 +3,20 @@ package bootstrap
 import (
 	appconfig "github.com/kodflow/daemon/internal/application/config"
 	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
-	domainkernel "github.com/kodflow/daemon/internal/domain/kernel"
+	domainreaper "github.com/kodflow/daemon/internal/domain/reaper"
 	"github.com/kodflow/daemon/internal/domain/service"
-	"github.com/kodflow/daemon/internal/infrastructure/process/reaper"
+	infrareaper "github.com/kodflow/daemon/internal/infrastructure/process/reaper"
 )
 
 // ProvideReaper returns the zombie reaper only if running as PID 1.
 // When not running as PID 1, zombie reaping is not needed and nil is returned.
 //
 // Params:
-//   - r: the reaper instance.
+//   - r: the reaper instance from infrastructure.
 //
 // Returns:
-//   - domainkernel.ZombieReaper: the reaper if PID 1, nil otherwise.
-func ProvideReaper(r *reaper.Reaper) domainkernel.ZombieReaper {
+//   - domainreaper.Reaper: the reaper if PID 1, nil otherwise.
+func ProvideReaper(r *infrareaper.Reaper) domainreaper.Reaper {
 	// Check if the process is running as PID 1.
 	if r.IsPID1() {
 		// Return the reaper for zombie cleanup.
