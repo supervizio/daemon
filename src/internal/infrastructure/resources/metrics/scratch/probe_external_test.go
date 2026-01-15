@@ -11,11 +11,11 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/resources/metrics/scratch"
 )
 
-// TestNewScratchProbe tests probe creation.
-func TestNewScratchProbe(t *testing.T) {
+// TestNew tests probe creation.
+func TestNew(t *testing.T) {
 	t.Parallel()
 
-	probe := scratch.NewScratchProbe()
+	probe := scratch.NewProbe()
 	require.NotNil(t, probe)
 	assert.NotNil(t, probe.CPU())
 	assert.NotNil(t, probe.Memory())
@@ -28,7 +28,7 @@ func TestNewScratchProbe(t *testing.T) {
 func TestCPUCollector_ReturnsErrors(t *testing.T) {
 	t.Parallel()
 
-	probe := scratch.NewScratchProbe()
+	probe := scratch.NewProbe()
 	cpu := probe.CPU()
 	ctx := context.Background()
 
@@ -67,7 +67,7 @@ func TestCPUCollector_ReturnsErrors(t *testing.T) {
 func TestMemoryCollector_ReturnsErrors(t *testing.T) {
 	t.Parallel()
 
-	probe := scratch.NewScratchProbe()
+	probe := scratch.NewProbe()
 	mem := probe.Memory()
 	ctx := context.Background()
 
@@ -100,7 +100,7 @@ func TestMemoryCollector_ReturnsErrors(t *testing.T) {
 func TestDiskCollector_ReturnsErrors(t *testing.T) {
 	t.Parallel()
 
-	probe := scratch.NewScratchProbe()
+	probe := scratch.NewProbe()
 	disk := probe.Disk()
 	ctx := context.Background()
 
@@ -139,7 +139,7 @@ func TestDiskCollector_ReturnsErrors(t *testing.T) {
 func TestNetworkCollector_ReturnsErrors(t *testing.T) {
 	t.Parallel()
 
-	probe := scratch.NewScratchProbe()
+	probe := scratch.NewProbe()
 	net := probe.Network()
 	ctx := context.Background()
 
@@ -166,7 +166,7 @@ func TestNetworkCollector_ReturnsErrors(t *testing.T) {
 func TestIOCollector_ReturnsErrors(t *testing.T) {
 	t.Parallel()
 
-	probe := scratch.NewScratchProbe()
+	probe := scratch.NewProbe()
 	io := probe.IO()
 	ctx := context.Background()
 

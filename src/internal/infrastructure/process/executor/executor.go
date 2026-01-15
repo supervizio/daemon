@@ -14,7 +14,6 @@ import (
 
 	domain "github.com/kodflow/daemon/internal/domain/process"
 	"github.com/kodflow/daemon/internal/domain/shared"
-	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 	"github.com/kodflow/daemon/internal/infrastructure/process/control"
 	"github.com/kodflow/daemon/internal/infrastructure/process/credentials"
 )
@@ -41,8 +40,8 @@ type ProcessFinder func(pid int) (Process, error)
 // It wraps the standard library exec.Cmd to provide process lifecycle management
 // with support for credentials, environment variables, and signal handling.
 type Executor struct {
-	credentials ports.CredentialManager
-	process     ports.ProcessControl
+	credentials credentials.CredentialManager
+	process     control.ProcessControl
 	findProcess ProcessFinder
 }
 
@@ -67,7 +66,7 @@ func New() *Executor {
 //
 // Returns:
 //   - *Executor: a configured executor instance.
-func NewWithDeps(creds ports.CredentialManager, proc ports.ProcessControl) *Executor {
+func NewWithDeps(creds credentials.CredentialManager, proc control.ProcessControl) *Executor {
 	return &Executor{
 		credentials: creds,
 		process:     proc,
@@ -85,7 +84,7 @@ func NewWithDeps(creds ports.CredentialManager, proc ports.ProcessControl) *Exec
 //
 // Returns:
 //   - *Executor: a configured executor instance.
-func NewWithOptions(creds ports.CredentialManager, proc ports.ProcessControl, finder ProcessFinder) *Executor {
+func NewWithOptions(creds credentials.CredentialManager, proc control.ProcessControl, finder ProcessFinder) *Executor {
 	return &Executor{
 		credentials: creds,
 		process:     proc,

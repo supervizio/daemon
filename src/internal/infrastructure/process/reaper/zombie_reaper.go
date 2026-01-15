@@ -1,7 +1,5 @@
-// Package kernel provides domain interfaces for OS abstraction.
-// These ports define the contract between the application layer and
-// platform-specific implementations in the infrastructure layer.
-package kernel
+// Package reaper provides zombie process reaping interfaces.
+package reaper
 
 // ZombieReaper handles zombie process reaping for PID1 scenarios.
 // When running as PID1 in a container, orphaned child processes become

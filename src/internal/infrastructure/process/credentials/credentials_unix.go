@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
+	"github.com/kodflow/daemon/internal/infrastructure/process"
 )
 
 const (
@@ -41,9 +41,9 @@ func New() *Manager {
 //   - nameOrID: the username or numeric UID to look up
 //
 // Returns:
-//   - *ports.User: the user information if found
+//   - *User: the user information if found
 //   - error: an error if the user could not be found
-func (m *Manager) LookupUser(nameOrID string) (*ports.User, error) {
+func (m *Manager) LookupUser(nameOrID string) (*User, error) {
 	lookedUpUser, err := user.Lookup(nameOrID)
 	// Check if the user lookup by name failed.
 	if err != nil {
@@ -52,7 +52,7 @@ func (m *Manager) LookupUser(nameOrID string) (*ports.User, error) {
 		// Check if the lookup by UID also failed.
 		if err != nil {
 			// Return an error indicating the user was not found.
-			return nil, ports.WrapError("lookup user", ports.ErrUserNotFound)
+			return nil, process.WrapError("lookup user", ErrUserNotFound)
 		}
 	}
 
@@ -60,7 +60,7 @@ func (m *Manager) LookupUser(nameOrID string) (*ports.User, error) {
 	gid, _ := strconv.ParseUint(lookedUpUser.Gid, baseDecimal, bitSize32)
 
 	// Return the user information with parsed UID and GID.
-	return &ports.User{
+	return &User{
 		UID:      uint32(uid),
 		GID:      uint32(gid),
 		Username: lookedUpUser.Username,
@@ -74,9 +74,9 @@ func (m *Manager) LookupUser(nameOrID string) (*ports.User, error) {
 //   - nameOrID: the group name or numeric GID to look up
 //
 // Returns:
-//   - *ports.Group: the group information if found
+//   - *Group: the group information if found
 //   - error: an error if the group could not be found
-func (m *Manager) LookupGroup(nameOrID string) (*ports.Group, error) {
+func (m *Manager) LookupGroup(nameOrID string) (*Group, error) {
 	lookedUpGroup, err := user.LookupGroup(nameOrID)
 	// Check if the group lookup by name failed.
 	if err != nil {
@@ -85,14 +85,14 @@ func (m *Manager) LookupGroup(nameOrID string) (*ports.Group, error) {
 		// Check if the lookup by GID also failed.
 		if err != nil {
 			// Return an error indicating the group was not found.
-			return nil, ports.WrapError("lookup group", ports.ErrGroupNotFound)
+			return nil, process.WrapError("lookup group", ErrGroupNotFound)
 		}
 	}
 
 	gid, _ := strconv.ParseUint(lookedUpGroup.Gid, baseDecimal, bitSize32)
 
 	// Return the group information with parsed GID.
-	return &ports.Group{
+	return &Group{
 		GID:  uint32(gid),
 		Name: lookedUpGroup.Name,
 	}, nil

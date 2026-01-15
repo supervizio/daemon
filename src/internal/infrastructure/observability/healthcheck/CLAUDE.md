@@ -1,77 +1,55 @@
-# Infrastructure Healthcheck Package
+# Healthcheck - Probers de Santé
 
-Protocol adapters implementing the domain Prober interface for service health checking.
+Vérification de la santé des services via différents protocoles.
 
-## Purpose
+## Rôle
 
-This package provides concrete implementations for **service health checks** - verifying
-that services are reachable and responding correctly via various protocols.
+Tester qu'un service est accessible et répond correctement.
 
-Note: This is different from **probe/metrics** which collect system telemetry (CPU, RAM, DISK).
+**Note** : Différent de `resources/metrics/` qui collecte des métriques système (CPU, RAM).
 
-## Files
+## Probers Disponibles
 
-| File | Purpose |
-|------|---------|
-| `tcp.go` | TCP connection health checks |
-| `udp.go` | UDP packet health checks |
-| `http.go` | HTTP endpoint health checks |
-| `grpc.go` | gRPC health checks (TCP fallback) |
-| `exec.go` | Command execution health checks |
-| `icmp.go` | ICMP ping health checks (TCP fallback) |
-| `factory.go` | Health checker factory |
-
-## Adapters
-
-### TCPProber
-- Verifies TCP port is accepting connections
-- Uses `net.DialContext` with timeout
-- Measures connection latency
-
-### UDPProber
-- Sends UDP packet and optionally waits for response
-- UDP is connectionless - timeout doesn't mean failure
-- Useful for DNS, NTP services
-
-### HTTPProber
-- Sends HTTP request to endpoint
-- Validates response status code
-- Uses `http.RoundTrip` (no redirect following)
-
-### GRPCProber
-- Uses gRPC health/v1 protocol for health checks
-- Supports both insecure and TLS connections
-- Returns service status (SERVING, NOT_SERVING, UNKNOWN)
-
-### ExecProber
-- Executes command via `TrustedCommand`
-- Exit code 0 = success, non-zero = failure
-- Captures stdout/stderr
-
-### ICMPProber
-- TCP fallback (ICMP requires CAP_NET_RAW)
-- Measures network latency
-- Useful for node-to-node connectivity
+| Type | Fichier | Description |
+|------|---------|-------------|
+| TCP | `tcp.go` | Connexion TCP réussie |
+| UDP | `udp.go` | Envoi paquet (connectionless) |
+| HTTP | `http.go` | GET/HEAD, validation status |
+| gRPC | `grpc.go` | Protocole health/v1 |
+| Exec | `exec.go` | Commande exit code 0 |
+| ICMP | `icmp.go` | Ping (fallback TCP si pas CAP_NET_RAW) |
 
 ## Factory
 
 ```go
-factory := NewFactory(5 * time.Second)
+factory := NewFactory(5 * time.Second)  // Timeout par défaut
 prober, err := factory.Create("http", 10*time.Second)
+
+// Ou méthodes typées
+tcpProber := factory.CreateTCP(5 * time.Second)
+httpProber := factory.CreateHTTP(10 * time.Second)
 ```
 
-Supported types: `tcp`, `udp`, `http`, `grpc`, `exec`, `icmp`
+## Interface Implémentée
 
-## Security Notes
+```go
+// domain/healthcheck/prober.go
+type Prober interface {
+    Probe(ctx context.Context, target Target) Result
+}
+```
 
-- ExecProber uses `process.TrustedCommand`
-- Commands must come from validated configuration
-- See `infrastructure/process/CLAUDE.md` for security model
+## Constructeurs
 
-## Related Packages
+```go
+NewTCPProber(timeout time.Duration) *TCPProber
+NewHTTPProber(timeout time.Duration) *HTTPProber
+NewGRPCProber(timeout time.Duration) *GRPCProber
+NewExecProber(timeout time.Duration) *ExecProber
+NewICMPProber(timeout time.Duration) *ICMPProber
+NewUDPProber(timeout time.Duration) *UDPProber
+```
 
-| Package | Relation |
-|---------|----------|
-| `domain/healthcheck/` | Port interface definition |
-| `application/health/` | Orchestrates health checks |
-| `infrastructure/metrics/` | System metrics collection (different concern) |
+## Sécurité
+
+`ExecProber` utilise `executor.TrustedCommand()` - voir `process/executor/CLAUDE.md`.

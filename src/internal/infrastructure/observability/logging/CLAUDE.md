@@ -1,47 +1,54 @@
-# Logging - Log Management
+# Logging - Gestion des Logs
 
-Log management utilities for process output capture and formatting.
+Capture et formatage des sorties des processus supervisés.
 
-## Structure
+## Rôle
 
-```
-logging/
-├── capture.go        # Output capture coordination
-├── linewriter.go     # Line-buffered writing
-├── multiwriter.go    # Multiple destination writer
-├── timestamp.go      # Timestamp prefixing
-├── writer.go         # Base log writer
-├── fileopener.go     # File opening utilities
-└── nopcloser.go      # No-op closer wrapper
-```
+Capturer stdout/stderr des processus, ajouter timestamps, écrire vers fichiers avec rotation.
 
-## Components
+## Composants
 
-| Type | Role |
-|------|------|
-| `Capture` | Coordinates stdout/stderr capture |
-| `LineWriter` | Ensures complete lines before flush |
-| `MultiWriter` | Writes to multiple destinations |
-| `TimestampWriter` | Adds timestamp prefixes |
-| `Writer` | Base writer implementation |
-| `FileOpener` | Opens log files (rotation-ready) |
-| `NopCloser` | Wraps writers without close |
+| Type | Fichier | Rôle |
+|------|---------|------|
+| `Capture` | `capture.go` | Coordonne stdout/stderr |
+| `LineWriter` | `linewriter.go` | Buffer ligne par ligne |
+| `MultiWriter` | `multiwriter.go` | Écrit vers plusieurs destinations |
+| `TimestampWriter` | `timestamp.go` | Ajoute préfixe horodatage |
+| `Writer` | `writer.go` | Writer de base vers fichier |
+| `FileOpener` | `fileopener.go` | Ouvre fichiers (prêt rotation) |
+| `NopCloser` | `nopcloser.go` | Wrapper sans Close() |
 
 ## Usage
 
 ```go
-import "github.com/kodflow/daemon/internal/infrastructure/logging"
-
-// Create timestamped line writer
+// Créer un writer avec timestamp
 tw := logging.NewTimestampWriter(file, "2006-01-02 15:04:05")
 lw := logging.NewLineWriter(tw)
 
-// Attach to process
+// Attacher au processus
 cmd.Stdout = lw
 cmd.Stderr = lw
 ```
 
-## Configuration
+## Chaîne de Writers
+
+```
+Process stdout/stderr
+         │
+         ▼
+    LineWriter       ← Buffer jusqu'à \n
+         │
+         ▼
+  TimestampWriter    ← Ajoute [2024-01-15 10:30:45]
+         │
+         ▼
+    MultiWriter      ← Fichier + Console
+         │
+         ▼
+      Writer         ← Fichier avec rotation
+```
+
+## Configuration YAML
 
 ```yaml
 logging:
@@ -50,29 +57,14 @@ logging:
     timestamp_format: iso8601
     rotation:
       max_size: 100MB
-      max_age: 7d
       max_files: 10
-      compress: true
 ```
 
-## Rotation Triggers
+## Constructeurs
 
-| Trigger | Action |
-|---------|--------|
-| `max_size` | Rotate when file > size |
-| `max_age` | Delete files > age |
-| `max_files` | Keep N files max |
-| `compress` | Gzip old files |
-
-## Dependencies
-
-- Depends on: nothing (utility layer)
-- Used by: `application/process`
-
-## Related Directories
-
-| Directory | Relation |
-|-----------|----------|
-| `../../application/process/` | Attaches writers to processes |
-| `../../domain/service/` | Receives LoggingConfig |
-| `../process/` | Process executor uses logging |
+```go
+NewCapture(stdout, stderr io.Writer) *Capture
+NewLineWriter(w io.Writer) *LineWriter
+NewTimestampWriter(w io.Writer, format string) *TimestampWriter
+NewMultiWriter(writers ...io.Writer) *MultiWriter
+```

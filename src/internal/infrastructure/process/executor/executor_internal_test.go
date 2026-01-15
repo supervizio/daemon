@@ -18,7 +18,6 @@ import (
 
 	domain "github.com/kodflow/daemon/internal/domain/process"
 	"github.com/kodflow/daemon/internal/domain/shared"
-	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 	"github.com/kodflow/daemon/internal/infrastructure/process/control"
 	"github.com/kodflow/daemon/internal/infrastructure/process/credentials"
 )
@@ -381,9 +380,9 @@ type mockCredentialManager struct {
 //   - _nameOrID: the username or UID to look up (unused in mock).
 //
 // Returns:
-//   - *ports.User: nil (not implemented for this mock).
+//   - *credentials.User: nil (not implemented for this mock).
 //   - error: always nil.
-func (m *mockCredentialManager) LookupUser(_nameOrID string) (*ports.User, error) {
+func (m *mockCredentialManager) LookupUser(_nameOrID string) (*credentials.User, error) {
 	// Return nil for this mock
 	return nil, nil
 }
@@ -394,9 +393,9 @@ func (m *mockCredentialManager) LookupUser(_nameOrID string) (*ports.User, error
 //   - _nameOrID: the group name or GID to look up (unused in mock).
 //
 // Returns:
-//   - *ports.Group: nil (not implemented for this mock).
+//   - *credentials.Group: nil (not implemented for this mock).
 //   - error: always nil.
-func (m *mockCredentialManager) LookupGroup(_nameOrID string) (*ports.Group, error) {
+func (m *mockCredentialManager) LookupGroup(_nameOrID string) (*credentials.Group, error) {
 	// Return nil for this mock
 	return nil, nil
 }

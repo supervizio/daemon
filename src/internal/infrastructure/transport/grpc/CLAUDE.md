@@ -1,46 +1,48 @@
-# Infrastructure gRPC Package
+# gRPC - API du Daemon
 
-gRPC server implementation for the daemon API services.
+Serveur gRPC exposant les services de contrôle et monitoring.
 
-## Files
+## Rôle
 
-| File | Purpose |
-|------|---------|
-| `server.go` | gRPC server implementation |
+Permettre le contrôle à distance du daemon : gestion des services, streaming de métriques.
 
-## Types
+## Structure
 
-### Server
+| Fichier | Rôle |
+|---------|------|
+| `server.go` | `Server` implémentant les services gRPC |
 
-Implements both `DaemonService` and `MetricsService` from the proto definitions.
+## Services
 
-```go
-type Server struct {
-    grpcServer      *grpc.Server
-    healthServer    *health.Server
-    metricsProvider MetricsProvider
-    stateProvider   StateProvider
+### DaemonService
+
+```protobuf
+service DaemonService {
+    rpc Start(StartRequest) returns (StartResponse);
+    rpc Stop(StopRequest) returns (StopResponse);
+    rpc Restart(RestartRequest) returns (RestartResponse);
+    rpc Status(StatusRequest) returns (StatusResponse);
+    rpc StreamStatus(StatusRequest) returns (stream StatusResponse);
 }
 ```
 
-### MetricsProvider
+### MetricsService
 
-Interface for accessing process metrics.
+```protobuf
+service MetricsService {
+    rpc GetMetrics(MetricsRequest) returns (MetricsResponse);
+    rpc StreamMetrics(MetricsRequest) returns (stream MetricsResponse);
+}
+```
+
+## Providers Requis
 
 ```go
 type MetricsProvider interface {
     GetProcessMetrics(serviceName string) (metrics.ProcessMetrics, error)
     GetAllProcessMetrics() []metrics.ProcessMetrics
-    Subscribe() <-chan metrics.ProcessMetrics
-    Unsubscribe(ch <-chan metrics.ProcessMetrics)
 }
-```
 
-### StateProvider
-
-Interface for accessing daemon state.
-
-```go
 type StateProvider interface {
     GetState() state.DaemonState
 }
@@ -56,28 +58,16 @@ if err := server.Serve(":50051"); err != nil {
 defer server.Stop()
 ```
 
-## Streaming
-
-All streaming methods use a generic `streamLoop` helper that:
-1. Sends initial value immediately
-2. Ticks at configured interval
-3. Handles context cancellation
-4. Continues on emit errors (skip tick)
-
-Default stream interval: 5 seconds.
-
 ## Health Checks
 
-Registers gRPC health/v1 protocol for:
+Enregistre le protocole gRPC health/v1 pour :
 - `daemon.v1.DaemonService`
 - `daemon.v1.MetricsService`
-- Overall server health (empty service name)
+- Server global (service name vide)
 
-## Related Packages
+## Streaming
 
-| Package | Relation |
-|---------|----------|
-| `api/proto/v1/daemon` | Proto definitions |
-| `internal/domain/state` | DaemonState type |
-| `internal/domain/metrics` | ProcessMetrics type |
-| `internal/infrastructure/healthcheck` | gRPC health prober |
+Intervalle par défaut : 5 secondes. Gère :
+- Envoi initial immédiat
+- Tick régulier
+- Annulation context

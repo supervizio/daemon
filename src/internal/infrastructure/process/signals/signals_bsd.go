@@ -2,13 +2,11 @@
 
 package signals
 
-import "github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
-
 // SetSubreaper is a no-op on BSD systems.
 // BSD does not have the PR_SET_CHILD_SUBREAPER functionality.
 // On BSD, daemon must run as PID 1 to reap zombies.
 func (m *Manager) SetSubreaper() error {
-	return ports.ErrNotSupported
+	return ErrSignalNotSupported
 }
 
 // ClearSubreaper is a no-op on BSD systems.

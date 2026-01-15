@@ -18,26 +18,26 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/persistence/storage/boltdb"
 )
 
-func newTestAdapter(t *testing.T) *boltdb.Adapter {
+func newTestStore(t *testing.T) *boltdb.Store {
 	t.Helper()
 	config := storage.StoreConfig{
 		Path:          filepath.Join(t.TempDir(), "test.db"),
 		Retention:     24 * time.Hour,
 		PruneInterval: time.Hour,
 	}
-	adapter, err := boltdb.New(config)
+	store, err := boltdb.New(config)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = adapter.Close() })
-	return adapter
+	t.Cleanup(func() { _ = store.Close() })
+	return store
 }
 
-func TestAdapter_New(t *testing.T) {
+func TestStore_New(t *testing.T) {
 	t.Parallel()
 
-	t.Run("creates adapter successfully", func(t *testing.T) {
+	t.Run("creates store successfully", func(t *testing.T) {
 		t.Parallel()
-		adapter := newTestAdapter(t)
-		require.NotNil(t, adapter)
+		store := newTestStore(t)
+		require.NotNil(t, store)
 	})
 
 	t.Run("fails with invalid path", func(t *testing.T) {
@@ -50,9 +50,9 @@ func TestAdapter_New(t *testing.T) {
 	})
 }
 
-func TestAdapter_WriteAndGetSystemCPU(t *testing.T) {
+func TestStore_WriteAndGetSystemCPU(t *testing.T) {
 	t.Parallel()
-	adapter := newTestAdapter(t)
+	store := newTestStore(t)
 	ctx := context.Background()
 
 	now := time.Now()
@@ -63,25 +63,25 @@ func TestAdapter_WriteAndGetSystemCPU(t *testing.T) {
 		Timestamp: now,
 	}
 
-	err := adapter.WriteSystemCPU(ctx, &cpu)
+	err := store.WriteSystemCPU(ctx, &cpu)
 	require.NoError(t, err)
 
 	// Get latest
-	latest, err := adapter.GetLatestSystemCPU(ctx)
+	latest, err := store.GetLatestSystemCPU(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(1000), latest.User)
 	assert.Equal(t, uint64(500), latest.System)
 
 	// Get by range
-	results, err := adapter.GetSystemCPU(ctx, now.Add(-time.Hour), now.Add(time.Hour))
+	results, err := store.GetSystemCPU(ctx, now.Add(-time.Hour), now.Add(time.Hour))
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	assert.Equal(t, uint64(1000), results[0].User)
 }
 
-func TestAdapter_WriteAndGetSystemMemory(t *testing.T) {
+func TestStore_WriteAndGetSystemMemory(t *testing.T) {
 	t.Parallel()
-	adapter := newTestAdapter(t)
+	store := newTestStore(t)
 	ctx := context.Background()
 
 	now := time.Now()
@@ -91,24 +91,24 @@ func TestAdapter_WriteAndGetSystemMemory(t *testing.T) {
 		Timestamp: now,
 	}
 
-	err := adapter.WriteSystemMemory(ctx, &mem)
+	err := store.WriteSystemMemory(ctx, &mem)
 	require.NoError(t, err)
 
 	// Get latest
-	latest, err := adapter.GetLatestSystemMemory(ctx)
+	latest, err := store.GetLatestSystemMemory(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(16*1024*1024*1024), latest.Total)
 
 	// Get by range
-	results, err := adapter.GetSystemMemory(ctx, now.Add(-time.Hour), now.Add(time.Hour))
+	results, err := store.GetSystemMemory(ctx, now.Add(-time.Hour), now.Add(time.Hour))
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	assert.Equal(t, uint64(16*1024*1024*1024), results[0].Total)
 }
 
-func TestAdapter_WriteAndGetProcessMetrics(t *testing.T) {
+func TestStore_WriteAndGetProcessMetrics(t *testing.T) {
 	t.Parallel()
-	adapter := newTestAdapter(t)
+	store := newTestStore(t)
 	ctx := context.Background()
 
 	now := time.Now()
@@ -121,50 +121,50 @@ func TestAdapter_WriteAndGetProcessMetrics(t *testing.T) {
 		Timestamp:    now,
 	}
 
-	err := adapter.WriteProcessMetrics(ctx, &proc)
+	err := store.WriteProcessMetrics(ctx, &proc)
 	require.NoError(t, err)
 
 	// Get latest
-	latest, err := adapter.GetLatestProcessMetrics(ctx, "test-service")
+	latest, err := store.GetLatestProcessMetrics(ctx, "test-service")
 	require.NoError(t, err)
 	assert.Equal(t, "test-service", latest.ServiceName)
 	assert.Equal(t, 1234, latest.PID)
 
 	// Get by range
-	results, err := adapter.GetProcessMetrics(ctx, "test-service", now.Add(-time.Hour), now.Add(time.Hour))
+	results, err := store.GetProcessMetrics(ctx, "test-service", now.Add(-time.Hour), now.Add(time.Hour))
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	assert.Equal(t, "test-service", results[0].ServiceName)
 }
 
-func TestAdapter_GetLatestReturnsErrorWhenEmpty(t *testing.T) {
+func TestStore_GetLatestReturnsErrorWhenEmpty(t *testing.T) {
 	t.Parallel()
-	adapter := newTestAdapter(t)
+	store := newTestStore(t)
 	ctx := context.Background()
 
-	_, err := adapter.GetLatestSystemCPU(ctx)
+	_, err := store.GetLatestSystemCPU(ctx)
 	assert.Error(t, err)
 
-	_, err = adapter.GetLatestSystemMemory(ctx)
+	_, err = store.GetLatestSystemMemory(ctx)
 	assert.Error(t, err)
 
-	_, err = adapter.GetLatestProcessMetrics(ctx, "nonexistent")
+	_, err = store.GetLatestProcessMetrics(ctx, "nonexistent")
 	assert.Error(t, err)
 }
 
-func TestAdapter_GetProcessMetricsForNonexistentService(t *testing.T) {
+func TestStore_GetProcessMetricsForNonexistentService(t *testing.T) {
 	t.Parallel()
-	adapter := newTestAdapter(t)
+	store := newTestStore(t)
 	ctx := context.Background()
 
-	results, err := adapter.GetProcessMetrics(ctx, "nonexistent", time.Now().Add(-time.Hour), time.Now())
+	results, err := store.GetProcessMetrics(ctx, "nonexistent", time.Now().Add(-time.Hour), time.Now())
 	require.NoError(t, err)
 	assert.Empty(t, results)
 }
 
-func TestAdapter_MultipleWrites(t *testing.T) {
+func TestStore_MultipleWrites(t *testing.T) {
 	t.Parallel()
-	adapter := newTestAdapter(t)
+	store := newTestStore(t)
 	ctx := context.Background()
 
 	base := time.Now()
@@ -173,11 +173,11 @@ func TestAdapter_MultipleWrites(t *testing.T) {
 			User:      uint64(i * 100),
 			Timestamp: base.Add(time.Duration(i) * time.Second),
 		}
-		err := adapter.WriteSystemCPU(ctx, &cpu)
+		err := store.WriteSystemCPU(ctx, &cpu)
 		require.NoError(t, err)
 	}
 
-	results, err := adapter.GetSystemCPU(ctx, base, base.Add(10*time.Second))
+	results, err := store.GetSystemCPU(ctx, base, base.Add(10*time.Second))
 	require.NoError(t, err)
 	assert.Len(t, results, 10)
 
@@ -187,9 +187,9 @@ func TestAdapter_MultipleWrites(t *testing.T) {
 	}
 }
 
-func TestAdapter_Prune(t *testing.T) {
+func TestStore_Prune(t *testing.T) {
 	t.Parallel()
-	adapter := newTestAdapter(t)
+	store := newTestStore(t)
 	ctx := context.Background()
 
 	// Write old and recent data
@@ -199,24 +199,24 @@ func TestAdapter_Prune(t *testing.T) {
 	oldCPU := metrics.SystemCPU{User: 100, Timestamp: old}
 	newCPU := metrics.SystemCPU{User: 200, Timestamp: recent}
 
-	require.NoError(t, adapter.WriteSystemCPU(ctx, &oldCPU))
-	require.NoError(t, adapter.WriteSystemCPU(ctx, &newCPU))
+	require.NoError(t, store.WriteSystemCPU(ctx, &oldCPU))
+	require.NoError(t, store.WriteSystemCPU(ctx, &newCPU))
 
 	// Prune data older than 1 hour
-	deleted, err := adapter.Prune(ctx, time.Hour)
+	deleted, err := store.Prune(ctx, time.Hour)
 	require.NoError(t, err)
 	assert.Equal(t, 1, deleted)
 
 	// Verify only recent data remains
-	results, err := adapter.GetSystemCPU(ctx, old.Add(-time.Hour), recent.Add(time.Hour))
+	results, err := store.GetSystemCPU(ctx, old.Add(-time.Hour), recent.Add(time.Hour))
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	assert.Equal(t, uint64(200), results[0].User)
 }
 
-func TestAdapter_PruneProcessMetrics(t *testing.T) {
+func TestStore_PruneProcessMetrics(t *testing.T) {
 	t.Parallel()
-	adapter := newTestAdapter(t)
+	store := newTestStore(t)
 	ctx := context.Background()
 
 	old := time.Now().Add(-2 * time.Hour)
@@ -225,29 +225,29 @@ func TestAdapter_PruneProcessMetrics(t *testing.T) {
 	oldProc := metrics.ProcessMetrics{ServiceName: "svc", PID: 1, Timestamp: old}
 	newProc := metrics.ProcessMetrics{ServiceName: "svc", PID: 2, Timestamp: recent}
 
-	require.NoError(t, adapter.WriteProcessMetrics(ctx, &oldProc))
-	require.NoError(t, adapter.WriteProcessMetrics(ctx, &newProc))
+	require.NoError(t, store.WriteProcessMetrics(ctx, &oldProc))
+	require.NoError(t, store.WriteProcessMetrics(ctx, &newProc))
 
-	deleted, err := adapter.Prune(ctx, time.Hour)
+	deleted, err := store.Prune(ctx, time.Hour)
 	require.NoError(t, err)
 	assert.Equal(t, 1, deleted)
 
-	results, err := adapter.GetProcessMetrics(ctx, "svc", old.Add(-time.Hour), recent.Add(time.Hour))
+	results, err := store.GetProcessMetrics(ctx, "svc", old.Add(-time.Hour), recent.Add(time.Hour))
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	assert.Equal(t, 2, results[0].PID)
 }
 
-func TestAdapter_ContextCancellation(t *testing.T) {
+func TestStore_ContextCancellation(t *testing.T) {
 	t.Parallel()
-	adapter := newTestAdapter(t)
+	store := newTestStore(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := adapter.GetSystemCPU(ctx, time.Now(), time.Now())
+	_, err := store.GetSystemCPU(ctx, time.Now(), time.Now())
 	assert.ErrorIs(t, err, context.Canceled)
 
-	err = adapter.WriteSystemCPU(ctx, &metrics.SystemCPU{})
+	err = store.WriteSystemCPU(ctx, &metrics.SystemCPU{})
 	assert.ErrorIs(t, err, context.Canceled)
 }

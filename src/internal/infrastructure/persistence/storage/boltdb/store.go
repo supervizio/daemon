@@ -1,6 +1,6 @@
 //go:build linux
 
-// Package boltdb provides a BoltDB adapter for metrics persistence.
+// Package boltdb provides a BoltDB store for metrics persistence.
 package boltdb
 
 import (
@@ -35,14 +35,14 @@ var (
 // Current schema version.
 const schemaVersion = 1
 
-// Adapter implements MetricsStore using BoltDB.
-type Adapter struct {
+// Store implements MetricsStore using BoltDB.
+type Store struct {
 	db     *bolt.DB
 	config storage.StoreConfig
 }
 
-// New creates a new BoltDB adapter.
-func New(config storage.StoreConfig) (*Adapter, error) {
+// New creates a new BoltDB store.
+func New(config storage.StoreConfig) (*Store, error) {
 	db, err := bolt.Open(config.Path, 0o600, &bolt.Options{
 		Timeout: 5 * time.Second,
 	})
@@ -50,21 +50,21 @@ func New(config storage.StoreConfig) (*Adapter, error) {
 		return nil, fmt.Errorf("open boltdb: %w", err)
 	}
 
-	adapter := &Adapter{
+	store := &Store{
 		db:     db,
 		config: config,
 	}
 
-	if err := adapter.initSchema(); err != nil {
+	if err := store.initSchema(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 
-	return adapter, nil
+	return store, nil
 }
 
 // initSchema creates the bucket structure.
-func (a *Adapter) initSchema() error {
+func (a *Store) initSchema() error {
 	return a.db.Update(func(tx *bolt.Tx) error {
 		// Create top-level buckets
 		buckets := [][]byte{
@@ -97,7 +97,7 @@ func (a *Adapter) initSchema() error {
 }
 
 // WriteSystemCPU persists system CPU metrics.
-func (a *Adapter) WriteSystemCPU(ctx context.Context, m *metrics.SystemCPU) error {
+func (a *Store) WriteSystemCPU(ctx context.Context, m *metrics.SystemCPU) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func (a *Adapter) WriteSystemCPU(ctx context.Context, m *metrics.SystemCPU) erro
 }
 
 // WriteSystemMemory persists system memory metrics.
-func (a *Adapter) WriteSystemMemory(ctx context.Context, m *metrics.SystemMemory) error {
+func (a *Store) WriteSystemMemory(ctx context.Context, m *metrics.SystemMemory) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (a *Adapter) WriteSystemMemory(ctx context.Context, m *metrics.SystemMemory
 }
 
 // WriteProcessMetrics persists process metrics.
-func (a *Adapter) WriteProcessMetrics(ctx context.Context, m *metrics.ProcessMetrics) error {
+func (a *Store) WriteProcessMetrics(ctx context.Context, m *metrics.ProcessMetrics) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (a *Adapter) WriteProcessMetrics(ctx context.Context, m *metrics.ProcessMet
 // GetSystemCPU retrieves system CPU metrics within the time range.
 //
 //nolint:dupl // Intentional type-specific implementation for SystemCPU
-func (a *Adapter) GetSystemCPU(ctx context.Context, since, until time.Time) ([]metrics.SystemCPU, error) {
+func (a *Store) GetSystemCPU(ctx context.Context, since, until time.Time) ([]metrics.SystemCPU, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func (a *Adapter) GetSystemCPU(ctx context.Context, since, until time.Time) ([]m
 // GetSystemMemory retrieves system memory metrics within the time range.
 //
 //nolint:dupl // Intentional type-specific implementation for SystemMemory
-func (a *Adapter) GetSystemMemory(ctx context.Context, since, until time.Time) ([]metrics.SystemMemory, error) {
+func (a *Store) GetSystemMemory(ctx context.Context, since, until time.Time) ([]metrics.SystemMemory, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func (a *Adapter) GetSystemMemory(ctx context.Context, since, until time.Time) (
 }
 
 // GetProcessMetrics retrieves process metrics for a service within the time range.
-func (a *Adapter) GetProcessMetrics(ctx context.Context, serviceName string, since, until time.Time) ([]metrics.ProcessMetrics, error) {
+func (a *Store) GetProcessMetrics(ctx context.Context, serviceName string, since, until time.Time) ([]metrics.ProcessMetrics, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (a *Adapter) GetProcessMetrics(ctx context.Context, serviceName string, sin
 }
 
 // getLatest is a generic helper to retrieve the most recent entry from a bucket.
-func getLatest[T any](ctx context.Context, a *Adapter, bucket []byte, notFoundMsg string) (T, error) {
+func getLatest[T any](ctx context.Context, a *Store, bucket []byte, notFoundMsg string) (T, error) {
 	var zero T
 	if err := ctx.Err(); err != nil {
 		return zero, err
@@ -271,17 +271,17 @@ func getLatest[T any](ctx context.Context, a *Adapter, bucket []byte, notFoundMs
 }
 
 // GetLatestSystemCPU retrieves the most recent system CPU metrics.
-func (a *Adapter) GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, error) {
+func (a *Store) GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, error) {
 	return getLatest[metrics.SystemCPU](ctx, a, bucketSystemCPU, "no system CPU metrics found")
 }
 
 // GetLatestSystemMemory retrieves the most recent system memory metrics.
-func (a *Adapter) GetLatestSystemMemory(ctx context.Context) (metrics.SystemMemory, error) {
+func (a *Store) GetLatestSystemMemory(ctx context.Context) (metrics.SystemMemory, error) {
 	return getLatest[metrics.SystemMemory](ctx, a, bucketSystemMemory, "no system memory metrics found")
 }
 
 // GetLatestProcessMetrics retrieves the most recent process metrics for a service.
-func (a *Adapter) GetLatestProcessMetrics(ctx context.Context, serviceName string) (metrics.ProcessMetrics, error) {
+func (a *Store) GetLatestProcessMetrics(ctx context.Context, serviceName string) (metrics.ProcessMetrics, error) {
 	if err := ctx.Err(); err != nil {
 		return metrics.ProcessMetrics{}, err
 	}
@@ -315,7 +315,7 @@ func (a *Adapter) GetLatestProcessMetrics(ctx context.Context, serviceName strin
 }
 
 // Prune removes metrics older than the specified duration.
-func (a *Adapter) Prune(ctx context.Context, olderThan time.Duration) (int, error) {
+func (a *Store) Prune(ctx context.Context, olderThan time.Duration) (int, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
@@ -386,7 +386,7 @@ func pruneBucket(b *bolt.Bucket, cutoffKey []byte) (int, error) {
 }
 
 // Close closes the database.
-func (a *Adapter) Close() error {
+func (a *Store) Close() error {
 	return a.db.Close()
 }
 

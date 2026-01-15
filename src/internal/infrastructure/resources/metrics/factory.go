@@ -19,32 +19,32 @@ const (
 // It automatically detects the best available implementation.
 //
 // Detection order:
-// 1. Linux with /proc filesystem -> linux.LinuxProbe
-// 2. FreeBSD/OpenBSD/NetBSD -> bsd.BSDProbe (TODO)
-// 3. Darwin (macOS) -> darwin.DarwinProbe (TODO)
-// 4. Fallback -> scratch.ScratchProbe
+// 1. Linux with /proc filesystem -> linux.Probe
+// 2. FreeBSD/OpenBSD/NetBSD -> bsd.Probe (TODO)
+// 3. Darwin (macOS) -> darwin.Probe (TODO)
+// 4. Fallback -> scratch.Probe
 func NewSystemCollector() metrics.SystemCollector {
 	switch {
 	case hasProc() && runtime.GOOS == platformLinux:
 		// Linux with /proc filesystem available
 		// Note: The linux adapter only partially implements the interface.
 		// For now, fall through to scratch as a placeholder.
-		// TODO: Return linux.NewLinuxProbe() when fully implemented.
-		return scratch.NewScratchProbe()
+		// TODO: Return linux.NewProbe() when fully implemented.
+		return scratch.NewProbe()
 
 	case isBSD():
 		// BSD family (FreeBSD, OpenBSD, NetBSD)
-		// TODO: Return bsd.NewBSDProbe() when implemented.
-		return scratch.NewScratchProbe()
+		// TODO: Return bsd.NewProbe() when implemented.
+		return scratch.NewProbe()
 
 	case runtime.GOOS == platformDarwin:
 		// macOS
-		// TODO: Return darwin.NewDarwinProbe() when implemented.
-		return scratch.NewScratchProbe()
+		// TODO: Return darwin.NewProbe() when implemented.
+		return scratch.NewProbe()
 
 	default:
 		// Fallback for scratch containers, Windows, or unknown platforms
-		return scratch.NewScratchProbe()
+		return scratch.NewProbe()
 	}
 }
 

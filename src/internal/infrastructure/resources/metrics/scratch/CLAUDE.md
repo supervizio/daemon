@@ -1,65 +1,41 @@
-# Scratch Metrics Infrastructure Package
+# Scratch Metrics - Stub
 
-Minimal metrics collector for environments without system metrics access.
-
-## Purpose
-
-The scratch package provides a `metrics.SystemCollector` implementation that
-returns `ErrNotSupported` for all operations. It's designed for:
-
-- Scratch containers (no /proc filesystem)
-- Windows environments (different metrics API)
-- Unknown platforms
-- Testing fallback behavior
-
-## Structure
-
-```
-scratch/
-└── probe.go    # ScratchProbe and all collectors
-```
-
-## Types
-
-| Type | Implements |
-|------|------------|
-| `ScratchProbe` | `metrics.SystemCollector` |
-| `CPUCollector` | `metrics.CPUCollector` |
-| `MemoryCollector` | `metrics.MemoryCollector` |
-| `DiskCollector` | `metrics.DiskCollector` |
-| `NetworkCollector` | `metrics.NetworkCollector` |
-| `IOCollector` | `metrics.IOCollector` |
-
-## Behavior
-
-All collector methods return `ErrNotSupported` with a zero-value result.
-This allows the application layer to detect unsupported platforms and
-handle them gracefully.
+Implémentation stub pour environnements sans métriques.
 
 ## Usage
 
-```go
-// Direct usage (rare)
-probe := scratch.NewScratchProbe()
-cpu, err := probe.CPU().CollectSystem(ctx)
-if errors.Is(err, scratch.ErrNotSupported) {
-    // Handle unsupported platform
-}
+- CI/CD sans accès OS
+- Tests unitaires
+- Containers scratch
+- Plateformes inconnues
 
-// Via factory (recommended)
-collector := metrics.NewSystemCollector() // Returns scratch on unknown platforms
+## Comportement
+
+Toutes les méthodes retournent des valeurs zéro sans erreur (ou `ErrNotSupported`).
+
+## Structure
+
+| Fichier | Rôle |
+|---------|------|
+| `probe.go` | `Probe` retournant des zéros |
+
+## Constructeur
+
+```go
+NewProbe() *Probe
 ```
 
-## Error Handling
-
-The application layer should check for `ErrNotSupported`:
+## Build Tag
 
 ```go
-import "errors"
+//go:build !linux && !darwin && !freebsd && !openbsd && !netbsd && !dragonfly
+```
 
+## Détection
+
+```go
 cpu, err := collector.CPU().CollectSystem(ctx)
 if errors.Is(err, scratch.ErrNotSupported) {
-    log.Warn("CPU metrics not available on this platform")
-    return
+    // Plateforme non supportée
 }
 ```

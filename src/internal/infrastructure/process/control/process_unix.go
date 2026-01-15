@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
+	"github.com/kodflow/daemon/internal/infrastructure/process"
 )
 
 // Control implements ProcessControl for Unix systems.
@@ -49,7 +49,7 @@ func (m *Control) GetProcessGroup(pid int) (int, error) {
 	// Check if getpgid syscall failed.
 	if err != nil {
 		// Return zero and the wrapped error.
-		return 0, ports.WrapError("getpgid", err)
+		return 0, process.WrapError("getpgid", err)
 	}
 	// Return the process group ID.
 	return pgid, nil

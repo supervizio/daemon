@@ -11,8 +11,6 @@ import (
 	"os/exec"
 	"strconv"
 	"syscall"
-
-	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 )
 
 // ErrScratchNameLookup is returned when a name lookup is attempted in scratch mode.
@@ -32,7 +30,7 @@ func NewScratch() *ScratchManager {
 
 // LookupUser looks up a user by numeric UID only.
 // Name lookups will fail as /etc/passwd is not available in scratch containers.
-func (m *ScratchManager) LookupUser(nameOrID string) (*ports.User, error) {
+func (m *ScratchManager) LookupUser(nameOrID string) (*User, error) {
 	// Try parsing as numeric UID
 	uid, err := strconv.ParseUint(nameOrID, baseDecimal, bitSize32)
 	if err != nil {
@@ -41,7 +39,7 @@ func (m *ScratchManager) LookupUser(nameOrID string) (*ports.User, error) {
 	}
 
 	// Return a minimal user with just the UID
-	return &ports.User{
+	return &User{
 		UID:      uint32(uid),
 		GID:      uint32(uid), // Default GID to same as UID
 		Username: nameOrID,    // Use the numeric string as username
@@ -50,7 +48,7 @@ func (m *ScratchManager) LookupUser(nameOrID string) (*ports.User, error) {
 
 // LookupGroup looks up a group by numeric GID only.
 // Name lookups will fail as /etc/group is not available in scratch containers.
-func (m *ScratchManager) LookupGroup(nameOrID string) (*ports.Group, error) {
+func (m *ScratchManager) LookupGroup(nameOrID string) (*Group, error) {
 	// Try parsing as numeric GID
 	gid, err := strconv.ParseUint(nameOrID, baseDecimal, bitSize32)
 	if err != nil {
@@ -59,7 +57,7 @@ func (m *ScratchManager) LookupGroup(nameOrID string) (*ports.Group, error) {
 	}
 
 	// Return a minimal group with just the GID
-	return &ports.Group{
+	return &Group{
 		GID:  uint32(gid),
 		Name: nameOrID, // Use the numeric string as group name
 	}, nil

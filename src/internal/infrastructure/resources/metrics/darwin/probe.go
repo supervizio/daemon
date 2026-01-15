@@ -14,8 +14,8 @@ import (
 // ErrNotImplemented is returned for methods not yet implemented.
 var ErrNotImplemented = errors.New("Darwin metrics collector not yet implemented")
 
-// DarwinProbe implements metrics.SystemCollector for macOS.
-type DarwinProbe struct {
+// Probe implements metrics.SystemCollector for macOS.
+type Probe struct {
 	cpu     *CPUCollector
 	memory  *MemoryCollector
 	disk    *DiskCollector
@@ -23,9 +23,9 @@ type DarwinProbe struct {
 	io      *IOCollector
 }
 
-// NewDarwinProbe creates a new macOS metrics collector.
-func NewDarwinProbe() *DarwinProbe {
-	return &DarwinProbe{
+// NewProbe creates a new macOS metrics collector.
+func NewProbe() *Probe {
+	return &Probe{
 		cpu:     &CPUCollector{},
 		memory:  &MemoryCollector{},
 		disk:    &DiskCollector{},
@@ -35,27 +35,27 @@ func NewDarwinProbe() *DarwinProbe {
 }
 
 // CPU returns the CPU collector.
-func (p *DarwinProbe) CPU() metrics.CPUCollector {
+func (p *Probe) CPU() metrics.CPUCollector {
 	return p.cpu
 }
 
 // Memory returns the memory collector.
-func (p *DarwinProbe) Memory() metrics.MemoryCollector {
+func (p *Probe) Memory() metrics.MemoryCollector {
 	return p.memory
 }
 
 // Disk returns the disk collector.
-func (p *DarwinProbe) Disk() metrics.DiskCollector {
+func (p *Probe) Disk() metrics.DiskCollector {
 	return p.disk
 }
 
 // Network returns the network collector.
-func (p *DarwinProbe) Network() metrics.NetworkCollector {
+func (p *Probe) Network() metrics.NetworkCollector {
 	return p.network
 }
 
 // IO returns the I/O collector.
-func (p *DarwinProbe) IO() metrics.IOCollector {
+func (p *Probe) IO() metrics.IOCollector {
 	return p.io
 }
 

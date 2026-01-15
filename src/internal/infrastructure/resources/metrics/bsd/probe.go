@@ -16,8 +16,8 @@ import (
 // ErrNotImplemented is returned for methods not yet implemented.
 var ErrNotImplemented = errors.New("BSD metrics collector not yet implemented")
 
-// BSDProbe implements metrics.SystemCollector for BSD systems.
-type BSDProbe struct {
+// Probe implements metrics.SystemCollector for BSD systems.
+type Probe struct {
 	cpu     *CPUCollector
 	memory  *MemoryCollector
 	disk    *DiskCollector
@@ -25,9 +25,9 @@ type BSDProbe struct {
 	io      *IOCollector
 }
 
-// NewBSDProbe creates a new BSD metrics collector.
-func NewBSDProbe() *BSDProbe {
-	return &BSDProbe{
+// NewProbe creates a new BSD metrics collector.
+func NewProbe() *Probe {
+	return &Probe{
 		cpu:     &CPUCollector{},
 		memory:  &MemoryCollector{},
 		disk:    &DiskCollector{},
@@ -37,27 +37,27 @@ func NewBSDProbe() *BSDProbe {
 }
 
 // CPU returns the CPU collector.
-func (p *BSDProbe) CPU() metrics.CPUCollector {
+func (p *Probe) CPU() metrics.CPUCollector {
 	return p.cpu
 }
 
 // Memory returns the memory collector.
-func (p *BSDProbe) Memory() metrics.MemoryCollector {
+func (p *Probe) Memory() metrics.MemoryCollector {
 	return p.memory
 }
 
 // Disk returns the disk collector.
-func (p *BSDProbe) Disk() metrics.DiskCollector {
+func (p *Probe) Disk() metrics.DiskCollector {
 	return p.disk
 }
 
 // Network returns the network collector.
-func (p *BSDProbe) Network() metrics.NetworkCollector {
+func (p *Probe) Network() metrics.NetworkCollector {
 	return p.network
 }
 
 // IO returns the I/O collector.
-func (p *BSDProbe) IO() metrics.IOCollector {
+func (p *Probe) IO() metrics.IOCollector {
 	return p.io
 }
 
