@@ -6,6 +6,11 @@ Private internal packages following hexagonal architecture.
 
 ```
 internal/
+├── bootstrap/            # Wire dependency injection
+│   ├── app.go            # App struct, Run(), signals
+│   ├── providers.go      # Custom providers
+│   ├── wire.go           # Injector (wireinject)
+│   └── wire_gen.go       # Generated code
 ├── application/          # Application layer (use cases)
 │   ├── config/           # Configuration port interface
 │   ├── healthcheck/      # Health monitoring with ProbeMonitor
@@ -86,6 +91,7 @@ See `infrastructure/CLAUDE.md` for details.
 
 | Directory | See |
 |-----------|-----|
+| bootstrap | `bootstrap/CLAUDE.md` |
 | application | `application/CLAUDE.md` |
 | domain | `domain/CLAUDE.md` |
 | infrastructure | `infrastructure/CLAUDE.md` |

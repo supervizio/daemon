@@ -49,7 +49,7 @@ type Supervisor struct {
 	config *service.Config
 	// loader is the configuration loader.
 	loader appconfig.Loader
-	// executor is the process executor.
+	// executor is the process execution.
 	executor domain.Executor
 	// managers is the map of service managers.
 	managers map[string]*appprocess.Manager
@@ -74,7 +74,7 @@ type Supervisor struct {
 // Params:
 //   - cfg: the service configuration.
 //   - loader: the configuration loader for reloading.
-//   - executor: the process executor.
+//   - executor: the process execution.
 //   - reaper: the zombie process reaper.
 //
 // Returns:

@@ -36,6 +36,13 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: src/go.sum
 
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@latest
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6
         with:
@@ -58,6 +65,13 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: src/go.sum
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@latest
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
 
       - name: Run tests
         working-directory: src
@@ -93,6 +107,13 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: src/go.sum
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@latest
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
 
       - name: Build
         working-directory: src
