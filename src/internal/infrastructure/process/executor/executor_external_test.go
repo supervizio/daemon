@@ -5,8 +5,9 @@
 package executor_test
 
 import (
-	"bytes"
 	"context"
+	"fmt"
+	"os"
 	"syscall"
 	"testing"
 	"time"
@@ -232,27 +233,25 @@ func TestExecutor_Start_EmptyCommand(t *testing.T) {
 	}
 }
 
-// TestExecutor_Start_WithOutput tests Start with output capture.
+// TestExecutor_Start_Success tests Start with a simple command.
+// Note: I/O capture is handled at infrastructure level, not via domain Spec.
 //
 // Params:
 //   - t: the testing context
 //
 // Returns:
 //   - (none, test function)
-func TestExecutor_Start_WithOutput(t *testing.T) {
-	// Define test cases for output capture.
+func TestExecutor_Start_Success(t *testing.T) {
+	// Define test cases for basic execution.
 	tests := []struct {
 		// name is the test case name.
 		name string
 		// command is the command to execute.
 		command string
-		// expected is the expected output.
-		expected string
 	}{
 		{
-			name:     "captures stdout",
-			command:  "echo hello",
-			expected: "hello\n",
+			name:    "executes simple command",
+			command: "echo hello",
 		},
 	}
 
@@ -263,10 +262,8 @@ func TestExecutor_Start_WithOutput(t *testing.T) {
 			executor := executor.New()
 			ctx := context.Background()
 
-			var stdout bytes.Buffer
 			spec := domain.Spec{
 				Command: tt.command,
-				Stdout:  &stdout,
 			}
 
 			pid, wait, err := executor.Start(ctx, spec)
@@ -277,10 +274,10 @@ func TestExecutor_Start_WithOutput(t *testing.T) {
 			assert.Greater(t, pid, 0)
 
 			// Wait for process to complete.
-			<-wait
+			result := <-wait
 
-			// Verify captured output.
-			assert.Equal(t, tt.expected, stdout.String())
+			// Verify successful exit.
+			assert.Equal(t, 0, result.Code)
 		})
 	}
 }
@@ -406,11 +403,12 @@ func TestExecutor_Start_WithWorkingDirectory(t *testing.T) {
 			executor := executor.New()
 			ctx := context.Background()
 
-			var stdout bytes.Buffer
+			// Create a marker file in the working directory to verify.
+			markerFile := fmt.Sprintf("executor_test_%d", time.Now().UnixNano())
 			spec := domain.Spec{
-				Command: "pwd",
+				Command: "touch",
+				Args:    []string{markerFile},
 				Dir:     tt.dir,
-				Stdout:  &stdout,
 			}
 
 			pid, wait, err := executor.Start(ctx, spec)
@@ -419,10 +417,18 @@ func TestExecutor_Start_WithWorkingDirectory(t *testing.T) {
 			assert.Greater(t, pid, 0)
 
 			// Wait for process to complete.
-			<-wait
+			result := <-wait
 
-			// Verify working directory in output.
-			assert.Contains(t, stdout.String(), tt.dir)
+			// Verify successful exit.
+			assert.Equal(t, 0, result.Code)
+
+			// Verify marker file was created in working directory.
+			markerPath := tt.dir + "/" + markerFile
+			_, err = os.Stat(markerPath)
+			assert.NoError(t, err, "marker file should exist in working directory")
+
+			// Cleanup marker file.
+			_ = os.Remove(markerPath)
 		})
 	}
 }
@@ -520,120 +526,6 @@ func TestExecutor_Start_NonZeroExit(t *testing.T) {
 			result := <-wait
 			// Verify exit code matches expected.
 			assert.Equal(t, tt.expectedCode, result.Code)
-		})
-	}
-}
-
-// TestExecutor_Start_WithStderr tests Start with stderr capture.
-//
-// Params:
-//   - t: the testing context
-//
-// Returns:
-//   - (none, test function)
-func TestExecutor_Start_WithStderr(t *testing.T) {
-	// Define test cases for stderr capture.
-	tests := []struct {
-		// name is the test case name.
-		name string
-		// command is the shell command producing stderr.
-		command string
-		// args are command arguments.
-		args []string
-		// expected is the expected stderr output.
-		expected string
-	}{
-		{
-			name:     "captures stderr",
-			command:  "sh",
-			args:     []string{"-c", "echo error >&2"},
-			expected: "error\n",
-		},
-	}
-
-	// Iterate over test cases.
-	for _, tt := range tests {
-		// Run each test case as a subtest.
-		t.Run(tt.name, func(t *testing.T) {
-			executor := executor.New()
-			ctx := context.Background()
-
-			var stderr bytes.Buffer
-			spec := domain.Spec{
-				Command: tt.command,
-				Args:    tt.args,
-				Stderr:  &stderr,
-			}
-
-			pid, wait, err := executor.Start(ctx, spec)
-
-			// Verify no error.
-			require.NoError(t, err)
-			// Verify PID is positive.
-			assert.Greater(t, pid, 0)
-
-			// Wait for process to complete.
-			<-wait
-
-			// Verify captured stderr output.
-			assert.Equal(t, tt.expected, stderr.String())
-		})
-	}
-}
-
-// TestExecutor_Start_WithBothOutputs tests Start with both stdout and stderr capture.
-//
-// Params:
-//   - t: the testing context
-//
-// Returns:
-//   - (none, test function)
-func TestExecutor_Start_WithBothOutputs(t *testing.T) {
-	// Define test cases for combined output capture.
-	tests := []struct {
-		// name is the test case name.
-		name string
-		// expectedOut is the expected stdout.
-		expectedOut string
-		// expectedErr is the expected stderr.
-		expectedErr string
-	}{
-		{
-			name:        "captures both streams",
-			expectedOut: "stdout\n",
-			expectedErr: "stderr\n",
-		},
-	}
-
-	// Iterate over test cases.
-	for _, tt := range tests {
-		// Run each test case as a subtest.
-		t.Run(tt.name, func(t *testing.T) {
-			executor := executor.New()
-			ctx := context.Background()
-
-			var stdout, stderr bytes.Buffer
-			spec := domain.Spec{
-				Command: "sh",
-				Args:    []string{"-c", "echo stdout && echo stderr >&2"},
-				Stdout:  &stdout,
-				Stderr:  &stderr,
-			}
-
-			pid, wait, err := executor.Start(ctx, spec)
-
-			// Verify no error.
-			require.NoError(t, err)
-			// Verify PID is positive.
-			assert.Greater(t, pid, 0)
-
-			// Wait for process to complete.
-			<-wait
-
-			// Verify captured stdout.
-			assert.Equal(t, tt.expectedOut, stdout.String())
-			// Verify captured stderr.
-			assert.Equal(t, tt.expectedErr, stderr.String())
 		})
 	}
 }

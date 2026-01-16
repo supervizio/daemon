@@ -426,11 +426,6 @@ func Test_constants(t *testing.T) {
 			constantName:  "defaultStopTimeout",
 			expectedValue: 30 * time.Second,
 		},
-		{
-			name:          "maxRestartsForBackoff_is_30",
-			constantName:  "maxRestartsForBackoff",
-			expectedValue: 30,
-		},
 	}
 
 	// Iterate through all test cases.
@@ -445,9 +440,6 @@ func Test_constants(t *testing.T) {
 			// Verify defaultStopTimeout.
 			case "defaultStopTimeout":
 				assert.Equal(t, tt.expectedValue, defaultStopTimeout)
-			// Verify maxRestartsForBackoff.
-			case "maxRestartsForBackoff":
-				assert.Equal(t, tt.expectedValue, maxRestartsForBackoff)
 			}
 		})
 	}

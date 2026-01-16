@@ -186,7 +186,8 @@ func (s *Server) Serve(address string) error {
 		return fmt.Errorf("serve: %w", ErrServerAlreadyRunning)
 	}
 
-	listener, err := net.Listen("tcp", address)
+	lc := net.ListenConfig{}
+	listener, err := lc.Listen(context.Background(), "tcp", address)
 	// Check if listen failed.
 	if err != nil {
 		s.mu.Unlock()

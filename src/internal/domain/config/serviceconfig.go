@@ -30,6 +30,7 @@ type ServiceConfig struct {
 	// Restart defines the restart behavior when the service exits.
 	Restart RestartConfig
 	// HealthChecks defines the health check configurations for this service.
+	//
 	// Deprecated: Use Listeners with Probe configuration instead.
 	HealthChecks []HealthCheckConfig
 	// Listeners defines the network listeners with probe configurations.

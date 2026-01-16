@@ -25,25 +25,35 @@ func NewIOCollector() *IOCollector {
 // CollectStats returns an error as I/O statistics are not available.
 //
 // Params:
-//   - _: context (unused in scratch mode)
+//   - ctx: context for cancellation
 //
 // Returns:
 //   - metrics.IOStats: zero value
-//   - error: ErrNotSupported
-func (i *IOCollector) CollectStats(_ context.Context) (metrics.IOStats, error) {
-	// Not supported in scratch mode
+//   - error: ErrNotSupported or context error
+func (i *IOCollector) CollectStats(ctx context.Context) (metrics.IOStats, error) {
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
+		return metrics.IOStats{}, ctx.Err()
+	}
+	// Not supported in scratch mode.
 	return metrics.IOStats{}, ErrNotSupported
 }
 
 // CollectPressure returns an error as I/O pressure metrics are not available.
 //
 // Params:
-//   - _: context (unused in scratch mode)
+//   - ctx: context for cancellation
 //
 // Returns:
 //   - metrics.IOPressure: zero value
-//   - error: ErrNotSupported
-func (i *IOCollector) CollectPressure(_ context.Context) (metrics.IOPressure, error) {
-	// Not supported in scratch mode
+//   - error: ErrNotSupported or context error
+func (i *IOCollector) CollectPressure(ctx context.Context) (metrics.IOPressure, error) {
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
+		return metrics.IOPressure{}, ctx.Err()
+	}
+	// Not supported in scratch mode.
 	return metrics.IOPressure{}, ErrNotSupported
 }

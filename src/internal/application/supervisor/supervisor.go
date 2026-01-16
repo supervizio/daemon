@@ -40,6 +40,16 @@ var (
 // It is called when a service emits a lifecycle event.
 type EventHandler func(serviceName string, event *domain.Event)
 
+// ErrorHandler is a callback function for handling non-fatal errors.
+// These errors occur in recovery/cleanup paths where the supervisor
+// continues operating despite the error. Examples include:
+//   - Errors stopping services during shutdown (best-effort cleanup)
+//   - Errors restarting services during configuration reload
+//
+// If no handler is set, these errors are silently discarded.
+// Setting a handler allows logging or monitoring of these conditions.
+type ErrorHandler func(operation string, serviceName string, err error)
+
 // Supervisor manages multiple services and their lifecycle.
 // It coordinates starting, stopping, and monitoring of all configured services.
 type Supervisor struct {
@@ -65,6 +75,8 @@ type Supervisor struct {
 	wg sync.WaitGroup
 	// eventHandler is the optional callback for events.
 	eventHandler EventHandler
+	// errorHandler is the optional callback for non-fatal errors in recovery paths.
+	errorHandler ErrorHandler
 	// stats holds per-service statistics.
 	stats map[string]*ServiceStats
 }
@@ -204,6 +216,7 @@ func (s *Supervisor) Stop() error {
 }
 
 // stopAll stops all managed services concurrently.
+// Errors during stop are reported via handleRecoveryError (best-effort cleanup).
 //
 // Goroutine lifecycle:
 //   - Spawns one goroutine per service for concurrent stop.
@@ -212,11 +225,15 @@ func (s *Supervisor) Stop() error {
 func (s *Supervisor) stopAll() {
 	var wg sync.WaitGroup
 	// Iterate through all managers.
-	for _, mgr := range s.managers {
+	for name, mgr := range s.managers {
+		serviceName := name
 		m := mgr
 		// Stop each manager in a goroutine using Go 1.25's wg.Go().
 		wg.Go(func() {
-			_ = m.Stop()
+			// Handle stop errors via recovery handler (best-effort cleanup).
+			if err := m.Stop(); err != nil {
+				s.handleRecoveryError("stop", serviceName, err)
+			}
 		})
 	}
 	wg.Wait()
@@ -266,6 +283,7 @@ func (s *Supervisor) Reload() error {
 }
 
 // updateServices updates or adds managers for services in the new configuration.
+// Errors during stop/start are reported via handleRecoveryError (best-effort reload).
 //
 // Params:
 //   - newCfg: the new service configuration.
@@ -280,13 +298,22 @@ func (s *Supervisor) updateServices(newCfg *domainconfig.Config) {
 		svc := &newCfg.Services[i]
 		// Check if the service already exists.
 		if mgr, exists := s.managers[svc.Name]; exists {
-			_ = mgr.Stop()
+			// Stop existing manager (best-effort).
+			if err := mgr.Stop(); err != nil {
+				s.handleRecoveryError("stop-for-reload", svc.Name, err)
+			}
 			s.managers[svc.Name] = applifecycle.NewManager(svc, s.executor)
-			_ = s.managers[svc.Name].Start()
+			// Start new manager (best-effort).
+			if err := s.managers[svc.Name].Start(); err != nil {
+				s.handleRecoveryError("start-for-reload", svc.Name, err)
+			}
 		} else {
 			// Create and start a new manager for the new service.
 			s.managers[svc.Name] = applifecycle.NewManager(svc, s.executor)
-			_ = s.managers[svc.Name].Start()
+			// Start new manager (best-effort).
+			if err := s.managers[svc.Name].Start(); err != nil {
+				s.handleRecoveryError("start-new-service", svc.Name, err)
+			}
 			s.wg.Add(1)
 			go s.monitorService(svc.Name, s.managers[svc.Name])
 		}
@@ -294,6 +321,7 @@ func (s *Supervisor) updateServices(newCfg *domainconfig.Config) {
 }
 
 // removeDeletedServices removes managers for services no longer in configuration.
+// Errors during stop are reported via handleRecoveryError (best-effort cleanup).
 //
 // Params:
 //   - newCfg: the new service configuration.
@@ -307,7 +335,10 @@ func (s *Supervisor) removeDeletedServices(newCfg *domainconfig.Config) {
 	for name, mgr := range s.managers {
 		// Check if the service should be removed.
 		if !newServices[name] {
-			_ = mgr.Stop()
+			// Stop removed service (best-effort).
+			if err := mgr.Stop(); err != nil {
+				s.handleRecoveryError("stop-removed-service", name, err)
+			}
 			delete(s.managers, name)
 		}
 	}
@@ -391,6 +422,43 @@ func (s *Supervisor) SetEventHandler(handler EventHandler) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.eventHandler = handler
+}
+
+// SetErrorHandler sets the callback for non-fatal errors in recovery paths.
+// These errors occur during best-effort operations like shutdown cleanup
+// or configuration reload where the supervisor continues despite errors.
+//
+// Params:
+//   - handler: the callback function to invoke on non-fatal errors.
+func (s *Supervisor) SetErrorHandler(handler ErrorHandler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.errorHandler = handler
+}
+
+// handleRecoveryError reports a non-fatal error to the error handler if set.
+// This method is called from recovery/cleanup paths where errors don't stop
+// the overall operation.
+//
+// Params:
+//   - operation: description of the operation that failed (e.g., "stop", "start").
+//   - serviceName: the name of the affected service.
+//   - err: the error that occurred.
+func (s *Supervisor) handleRecoveryError(operation, serviceName string, err error) {
+	// Skip if no error.
+	if err == nil {
+		// Return early when there is no error to handle.
+		return
+	}
+
+	s.mu.RLock()
+	handler := s.errorHandler
+	s.mu.RUnlock()
+
+	// Call handler if registered.
+	if handler != nil {
+		handler(operation, serviceName, err)
+	}
 }
 
 // Stats returns statistics for a specific service.

@@ -25,39 +25,59 @@ func NewNetworkCollector() *NetworkCollector {
 // ListInterfaces returns an error as interface enumeration is not available.
 //
 // Params:
-//   - _: context (unused in scratch mode)
+//   - ctx: context for cancellation
 //
 // Returns:
 //   - []metrics.NetInterface: nil slice
-//   - error: ErrNotSupported
-func (n *NetworkCollector) ListInterfaces(_ context.Context) ([]metrics.NetInterface, error) {
-	// Not supported in scratch mode
+//   - error: ErrNotSupported or context error
+func (n *NetworkCollector) ListInterfaces(ctx context.Context) ([]metrics.NetInterface, error) {
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
+		return nil, ctx.Err()
+	}
+	// Not supported in scratch mode.
 	return nil, ErrNotSupported
 }
 
 // CollectStats returns an error as interface statistics are not available.
 //
 // Params:
-//   - _: context (unused in scratch mode)
+//   - ctx: context for cancellation
 //   - _: interface name (unused in scratch mode)
 //
 // Returns:
 //   - metrics.NetStats: zero value
-//   - error: ErrNotSupported
-func (n *NetworkCollector) CollectStats(_ context.Context, _ string) (metrics.NetStats, error) {
-	// Not supported in scratch mode
+//   - error: ErrNotSupported or context error
+func (n *NetworkCollector) CollectStats(ctx context.Context, ifaceName string) (metrics.NetStats, error) {
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
+		return metrics.NetStats{}, ctx.Err()
+	}
+	// Validate interface name before returning not supported.
+	if ifaceName == "" {
+		// Return error for empty interface name.
+		return metrics.NetStats{}, ErrEmptyInterface
+	}
+	// Not supported in scratch mode.
 	return metrics.NetStats{}, ErrNotSupported
 }
 
 // CollectAllStats returns an error as interface enumeration is not available.
 //
 // Params:
-//   - _: context (unused in scratch mode)
+//   - ctx: context for cancellation
 //
 // Returns:
 //   - []metrics.NetStats: nil slice
-//   - error: ErrNotSupported
-func (n *NetworkCollector) CollectAllStats(_ context.Context) ([]metrics.NetStats, error) {
-	// Not supported in scratch mode
+//   - error: ErrNotSupported or context error
+func (n *NetworkCollector) CollectAllStats(ctx context.Context) ([]metrics.NetStats, error) {
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
+		return nil, ctx.Err()
+	}
+	// Not supported in scratch mode.
 	return nil, ErrNotSupported
 }

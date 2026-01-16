@@ -14,28 +14,39 @@ time-series queries and historical analysis.
 
 ## Key Types
 
-### MetricsStore (Port Interface)
+### Segregated Interfaces (ISP)
+
+The MetricsStore is split into focused interfaces following Interface Segregation Principle:
 
 ```go
-type MetricsStore interface {
-    // Write operations
+// MetricsWriter - for components that only write metrics
+type MetricsWriter interface {
     WriteSystemCPU(ctx context.Context, m *metrics.SystemCPU) error
     WriteSystemMemory(ctx context.Context, m *metrics.SystemMemory) error
     WriteProcessMetrics(ctx context.Context, m *metrics.ProcessMetrics) error
+}
 
-    // Time-range queries
+// MetricsReader - for components that only read metrics
+type MetricsReader interface {
     GetSystemCPU(ctx context.Context, since, until time.Time) ([]metrics.SystemCPU, error)
     GetSystemMemory(ctx context.Context, since, until time.Time) ([]metrics.SystemMemory, error)
     GetProcessMetrics(ctx context.Context, serviceName string, since, until time.Time) ([]metrics.ProcessMetrics, error)
-
-    // Latest value queries
     GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, error)
     GetLatestSystemMemory(ctx context.Context) (metrics.SystemMemory, error)
     GetLatestProcessMetrics(ctx context.Context, serviceName string) (metrics.ProcessMetrics, error)
+}
 
-    // Maintenance
+// MetricsMaintainer - for maintenance operations
+type MetricsMaintainer interface {
     Prune(ctx context.Context, olderThan time.Duration) (int, error)
     Close() error
+}
+
+// MetricsStore - composed interface for full access
+type MetricsStore interface {
+    MetricsWriter
+    MetricsReader
+    MetricsMaintainer
 }
 ```
 

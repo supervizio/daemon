@@ -9,8 +9,19 @@ import (
 	"github.com/kodflow/daemon/internal/domain/metrics"
 )
 
-// ErrNotSupported is returned when a metric is not available in scratch mode.
-var ErrNotSupported error = errors.New("metric collection not supported in scratch mode")
+// Sentinel errors for scratch metrics package.
+var (
+	// ErrNotSupported is returned when a metric is not available in scratch mode.
+	ErrNotSupported error = errors.New("metric collection not supported in scratch mode")
+	// ErrInvalidPID is returned when an invalid process ID is provided.
+	ErrInvalidPID error = errors.New("invalid process ID: must be positive")
+	// ErrEmptyPath is returned when an empty mount path is provided.
+	ErrEmptyPath error = errors.New("empty mount path")
+	// ErrEmptyDevice is returned when an empty device name is provided.
+	ErrEmptyDevice error = errors.New("empty device name")
+	// ErrEmptyInterface is returned when an empty interface name is provided.
+	ErrEmptyInterface error = errors.New("empty interface name")
+)
 
 // Probe implements metrics.SystemCollector with minimal functionality.
 // It's designed for environments where system metrics are unavailable.

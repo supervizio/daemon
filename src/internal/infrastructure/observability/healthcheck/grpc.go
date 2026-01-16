@@ -199,6 +199,7 @@ func (p *GRPCProber) handleRPCError(err error, latency time.Duration, service st
 	}
 
 	// Switch on gRPC status code.
+	//nolint:exhaustive // codes.Code has 17+ values, default handles all others
 	switch st.Code() {
 	// Handle service not found.
 	case codes.NotFound:
@@ -244,6 +245,7 @@ func (p *GRPCProber) handleHealthStatus(
 	target health.Target,
 ) health.CheckResult {
 	// Switch on health status.
+	//nolint:exhaustive // UNKNOWN handled by default case
 	switch resp.Status {
 	// Handle serving status.
 	case grpc_health_v1.HealthCheckResponse_SERVING:

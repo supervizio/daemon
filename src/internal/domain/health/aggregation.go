@@ -31,10 +31,11 @@ type AggregatedHealth struct {
 }
 
 // Listeners returns the subjects slice for backward compatibility.
-// Deprecated: Use Subjects field directly instead.
 //
 // Returns:
 //   - []SubjectStatus: the list of subject statuses.
+//
+// Deprecated: Use Subjects field directly instead.
 func (h *AggregatedHealth) Listeners() []SubjectStatus {
 	// Return subjects slice for backward compatibility.
 	return h.Subjects
@@ -65,11 +66,12 @@ func (h *AggregatedHealth) AddSubject(snapshot SubjectSnapshot) {
 }
 
 // AddListener adds a listener status (backward compatibility).
-// Deprecated: Use AddSubject instead.
 //
 // Params:
 //   - name: the listener name.
 //   - state: the subject's current state.
+//
+// Deprecated: Use AddSubject instead.
 func (h *AggregatedHealth) AddListener(name string, state SubjectState) {
 	// Append subject status using constructor.
 	h.Subjects = append(h.Subjects, NewSubjectStatusFromState(name, state))

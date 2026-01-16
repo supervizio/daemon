@@ -39,7 +39,7 @@ func InitializeApp(configPath string) (*App, error) {
 
 		// Infrastructure: Zombie reaper (conditional via ProvideReaper).
 		infrareaper.New,
-		wire.Bind(new(reaper), new(*infrareaper.Reaper)),
+		wire.Bind(new(ReaperMinimal), new(*infrareaper.Reaper)),
 
 		// Infrastructure: Process executor.
 		executor.NewWithDeps,

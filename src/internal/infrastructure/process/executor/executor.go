@@ -285,8 +285,8 @@ func (e *Executor) buildCommand(ctx context.Context, spec domain.Spec) (*exec.Cm
 		return nil, shared.ErrEmptyCommand
 	}
 
-	// Initialize args slice with command parts after executable
-	var args []string
+	// Initialize args slice with preallocated capacity
+	args := make([]string, 0, len(parts)-1+len(spec.Args))
 	args = append(args, parts[1:]...)
 	// Append additional args from spec
 	args = append(args, spec.Args...)
@@ -308,16 +308,9 @@ func (e *Executor) buildCommand(ctx context.Context, spec domain.Spec) (*exec.Cm
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	// Configure stdout if provided in spec
-	if spec.Stdout != nil {
-		// Set command stdout writer
-		cmd.Stdout = spec.Stdout
-	}
-	// Configure stderr if provided in spec
-	if spec.Stderr != nil {
-		// Set command stderr writer
-		cmd.Stderr = spec.Stderr
-	}
+	// Note: stdout/stderr are inherited from parent process by default.
+	// I/O configuration is handled at infrastructure level (e.g., logging/capture)
+	// rather than through domain Spec, following hexagonal architecture.
 
 	// Set process group for signal forwarding
 	e.process.SetProcessGroup(cmd)

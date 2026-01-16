@@ -64,6 +64,21 @@ supervisor/
 | `ErrNotRunning` | Supervisor is not running |
 | `ErrServiceNotFound` | Service not found |
 
+## Error Handling Policy
+
+Non-fatal errors in recovery paths are handled via optional `ErrorHandler` callback:
+- `SetErrorHandler(handler)` - Register callback for non-fatal errors
+- Errors during shutdown (best-effort cleanup) are reported but don't stop operation
+- Errors during reload (stop/start services) are reported but don't stop reload
+- If no handler is set, these errors are silently discarded
+
+Operations that report via ErrorHandler:
+- `stop` - Error stopping service during shutdown
+- `stop-for-reload` - Error stopping service during config reload
+- `start-for-reload` - Error starting updated service during reload
+- `start-new-service` - Error starting new service during reload
+- `stop-removed-service` - Error stopping service removed from config
+
 ## ServiceInfo Fields
 
 | Field | Description |

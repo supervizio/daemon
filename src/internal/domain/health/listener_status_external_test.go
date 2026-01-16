@@ -649,3 +649,408 @@ func TestListenerStatus_IsListening(t *testing.T) {
 		})
 	}
 }
+
+// TestSubjectStatus_EvaluateProbeResult tests EvaluateProbeResult pure function.
+func TestSubjectStatus_EvaluateProbeResult(t *testing.T) {
+	// Define test cases for purity verification.
+	tests := []struct {
+		name             string
+		initialState     health.SubjectState
+		initialSuccesses int
+		initialFailures  int
+		success          bool
+		successThreshold int
+		failureThreshold int
+	}{
+		{
+			name:             "success_with_failures",
+			initialState:     health.SubjectListening,
+			initialSuccesses: 0,
+			initialFailures:  2,
+			success:          true,
+			successThreshold: 1,
+			failureThreshold: 3,
+		},
+		{
+			name:             "failure_with_successes",
+			initialState:     health.SubjectReady,
+			initialSuccesses: 3,
+			initialFailures:  0,
+			success:          false,
+			successThreshold: 1,
+			failureThreshold: 1,
+		},
+		{
+			name:             "success_threshold_met",
+			initialState:     health.SubjectListening,
+			initialSuccesses: 2,
+			initialFailures:  0,
+			success:          true,
+			successThreshold: 3,
+			failureThreshold: 3,
+		},
+	}
+
+	// Iterate through test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create subject status with known state.
+			ss := health.NewSubjectStatusFromState("test", tt.initialState)
+			ss.ConsecutiveSuccesses = tt.initialSuccesses
+			ss.ConsecutiveFailures = tt.initialFailures
+
+			// Call pure evaluation.
+			_ = ss.EvaluateProbeResult(tt.success, tt.successThreshold, tt.failureThreshold)
+
+			// Verify no mutations occurred.
+			assert.Equal(t, tt.initialSuccesses, ss.ConsecutiveSuccesses, "EvaluateProbeResult should not mutate ConsecutiveSuccesses")
+			assert.Equal(t, tt.initialFailures, ss.ConsecutiveFailures, "EvaluateProbeResult should not mutate ConsecutiveFailures")
+			assert.Equal(t, tt.initialState, ss.State, "EvaluateProbeResult should not mutate State")
+		})
+	}
+}
+
+// TestSubjectStatus_EvaluateProbeResult_SuccessThreshold tests success threshold logic.
+func TestSubjectStatus_EvaluateProbeResult_SuccessThreshold(t *testing.T) {
+	tests := []struct {
+		name             string
+		initialSuccesses int
+		initialFailures  int
+		success          bool
+		successThreshold int
+		failureThreshold int
+		wantTransition   bool
+		wantTargetState  health.SubjectState
+		wantSuccessCount int
+		wantFailureCount int
+	}{
+		{
+			name:             "success_below_threshold",
+			initialSuccesses: 0,
+			initialFailures:  0,
+			success:          true,
+			successThreshold: 3,
+			failureThreshold: 3,
+			wantTransition:   false,
+			wantTargetState:  health.SubjectListening,
+			wantSuccessCount: 1,
+			wantFailureCount: 0,
+		},
+		{
+			name:             "success_meets_threshold",
+			initialSuccesses: 2,
+			initialFailures:  0,
+			success:          true,
+			successThreshold: 3,
+			failureThreshold: 3,
+			wantTransition:   true,
+			wantTargetState:  health.SubjectReady,
+			wantSuccessCount: 3,
+			wantFailureCount: 0,
+		},
+		{
+			name:             "success_exceeds_threshold",
+			initialSuccesses: 5,
+			initialFailures:  0,
+			success:          true,
+			successThreshold: 3,
+			failureThreshold: 3,
+			wantTransition:   true,
+			wantTargetState:  health.SubjectReady,
+			wantSuccessCount: 6,
+			wantFailureCount: 0,
+		},
+		{
+			name:             "success_resets_failures",
+			initialSuccesses: 0,
+			initialFailures:  2,
+			success:          true,
+			successThreshold: 3,
+			failureThreshold: 3,
+			wantTransition:   false,
+			wantTargetState:  health.SubjectListening,
+			wantSuccessCount: 1,
+			wantFailureCount: 0,
+		},
+	}
+
+	// Iterate through test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create subject status with initial state.
+			ss := health.NewSubjectStatusFromState("test", health.SubjectListening)
+			ss.ConsecutiveSuccesses = tt.initialSuccesses
+			ss.ConsecutiveFailures = tt.initialFailures
+
+			// Evaluate probe result.
+			eval := ss.EvaluateProbeResult(tt.success, tt.successThreshold, tt.failureThreshold)
+
+			// Verify evaluation result.
+			assert.Equal(t, tt.wantTransition, eval.ShouldTransition, "ShouldTransition mismatch")
+			assert.Equal(t, tt.wantTargetState, eval.TargetState, "TargetState mismatch")
+			assert.Equal(t, tt.wantSuccessCount, eval.NewSuccessCount, "NewSuccessCount mismatch")
+			assert.Equal(t, tt.wantFailureCount, eval.NewFailureCount, "NewFailureCount mismatch")
+		})
+	}
+}
+
+// TestSubjectStatus_EvaluateProbeResult_FailureThreshold tests failure threshold logic.
+func TestSubjectStatus_EvaluateProbeResult_FailureThreshold(t *testing.T) {
+	tests := []struct {
+		name             string
+		initialSuccesses int
+		initialFailures  int
+		success          bool
+		successThreshold int
+		failureThreshold int
+		wantTransition   bool
+		wantTargetState  health.SubjectState
+		wantSuccessCount int
+		wantFailureCount int
+	}{
+		{
+			name:             "failure_below_threshold",
+			initialSuccesses: 0,
+			initialFailures:  0,
+			success:          false,
+			successThreshold: 3,
+			failureThreshold: 3,
+			wantTransition:   false,
+			wantTargetState:  health.SubjectReady,
+			wantSuccessCount: 0,
+			wantFailureCount: 1,
+		},
+		{
+			name:             "failure_meets_threshold",
+			initialSuccesses: 0,
+			initialFailures:  2,
+			success:          false,
+			successThreshold: 3,
+			failureThreshold: 3,
+			wantTransition:   true,
+			wantTargetState:  health.SubjectListening,
+			wantSuccessCount: 0,
+			wantFailureCount: 3,
+		},
+		{
+			name:             "failure_exceeds_threshold",
+			initialSuccesses: 0,
+			initialFailures:  5,
+			success:          false,
+			successThreshold: 3,
+			failureThreshold: 3,
+			wantTransition:   true,
+			wantTargetState:  health.SubjectListening,
+			wantSuccessCount: 0,
+			wantFailureCount: 6,
+		},
+		{
+			name:             "failure_resets_successes",
+			initialSuccesses: 2,
+			initialFailures:  0,
+			success:          false,
+			successThreshold: 3,
+			failureThreshold: 3,
+			wantTransition:   false,
+			wantTargetState:  health.SubjectReady,
+			wantSuccessCount: 0,
+			wantFailureCount: 1,
+		},
+	}
+
+	// Iterate through test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create subject status with initial state.
+			ss := health.NewSubjectStatusFromState("test", health.SubjectReady)
+			ss.ConsecutiveSuccesses = tt.initialSuccesses
+			ss.ConsecutiveFailures = tt.initialFailures
+
+			// Evaluate probe result.
+			eval := ss.EvaluateProbeResult(tt.success, tt.successThreshold, tt.failureThreshold)
+
+			// Verify evaluation result.
+			assert.Equal(t, tt.wantTransition, eval.ShouldTransition, "ShouldTransition mismatch")
+			assert.Equal(t, tt.wantTargetState, eval.TargetState, "TargetState mismatch")
+			assert.Equal(t, tt.wantSuccessCount, eval.NewSuccessCount, "NewSuccessCount mismatch")
+			assert.Equal(t, tt.wantFailureCount, eval.NewFailureCount, "NewFailureCount mismatch")
+		})
+	}
+}
+
+// TestSubjectStatus_ApplyProbeEvaluation tests ApplyProbeEvaluation method.
+func TestSubjectStatus_ApplyProbeEvaluation(t *testing.T) {
+	tests := []struct {
+		name              string
+		initialState      health.SubjectState
+		eval              health.ProbeEvaluation
+		expectedState     health.SubjectState
+		expectedSuccesses int
+		expectedFailures  int
+	}{
+		{
+			name:         "apply_transition_to_ready",
+			initialState: health.SubjectListening,
+			eval: health.ProbeEvaluation{
+				ShouldTransition: true,
+				TargetState:      health.SubjectReady,
+				NewSuccessCount:  3,
+				NewFailureCount:  0,
+			},
+			expectedState:     health.SubjectReady,
+			expectedSuccesses: 3,
+			expectedFailures:  0,
+		},
+		{
+			name:         "apply_transition_to_listening",
+			initialState: health.SubjectReady,
+			eval: health.ProbeEvaluation{
+				ShouldTransition: true,
+				TargetState:      health.SubjectListening,
+				NewSuccessCount:  0,
+				NewFailureCount:  3,
+			},
+			expectedState:     health.SubjectListening,
+			expectedSuccesses: 0,
+			expectedFailures:  3,
+		},
+		{
+			name:         "apply_no_transition",
+			initialState: health.SubjectListening,
+			eval: health.ProbeEvaluation{
+				ShouldTransition: false,
+				TargetState:      health.SubjectListening,
+				NewSuccessCount:  1,
+				NewFailureCount:  0,
+			},
+			expectedState:     health.SubjectListening,
+			expectedSuccesses: 1,
+			expectedFailures:  0,
+		},
+	}
+
+	// Iterate through test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create subject status with initial state.
+			ss := health.NewSubjectStatusFromState("test", tt.initialState)
+
+			// Apply evaluation.
+			ss.ApplyProbeEvaluation(tt.eval)
+
+			// Verify final state.
+			assert.Equal(t, tt.expectedState, ss.State, "State mismatch")
+			assert.Equal(t, tt.expectedSuccesses, ss.ConsecutiveSuccesses, "ConsecutiveSuccesses mismatch")
+			assert.Equal(t, tt.expectedFailures, ss.ConsecutiveFailures, "ConsecutiveFailures mismatch")
+		})
+	}
+}
+
+// TestSubjectStatus_ResetCounters tests ResetCounters method.
+func TestSubjectStatus_ResetCounters(t *testing.T) {
+	tests := []struct {
+		name             string
+		initialSuccesses int
+		initialFailures  int
+	}{
+		{
+			name:             "reset_both_nonzero",
+			initialSuccesses: 5,
+			initialFailures:  3,
+		},
+		{
+			name:             "reset_only_successes",
+			initialSuccesses: 10,
+			initialFailures:  0,
+		},
+		{
+			name:             "reset_only_failures",
+			initialSuccesses: 0,
+			initialFailures:  7,
+		},
+		{
+			name:             "reset_already_zero",
+			initialSuccesses: 0,
+			initialFailures:  0,
+		},
+	}
+
+	// Iterate through test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create subject status with initial counters.
+			ss := health.NewSubjectStatusFromState("test", health.SubjectListening)
+			ss.ConsecutiveSuccesses = tt.initialSuccesses
+			ss.ConsecutiveFailures = tt.initialFailures
+
+			// Reset counters.
+			ss.ResetCounters()
+
+			// Verify both counters are zero.
+			assert.Equal(t, 0, ss.ConsecutiveSuccesses, "ConsecutiveSuccesses should be zero")
+			assert.Equal(t, 0, ss.ConsecutiveFailures, "ConsecutiveFailures should be zero")
+		})
+	}
+}
+
+// TestSubjectStatus_EvaluateAndApply_Integration tests the full evaluate-then-apply workflow.
+func TestSubjectStatus_EvaluateAndApply_Integration(t *testing.T) {
+	tests := []struct {
+		name              string
+		initialState      health.SubjectState
+		probeResults      []bool
+		successThreshold  int
+		failureThreshold  int
+		expectedFinalState health.SubjectState
+	}{
+		{
+			name:              "three_successes_triggers_ready",
+			initialState:      health.SubjectListening,
+			probeResults:      []bool{true, true, true},
+			successThreshold:  3,
+			failureThreshold:  3,
+			expectedFinalState: health.SubjectReady,
+		},
+		{
+			name:              "three_failures_triggers_listening",
+			initialState:      health.SubjectReady,
+			probeResults:      []bool{false, false, false},
+			successThreshold:  3,
+			failureThreshold:  3,
+			expectedFinalState: health.SubjectListening,
+		},
+		{
+			name:              "mixed_results_no_transition",
+			initialState:      health.SubjectListening,
+			probeResults:      []bool{true, true, false, true, true},
+			successThreshold:  3,
+			failureThreshold:  3,
+			expectedFinalState: health.SubjectListening,
+		},
+		{
+			name:              "recovery_after_failures",
+			initialState:      health.SubjectListening,
+			probeResults:      []bool{false, false, true, true, true},
+			successThreshold:  3,
+			failureThreshold:  3,
+			expectedFinalState: health.SubjectReady,
+		},
+	}
+
+	// Iterate through test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create subject status with initial state.
+			ss := health.NewSubjectStatusFromState("test", tt.initialState)
+
+			// Process each probe result.
+			for _, success := range tt.probeResults {
+				eval := ss.EvaluateProbeResult(success, tt.successThreshold, tt.failureThreshold)
+				ss.ApplyProbeEvaluation(eval)
+			}
+
+			// Verify final state.
+			assert.Equal(t, tt.expectedFinalState, ss.State, "Final state mismatch")
+		})
+	}
+}

@@ -25,52 +25,77 @@ func NewMemoryCollector() *MemoryCollector {
 // CollectSystem returns an error as system memory metrics are not available.
 //
 // Params:
-//   - _: context (unused in scratch mode)
+//   - ctx: context for cancellation
 //
 // Returns:
 //   - metrics.SystemMemory: zero value
-//   - error: ErrNotSupported
-func (m *MemoryCollector) CollectSystem(_ context.Context) (metrics.SystemMemory, error) {
-	// Not supported in scratch mode
+//   - error: ErrNotSupported or context error
+func (m *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemory, error) {
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
+		return metrics.SystemMemory{}, ctx.Err()
+	}
+	// Not supported in scratch mode.
 	return metrics.SystemMemory{}, ErrNotSupported
 }
 
 // CollectProcess returns an error as process memory metrics are not available.
 //
 // Params:
-//   - _: context (unused in scratch mode)
+//   - ctx: context for cancellation
 //   - _: process ID (unused in scratch mode)
 //
 // Returns:
 //   - metrics.ProcessMemory: zero value
-//   - error: ErrNotSupported
-func (m *MemoryCollector) CollectProcess(_ context.Context, _ int) (metrics.ProcessMemory, error) {
-	// Not supported in scratch mode
+//   - error: ErrNotSupported or context error
+func (m *MemoryCollector) CollectProcess(ctx context.Context, pid int) (metrics.ProcessMemory, error) {
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
+		return metrics.ProcessMemory{}, ctx.Err()
+	}
+	// Validate PID before returning not supported.
+	if pid <= 0 {
+		// Return error for invalid process ID.
+		return metrics.ProcessMemory{}, ErrInvalidPID
+	}
+	// Not supported in scratch mode.
 	return metrics.ProcessMemory{}, ErrNotSupported
 }
 
 // CollectAllProcesses returns an error as process enumeration is not available.
 //
 // Params:
-//   - _: context (unused in scratch mode)
+//   - ctx: context for cancellation
 //
 // Returns:
 //   - []metrics.ProcessMemory: nil slice
-//   - error: ErrNotSupported
-func (m *MemoryCollector) CollectAllProcesses(_ context.Context) ([]metrics.ProcessMemory, error) {
-	// Not supported in scratch mode
+//   - error: ErrNotSupported or context error
+func (m *MemoryCollector) CollectAllProcesses(ctx context.Context) ([]metrics.ProcessMemory, error) {
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
+		return nil, ctx.Err()
+	}
+	// Not supported in scratch mode.
 	return nil, ErrNotSupported
 }
 
 // CollectPressure returns an error as memory pressure metrics are not available.
 //
 // Params:
-//   - _: context (unused in scratch mode)
+//   - ctx: context for cancellation
 //
 // Returns:
 //   - metrics.MemoryPressure: zero value
-//   - error: ErrNotSupported
-func (m *MemoryCollector) CollectPressure(_ context.Context) (metrics.MemoryPressure, error) {
-	// Not supported in scratch mode
+//   - error: ErrNotSupported or context error
+func (m *MemoryCollector) CollectPressure(ctx context.Context) (metrics.MemoryPressure, error) {
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
+		return metrics.MemoryPressure{}, ctx.Err()
+	}
+	// Not supported in scratch mode.
 	return metrics.MemoryPressure{}, ErrNotSupported
 }

@@ -305,63 +305,6 @@ func Test_Executor_configureCredentials(t *testing.T) {
 	}
 }
 
-// Test_Executor_buildCommand_Stderr tests buildCommand with stderr configuration.
-//
-// Params:
-//   - t: the testing context
-//
-// Returns:
-//   - (none, test function)
-func Test_UnixExecutor_buildCommand_Stderr(t *testing.T) {
-	// Define test cases for stderr configuration.
-	tests := []struct {
-		// name is the test case name.
-		name string
-	}{
-		{name: "configures stderr writer"},
-	}
-
-	// Iterate over test cases.
-	for _, tt := range tests {
-		// Run each test case as a subtest.
-		t.Run(tt.name, func(t *testing.T) {
-			executor := New()
-			ctx := context.Background()
-
-			// Create a stderr writer
-			stderr := &mockWriter{}
-			spec := domain.Spec{
-				Command: "echo test",
-				Stderr:  stderr,
-			}
-
-			// Call the private function
-			cmd, err := executor.buildCommand(ctx, spec)
-
-			// Verify no error
-			require.NoError(t, err, "should not return error")
-			// Verify stderr is set
-			assert.Equal(t, stderr, cmd.Stderr, "stderr should be set")
-		})
-	}
-}
-
-// mockWriter is a mock implementation of io.Writer for testing.
-type mockWriter struct{}
-
-// Write implements io.Writer.
-//
-// Params:
-//   - p: bytes to write
-//
-// Returns:
-//   - int: number of bytes written
-//   - error: always nil
-func (m *mockWriter) Write(p []byte) (int, error) {
-	// Return successful write
-	return len(p), nil
-}
-
 // mockCredentialManager is a mock implementation of CredentialManager for testing.
 type mockCredentialManager struct {
 	// resolveErr is the error to return from ResolveCredentials.

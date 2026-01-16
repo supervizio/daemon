@@ -13,6 +13,19 @@ import (
 	"github.com/kodflow/daemon/internal/domain/process"
 )
 
+// subjectStatus defines the interface for subject status operations.
+// This internal interface enables interface-based programming for the updateListenerState method.
+type subjectStatus interface {
+	// ApplyProbeEvaluation applies a previously computed evaluation.
+	ApplyProbeEvaluation(eval domain.ProbeEvaluation)
+	// EvaluateProbeResult evaluates a probe result without mutating state.
+	EvaluateProbeResult(success bool, successThreshold, failureThreshold int) domain.ProbeEvaluation
+	// ResetCounters resets consecutive success and failure counts.
+	ResetCounters()
+	// SetState updates the subject state.
+	SetState(state domain.SubjectState)
+}
+
 // ProbeMonitor monitors health using the Prober interface.
 // It supports multiple listeners with different probe types and aggregates health status.
 type ProbeMonitor struct {
@@ -431,6 +444,8 @@ func (m *ProbeMonitor) normalizeThresholds(config domain.CheckConfig) (successTh
 }
 
 // updateListenerState updates listener state based on probe result and thresholds.
+// Uses the domain's pure EvaluateProbeResult to compute state changes,
+// then applies only if the Listener accepts the transition.
 //
 // Params:
 //   - lp: the listener probe.
@@ -438,38 +453,43 @@ func (m *ProbeMonitor) normalizeThresholds(config domain.CheckConfig) (successTh
 //   - result: the probe result.
 //   - successThreshold: number of successes needed.
 //   - failureThreshold: number of failures needed.
-func (m *ProbeMonitor) updateListenerState(lp *ListenerProbe, ls *domain.SubjectStatus, result domain.CheckResult, successThreshold, failureThreshold int) {
-	// Check if probe succeeded to update counters accordingly.
-	if result.Success {
-		// Probe succeeded: reset failures, increment successes.
-		ls.ConsecutiveFailures = 0
-		ls.ConsecutiveSuccesses++
+func (m *ProbeMonitor) updateListenerState(lp *ListenerProbe, ls subjectStatus, result domain.CheckResult, successThreshold, failureThreshold int) {
+	// 1. Pure evaluation - no side effects, computes what should happen.
+	eval := ls.EvaluateProbeResult(result.Success, successThreshold, failureThreshold)
 
-		// Check if success threshold met to transition to Ready.
-		if ls.ConsecutiveSuccesses >= successThreshold {
-			// Check return value to prevent state divergence.
-			if lp.Listener.MarkReady() {
-				ls.SetState(domain.SubjectReady)
-			} else {
-				// Sync state if transition failed.
-				ls.SetState(listenerStateToSubjectState(lp.Listener.State))
-			}
-		}
+	// 2. No transition needed - safe to apply counters directly.
+	if !eval.ShouldTransition {
+		ls.ApplyProbeEvaluation(eval)
+
+		// Return early when no state transition is needed.
+		return
+	}
+
+	// 3. Check if Listener accepts the transition.
+	var accepted bool
+
+	//exhaustive:ignore
+	switch eval.TargetState {
+	// Handle transition to Ready state.
+	case domain.SubjectReady:
+		accepted = lp.Listener.MarkReady()
+	// Handle transition to Listening state.
+	case domain.SubjectListening:
+		accepted = lp.Listener.MarkListening()
+	// Handle invalid transition targets for listeners.
+	case domain.SubjectUnknown, domain.SubjectClosed, domain.SubjectRunning, domain.SubjectStopped, domain.SubjectFailed:
+		// These states are not valid transition targets for listeners.
+		accepted = false
+	}
+
+	// 4. Apply evaluation only if Listener accepted the transition.
+	if accepted {
+		ls.ApplyProbeEvaluation(eval)
 	} else {
-		// Probe failed: reset successes, increment failures.
-		ls.ConsecutiveSuccesses = 0
-		ls.ConsecutiveFailures++
-
-		// Check if failure threshold met to transition to Listening.
-		if ls.ConsecutiveFailures >= failureThreshold {
-			// Check return value to prevent state divergence.
-			if lp.Listener.MarkListening() {
-				ls.SetState(domain.SubjectListening)
-			} else {
-				// Sync state if transition failed.
-				ls.SetState(listenerStateToSubjectState(lp.Listener.State))
-			}
-		}
+		// Listener refused - sync SubjectStatus with Listener's actual state.
+		ls.SetState(listenerStateToSubjectState(lp.Listener.State))
+		// Reset counters to avoid drift between domain and listener state.
+		ls.ResetCounters()
 	}
 }
 

@@ -104,12 +104,95 @@ func (ss *SubjectStatus) IsListening() bool {
 	return ss.State.IsListening()
 }
 
+// EvaluateProbeResult evaluates a probe result WITHOUT mutating state.
+// This is a PURE function - it only computes what should happen.
+// Call ApplyProbeEvaluation to apply the result after confirming
+// that any external state (e.g., Listener) accepts the transition.
+//
+// Params:
+//   - success: whether the probe succeeded.
+//   - successThreshold: consecutive successes needed for Ready.
+//   - failureThreshold: consecutive failures needed for Listening.
+//
+// Returns:
+//   - ProbeEvaluation: computed next state and counters.
+func (ss *SubjectStatus) EvaluateProbeResult(success bool, successThreshold, failureThreshold int) ProbeEvaluation {
+	// Get current counter values.
+	currentSuccesses := ss.ConsecutiveSuccesses
+	currentFailures := ss.ConsecutiveFailures
+
+	// Handle success case.
+	if success {
+		newSuccesses := currentSuccesses + 1
+		// Check if threshold met for Ready transition.
+		if newSuccesses >= successThreshold {
+			// Return evaluation with transition to Ready state.
+			return ProbeEvaluation{
+				ShouldTransition: true,
+				TargetState:      SubjectReady,
+				NewSuccessCount:  newSuccesses,
+				NewFailureCount:  0,
+			}
+		}
+		// Return evaluation without transition, just update counters.
+		return ProbeEvaluation{
+			ShouldTransition: false,
+			TargetState:      ss.State,
+			NewSuccessCount:  newSuccesses,
+			NewFailureCount:  0,
+		}
+	}
+
+	// Handle failure case.
+	newFailures := currentFailures + 1
+	// Check if threshold met for Listening transition.
+	if newFailures >= failureThreshold {
+		// Return evaluation with transition to Listening state.
+		return ProbeEvaluation{
+			ShouldTransition: true,
+			TargetState:      SubjectListening,
+			NewSuccessCount:  0,
+			NewFailureCount:  newFailures,
+		}
+	}
+	// Return evaluation without transition, just update counters.
+	return ProbeEvaluation{
+		ShouldTransition: false,
+		TargetState:      ss.State,
+		NewSuccessCount:  0,
+		NewFailureCount:  newFailures,
+	}
+}
+
+// ApplyProbeEvaluation applies a previously computed evaluation.
+// Call this ONLY after confirming any external state accepts the transition.
+// This maintains consistency between SubjectStatus and external state.
+//
+// Params:
+//   - eval: the evaluation result from EvaluateProbeResult.
+func (ss *SubjectStatus) ApplyProbeEvaluation(eval ProbeEvaluation) {
+	// Update counters from evaluation.
+	ss.ConsecutiveSuccesses = eval.NewSuccessCount
+	ss.ConsecutiveFailures = eval.NewFailureCount
+	// Apply state transition if warranted.
+	if eval.ShouldTransition {
+		ss.State = eval.TargetState
+	}
+}
+
+// ResetCounters resets both consecutive success and failure counts to zero.
+// Use this when external state rejects a transition to avoid counter drift.
+func (ss *SubjectStatus) ResetCounters() {
+	ss.ConsecutiveSuccesses = 0
+	ss.ConsecutiveFailures = 0
+}
+
 // ListenerStatus is an alias for SubjectStatus for backward compatibility.
+//
 // Deprecated: Use SubjectStatus instead.
 type ListenerStatus = SubjectStatus
 
 // NewListenerStatus creates a new listener status (backward compatibility).
-// Deprecated: Use NewSubjectStatusFromState instead.
 //
 // Params:
 //   - name: the listener name.
@@ -117,6 +200,8 @@ type ListenerStatus = SubjectStatus
 //
 // Returns:
 //   - SubjectStatus: a new subject status for the listener.
+//
+// Deprecated: Use NewSubjectStatusFromState instead.
 func NewListenerStatus(name string, state SubjectState) SubjectStatus {
 	// Delegate to new function.
 	return NewSubjectStatusFromState(name, state)

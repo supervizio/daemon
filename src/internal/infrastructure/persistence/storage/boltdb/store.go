@@ -429,8 +429,6 @@ func (s *Store) GetProcessMetrics(ctx context.Context, serviceName string, since
 // Returns:
 //   - metrics.SystemCPU: most recent CPU metrics
 //   - error: context cancellation, database errors, or not found
-//
-//nolint:dupl // Intentional type-specific implementation for SystemCPU
 func (s *Store) GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, error) {
 	// Check if context is already cancelled
 	if err := ctx.Err(); err != nil {
@@ -484,8 +482,6 @@ func (s *Store) GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, erro
 // Returns:
 //   - metrics.SystemMemory: most recent memory metrics
 //   - error: context cancellation, database errors, or not found
-//
-//nolint:dupl // Intentional type-specific implementation for SystemMemory
 func (s *Store) GetLatestSystemMemory(ctx context.Context) (metrics.SystemMemory, error) {
 	// Check if context is already cancelled
 	if err := ctx.Err(); err != nil {

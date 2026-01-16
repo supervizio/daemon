@@ -82,7 +82,6 @@ exclude:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 rules:
-
   # ─────────────────────────────────────────────────────────────────────────────
   # API Rules (1 rules)
   # ─────────────────────────────────────────────────────────────────────────────
@@ -91,7 +90,6 @@ rules:
   # use consumer-side minimal interfaces for external dependencies
   KTN-API-MINIF:
     enabled: true
-
 
   # ─────────────────────────────────────────────────────────────────────────────
   # COMMENT Rules (7 rules)
@@ -145,7 +143,6 @@ rules:
     enabled: true
     # skip_test_files: true  # (default)
 
-
   # ─────────────────────────────────────────────────────────────────────────────
   # CONST Rules (6 rules)
   # ─────────────────────────────────────────────────────────────────────────────
@@ -181,7 +178,6 @@ rules:
   # Checks that constants have an explicit type
   KTN-CONST-TYPED:
     enabled: true
-
 
   # ─────────────────────────────────────────────────────────────────────────────
   # FUNC Rules (19 rules)
@@ -300,7 +296,6 @@ rules:
   KTN-FUNC-USECLEAR:
     enabled: true
 
-
   # ─────────────────────────────────────────────────────────────────────────────
   # GENERIC Rules (5 rules)
   # ─────────────────────────────────────────────────────────────────────────────
@@ -330,7 +325,6 @@ rules:
   KTN-GENERIC-USECMP:
     enabled: true
 
-
   # ─────────────────────────────────────────────────────────────────────────────
   # GOROUTINE Rules (2 rules)
   # ─────────────────────────────────────────────────────────────────────────────
@@ -344,7 +338,6 @@ rules:
   # document goroutine lifecycle
   KTN-GOROUTINE-LIFECYCLE:
     enabled: true
-
 
   # ─────────────────────────────────────────────────────────────────────────────
   # GOVET Rules (25 rules)
@@ -475,7 +468,6 @@ rules:
   KTN-GOVET-WAITGROUP:
     enabled: true
 
-
   # ─────────────────────────────────────────────────────────────────────────────
   # INTERFACE Rules (3 rules)
   # ─────────────────────────────────────────────────────────────────────────────
@@ -494,7 +486,6 @@ rules:
   # unused private interface
   KTN-INTERFACE-UNUSED:
     enabled: true
-
 
   # ─────────────────────────────────────────────────────────────────────────────
   # ITER Rules (5 rules)
@@ -525,7 +516,6 @@ rules:
   KTN-ITER-YIELD:
     enabled: true
 
-
   # ─────────────────────────────────────────────────────────────────────────────
   # RECEIVER Rules (4 rules)
   # ─────────────────────────────────────────────────────────────────────────────
@@ -549,7 +539,6 @@ rules:
   # unnecessary pointer to map/func/chan
   KTN-RECEIVER-PTRMAP:
     enabled: true
-
 
   # ─────────────────────────────────────────────────────────────────────────────
   # STRUCT Rules (9 rules)
@@ -601,7 +590,6 @@ rules:
   # Receiver type must be consistent (pointer or value)
   KTN-STRUCT-RECVTYPE:
     enabled: true
-
 
   # ─────────────────────────────────────────────────────────────────────────────
   # TEST Rules (20 rules)
@@ -706,7 +694,6 @@ rules:
   # Use t.TempDir() instead of empty string in os.CreateTemp
   KTN-TEST-TMPFILE:
     enabled: true
-
 
   # ─────────────────────────────────────────────────────────────────────────────
   # VAR Rules (36 rules)
@@ -922,4 +909,3 @@ rules:
   # Detects wg.Add(1)+go func()+defer wg.Done() - use wg.Go() (Go 1.25+)
   KTN-VAR-WGGO:
     enabled: true
-

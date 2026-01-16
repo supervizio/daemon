@@ -2,19 +2,21 @@ module github.com/kodflow/daemon
 
 go 1.25.5
 
-require gopkg.in/yaml.v3 v3.0.1
+require (
+	github.com/google/wire v0.7.0
+	go.etcd.io/bbolt v1.4.3
+	google.golang.org/grpc v1.78.0
+	google.golang.org/protobuf v1.36.11
+	gopkg.in/yaml.v3 v3.0.1
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/google/wire v0.7.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	go.etcd.io/bbolt v1.4.3 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda // indirect
-	google.golang.org/grpc v1.78.0 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 )
 
 require github.com/stretchr/testify v1.10.0 // test

@@ -17,8 +17,6 @@ const (
 	eventBufferSize int = 16
 	// defaultStopTimeout defines the default timeout for stopping processes.
 	defaultStopTimeout time.Duration = 30 * time.Second
-	// maxRestartsForBackoff defines the max restarts before backoff ceiling.
-	maxRestartsForBackoff int = 30
 )
 
 // Manager manages the lifecycle of a single process with restart policies.
@@ -280,6 +278,9 @@ func (m *Manager) startProcess() error {
 }
 
 // waitForProcessOrShutdown waits for process exit or shutdown signal.
+// Stop errors during shutdown are intentionally discarded (best-effort cleanup).
+// The process will be terminated when the parent exits regardless.
+// A Failed event has already been sent if the process crashed.
 //
 // Returns:
 //   - bool: true if shutdown requested, false if process exited.
@@ -290,7 +291,7 @@ func (m *Manager) waitForProcessOrShutdown() bool {
 		m.mu.Lock()
 		pid := m.pid
 		m.mu.Unlock()
-		// Stop process if running.
+		// Stop process if running (best-effort, errors discarded during shutdown).
 		if pid > 0 {
 			_ = m.executor.Stop(pid, defaultStopTimeout)
 		}
