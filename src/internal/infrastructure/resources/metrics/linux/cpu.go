@@ -127,12 +127,10 @@ func NewCPUCollectorWithPath(procPath string) *CPUCollector {
 //   - metrics.SystemCPU: system-wide CPU metrics
 //   - error: error if collection fails
 func (c *CPUCollector) CollectSystem(ctx context.Context) (metrics.SystemCPU, error) {
-	// Check if context is already cancelled before proceeding
-	select {
-	case <-ctx.Done():
-		// Return context error if cancelled
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
 		return metrics.SystemCPU{}, ctx.Err()
-	default:
 	}
 
 	// Open /proc/stat file for reading
@@ -225,17 +223,15 @@ func (c *CPUCollector) parseCPULine(line string) (metrics.SystemCPU, error) {
 //   - metrics.ProcessCPU: process CPU metrics
 //   - error: error if collection fails
 func (c *CPUCollector) CollectProcess(ctx context.Context, pid int) (metrics.ProcessCPU, error) {
-	// Check if context is already cancelled before proceeding
-	select {
-	case <-ctx.Done():
-		// Return context error if cancelled
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
 		return metrics.ProcessCPU{}, ctx.Err()
-	default:
 	}
 
-	// Validate PID is positive
+	// Validate PID before proceeding.
 	if pid <= 0 {
-		// Return error for invalid PID
+		// Return error for invalid process ID.
 		return metrics.ProcessCPU{}, fmt.Errorf("%w: %d", ErrInvalidPID, pid)
 	}
 
@@ -319,12 +315,10 @@ func (c *CPUCollector) parseProcessStat(pid int, data string) (metrics.ProcessCP
 //   - []metrics.ProcessCPU: slice of process CPU metrics
 //   - error: error if collection fails
 func (c *CPUCollector) CollectAllProcesses(ctx context.Context) ([]metrics.ProcessCPU, error) {
-	// Check if context is already cancelled before proceeding
-	select {
-	case <-ctx.Done():
-		// Return context error if cancelled
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
 		return nil, ctx.Err()
-	default:
 	}
 
 	// Read /proc directory to enumerate processes
@@ -352,12 +346,10 @@ func (c *CPUCollector) collectFromEntries(ctx context.Context, entries []os.DirE
 	results := make([]metrics.ProcessCPU, 0, len(entries))
 	// Iterate through all entries in /proc
 	for _, entry := range entries {
-		// Check for context cancellation to allow early abort
-		select {
-		case <-ctx.Done():
-			// Return context error if cancelled during iteration
+		// Check for context cancellation to allow early abort.
+		if ctx.Err() != nil {
+			// Return context error when cancelled during iteration.
 			return nil, ctx.Err()
-		default:
 		}
 
 		// Skip non-directory entries

@@ -77,12 +77,10 @@ func NewMemoryCollectorWithPath(procPath string) *MemoryCollector {
 //   - metrics.SystemMemory: current system memory statistics
 //   - error: context cancellation or filesystem errors
 func (c *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemory, error) {
-	// Check for context cancellation before expensive operations.
-	select {
-	case <-ctx.Done():
-		// Context was cancelled, abort collection.
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
 		return metrics.SystemMemory{}, ctx.Err()
-	default:
 	}
 
 	// Parse meminfo file into key-value map.
@@ -222,17 +220,15 @@ func (c *MemoryCollector) parseMemInfoLine(line string) (key string, value uint6
 //   - metrics.ProcessMemory: process memory statistics
 //   - error: invalid PID, context cancellation, or filesystem errors
 func (c *MemoryCollector) CollectProcess(ctx context.Context, pid int) (metrics.ProcessMemory, error) {
-	// Check for context cancellation before expensive operations.
-	select {
-	case <-ctx.Done():
-		// Context was cancelled, abort collection.
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
 		return metrics.ProcessMemory{}, ctx.Err()
-	default:
 	}
 
-	// Validate PID range.
+	// Validate PID before proceeding.
 	if pid <= 0 {
-		// Invalid PID, must be positive integer (no underlying error to wrap).
+		// Return error for invalid process ID.
 		return metrics.ProcessMemory{}, NewInvalidPIDError(pid)
 	}
 
@@ -377,12 +373,10 @@ func (c *MemoryCollector) parseStatusLine(line string) (key string, value uint64
 //   - []metrics.ProcessMemory: memory metrics for all processes
 //   - error: context cancellation or filesystem errors
 func (c *MemoryCollector) CollectAllProcesses(ctx context.Context) ([]metrics.ProcessMemory, error) {
-	// Check for context cancellation before expensive operations.
-	select {
-	case <-ctx.Done():
-		// Context was cancelled, abort collection.
+	// Respect context cancellation.
+	if ctx.Err() != nil {
+		// Return context error when cancelled.
 		return nil, ctx.Err()
-	default:
 	}
 
 	// Get total system memory for percentage calculation.
@@ -425,11 +419,9 @@ func (c *MemoryCollector) collectProcessesFromEntries(
 	// Iterate through all /proc entries.
 	for _, entry := range entries {
 		// Check for context cancellation to allow early abort.
-		select {
-		case <-ctx.Done():
-			// Context was cancelled, stop iteration.
+		if ctx.Err() != nil {
+			// Return context error when cancelled during iteration.
 			return nil, ctx.Err()
-		default:
 		}
 
 		proc, ok := c.tryCollectProcessEntry(ctx, entry, totalMemory)

@@ -44,11 +44,11 @@ func (m *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemo
 //
 // Params:
 //   - ctx: context for cancellation
-//   - _: process ID (unused in scratch mode)
+//   - pid: process ID to collect for
 //
 // Returns:
-//   - metrics.ProcessMemory: zero value
-//   - error: ErrNotSupported or context error
+//   - metrics.ProcessMemory: zero value with PID set for context
+//   - error: ErrNotSupported, ErrInvalidPID, or context error
 func (m *MemoryCollector) CollectProcess(ctx context.Context, pid int) (metrics.ProcessMemory, error) {
 	// Respect context cancellation.
 	if ctx.Err() != nil {
@@ -60,8 +60,8 @@ func (m *MemoryCollector) CollectProcess(ctx context.Context, pid int) (metrics.
 		// Return error for invalid process ID.
 		return metrics.ProcessMemory{}, ErrInvalidPID
 	}
-	// Not supported in scratch mode.
-	return metrics.ProcessMemory{}, ErrNotSupported
+	// Not supported in scratch mode, return PID for context.
+	return metrics.ProcessMemory{PID: pid}, ErrNotSupported
 }
 
 // CollectAllProcesses returns an error as process enumeration is not available.

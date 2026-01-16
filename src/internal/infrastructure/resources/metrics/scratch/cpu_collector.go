@@ -44,11 +44,11 @@ func (c *CPUCollector) CollectSystem(ctx context.Context) (metrics.SystemCPU, er
 //
 // Params:
 //   - ctx: context for cancellation
-//   - _: process ID (unused in scratch mode)
+//   - pid: process ID to collect for
 //
 // Returns:
-//   - metrics.ProcessCPU: zero value
-//   - error: ErrNotSupported or context error
+//   - metrics.ProcessCPU: zero value with PID set for context
+//   - error: ErrNotSupported, ErrInvalidPID, or context error
 func (c *CPUCollector) CollectProcess(ctx context.Context, pid int) (metrics.ProcessCPU, error) {
 	// Respect context cancellation.
 	if ctx.Err() != nil {
@@ -60,8 +60,8 @@ func (c *CPUCollector) CollectProcess(ctx context.Context, pid int) (metrics.Pro
 		// Return error for invalid process ID.
 		return metrics.ProcessCPU{}, ErrInvalidPID
 	}
-	// Not supported in scratch mode.
-	return metrics.ProcessCPU{}, ErrNotSupported
+	// Not supported in scratch mode, return PID for context.
+	return metrics.ProcessCPU{PID: pid}, ErrNotSupported
 }
 
 // CollectAllProcesses returns an error as process enumeration is not available.

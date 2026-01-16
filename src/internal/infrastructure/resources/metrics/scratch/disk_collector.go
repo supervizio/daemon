@@ -44,24 +44,24 @@ func (d *DiskCollector) ListPartitions(ctx context.Context) ([]metrics.Partition
 //
 // Params:
 //   - ctx: context for cancellation
-//   - _: mount path (unused in scratch mode)
+//   - path: mount path to collect usage for
 //
 // Returns:
-//   - metrics.DiskUsage: zero value
-//   - error: ErrNotSupported or context error
-func (d *DiskCollector) CollectUsage(ctx context.Context, mountPath string) (metrics.DiskUsage, error) {
+//   - metrics.DiskUsage: zero value with Path set for context
+//   - error: ErrNotSupported, ErrEmptyPath, or context error
+func (d *DiskCollector) CollectUsage(ctx context.Context, path string) (metrics.DiskUsage, error) {
 	// Respect context cancellation.
 	if ctx.Err() != nil {
 		// Return context error when cancelled.
 		return metrics.DiskUsage{}, ctx.Err()
 	}
-	// Validate mount path before returning not supported.
-	if mountPath == "" {
+	// Validate path before returning not supported.
+	if path == "" {
 		// Return error for empty mount path.
 		return metrics.DiskUsage{}, ErrEmptyPath
 	}
-	// Not supported in scratch mode.
-	return metrics.DiskUsage{}, ErrNotSupported
+	// Not supported in scratch mode, return path for context.
+	return metrics.DiskUsage{Path: path}, ErrNotSupported
 }
 
 // CollectAllUsage returns an error as disk enumeration is not available.
@@ -104,22 +104,22 @@ func (d *DiskCollector) CollectIO(ctx context.Context) ([]metrics.DiskIOStats, e
 //
 // Params:
 //   - ctx: context for cancellation
-//   - _: device name (unused in scratch mode)
+//   - device: device name to collect I/O for
 //
 // Returns:
-//   - metrics.DiskIOStats: zero value
-//   - error: ErrNotSupported or context error
-func (d *DiskCollector) CollectDeviceIO(ctx context.Context, deviceName string) (metrics.DiskIOStats, error) {
+//   - metrics.DiskIOStats: zero value with Device set for context
+//   - error: ErrNotSupported, ErrEmptyDevice, or context error
+func (d *DiskCollector) CollectDeviceIO(ctx context.Context, device string) (metrics.DiskIOStats, error) {
 	// Respect context cancellation.
 	if ctx.Err() != nil {
 		// Return context error when cancelled.
 		return metrics.DiskIOStats{}, ctx.Err()
 	}
 	// Validate device name before returning not supported.
-	if deviceName == "" {
+	if device == "" {
 		// Return error for empty device name.
 		return metrics.DiskIOStats{}, ErrEmptyDevice
 	}
-	// Not supported in scratch mode.
-	return metrics.DiskIOStats{}, ErrNotSupported
+	// Not supported in scratch mode, return device for context.
+	return metrics.DiskIOStats{Device: device}, ErrNotSupported
 }

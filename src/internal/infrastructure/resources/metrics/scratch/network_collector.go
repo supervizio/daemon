@@ -44,24 +44,24 @@ func (n *NetworkCollector) ListInterfaces(ctx context.Context) ([]metrics.NetInt
 //
 // Params:
 //   - ctx: context for cancellation
-//   - _: interface name (unused in scratch mode)
+//   - iface: interface name to collect stats for
 //
 // Returns:
-//   - metrics.NetStats: zero value
-//   - error: ErrNotSupported or context error
-func (n *NetworkCollector) CollectStats(ctx context.Context, ifaceName string) (metrics.NetStats, error) {
+//   - metrics.NetStats: zero value with Interface set for context
+//   - error: ErrNotSupported, ErrEmptyInterface, or context error
+func (n *NetworkCollector) CollectStats(ctx context.Context, iface string) (metrics.NetStats, error) {
 	// Respect context cancellation.
 	if ctx.Err() != nil {
 		// Return context error when cancelled.
 		return metrics.NetStats{}, ctx.Err()
 	}
 	// Validate interface name before returning not supported.
-	if ifaceName == "" {
+	if iface == "" {
 		// Return error for empty interface name.
 		return metrics.NetStats{}, ErrEmptyInterface
 	}
-	// Not supported in scratch mode.
-	return metrics.NetStats{}, ErrNotSupported
+	// Not supported in scratch mode, return interface for context.
+	return metrics.NetStats{Interface: iface}, ErrNotSupported
 }
 
 // CollectAllStats returns an error as interface enumeration is not available.
