@@ -184,6 +184,122 @@ func TestIsContainerized(t *testing.T) {
 	}
 }
 
+// mockFileSystem implements cgroup.FileSystem for testing.
+type mockFileSystem struct {
+	statFunc     func(name string) (os.FileInfo, error)
+	readFileFunc func(name string) ([]byte, error)
+}
+
+// Stat returns file info using the mock function.
+func (m *mockFileSystem) Stat(name string) (os.FileInfo, error) {
+	return m.statFunc(name)
+}
+
+// ReadFile reads file contents using the mock function.
+func (m *mockFileSystem) ReadFile(name string) ([]byte, error) {
+	return m.readFileFunc(name)
+}
+
+// TestIsContainerizedWithFS tests the IsContainerizedWithFS function with injected filesystem.
+//
+// Params:
+//   - t: the testing context.
+func TestIsContainerizedWithFS(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		dockerenvErr  error
+		cgroupContent string
+		cgroupErr     error
+		want          bool
+	}{
+		{
+			name:         "detects_docker_via_dockerenv",
+			dockerenvErr: nil, // File exists
+			want:         true,
+		},
+		{
+			name:          "detects_docker_via_cgroup",
+			dockerenvErr:  os.ErrNotExist,
+			cgroupContent: "12:memory:/docker/abc123def456\n",
+			want:          true,
+		},
+		{
+			name:          "detects_kubernetes_via_cgroup",
+			dockerenvErr:  os.ErrNotExist,
+			cgroupContent: "12:memory:/kubepods/burstable/pod-abc123\n",
+			want:          true,
+		},
+		{
+			name:          "detects_lxc_via_cgroup",
+			dockerenvErr:  os.ErrNotExist,
+			cgroupContent: "12:memory:/lxc/container-123\n",
+			want:          true,
+		},
+		{
+			name:          "detects_containerd_via_cgroup",
+			dockerenvErr:  os.ErrNotExist,
+			cgroupContent: "0::/containerd/abc123\n",
+			want:          true,
+		},
+		{
+			name:          "not_containerized_no_markers",
+			dockerenvErr:  os.ErrNotExist,
+			cgroupContent: "12:memory:/user.slice/user-1000.slice\n",
+			want:          false,
+		},
+		{
+			name:          "not_containerized_empty_cgroup",
+			dockerenvErr:  os.ErrNotExist,
+			cgroupContent: "",
+			want:          false,
+		},
+		{
+			name:         "not_containerized_cgroup_read_error",
+			dockerenvErr: os.ErrNotExist,
+			cgroupErr:    os.ErrPermission,
+			want:         false,
+		},
+	}
+
+	// Iterate through test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Create mock filesystem with test case behavior.
+			fs := &mockFileSystem{
+				statFunc: func(name string) (os.FileInfo, error) {
+					if name == "/.dockerenv" {
+						if tt.dockerenvErr != nil {
+							return nil, tt.dockerenvErr
+						}
+						// Return a mock FileInfo (nil is acceptable for existence check).
+						return nil, nil
+					}
+					return nil, os.ErrNotExist
+				},
+				readFileFunc: func(name string) ([]byte, error) {
+					if name == "/proc/1/cgroup" {
+						if tt.cgroupErr != nil {
+							return nil, tt.cgroupErr
+						}
+						return []byte(tt.cgroupContent), nil
+					}
+					return nil, os.ErrNotExist
+				},
+			}
+
+			// Call IsContainerizedWithFS with mock.
+			result := cgroup.IsContainerizedWithFS(fs)
+
+			// Verify expected result.
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}
+
 // TestNewReader tests the NewReader function.
 //
 // Params:

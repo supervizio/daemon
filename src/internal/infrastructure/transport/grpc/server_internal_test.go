@@ -30,17 +30,25 @@ func (m *mockMetricsProvider) GetProcessMetrics(_ string) (metrics.ProcessMetric
 }
 
 // mockMetricsProviderFailAfter fails after N successful calls.
+// Uses a call log slice to track invocations without direct increment in getter.
 type mockMetricsProviderFailAfter struct {
 	processMetrics    metrics.ProcessMetrics
 	allProcessMetrics []metrics.ProcessMetrics
 	failAfter         int
-	callCount         int
+	callLog           []time.Time
 	err               error
 }
 
+// trackCall records a call timestamp and returns the current count.
+func (m *mockMetricsProviderFailAfter) trackCall() int {
+	m.callLog = append(m.callLog, time.Now())
+	return len(m.callLog)
+}
+
 func (m *mockMetricsProviderFailAfter) GetProcessMetrics(_ string) (metrics.ProcessMetrics, error) {
-	m.callCount++
-	if m.callCount > m.failAfter {
+	// Track this call and check if should fail.
+	callCount := m.trackCall()
+	if callCount > m.failAfter {
 		return metrics.ProcessMetrics{}, m.err
 	}
 	return m.processMetrics, nil
@@ -680,239 +688,236 @@ func Test_Server_convertKubernetesInfo(t *testing.T) {
 	}
 }
 
-// Test_Server_GetState_nilRequest verifies GetState handles nil request gracefully.
+// Test_Server_RequestHandling verifies request handling edge cases for all endpoints.
 //
 // Params:
 //   - t: testing context for assertions
-func Test_Server_GetState_nilRequest(t *testing.T) {
+func Test_Server_RequestHandling(t *testing.T) {
 	t.Parallel()
 
-	metricsProvider := &mockMetricsProvider{}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	result, err := server.GetState(context.Background(), nil)
-
-	assert.NoError(t, err)
-	assert.Nil(t, result)
-}
-
-// Test_Server_GetState_cancelledContext verifies GetState handles cancelled context.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_GetState_cancelledContext(t *testing.T) {
-	t.Parallel()
-
-	metricsProvider := &mockMetricsProvider{}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	_, err := server.GetState(ctx, &emptypb.Empty{})
-
-	// Context error is returned when context is cancelled
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, context.Canceled)
-}
-
-// Test_Server_ListProcesses_nilRequest verifies ListProcesses handles nil request gracefully.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_ListProcesses_nilRequest(t *testing.T) {
-	t.Parallel()
-
-	metricsProvider := &mockMetricsProvider{
-		allProcessMetrics: []metrics.ProcessMetrics{
-			{ServiceName: "test-service", PID: 1234},
+	tests := []struct {
+		name            string
+		endpoint        string
+		testType        string
+		metricsProvider *mockMetricsProvider
+		stateProvider   *mockGetStator
+		wantErr         bool
+		wantNilResult   bool
+		errorContains   string
+	}{
+		{
+			name:            "GetState_nilRequest",
+			endpoint:        "GetState",
+			testType:        "nil",
+			metricsProvider: &mockMetricsProvider{},
+			stateProvider:   &mockGetStator{},
+			wantErr:         false,
+			wantNilResult:   true,
 		},
-	}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	result, err := server.ListProcesses(context.Background(), nil)
-
-	assert.NoError(t, err)
-	assert.Nil(t, result)
-}
-
-// Test_Server_ListProcesses_cancelledContext verifies ListProcesses handles cancelled context.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_ListProcesses_cancelledContext(t *testing.T) {
-	t.Parallel()
-
-	metricsProvider := &mockMetricsProvider{
-		allProcessMetrics: []metrics.ProcessMetrics{
-			{ServiceName: "test-service", PID: 1234},
+		{
+			name:            "GetState_cancelledContext",
+			endpoint:        "GetState",
+			testType:        "cancelled",
+			metricsProvider: &mockMetricsProvider{},
+			stateProvider:   &mockGetStator{},
+			wantErr:         true,
 		},
-	}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	_, err := server.ListProcesses(ctx, &emptypb.Empty{})
-
-	// Context error is returned when context is cancelled
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, context.Canceled)
-}
-
-// Test_Server_GetSystemMetrics_nilRequest verifies GetSystemMetrics handles nil request gracefully.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_GetSystemMetrics_nilRequest(t *testing.T) {
-	t.Parallel()
-
-	metricsProvider := &mockMetricsProvider{}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	result, err := server.GetSystemMetrics(context.Background(), nil)
-
-	assert.NoError(t, err)
-	assert.Nil(t, result)
-}
-
-// Test_Server_GetSystemMetrics_cancelledContext verifies GetSystemMetrics handles cancelled context.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_GetSystemMetrics_cancelledContext(t *testing.T) {
-	t.Parallel()
-
-	metricsProvider := &mockMetricsProvider{}
-	stateProvider := &mockGetStator{
-		state: lifecycle.DaemonState{
-			System: lifecycle.SystemState{
-				CPU:    metrics.SystemCPU{User: 100},
-				Memory: metrics.SystemMemory{Total: 1024},
+		{
+			name:     "ListProcesses_nilRequest",
+			endpoint: "ListProcesses",
+			testType: "nil",
+			metricsProvider: &mockMetricsProvider{
+				allProcessMetrics: []metrics.ProcessMetrics{
+					{ServiceName: "test-service", PID: 1234},
+				},
 			},
+			stateProvider: &mockGetStator{},
+			wantErr:       false,
+			wantNilResult: true,
+		},
+		{
+			name:     "ListProcesses_cancelledContext",
+			endpoint: "ListProcesses",
+			testType: "cancelled",
+			metricsProvider: &mockMetricsProvider{
+				allProcessMetrics: []metrics.ProcessMetrics{
+					{ServiceName: "test-service", PID: 1234},
+				},
+			},
+			stateProvider: &mockGetStator{},
+			wantErr:       true,
+		},
+		{
+			name:            "GetSystemMetrics_nilRequest",
+			endpoint:        "GetSystemMetrics",
+			testType:        "nil",
+			metricsProvider: &mockMetricsProvider{},
+			stateProvider:   &mockGetStator{},
+			wantErr:         false,
+			wantNilResult:   true,
+		},
+		{
+			name:            "GetSystemMetrics_cancelledContext",
+			endpoint:        "GetSystemMetrics",
+			testType:        "cancelled",
+			metricsProvider: &mockMetricsProvider{},
+			stateProvider: &mockGetStator{
+				state: lifecycle.DaemonState{
+					System: lifecycle.SystemState{
+						CPU:    metrics.SystemCPU{User: 100},
+						Memory: metrics.SystemMemory{Total: 1024},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:     "GetProcess_error",
+			endpoint: "GetProcess",
+			testType: "error",
+			metricsProvider: &mockMetricsProvider{
+				err: errors.New("process not found"),
+			},
+			stateProvider: &mockGetStator{},
+			wantErr:       true,
+			errorContains: "process not found",
+		},
+		{
+			name:            "GetProcess_cancelledContext",
+			endpoint:        "GetProcess",
+			testType:        "cancelled",
+			metricsProvider: &mockMetricsProvider{},
+			stateProvider:   &mockGetStator{},
+			wantErr:         true,
 		},
 	}
-	server := NewServer(metricsProvider, stateProvider)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	_, err := server.GetSystemMetrics(ctx, &emptypb.Empty{})
+			server := NewServer(tt.metricsProvider, tt.stateProvider)
 
-	// Context error is returned when context is cancelled
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, context.Canceled)
-}
+			var err error
+			var result any
+			ctx := context.Background()
 
-// Test_Server_GetProcess_error verifies GetProcess handles errors from provider.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_GetProcess_error(t *testing.T) {
-	t.Parallel()
+			if tt.testType == "cancelled" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(context.Background())
+				cancel()
+			}
 
-	metricsProvider := &mockMetricsProvider{
-		err: errors.New("process not found"),
+			switch tt.endpoint {
+			case "GetState":
+				if tt.testType == "nil" {
+					result, err = server.GetState(ctx, nil)
+				} else {
+					result, err = server.GetState(ctx, &emptypb.Empty{})
+				}
+			case "ListProcesses":
+				if tt.testType == "nil" {
+					result, err = server.ListProcesses(ctx, nil)
+				} else {
+					result, err = server.ListProcesses(ctx, &emptypb.Empty{})
+				}
+			case "GetSystemMetrics":
+				if tt.testType == "nil" {
+					result, err = server.GetSystemMetrics(ctx, nil)
+				} else {
+					result, err = server.GetSystemMetrics(ctx, &emptypb.Empty{})
+				}
+			case "GetProcess":
+				req := &daemonpb.GetProcessRequest{ServiceName: "test-service"}
+				result, err = server.GetProcess(ctx, req)
+			}
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.testType == "cancelled" {
+					assert.ErrorIs(t, err, context.Canceled)
+				}
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
+			} else {
+				assert.NoError(t, err)
+				if tt.wantNilResult {
+					assert.Nil(t, result)
+				}
+			}
+		})
 	}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	req := &daemonpb.GetProcessRequest{ServiceName: "test-service"}
-	_, err := server.GetProcess(context.Background(), req)
-
-	// Error from provider is returned
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "process not found")
 }
 
-// Test_Server_GetProcess_cancelledContext verifies GetProcess handles cancelled context.
+// Test_Server_ErrorHandling verifies server error handling for various scenarios.
 //
 // Params:
 //   - t: testing context for assertions
-func Test_Server_GetProcess_cancelledContext(t *testing.T) {
+func Test_Server_ErrorHandling(t *testing.T) {
 	t.Parallel()
 
-	metricsProvider := &mockMetricsProvider{}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	req := &daemonpb.GetProcessRequest{ServiceName: "test-service"}
-	_, err := server.GetProcess(ctx, req)
-
-	// Context error is returned when context is cancelled
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, context.Canceled)
-}
-
-// Test_Server_Serve_listenError verifies Serve handles listen errors.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_Serve_listenError(t *testing.T) {
-	t.Parallel()
-
-	metricsProvider := &mockMetricsProvider{}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	// Use invalid address to trigger listen error
-	err := server.Serve("invalid-address-no-port")
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "listen")
-}
-
-// Test_streamLoop_emitErrorAfterInitial verifies streamLoop continues on emit error after initial success.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_streamLoop_emitErrorAfterInitial(t *testing.T) {
-	t.Parallel()
-
-	var callCount int
-	emit := func() (string, error) {
-		callCount++
-		if callCount == 1 {
-			// First call succeeds
-			return "initial", nil
-		}
-		if callCount <= 3 {
-			// Next calls fail
-			return "", errors.New("emit error")
-		}
-		// After that, succeed
-		return "recovered", nil
+	tests := []struct {
+		name          string
+		testType      string
+		errorContains string
+	}{
+		{
+			name:          "Serve_listenError",
+			testType:      "serve",
+			errorContains: "listen",
+		},
+		{
+			name:          "streamLoop_emitErrorAfterInitial",
+			testType:      "streamLoop",
+			errorContains: "stop",
+		},
 	}
 
-	var sent []string
-	send := func(val string) error {
-		sent = append(sent, val)
-		if len(sent) >= 2 {
-			// Stop after receiving second value
-			return errors.New("stop")
-		}
-		return nil
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var err error
+
+			switch tt.testType {
+			case "serve":
+				metricsProvider := &mockMetricsProvider{}
+				stateProvider := &mockGetStator{}
+				server := NewServer(metricsProvider, stateProvider)
+				err = server.Serve("invalid-address-no-port")
+
+			case "streamLoop":
+				var callCount int
+				emit := func() (string, error) {
+					callCount++
+					if callCount == 1 {
+						return "initial", nil
+					}
+					if callCount <= 3 {
+						return "", errors.New("emit error")
+					}
+					return "recovered", nil
+				}
+
+				var sent []string
+				send := func(val string) error {
+					sent = append(sent, val)
+					if len(sent) >= 2 {
+						return errors.New("stop")
+					}
+					return nil
+				}
+
+				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+				defer cancel()
+				err = streamLoop(ctx, 10*time.Millisecond, emit, send)
+			}
+
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errorContains)
+		})
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-
-	// Use short interval to trigger multiple ticks
-	err := streamLoop(ctx, 10*time.Millisecond, emit, send)
-
-	// Should return send error
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "stop")
-	// Should have received initial value and recovered value
-	assert.Contains(t, sent, "initial")
 }
 
 // mockInternalStreamStateServer is a simple mock for StreamState internal tests.
@@ -929,30 +934,71 @@ func (m *mockInternalStreamStateServer) Send(_ *daemonpb.DaemonState) error {
 	return nil
 }
 
-// Test_Server_StreamState_customInterval verifies StreamState uses custom interval.
+// Test_Server_StreamCustomInterval verifies all stream methods use custom intervals correctly.
 //
 // Params:
 //   - t: testing context for assertions
-func Test_Server_StreamState_customInterval(t *testing.T) {
+func Test_Server_StreamCustomInterval(t *testing.T) {
 	t.Parallel()
 
-	metricsProvider := &mockMetricsProvider{}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	// Cancel immediately to stop the stream
-	cancel()
-
-	req := &daemonpb.StreamStateRequest{
-		Interval: durationpb.New(100 * time.Millisecond),
+	tests := []struct {
+		name         string
+		streamMethod string
+	}{
+		{name: "StreamState_customInterval", streamMethod: "StreamState"},
+		{name: "StreamProcessMetrics_customInterval", streamMethod: "StreamProcessMetrics"},
+		{name: "StreamSystemMetrics_customInterval", streamMethod: "StreamSystemMetrics"},
+		{name: "StreamAllProcessMetrics_customInterval", streamMethod: "StreamAllProcessMetrics"},
 	}
-	mockStream := &mockInternalStreamStateServer{ctx: ctx}
 
-	err := server.StreamState(req, mockStream)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Should return context cancelled error
-	assert.Error(t, err)
+			metricsProvider := &mockMetricsProvider{
+				processMetrics: metrics.ProcessMetrics{ServiceName: "test", PID: 123},
+				allProcessMetrics: []metrics.ProcessMetrics{
+					{ServiceName: "test", PID: 123},
+				},
+			}
+			stateProvider := &mockGetStator{}
+			server := NewServer(metricsProvider, stateProvider)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			var err error
+			switch tt.streamMethod {
+			case "StreamState":
+				req := &daemonpb.StreamStateRequest{
+					Interval: durationpb.New(100 * time.Millisecond),
+				}
+				mockStream := &mockInternalStreamStateServer{ctx: ctx}
+				err = server.StreamState(req, mockStream)
+			case "StreamProcessMetrics":
+				req := &daemonpb.StreamProcessMetricsRequest{
+					ServiceName: "test",
+					Interval:    durationpb.New(100 * time.Millisecond),
+				}
+				mockStream := &mockInternalStreamProcessMetricsServer{ctx: ctx}
+				err = server.StreamProcessMetrics(req, mockStream)
+			case "StreamSystemMetrics":
+				req := &daemonpb.StreamMetricsRequest{
+					Interval: durationpb.New(100 * time.Millisecond),
+				}
+				mockStream := &mockInternalStreamSystemMetricsServer{ctx: ctx}
+				err = server.StreamSystemMetrics(req, mockStream)
+			case "StreamAllProcessMetrics":
+				req := &daemonpb.StreamMetricsRequest{
+					Interval: durationpb.New(100 * time.Millisecond),
+				}
+				mockStream := &mockInternalStreamAllProcessMetricsServer{ctx: ctx}
+				err = server.StreamAllProcessMetrics(req, mockStream)
+			}
+
+			assert.Error(t, err)
+		})
+	}
 }
 
 // mockInternalStreamProcessMetricsServer is a simple mock for StreamProcessMetrics internal tests.
@@ -971,68 +1017,6 @@ func (m *mockInternalStreamProcessMetricsServer) Send(_ *daemonpb.ProcessMetrics
 	return nil
 }
 
-// Test_Server_StreamProcessMetrics_customInterval verifies StreamProcessMetrics uses custom interval.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_StreamProcessMetrics_customInterval(t *testing.T) {
-	t.Parallel()
-
-	metricsProvider := &mockMetricsProvider{
-		processMetrics: metrics.ProcessMetrics{ServiceName: "test", PID: 123},
-	}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	// Cancel immediately to stop the stream
-	cancel()
-
-	req := &daemonpb.StreamProcessMetricsRequest{
-		ServiceName: "test",
-		Interval:    durationpb.New(100 * time.Millisecond),
-	}
-	mockStream := &mockInternalStreamProcessMetricsServer{ctx: ctx}
-
-	err := server.StreamProcessMetrics(req, mockStream)
-
-	// Should return context cancelled error
-	assert.Error(t, err)
-}
-
-// Test_Server_StreamProcessMetrics_emitErrorDuringStreaming verifies error handling in streaming loop.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_StreamProcessMetrics_emitErrorDuringStreaming(t *testing.T) {
-	t.Parallel()
-
-	// Provider that succeeds initially but fails on subsequent calls
-	metricsProvider := &mockMetricsProviderFailAfter{
-		processMetrics: metrics.ProcessMetrics{ServiceName: "test", PID: 123},
-		failAfter:      1, // First call succeeds, then fails
-		err:            errors.New("metrics unavailable"),
-	}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	req := &daemonpb.StreamProcessMetricsRequest{
-		ServiceName: "test",
-		Interval:    durationpb.New(10 * time.Millisecond),
-	}
-	mockStream := &mockInternalStreamProcessMetricsServer{ctx: ctx}
-
-	err := server.StreamProcessMetrics(req, mockStream)
-
-	// Should return context deadline exceeded (errors during streaming are continued)
-	assert.Error(t, err)
-	// Should have sent at least the initial value
-	assert.GreaterOrEqual(t, mockStream.sendCount, 1)
-}
-
 // mockInternalStreamSystemMetricsServer is a simple mock for StreamSystemMetrics internal tests.
 type mockInternalStreamSystemMetricsServer struct {
 	daemonpb.MetricsService_StreamSystemMetricsServer
@@ -1047,32 +1031,6 @@ func (m *mockInternalStreamSystemMetricsServer) Send(_ *daemonpb.SystemMetrics) 
 	return nil
 }
 
-// Test_Server_StreamSystemMetrics_customInterval verifies StreamSystemMetrics uses custom interval.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_StreamSystemMetrics_customInterval(t *testing.T) {
-	t.Parallel()
-
-	metricsProvider := &mockMetricsProvider{}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	// Cancel immediately to stop the stream
-	cancel()
-
-	req := &daemonpb.StreamMetricsRequest{
-		Interval: durationpb.New(100 * time.Millisecond),
-	}
-	mockStream := &mockInternalStreamSystemMetricsServer{ctx: ctx}
-
-	err := server.StreamSystemMetrics(req, mockStream)
-
-	// Should return context cancelled error
-	assert.Error(t, err)
-}
-
 // mockInternalStreamAllProcessMetricsServer is a simple mock for StreamAllProcessMetrics internal tests.
 type mockInternalStreamAllProcessMetricsServer struct {
 	daemonpb.MetricsService_StreamAllProcessMetricsServer
@@ -1085,36 +1043,6 @@ func (m *mockInternalStreamAllProcessMetricsServer) Context() context.Context {
 
 func (m *mockInternalStreamAllProcessMetricsServer) Send(_ *daemonpb.ProcessMetrics) error {
 	return nil
-}
-
-// Test_Server_StreamAllProcessMetrics_customInterval verifies StreamAllProcessMetrics uses custom interval.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_StreamAllProcessMetrics_customInterval(t *testing.T) {
-	t.Parallel()
-
-	metricsProvider := &mockMetricsProvider{
-		allProcessMetrics: []metrics.ProcessMetrics{
-			{ServiceName: "test", PID: 123},
-		},
-	}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	// Cancel immediately to stop the stream
-	cancel()
-
-	req := &daemonpb.StreamMetricsRequest{
-		Interval: durationpb.New(100 * time.Millisecond),
-	}
-	mockStream := &mockInternalStreamAllProcessMetricsServer{ctx: ctx}
-
-	err := server.StreamAllProcessMetrics(req, mockStream)
-
-	// Should return context cancelled error
-	assert.Error(t, err)
 }
 
 // mockInternalStreamAllProcessMetricsServerWithSend is a mock that allows ticker to fire.
@@ -1134,67 +1062,113 @@ func (m *mockInternalStreamAllProcessMetricsServerWithSend) Send(_ *daemonpb.Pro
 	return m.sendErr
 }
 
-// Test_Server_StreamAllProcessMetrics_tickerFires verifies the ticker case executes.
+// Test_Server_StreamBehaviors verifies streaming behaviors for various scenarios.
 //
 // Params:
 //   - t: testing context for assertions
-func Test_Server_StreamAllProcessMetrics_tickerFires(t *testing.T) {
+func Test_Server_StreamBehaviors(t *testing.T) {
 	t.Parallel()
 
-	metricsProvider := &mockMetricsProvider{
-		allProcessMetrics: []metrics.ProcessMetrics{
-			{ServiceName: "test1", PID: 123},
-			{ServiceName: "test2", PID: 456},
+	tests := []struct {
+		name            string
+		testType        string
+		sendErr         error
+		minSendCount    int
+		errorContains   string
+		useFailProvider bool
+	}{
+		{
+			name:         "StreamAllProcessMetrics_tickerFires",
+			testType:     "tickerFires",
+			minSendCount: 1,
+		},
+		{
+			name:          "StreamAllProcessMetrics_sendError",
+			testType:      "sendError",
+			sendErr:       errors.New("send failed"),
+			errorContains: "send failed",
+		},
+		{
+			name:            "StreamProcessMetrics_emitErrorDuringStreaming",
+			testType:        "emitError",
+			minSendCount:    1,
+			useFailProvider: true,
 		},
 	}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	req := &daemonpb.StreamMetricsRequest{
-		Interval: durationpb.New(10 * time.Millisecond),
+			var stateProvider = &mockGetStator{}
+			var err error
+
+			switch tt.testType {
+			case "tickerFires":
+				metricsProvider := &mockMetricsProvider{
+					allProcessMetrics: []metrics.ProcessMetrics{
+						{ServiceName: "test1", PID: 123},
+						{ServiceName: "test2", PID: 456},
+					},
+				}
+				server := NewServer(metricsProvider, stateProvider)
+
+				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				defer cancel()
+
+				req := &daemonpb.StreamMetricsRequest{
+					Interval: durationpb.New(10 * time.Millisecond),
+				}
+				mockStream := &mockInternalStreamAllProcessMetricsServerWithSend{ctx: ctx}
+
+				err = server.StreamAllProcessMetrics(req, mockStream)
+				assert.Error(t, err)
+				assert.Greater(t, mockStream.sendCount, tt.minSendCount-1)
+
+			case "sendError":
+				metricsProvider := &mockMetricsProvider{
+					allProcessMetrics: []metrics.ProcessMetrics{
+						{ServiceName: "test", PID: 123},
+					},
+				}
+				server := NewServer(metricsProvider, stateProvider)
+
+				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				defer cancel()
+
+				req := &daemonpb.StreamMetricsRequest{
+					Interval: durationpb.New(10 * time.Millisecond),
+				}
+				mockStream := &mockInternalStreamAllProcessMetricsServerWithSend{
+					ctx:     ctx,
+					sendErr: tt.sendErr,
+				}
+
+				err = server.StreamAllProcessMetrics(req, mockStream)
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorContains)
+
+			case "emitError":
+				metricsProvider := &mockMetricsProviderFailAfter{
+					processMetrics: metrics.ProcessMetrics{ServiceName: "test", PID: 123},
+					failAfter:      1,
+					err:            errors.New("metrics unavailable"),
+				}
+				server := NewServer(metricsProvider, stateProvider)
+
+				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				defer cancel()
+
+				req := &daemonpb.StreamProcessMetricsRequest{
+					ServiceName: "test",
+					Interval:    durationpb.New(10 * time.Millisecond),
+				}
+				mockStream := &mockInternalStreamProcessMetricsServer{ctx: ctx}
+
+				err = server.StreamProcessMetrics(req, mockStream)
+				assert.Error(t, err)
+				assert.GreaterOrEqual(t, mockStream.sendCount, tt.minSendCount)
+			}
+		})
 	}
-	mockStream := &mockInternalStreamAllProcessMetricsServerWithSend{ctx: ctx}
-
-	err := server.StreamAllProcessMetrics(req, mockStream)
-
-	// Should return context deadline exceeded
-	assert.Error(t, err)
-	// Should have sent metrics (ticker should have fired at least once)
-	assert.Greater(t, mockStream.sendCount, 0)
-}
-
-// Test_Server_StreamAllProcessMetrics_sendError verifies send error handling.
-//
-// Params:
-//   - t: testing context for assertions
-func Test_Server_StreamAllProcessMetrics_sendError(t *testing.T) {
-	t.Parallel()
-
-	metricsProvider := &mockMetricsProvider{
-		allProcessMetrics: []metrics.ProcessMetrics{
-			{ServiceName: "test", PID: 123},
-		},
-	}
-	stateProvider := &mockGetStator{}
-	server := NewServer(metricsProvider, stateProvider)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	req := &daemonpb.StreamMetricsRequest{
-		Interval: durationpb.New(10 * time.Millisecond),
-	}
-	mockStream := &mockInternalStreamAllProcessMetricsServerWithSend{
-		ctx:     ctx,
-		sendErr: errors.New("send failed"),
-	}
-
-	err := server.StreamAllProcessMetrics(req, mockStream)
-
-	// Should return send error
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "send failed")
 }

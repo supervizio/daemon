@@ -153,6 +153,56 @@ func TestStore_initSchema(t *testing.T) {
 				require.NoError(t, err)
 			},
 		},
+		{
+			name: "metadata write verification",
+			verify: func(t *testing.T, store *Store) {
+				err := store.db.View(func(tx *bolt.Tx) error {
+					meta := tx.Bucket(bucketMetadata)
+					require.NotNil(t, meta)
+					created := meta.Get(keyCreated)
+					assert.NotNil(t, created)
+					version := meta.Get(keyVersion)
+					assert.NotNil(t, version)
+					return nil
+				})
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "verify bucket structure",
+			verify: func(t *testing.T, store *Store) {
+				err := store.db.View(func(tx *bolt.Tx) error {
+					buckets := [][]byte{
+						bucketSystemCPU,
+						bucketSystemMemory,
+						bucketProcessMetrics,
+						bucketMetadata,
+					}
+					for _, name := range buckets {
+						b := tx.Bucket(name)
+						assert.NotNil(t, b, "Bucket %s should exist", string(name))
+					}
+					return nil
+				})
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "second call is idempotent",
+			verify: func(t *testing.T, store *Store) {
+				// Call initSchema again - should be idempotent
+				err := store.initSchema()
+				require.NoError(t, err)
+				// Verify metadata was not overwritten
+				err = store.db.View(func(tx *bolt.Tx) error {
+					meta := tx.Bucket(bucketMetadata)
+					created := meta.Get(keyCreated)
+					assert.NotNil(t, created)
+					return nil
+				})
+				require.NoError(t, err)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -177,6 +227,7 @@ func TestStore_pruneTransaction(t *testing.T) {
 		setupStore  func(t *testing.T, store *Store) (old, recent time.Time)
 		wantDeleted int
 		verifyMeta  bool
+		wantErr     bool
 	}{
 		{
 			name: "prunes old entries",
@@ -200,6 +251,22 @@ func TestStore_pruneTransaction(t *testing.T) {
 			wantDeleted: 0,
 			verifyMeta:  true,
 		},
+		{
+			name: "error_path_closed_db",
+			setupStore: func(t *testing.T, store *Store) (time.Time, time.Time) {
+				ctx := t.Context()
+				old := time.Now().Add(-2 * time.Hour)
+				require.NoError(t, store.WriteSystemCPU(ctx, &metrics.SystemCPU{
+					User:      100,
+					Timestamp: old,
+				}))
+				// Close the database to force errors
+				require.NoError(t, store.Close())
+				return old, time.Now()
+			},
+			wantDeleted: 0,
+			wantErr:     true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -209,6 +276,13 @@ func TestStore_pruneTransaction(t *testing.T) {
 			old, recent := tt.setupStore(t, store)
 			cutoffKey := timeToKey(time.Now().Add(-time.Hour))
 			deleted, err := store.pruneTransaction(cutoffKey)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Equal(t, tt.wantDeleted, deleted)
+				return
+			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantDeleted, deleted)
 
@@ -356,6 +430,8 @@ func TestStore_pruneBucketHelper(t *testing.T) {
 		oldCount    int
 		wantDeleted int
 		wantRemain  int
+		closeDB     bool
+		wantErr     bool
 	}{
 		{
 			name:        "deletes entries before cutoff",
@@ -370,6 +446,14 @@ func TestStore_pruneBucketHelper(t *testing.T) {
 			oldCount:    0,
 			wantDeleted: 0,
 			wantRemain:  1,
+		},
+		{
+			name:        "error on closed db",
+			writeCount:  1,
+			oldCount:    1,
+			wantDeleted: 0,
+			closeDB:     true,
+			wantErr:     true,
 		},
 	}
 
@@ -395,7 +479,18 @@ func TestStore_pruneBucketHelper(t *testing.T) {
 				}))
 			}
 
+			if tt.closeDB {
+				require.NoError(t, store.Close())
+			}
+
 			deleted, err := store.Prune(ctx, time.Hour)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Equal(t, tt.wantDeleted, deleted)
+				return
+			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantDeleted, deleted)
 
@@ -786,3 +881,4 @@ func Test_decodeProcessMetrics(t *testing.T) {
 		})
 	}
 }
+

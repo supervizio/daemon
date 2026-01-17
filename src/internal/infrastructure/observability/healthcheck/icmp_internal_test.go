@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/kodflow/daemon/internal/domain/health"
 )
 
 // TestICMPProber_internalFields tests internal struct fields.
@@ -172,4 +173,128 @@ func parsePort(portStr string) int {
 		port = port*10 + int(c-'0')
 	}
 	return port
+}
+
+// TestICMPProber_tcpPing_invalidPort tests TCP ping with invalid port values.
+func TestICMPProber_tcpPing_invalidPort(t *testing.T) {
+	tests := []struct {
+		name          string
+		tcpPort       int
+		expectSuccess bool
+	}{
+		{
+			name:          "port_greater_than_max",
+			tcpPort:       70000, // > 65535
+			expectSuccess: false,
+		},
+		{
+			name:          "port_zero",
+			tcpPort:       0,
+			expectSuccess: false,
+		},
+		{
+			name:          "port_negative",
+			tcpPort:       -1,
+			expectSuccess: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create ICMP prober with invalid port.
+			prober := NewICMPProberWithTCPFallback(100*time.Millisecond, tt.tcpPort)
+			ctx := context.Background()
+			start := time.Now()
+
+			// Call internal method - should use default port.
+			result := prober.tcpPing(ctx, "127.0.0.1", start)
+
+			// With default port 80, connection to localhost should fail quickly.
+			assert.False(t, result.Success)
+		})
+	}
+}
+
+
+// TestDefaultTCPFallbackPort_constant tests the default TCP fallback port constant.
+func TestDefaultTCPFallbackPort_constant(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected int
+	}{
+		{
+			name:     "default_is_80",
+			expected: 80,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Verify default TCP fallback port.
+			assert.Equal(t, tt.expected, defaultTCPFallbackPort)
+		})
+	}
+}
+
+// TestICMPProber_Probe_addressWithoutPort tests Probe with address without port.
+func TestICMPProber_Probe_addressWithoutPort(t *testing.T) {
+	tests := []struct {
+		name    string
+		address string
+	}{
+		{
+			name:    "plain_ip_address",
+			address: "192.0.2.1", // TEST-NET-1, guaranteed to not respond
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create ICMP prober with very short timeout.
+			prober := NewICMPProber(50 * time.Millisecond)
+
+			target := health.Target{
+				Address: tt.address,
+			}
+
+			// Probe should handle address without port.
+			result := prober.Probe(context.Background(), target)
+
+			// Should fail due to unreachable host or timeout.
+			assert.False(t, result.Success)
+			assert.Greater(t, result.Latency, time.Duration(0))
+		})
+	}
+}
+
+// TestICMPProber_Probe_withoutTCPFallback tests the non-fallback code path.
+func TestICMPProber_Probe_withoutTCPFallback(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "useTCPFallback_false_path",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create prober with useTCPFallback explicitly set to false.
+			prober := &ICMPProber{
+				timeout:        100 * time.Millisecond,
+				useTCPFallback: false,
+				tcpPort:        80,
+			}
+
+			target := health.Target{
+				Address: "192.0.2.1",
+			}
+
+			// This will execute the non-fallback path (line 107).
+			result := prober.Probe(context.Background(), target)
+
+			// Will fail since real ICMP is not implemented (TODO in code).
+			assert.False(t, result.Success)
+		})
+	}
 }

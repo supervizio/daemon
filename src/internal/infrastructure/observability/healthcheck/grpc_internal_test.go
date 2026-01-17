@@ -443,3 +443,126 @@ func TestGRPCProber_handleHealthStatus(t *testing.T) {
 		})
 	}
 }
+// TestErrGRPCUnknownStatus tests the exported error variables.
+func TestErrGRPCUnknownStatus(t *testing.T) {
+	tests := []struct {
+		name            string
+		err             error
+		expectedNotNil  bool
+		expectedContain string
+	}{
+		{
+			name:            "ErrGRPCUnknownStatus_not_nil",
+			err:             ErrGRPCUnknownStatus,
+			expectedNotNil:  true,
+			expectedContain: "unknown",
+		},
+		{
+			name:            "ErrGRPCNotServing_not_nil",
+			err:             ErrGRPCNotServing,
+			expectedNotNil:  true,
+			expectedContain: "not serving",
+		},
+		{
+			name:            "ErrGRPCServiceUnknown_not_nil",
+			err:             ErrGRPCServiceUnknown,
+			expectedNotNil:  true,
+			expectedContain: "unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.NotNil(t, tt.err)
+			assert.Contains(t, tt.err.Error(), tt.expectedContain)
+		})
+	}
+}
+
+// TestGRPCProber_Probe_allPaths ensures all code paths are executed.
+func TestGRPCProber_Probe_allPaths(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupServer   bool
+		serverStatus  grpc_health_v1.HealthCheckResponse_ServingStatus
+		cancelContext bool
+		targetService string
+		expectSuccess bool
+	}{
+		{
+			name:          "happy_path_serving",
+			setupServer:   true,
+			serverStatus:  grpc_health_v1.HealthCheckResponse_SERVING,
+			targetService: "test.Service",
+			expectSuccess: true,
+		},
+		{
+			name:          "happy_path_empty_service",
+			setupServer:   true,
+			serverStatus:  grpc_health_v1.HealthCheckResponse_SERVING,
+			targetService: "",
+			expectSuccess: true,
+		},
+		{
+			name:         "connection_fails",
+			setupServer:  false,
+			expectSuccess: false,
+		},
+		{
+			name:          "health_check_fails",
+			setupServer:   true,
+			serverStatus:  grpc_health_v1.HealthCheckResponse_NOT_SERVING,
+			targetService: "test.Service",
+			expectSuccess: false,
+		},
+		{
+			name:          "service_unknown_status",
+			setupServer:   true,
+			serverStatus:  grpc_health_v1.HealthCheckResponse_SERVICE_UNKNOWN,
+			targetService: "test.Service",
+			expectSuccess: false,
+		},
+		{
+			name:          "connection_close_in_defer",
+			setupServer:   true,
+			serverStatus:  grpc_health_v1.HealthCheckResponse_SERVING,
+			targetService: "",
+			expectSuccess: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var addr string
+
+			if tt.setupServer {
+				listener, err := net.Listen("tcp", "127.0.0.1:0")
+				require.NoError(t, err)
+				defer func() { _ = listener.Close() }()
+
+				addr = listener.Addr().String()
+				cleanup := setupInternalTestGRPCServer(listener, tt.serverStatus)
+				defer cleanup()
+			} else {
+				addr = "127.0.0.1:1" // Unreachable port
+			}
+
+			prober := NewGRPCProber(100 * time.Millisecond)
+			ctx := context.Background()
+
+			if tt.cancelContext {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+
+			target := health.Target{
+				Address: addr,
+				Service: tt.targetService,
+			}
+
+			result := prober.Probe(ctx, target)
+			assert.Equal(t, tt.expectSuccess, result.Success)
+		})
+	}
+}

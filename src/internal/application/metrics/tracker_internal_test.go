@@ -427,6 +427,93 @@ func TestTracker_updateProcessMetrics(t *testing.T) {
 	}
 }
 
+// TestTracker_Unsubscribe_nil tests Unsubscribe with nil channel.
+// This verifies the defensive handling when a nil channel is passed.
+//
+// Note: With the reflection-based implementation, nil channels are handled
+// safely by reflect.ValueOf().Pointer() which returns 0 for nil channels,
+// so the channel is simply not found in the subscribers map and nothing happens.
+func TestTracker_Unsubscribe_nil(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "handles_nil_channel_without_panic",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			collector := &internalMockCollector{}
+			tracker := NewTracker(collector)
+
+			// Pass nil - should not panic or cause errors.
+			// Note: nil channels are handled safely by reflection,
+			// as reflect.ValueOf(nil).Pointer() returns 0 and won't match any channel.
+			assert.NotPanics(t, func() {
+				tracker.Unsubscribe(nil)
+			})
+		})
+	}
+}
+
+// TestTracker_Unsubscribe_verifyChannelClosed tests that Unsubscribe
+// properly closes the channel and removes it from subscribers.
+func TestTracker_Unsubscribe_verifyChannelClosed(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "channel_is_closed_and_removed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			collector := &internalMockCollector{}
+			tracker := NewTracker(collector)
+
+			// Subscribe to get a channel
+			ch := tracker.Subscribe()
+
+			// Verify channel is open by trying non-blocking receive
+			select {
+			case _, ok := <-ch:
+				if !ok {
+					t.Fatal("channel should be open after subscribe")
+				}
+			default:
+				// Channel is open and empty (expected)
+			}
+
+			// Unsubscribe
+			tracker.Unsubscribe(ch)
+
+			// Verify channel is closed
+			_, ok := <-ch
+			assert.False(t, ok, "channel should be closed after unsubscribe")
+
+			// Verify channel is removed from subscribers by publishing
+			// If channel was not removed, this would panic trying to send to closed channel
+			metrics := &domainmetrics.ProcessMetrics{
+				ServiceName: "test",
+				PID:         1234,
+			}
+			assert.NotPanics(t, func() {
+				tracker.publish(metrics)
+			}, "publishing should not panic after unsubscribe")
+		})
+	}
+}
+
 // TestTracker_publish tests the publish method.
 func TestTracker_publish(t *testing.T) {
 	t.Parallel()

@@ -13,6 +13,7 @@ creating circular dependencies.
 | `duration.go` | `Duration` value object - time duration wrapper |
 | `size.go` | Size parsing and formatting utilities |
 | `clock.go` | `Nower` interface, `RealClock` for time abstraction |
+| `filesystem.go` | `FileSystem` interface for OS file operations |
 | `constants.go` | Shared constants (e.g., MaxValidPort) |
 | `errors.go` | Common domain errors |
 
@@ -86,6 +87,23 @@ var DefaultClock Nower   // Global default
 **Functions:**
 - `NewRealClock()` - Create real clock instance
 
+### FileSystem (Interface + Implementation)
+
+Abstraction for file system operations, enabling mock injection for testing.
+
+```go
+type FileSystem interface {
+    Stat(name string) (os.FileInfo, error)
+    ReadFile(name string) ([]byte, error)
+}
+
+type OSFileSystem struct{}       // Uses real os package
+var DefaultFileSystem FileSystem // Global default
+```
+
+**Functions:**
+- `NewOSFileSystem()` - Create real filesystem instance
+
 ### Constants
 
 ```go
@@ -155,6 +173,35 @@ func (m MockClock) Now() time.Time {
 }
 ```
 
+### FileSystem for Testing
+```go
+// Production code
+func IsContainerized() bool {
+    return IsContainerizedWithFS(shared.DefaultFileSystem)
+}
+
+func IsContainerizedWithFS(fs shared.FileSystem) bool {
+    if _, err := fs.Stat("/.dockerenv"); err == nil {
+        return true
+    }
+    // ... more checks
+}
+
+// Test code
+type MockFS struct {
+    statFunc     func(string) (os.FileInfo, error)
+    readFileFunc func(string) ([]byte, error)
+}
+
+func (m MockFS) Stat(name string) (os.FileInfo, error) {
+    return m.statFunc(name)
+}
+
+func (m MockFS) ReadFile(name string) ([]byte, error) {
+    return m.readFileFunc(name)
+}
+```
+
 ## Dependencies
 
 - Depends on: nothing (pure domain)
@@ -168,3 +215,4 @@ func (m MockClock) Now() time.Time {
 | `domain/health` | Uses Duration for check intervals |
 | `domain/process` | Uses Duration for stop timeouts |
 | `infrastructure/persistence/config/yaml` | Parses Duration and Size from YAML |
+| `infrastructure/resources/cgroup` | Uses FileSystem for container detection |

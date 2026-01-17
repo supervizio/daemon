@@ -910,3 +910,36 @@ func TestStore_MultipleWrites(t *testing.T) {
 		})
 	}
 }
+
+// TestStore_Db verifies the Db accessor returns the underlying database.
+//
+// Params:
+//   - t: testing context for assertions
+func TestStore_Db(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		wantNotNil  bool
+		description string
+	}{
+		{
+			name:        "returns_valid_db",
+			wantNotNil:  true,
+			description: "Db should return a non-nil database instance",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			store := newTestStore(t)
+			db := store.Db()
+
+			if tt.wantNotNil {
+				assert.NotNil(t, db, tt.description)
+			}
+		})
+	}
+}

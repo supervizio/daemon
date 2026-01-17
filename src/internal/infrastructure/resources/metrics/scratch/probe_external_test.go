@@ -329,3 +329,113 @@ func TestIOCollector_ReturnsErrors(t *testing.T) {
 		})
 	}
 }
+
+// TestProbe_CPU tests the CPU collector accessor.
+func TestProbe_CPU(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns_cpu_collector",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			probe := scratch.NewProbe()
+			cpu := probe.CPU()
+
+			require.NotNil(t, cpu)
+		})
+	}
+}
+
+// TestProbe_Memory tests the Memory collector accessor.
+func TestProbe_Memory(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns_memory_collector",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			probe := scratch.NewProbe()
+			mem := probe.Memory()
+
+			require.NotNil(t, mem)
+		})
+	}
+}
+
+// TestProbe_Disk tests the Disk collector accessor.
+func TestProbe_Disk(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns_disk_collector",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			probe := scratch.NewProbe()
+			disk := probe.Disk()
+
+			require.NotNil(t, disk)
+		})
+	}
+}
+
+// TestProbe_Network tests the Network collector accessor.
+func TestProbe_Network(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns_network_collector",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			probe := scratch.NewProbe()
+			net := probe.Network()
+
+			require.NotNil(t, net)
+		})
+	}
+}
+
+// TestProbe_IO tests the IO collector accessor.
+func TestProbe_IO(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns_io_collector",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			probe := scratch.NewProbe()
+			ioCollector := probe.IO()
+
+			require.NotNil(t, ioCollector)
+		})
+	}
+}

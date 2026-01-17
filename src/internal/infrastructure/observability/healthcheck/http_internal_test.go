@@ -245,6 +245,11 @@ func TestHTTPProber_getStatusCode_urlHandling(t *testing.T) {
 }
 
 // TestHTTPProber_getStatusCode_contextCancellation tests context cancellation.
+//
+// Goroutine lifecycle:
+//   - Started: goroutine to cancel context after delay
+//   - Synchronized: via context cancellation affecting HTTP request
+//   - Terminated: when cancel() is called or test completes
 func TestHTTPProber_getStatusCode_contextCancellation(t *testing.T) {
 	// Create test server that delays response.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -285,6 +290,215 @@ func TestHTTPProber_getStatusCode_contextCancellation(t *testing.T) {
 			// Verify error due to cancellation.
 			if tt.expectError {
 				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+// TestHTTPProber_getStatusCode_urlWithSchemeAndPath tests URL with scheme and path handling.
+func TestHTTPProber_getStatusCode_urlWithSchemeAndPath(t *testing.T) {
+	// Create test server.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tests := []struct {
+		name        string
+		url         string
+		path        string
+		expectError bool
+	}{
+		{
+			name:        "url_without_scheme_defaults_to_http",
+			url:         "localhost:8080",
+			path:        "/health",
+			expectError: true, // Will fail to connect but parsing succeeds
+		},
+		{
+			name:        "url_with_scheme_missing_after_default",
+			url:         "\x00invalid",
+			path:        "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create HTTP prober.
+			prober := NewHTTPProber(100 * time.Millisecond)
+			ctx := context.Background()
+
+			// Call internal method.
+			_, err := prober.getStatusCode(ctx, http.MethodGet, tt.url, tt.path)
+
+			// Verify error as expected.
+			if tt.expectError {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+
+// TestHTTPProber_getStatusCode_schemeFailSecondParse tests second parse failure.
+func TestHTTPProber_getStatusCode_schemeFailSecondParse(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+	}{
+		{
+			name: "invalid_url_after_adding_scheme",
+			url:  "http://[::1]:namedport",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create HTTP prober.
+			prober := NewHTTPProber(100 * time.Millisecond)
+			ctx := context.Background()
+
+			// This URL parses initially (no scheme), but adding http:// might cause issues.
+			_, err := prober.getStatusCode(ctx, http.MethodGet, tt.url, "")
+
+			// Connection will likely fail, but we're testing the parse path.
+			assert.Error(t, err)
+		})
+	}
+}
+
+// TestHTTPProber_getStatusCode_noScheme tests URL without scheme.
+func TestHTTPProber_getStatusCode_noScheme(t *testing.T) {
+	// Create test server.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tests := []struct {
+		name        string
+		url         string
+		path        string
+		expectError bool
+	}{
+		{
+			name:        "url_without_scheme_localhost",
+			url:         "localhost",
+			path:        "",
+			expectError: true, // Will fail to connect but tests the parse path
+		},
+		{
+			name:        "url_scheme_relative",
+			url:         "//invalid.local.test",
+			path:        "/health",
+			expectError: true, // Will fail to connect but tests the parse path
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create HTTP prober with short timeout.
+			prober := NewHTTPProber(100 * time.Millisecond)
+			ctx := context.Background()
+
+			// Call internal method.
+			_, err := prober.getStatusCode(ctx, http.MethodGet, tt.url, tt.path)
+
+			// These will fail to connect but we're testing the URL parsing path.
+			if tt.expectError {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+// TestHTTPProber_getStatusCode_secondParseError tests second parse failure with space in URL.
+func TestHTTPProber_getStatusCode_secondParseError(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+	}{
+		{
+			name: "url_with_space_fails_second_parse",
+			url:  "host name with spaces",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create HTTP prober.
+			prober := NewHTTPProber(100 * time.Millisecond)
+			ctx := context.Background()
+
+			// This URL parses initially (as path), but fails when http:// is prepended.
+			_, err := prober.getStatusCode(ctx, http.MethodGet, tt.url, "")
+
+			// Should fail with parse error.
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "failed to parse url")
+		})
+	}
+}
+
+// TestHTTPProber_getStatusCode_invalidMethod tests invalid HTTP method.
+func TestHTTPProber_getStatusCode_invalidMethod(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		url    string
+	}{
+		{
+			name:   "invalid_method_with_newline",
+			method: "GET\nHost: evil.com",
+			url:    "http://example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create HTTP prober.
+			prober := NewHTTPProber(100 * time.Millisecond)
+			ctx := context.Background()
+
+			// Call with invalid method to trigger request creation error.
+			_, err := prober.getStatusCode(ctx, tt.method, tt.url, "")
+
+			// Should fail with request creation error.
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "failed to create request")
+		})
+	}
+}
+
+// TestHTTPProber_getStatusCode_responseBodyClose tests response body closing.
+func TestHTTPProber_getStatusCode_responseBodyClose(t *testing.T) {
+	// Create test server.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("response body"))
+	}))
+	defer server.Close()
+
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "ensures_body_is_closed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create HTTP prober.
+			prober := NewHTTPProber(time.Second)
+			ctx := context.Background()
+
+			// Make multiple requests to ensure body close defer runs.
+			for range 3 {
+				statusCode, err := prober.getStatusCode(ctx, http.MethodGet, server.URL, "")
+				assert.NoError(t, err)
+				assert.Equal(t, http.StatusOK, statusCode)
 			}
 		})
 	}

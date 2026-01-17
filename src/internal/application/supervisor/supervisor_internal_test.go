@@ -14,6 +14,7 @@ import (
 
 	"github.com/kodflow/daemon/internal/domain/config"
 	domain "github.com/kodflow/daemon/internal/domain/process"
+	applifecycle "github.com/kodflow/daemon/internal/application/lifecycle"
 )
 
 // mockLoader implements appconfig.Loader for testing.
@@ -1361,6 +1362,79 @@ func Test_Supervisor_removeDeletedServices_withStopError(t *testing.T) {
 				ex.SetStopErr(nil)
 			}
 			_ = sup.Stop()
+		})
+	}
+}
+
+// NOTE ON COVERAGE: updateServices currently shows 84.6% coverage because lines 307-309
+// and 314-316 are unreachable defensive error handling code:
+//
+// - updateServices calls applifecycle.NewManager() which always creates managers with running=false  
+// - Manager.Start() only returns an error when running=true (ErrAlreadyRunning)
+// - Therefore, Start() can never fail on a newly created manager
+//
+// Achieving 100% coverage would require refactoring production code to inject a manager
+// factory or adding test hooks. The test below verifies the error handling logic works
+// correctly, even though it cannot be triggered through updateServices.
+
+// Test_Supervisor_updateServices_defensive_error_handling tests the error handling
+// logic at lines 307-309 and 314-316 by manually replicating the conditions.
+func Test_Supervisor_updateServices_defensive_error_handling(t *testing.T) {
+	tests := []struct {
+		name         string
+		operation    string
+		serviceName  string
+		setupManager func(*config.Config, *mockExecutor) *applifecycle.Manager
+	}{
+		{
+			name:        "start_for_reload_error_path",
+			operation:   "start-for-reload",
+			serviceName: "test-service",
+			setupManager: func(cfg *config.Config, exec *mockExecutor) *applifecycle.Manager {
+				// Use the first service from config.
+				return applifecycle.NewManager(&cfg.Services[0], exec)
+			},
+		},
+		{
+			name:        "start_new_service_error_path",
+			operation:   "start-new-service",
+			serviceName: "new-service",
+			setupManager: func(_ *config.Config, exec *mockExecutor) *applifecycle.Manager {
+				// Use a new service config.
+				newSvc := &config.ServiceConfig{Name: "new-service", Command: "/bin/echo", Args: []string{"new"}}
+				return applifecycle.NewManager(newSvc, exec)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createTestConfig()
+			loader := &mockLoader{cfg: cfg}
+			executor := &mockExecutor{}
+
+			sup, err := NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			// Track if error handler was called.
+			var handlerCalled bool
+			sup.SetErrorHandler(func(op, svc string, e error) {
+				handlerCalled = true
+				assert.Equal(t, tt.operation, op)
+			})
+
+			// Create and start manager to put it in running state.
+			mgr := tt.setupManager(cfg, executor)
+			_ = mgr.Start() // Makes running=true
+			defer func() { _ = mgr.Stop() }()
+
+			// Try to start again - this triggers error.
+			if startErr := mgr.Start(); startErr != nil {
+				sup.handleRecoveryError(tt.operation, tt.serviceName, startErr)
+			}
+
+			// Verify error handler was called.
+			assert.True(t, handlerCalled)
 		})
 	}
 }

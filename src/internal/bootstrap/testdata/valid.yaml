@@ -1,0 +1,5 @@
+version: "1"
+services:
+  - name: test-service
+    command: /bin/echo
+    args: ["hello"]

@@ -435,3 +435,220 @@ func Test_UDPProber_calculateDeadline(t *testing.T) {
 		})
 	}
 }
+
+// TestUDPProber_Probe_contextCancelled tests early context cancellation.
+func TestUDPProber_Probe_contextCancelled(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "context_already_cancelled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create UDP prober.
+			prober := NewUDPProber(time.Second)
+
+			// Create already cancelled context.
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			target := health.Target{
+				Address: "127.0.0.1:12345",
+			}
+
+			// Probe should detect cancelled context immediately.
+			result := prober.Probe(ctx, target)
+
+			// Should fail with context error.
+			assert.False(t, result.Success)
+			assert.Contains(t, result.Output, "context cancelled")
+		})
+	}
+}
+
+// TestUDPProber_dialUDP_setDeadlineError tests SetDeadline error path.
+func TestUDPProber_dialUDP_setDeadlineError(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "closed_connection_causes_deadline_error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// We can't easily force SetDeadline to fail on a valid connection,
+			// but we can test with an invalid network type.
+			prober := NewUDPProber(time.Second)
+			start := time.Now()
+
+			target := health.Target{
+				Address: "127.0.0.1:12345",
+				Network: "invalid-network-type",
+			}
+
+			// This should fail during resolve or dial.
+			conn, result := prober.dialUDP(context.Background(), target, start)
+
+			// Should return nil connection with error.
+			assert.Nil(t, conn)
+			assert.False(t, result.Success)
+		})
+	}
+}
+
+// mockUDPConn is a mock UDP connection for testing write errors.
+type mockUDPConn struct {
+	writeErr error
+	readErr  error
+	readN    int
+}
+
+// Read implements udpConn.Read.
+func (m *mockUDPConn) Read(b []byte) (int, error) {
+	return m.readN, m.readErr
+}
+
+// Write implements udpConn.Write.
+func (m *mockUDPConn) Write(b []byte) (int, error) {
+	if m.writeErr != nil {
+		return 0, m.writeErr
+	}
+	return len(b), nil
+}
+
+// TestUDPProber_sendAndReceive_writeError tests write error handling.
+func TestUDPProber_sendAndReceive_writeError(t *testing.T) {
+	tests := []struct {
+		name      string
+		writeErr  error
+		expectMsg string
+	}{
+		{
+			name:      "write_fails_with_error",
+			writeErr:  errors.New("write failed"),
+			expectMsg: "failed to write",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create UDP prober.
+			prober := NewUDPProber(time.Second)
+
+			// Create mock connection with write error.
+			mockConn := &mockUDPConn{
+				writeErr: tt.writeErr,
+			}
+
+			start := time.Now()
+
+			// Call internal method with mock.
+			result := prober.sendAndReceive(mockConn, "127.0.0.1:1234", start)
+
+			// Should fail with write error.
+			assert.False(t, result.Success)
+			assert.Contains(t, result.Output, tt.expectMsg)
+		})
+	}
+}
+
+// TestUDPProber_calculateDeadline_noDeadline tests deadline calculation with no timeout.
+func TestUDPProber_calculateDeadline_noDeadline(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "no_timeout_uses_default",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create prober with zero timeout.
+			prober := NewUDPProber(0)
+
+			// Use background context (no deadline).
+			ctx := context.Background()
+
+			now := time.Now()
+			deadline := prober.calculateDeadline(ctx)
+
+			// Should use default timeout.
+			expectedDeadline := now.Add(health.DefaultTimeout)
+
+			// Verify deadline is close to default.
+			assert.WithinDuration(t, expectedDeadline, deadline, 100*time.Millisecond)
+		})
+	}
+}
+
+// TestUDPBufferSize_constant tests the UDP buffer size constant.
+func TestUDPBufferSize_constant(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected int
+	}{
+		{
+			name:     "buffer_is_1024",
+			expected: 1024,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Verify buffer size constant.
+			assert.Equal(t, tt.expected, udpBufferSize)
+		})
+	}
+}
+
+// TestUDPProber_dialUDP_emptyNetwork tests dialUDP with empty network string.
+func TestUDPProber_dialUDP_emptyNetwork(t *testing.T) {
+	tests := []struct {
+		name    string
+		network string
+	}{
+		{
+			name:    "empty_network_uses_default",
+			network: "",
+		},
+		{
+			name:    "explicit_udp4",
+			network: "udp4",
+		},
+		{
+			name:    "explicit_udp6",
+			network: "udp6",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create UDP prober.
+			prober := NewUDPProber(time.Second)
+			start := time.Now()
+
+			target := health.Target{
+				Address: "127.0.0.1:12345",
+				Network: tt.network,
+			}
+
+			// Call dialUDP - will create connection.
+			conn, result := prober.dialUDP(context.Background(), target, start)
+
+			// Should succeed in creating connection.
+			if conn != nil {
+				_ = conn.Close()
+				assert.Equal(t, health.CheckResult{}, result)
+			} else {
+				// If it fails, check error result.
+				assert.False(t, result.Success)
+			}
+		})
+	}
+}

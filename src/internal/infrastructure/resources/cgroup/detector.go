@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/kodflow/daemon/internal/domain/shared"
 )
 
 // DefaultCgroupPath is the default cgroup filesystem path.
@@ -109,15 +111,28 @@ func DetectWithPath(cgroupPath string) Version {
 // Returns:
 //   - bool: true if running in a container, false otherwise
 func IsContainerized() bool {
+	// Delegate to injectable version with default filesystem
+	return IsContainerizedWithFS(shared.DefaultFileSystem)
+}
+
+// IsContainerizedWithFS detects if running in a container using the provided filesystem.
+// This function allows dependency injection for testing.
+//
+// Params:
+//   - fs: filesystem interface for file operations
+//
+// Returns:
+//   - bool: true if running in a container, false otherwise
+func IsContainerizedWithFS(fs shared.FileSystem) bool {
 	// Check for /.dockerenv
 	// Docker marker file exists in all Docker containers
-	if _, err := os.Stat("/.dockerenv"); err == nil {
+	if _, err := fs.Stat("/.dockerenv"); err == nil {
 		// Found Docker marker file
 		return true
 	}
 
 	// Check /proc/1/cgroup for container indicators
-	data, err := os.ReadFile("/proc/1/cgroup")
+	data, err := fs.ReadFile("/proc/1/cgroup")
 	// File read failed (not fatal for detection)
 	if err != nil {
 		// Assume not containerized if can't read cgroup info

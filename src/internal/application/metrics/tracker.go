@@ -4,6 +4,7 @@ package metrics
 import (
 	"context"
 	"maps"
+	"reflect"
 	"slices"
 	"sync"
 	"time"
@@ -272,19 +273,36 @@ func (t *Tracker) Subscribe() <-chan domainmetrics.ProcessMetrics {
 // Params:
 //   - ch: channel to unsubscribe
 func (t *Tracker) Unsubscribe(ch <-chan domainmetrics.ProcessMetrics) {
-	// Type assert to get the sendable channel.
-	sendCh, ok := any(ch).(chan domainmetrics.ProcessMetrics)
-	// Check type assertion.
-	if !ok {
-		// Invalid channel type.
-		return
-	}
+	// Get pointer value for channel identity comparison.
+	// Since Subscribe() returns a receive-only channel (<-chan) but internally
+	// stores a bidirectional channel (chan), we need to use reflection to
+	// compare channel identity across type conversions.
+	recvPtr := reflect.ValueOf(ch).Pointer()
 
 	t.subsMu.Lock()
-	delete(t.subscribers, sendCh)
+	var bidirCh chan domainmetrics.ProcessMetrics
+	var found bool
+
+	// Find the bidirectional channel with matching pointer.
+	for ch := range t.subscribers {
+		// Check if this channel's pointer matches the receive channel.
+		if reflect.ValueOf(ch).Pointer() == recvPtr {
+			bidirCh = ch
+			found = true
+			break
+		}
+	}
+
+	// Remove subscriber if found.
+	if found {
+		delete(t.subscribers, bidirCh)
+	}
 	t.subsMu.Unlock()
 
-	close(sendCh)
+	// Close channel outside lock to avoid blocking.
+	if found {
+		close(bidirCh)
+	}
 }
 
 // UpdateState updates the state of a tracked process.

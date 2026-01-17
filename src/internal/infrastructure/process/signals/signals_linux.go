@@ -19,6 +19,13 @@ const (
 	prGetChildSubreaper uintptr = 37
 )
 
+// prctlFunc is the function type for prctl syscalls.
+// Extracted as a variable to enable error injection in tests.
+type prctlFunc func(trap uintptr, a1 uintptr, a2 uintptr, a3 uintptr) (uintptr, uintptr, syscall.Errno)
+
+// prctlSyscall is the syscall function, can be overridden in tests.
+var prctlSyscall prctlFunc = syscall.RawSyscall
+
 // initLinuxSignals adds Linux-specific signals to the signal manager.
 // Called from New when on Linux platform.
 //
@@ -58,7 +65,7 @@ func (m *Manager) ClearSubreaper() error {
 func (m *Manager) IsSubreaper() (bool, error) {
 	var flag int
 	// #nosec G103 - unsafe.Pointer required for prctl syscall interface
-	_, _, errno := syscall.RawSyscall(syscall.SYS_PRCTL, prGetChildSubreaper, uintptr(unsafe.Pointer(&flag)), 0)
+	_, _, errno := prctlSyscall(syscall.SYS_PRCTL, prGetChildSubreaper, uintptr(unsafe.Pointer(&flag)), 0)
 	// Check if the syscall returned an error.
 	if errno != 0 {
 		// Return false and wrap the syscall error.
@@ -76,7 +83,7 @@ func (m *Manager) IsSubreaper() (bool, error) {
 // Returns:
 //   - error: an error if the prctl syscall fails
 func prctlSubreaper(flag int) error {
-	_, _, errno := syscall.RawSyscall(syscall.SYS_PRCTL, prSetChildSubreaper, uintptr(flag), 0)
+	_, _, errno := prctlSyscall(syscall.SYS_PRCTL, prSetChildSubreaper, uintptr(flag), 0)
 	// Check if the syscall returned an error.
 	if errno != 0 {
 		// Return the wrapped syscall error.
