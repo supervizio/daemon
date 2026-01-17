@@ -176,3 +176,116 @@ func TestDefaultHTTPStatusCode_constant(t *testing.T) {
 		})
 	}
 }
+
+// TestHTTPProber_getStatusCode_urlHandling tests URL parsing and path handling.
+func TestHTTPProber_getStatusCode_urlHandling(t *testing.T) {
+	// Create test server that echoes back the request path.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-Path", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tests := []struct {
+		name        string
+		url         string
+		path        string
+		expectError bool
+	}{
+		{
+			name:        "url_with_path_appended",
+			url:         server.URL,
+			path:        "/health",
+			expectError: false,
+		},
+		{
+			name:        "url_with_trailing_slash_and_path",
+			url:         server.URL + "/",
+			path:        "/status",
+			expectError: false,
+		},
+		{
+			name:        "url_with_path_no_leading_slash",
+			url:         server.URL,
+			path:        "api/health",
+			expectError: false,
+		},
+		{
+			name:        "url_host_without_scheme_fails_parse",
+			url:         "127.0.0.1:8080",
+			path:        "",
+			expectError: true,
+		},
+		{
+			name:        "url_without_scheme_with_path_defaults_to_http",
+			url:         "localhost/path",
+			path:        "",
+			expectError: true, // Connection will fail but parsing succeeds
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create HTTP prober with short timeout.
+			prober := NewHTTPProber(100 * time.Millisecond)
+			ctx := context.Background()
+
+			// Call internal method.
+			statusCode, err := prober.getStatusCode(ctx, http.MethodGet, tt.url, tt.path)
+
+			// Verify result.
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, http.StatusOK, statusCode)
+			}
+		})
+	}
+}
+
+// TestHTTPProber_getStatusCode_contextCancellation tests context cancellation.
+func TestHTTPProber_getStatusCode_contextCancellation(t *testing.T) {
+	// Create test server that delays response.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tests := []struct {
+		name        string
+		cancelAfter time.Duration
+		expectError bool
+	}{
+		{
+			name:        "cancelled_context_returns_error",
+			cancelAfter: 10 * time.Millisecond,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create HTTP prober.
+			prober := NewHTTPProber(5 * time.Second)
+
+			// Create context that will be cancelled.
+			ctx, cancel := context.WithCancel(context.Background())
+
+			// Cancel context after short delay.
+			go func() {
+				time.Sleep(tt.cancelAfter)
+				cancel()
+			}()
+
+			// Call internal method.
+			_, err := prober.getStatusCode(ctx, http.MethodGet, server.URL, "")
+
+			// Verify error due to cancellation.
+			if tt.expectError {
+				assert.Error(t, err)
+			}
+		})
+	}
+}

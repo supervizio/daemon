@@ -328,6 +328,37 @@ func TestTracker_UpdateState(t *testing.T) {
 	}
 }
 
+// TestTracker_UpdateState_NonExistent tests UpdateState with non-existent service.
+func TestTracker_UpdateState_NonExistent(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		serviceName string
+	}{
+		{
+			name:        "does nothing for non-existent service",
+			serviceName: "nonexistent-service",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			collector := &mockCollector{}
+			tracker := appmetrics.NewTracker(collector)
+
+			// Should not panic on non-existent service.
+			tracker.UpdateState(tt.serviceName, process.StateFailed, "error")
+
+			// Verify service still doesn't exist.
+			_, ok := tracker.Get(tt.serviceName)
+			assert.False(t, ok, "service should not exist")
+		})
+	}
+}
+
 func TestTracker_UpdateHealth(t *testing.T) {
 	t.Parallel()
 
@@ -371,6 +402,37 @@ func TestTracker_UpdateHealth(t *testing.T) {
 
 			m, _ := tracker.Get(tt.serviceName)
 			assert.Equal(t, tt.healthy, m.Healthy)
+		})
+	}
+}
+
+// TestTracker_UpdateHealth_NonExistent tests UpdateHealth with non-existent service.
+func TestTracker_UpdateHealth_NonExistent(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		serviceName string
+	}{
+		{
+			name:        "does nothing for non-existent service",
+			serviceName: "nonexistent-service",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			collector := &mockCollector{}
+			tracker := appmetrics.NewTracker(collector)
+
+			// Should not panic on non-existent service.
+			tracker.UpdateHealth(tt.serviceName, true)
+
+			// Verify service still doesn't exist.
+			_, ok := tracker.Get(tt.serviceName)
+			assert.False(t, ok, "service should not exist")
 		})
 	}
 }

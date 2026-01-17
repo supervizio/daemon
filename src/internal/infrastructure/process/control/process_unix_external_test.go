@@ -40,6 +40,34 @@ func TestNew(t *testing.T) {
 	}
 }
 
+// TestNewControl tests the NewControl constructor.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestNewControl(t *testing.T) {
+	// Define test cases for NewControl.
+	tests := []struct {
+		name string
+	}{
+		{name: "returns non-nil process control"},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			pc := control.NewControl()
+			// Check if the process control is not nil.
+			if pc == nil {
+				t.Error("NewControl should return a non-nil instance")
+			}
+		})
+	}
+}
+
 // TestControl_SetProcessGroup tests the SetProcessGroup method.
 //
 // Params:

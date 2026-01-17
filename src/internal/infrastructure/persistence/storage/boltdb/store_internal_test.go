@@ -5,6 +5,7 @@ package boltdb
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -33,6 +34,79 @@ func newInternalTestStore(t *testing.T) *Store {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	return store
+}
+
+// =============================================================================
+// NEWSTORE ERROR TESTS
+// =============================================================================
+
+// TestNewStore_errors tests NewStore error conditions.
+func TestNewStore_errors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		setupPath func(t *testing.T) string
+		wantErr   bool
+	}{
+		{
+			name: "fails with directory path",
+			setupPath: func(t *testing.T) string {
+				// Return a directory path (cannot open as bolt db)
+				return t.TempDir()
+			},
+			wantErr: true,
+		},
+		{
+			name: "fails with non-existent directory",
+			setupPath: func(_ *testing.T) string {
+				// Return path in non-existent directory
+				return "/nonexistent/path/to/db.bolt"
+			},
+			wantErr: true,
+		},
+		{
+			name: "fails with read-only file",
+			setupPath: func(t *testing.T) string {
+				// Create read-only file
+				path := filepath.Join(t.TempDir(), "readonly.db")
+				err := os.WriteFile(path, []byte("not a db"), 0o000)
+				require.NoError(t, err)
+				t.Cleanup(func() {
+					// Restore permissions for cleanup
+					_ = os.Chmod(path, 0o644)
+				})
+				return path
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := tt.setupPath(t)
+			config := storage.StoreConfig{
+				Path:          path,
+				Retention:     24 * time.Hour,
+				PruneInterval: time.Hour,
+			}
+
+			store, err := NewStore(config)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, store)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, store)
+				if store != nil {
+					_ = store.Close()
+				}
+			}
+		})
+	}
 }
 
 // =============================================================================

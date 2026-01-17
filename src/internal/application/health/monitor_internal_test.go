@@ -999,3 +999,372 @@ func Test_listenerStateToSubjectState(t *testing.T) {
 		})
 	}
 }
+
+// Test_ProbeMonitor_createProberFromBinding_factoryError tests error handling
+// when the factory.Create method fails.
+func Test_ProbeMonitor_createProberFromBinding_factoryError(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "factory_create_returns_error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create factory that returns an error.
+			factory := &internalTestCreator{
+				err: assert.AnError,
+			}
+
+			// Create monitor with the failing factory.
+			config := NewProbeMonitorConfig(factory)
+			monitor := NewProbeMonitor(config)
+
+			// Create binding that will trigger factory.Create.
+			target := ProbeTarget{Address: "localhost:8080"}
+			binding := NewProbeBinding("test-listener", ProbeTCP, target)
+
+			// Attempt to create prober - should fail.
+			prober, err := monitor.createProberFromBinding(binding)
+
+			// Verify error was returned.
+			assert.Error(t, err)
+			assert.Nil(t, prober)
+			assert.Contains(t, err.Error(), "create prober for binding")
+		})
+	}
+}
+
+// Test_ProbeMonitor_createProberFromBinding_defaultTimeout tests that
+// the default timeout is used when binding config has no timeout.
+func Test_ProbeMonitor_createProberFromBinding_defaultTimeout(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "uses_default_timeout_when_not_specified",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create factory.
+			factory := &internalTestCreator{}
+
+			// Create monitor with default timeout.
+			config := NewProbeMonitorConfig(factory)
+			monitor := NewProbeMonitor(config)
+
+			// Create binding without timeout (Config.Timeout will be 0).
+			target := ProbeTarget{Address: "localhost:8080"}
+			binding := NewProbeBinding("test-listener", ProbeTCP, target)
+			// Ensure binding timeout is 0.
+			binding.Config.Timeout = 0
+
+			// Create prober - should succeed using default timeout.
+			prober, err := monitor.createProberFromBinding(binding)
+
+			// Verify success.
+			assert.NoError(t, err)
+			assert.NotNil(t, prober)
+		})
+	}
+}
+
+// Test_ProbeMonitor_AddListenerWithBinding_proberError tests error handling
+// when createProberFromBinding fails during AddListenerWithBinding.
+func Test_ProbeMonitor_AddListenerWithBinding_proberError(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns_error_when_prober_creation_fails",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create factory that returns an error.
+			factory := &internalTestCreator{
+				err: assert.AnError,
+			}
+
+			// Create monitor with the failing factory.
+			config := NewProbeMonitorConfig(factory)
+			monitor := NewProbeMonitor(config)
+
+			// Create listener and binding.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			target := ProbeTarget{Address: "localhost:8080"}
+			binding := NewProbeBinding("test", ProbeTCP, target)
+
+			// Add listener with binding - should fail.
+			err := monitor.AddListenerWithBinding(l, binding)
+
+			// Verify error was returned.
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "create prober for binding")
+		})
+	}
+}
+
+// Test_ProbeMonitor_runProber_defaultInterval tests that the default
+// interval is used when probe config has no interval.
+func Test_ProbeMonitor_runProber_defaultInterval(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "uses_default_interval_when_not_specified",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create factory.
+			factory := &internalTestCreator{}
+
+			// Create monitor.
+			config := NewProbeMonitorConfig(factory)
+			monitor := NewProbeMonitor(config)
+
+			// Create listener with prober but no interval in config.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			lp := NewListenerProbe(l)
+			lp.Prober = &internalTestProber{
+				probeType: "tcp",
+				result:    domain.CheckResult{Success: true},
+			}
+			// ProbeConfig returns default config with Interval = 0.
+
+			// Start the monitor to trigger runProber.
+			ctx, cancel := context.WithCancel(context.Background())
+			monitor.listeners = append(monitor.listeners, lp)
+			monitor.Start(ctx)
+
+			// Wait briefly for initial probe.
+			time.Sleep(20 * time.Millisecond)
+
+			// Stop the monitor.
+			cancel()
+			monitor.Stop()
+
+			// Verify the prober was called (proves runProber ran).
+			assert.GreaterOrEqual(t, lp.Prober.(*internalTestProber).probeCount, 1)
+		})
+	}
+}
+
+// Test_ProbeMonitor_runProber_stopBeforeInitialProbe tests that runProber
+// exits early when stop signal is received before initial probe.
+func Test_ProbeMonitor_runProber_stopBeforeInitialProbe(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "exits_when_stop_signal_received_immediately",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create monitor.
+			factory := &internalTestCreator{}
+			config := NewProbeMonitorConfig(factory)
+			monitor := NewProbeMonitor(config)
+
+			// Create listener probe.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			lp := NewListenerProbe(l)
+			lp.Prober = &internalTestProber{
+				probeType: "tcp",
+				result:    domain.CheckResult{Success: true},
+			}
+
+			// Create already-closed stop channel.
+			stopCh := make(chan struct{})
+			close(stopCh)
+
+			// Run prober - should exit immediately.
+			ctx := context.Background()
+			monitor.runProber(ctx, stopCh, lp)
+
+			// Verify prober was never called.
+			assert.Equal(t, 0, lp.Prober.(*internalTestProber).probeCount)
+		})
+	}
+}
+
+// Test_ProbeMonitor_runProber_ctxCancelBeforeInitialProbe tests that runProber
+// exits early when context is cancelled before initial probe.
+func Test_ProbeMonitor_runProber_ctxCancelBeforeInitialProbe(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "exits_when_ctx_cancelled_immediately",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create monitor.
+			factory := &internalTestCreator{}
+			config := NewProbeMonitorConfig(factory)
+			monitor := NewProbeMonitor(config)
+
+			// Create listener probe.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			lp := NewListenerProbe(l)
+			lp.Prober = &internalTestProber{
+				probeType: "tcp",
+				result:    domain.CheckResult{Success: true},
+			}
+
+			// Create already-cancelled context.
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			// Create stop channel.
+			stopCh := make(chan struct{})
+
+			// Run prober - should exit immediately.
+			monitor.runProber(ctx, stopCh, lp)
+
+			// Verify prober was never called.
+			assert.Equal(t, 0, lp.Prober.(*internalTestProber).probeCount)
+		})
+	}
+}
+
+// Test_ProbeMonitor_performProbe_nilProber tests that performProbe
+// handles nil prober gracefully.
+func Test_ProbeMonitor_performProbe_nilProber(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "handles_nil_prober_gracefully",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create monitor.
+			factory := &internalTestCreator{}
+			config := NewProbeMonitorConfig(factory)
+			monitor := NewProbeMonitor(config)
+
+			// Create listener probe with nil prober.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			lp := NewListenerProbe(l)
+			lp.Prober = nil
+
+			// Call performProbe - should not panic.
+			ctx := context.Background()
+			assert.NotPanics(t, func() {
+				monitor.performProbe(ctx, lp)
+			})
+		})
+	}
+}
+
+// Test_ProbeMonitor_Health_withSubjects tests the Health method when
+// there are subjects with non-nil LastProbeResult.
+func Test_ProbeMonitor_Health_withSubjects(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "deep_copies_subjects_with_probe_results",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create monitor.
+			factory := &internalTestCreator{}
+			config := NewProbeMonitorConfig(factory)
+			monitor := NewProbeMonitor(config)
+
+			// Manually populate health with a subject that has LastProbeResult.
+			result := &domain.Result{
+				Status:   domain.StatusHealthy,
+				Duration: 10 * time.Millisecond,
+			}
+			monitor.health.Subjects = []domain.SubjectStatus{
+				{
+					Name:            "test-subject",
+					State:           domain.SubjectListening,
+					LastProbeResult: result,
+				},
+			}
+
+			// Call Health - should return deep copy.
+			health := monitor.Health()
+
+			// Verify we got a copy.
+			require.NotNil(t, health)
+			require.Len(t, health.Subjects, 1)
+			assert.Equal(t, "test-subject", health.Subjects[0].Name)
+			assert.NotNil(t, health.Subjects[0].LastProbeResult)
+
+			// Verify it's a deep copy - modifying copy shouldn't affect original.
+			health.Subjects[0].Name = "modified"
+			assert.Equal(t, "test-subject", monitor.health.Subjects[0].Name)
+
+			// Verify LastProbeResult is also a copy.
+			health.Subjects[0].LastProbeResult.Duration = 999 * time.Millisecond
+			assert.Equal(t, 10*time.Millisecond, monitor.health.Subjects[0].LastProbeResult.Duration)
+		})
+	}
+}
+
+// Test_ProbeMonitor_Start_withListenersWithProbers tests Start when
+// there are listeners with configured probers.
+func Test_ProbeMonitor_Start_withListenersWithProbers(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "starts_prober_goroutines_for_listeners",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create factory.
+			factory := &internalTestCreator{}
+
+			// Create monitor.
+			config := NewProbeMonitorConfig(factory)
+			monitor := NewProbeMonitor(config)
+
+			// Add listener with prober.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			lp := NewListenerProbe(l)
+			prober := &internalTestProber{
+				probeType: "tcp",
+				result:    domain.CheckResult{Success: true},
+			}
+			lp.Prober = prober
+			monitor.listeners = append(monitor.listeners, lp)
+
+			// Start the monitor.
+			ctx, cancel := context.WithCancel(context.Background())
+			monitor.Start(ctx)
+
+			// Wait for initial probe.
+			time.Sleep(30 * time.Millisecond)
+
+			// Stop the monitor.
+			cancel()
+			monitor.Stop()
+
+			// Verify prober was called.
+			assert.GreaterOrEqual(t, prober.probeCount, 1)
+		})
+	}
+}

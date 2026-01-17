@@ -995,3 +995,47 @@ func TestSupervisor_SetEventHandler(t *testing.T) {
 		})
 	}
 }
+
+// TestSupervisor_SetErrorHandler tests the SetErrorHandler method on the Supervisor type.
+// This test validates the SetErrorHandler method behavior using black-box testing.
+//
+// Params:
+//   - t: the testing context.
+func TestSupervisor_SetErrorHandler(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// handler is the error handler to set.
+		handler supervisor.ErrorHandler
+	}{
+		{
+			name:    "set_nil_error_handler",
+			handler: nil,
+		},
+		{
+			name: "set_valid_error_handler",
+			handler: func(_ string, _ string, _ error) {
+				// Handler implementation for testing.
+			},
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createValidConfig()
+			loader := &mockLoader{cfg: cfg}
+			executor := &mockExecutor{}
+
+			sup, err := supervisor.NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			// Set the handler - should not panic.
+			sup.SetErrorHandler(tt.handler)
+
+			// Verify supervisor is still operational.
+			assert.Equal(t, supervisor.StateStopped, sup.State())
+		})
+	}
+}

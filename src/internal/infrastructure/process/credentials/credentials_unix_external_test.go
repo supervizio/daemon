@@ -42,6 +42,34 @@ func TestNew(t *testing.T) {
 	}
 }
 
+// TestNewManager tests the NewManager constructor.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestNewManager(t *testing.T) {
+	// Define test cases for NewManager constructor.
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns non-nil manager instance",
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			manager := credentials.NewManager()
+			// Check if the manager is not nil.
+			assert.NotNil(t, manager, "NewManager should return a non-nil instance")
+		})
+	}
+}
+
 // TestManager_LookupUser tests the LookupUser method with various inputs.
 //
 // Params:

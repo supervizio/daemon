@@ -78,6 +78,11 @@ func TestTypeCategory(t *testing.T) {
 			typeVal:  TypeUnknown,
 			expected: "unknown",
 		},
+		{
+			name:     "unmapped type returns unknown",
+			typeVal:  Type(999),
+			expected: "unknown",
+		},
 	}
 
 	for _, tt := range tests {

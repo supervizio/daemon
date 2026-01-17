@@ -186,6 +186,12 @@ func TestState_CanTransitionTo(t *testing.T) {
 			to:       listener.StateClosed,
 			expected: true,
 		},
+		{
+			name:     "unknown_state_returns_false",
+			from:     listener.State(99),
+			to:       listener.StateListening,
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {

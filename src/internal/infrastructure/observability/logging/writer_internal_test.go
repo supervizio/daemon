@@ -556,16 +556,25 @@ func Test_Writer_rotate_openNewFileError(t *testing.T) {
 				size:     0,
 			}
 
-			// Remove write permissions from directory to cause openNewFile to fail.
-			err = os.Chmod(tmpDir, 0o000)
-			require.NoError(t, err)
+			// Save original openFileFunc.
+			originalFunc := openFileFunc
+			defer func() { openFileFunc = originalFunc }()
 
-			// Restore permissions after test.
-			defer func() { _ = os.Chmod(tmpDir, dirPermissions) }()
+			// Replace openFileFunc to fail after rotateFiles succeeds.
+			callCount := 0
+			openFileFunc = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+				callCount++
+				// Let rotateFiles work, but fail on openNewFile.
+				if callCount > 0 && name == path {
+					return nil, os.ErrPermission
+				}
+				return os.OpenFile(name, flag, perm)
+			}
 
 			// Rotate should fail because openNewFile fails.
 			err = w.rotate()
 			assert.Error(t, err)
+			assert.ErrorIs(t, err, os.ErrPermission)
 		})
 	}
 }
