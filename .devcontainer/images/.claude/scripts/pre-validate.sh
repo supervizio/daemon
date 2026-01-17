@@ -104,7 +104,7 @@ if [[ "$USE_YQ" == "true" ]]; then
             echo "  accidentelles par .claude/protected-paths.yml"
             echo ""
             echo "  Pour modifier ce fichier:"
-            echo "    1. Utilisez une task avec risk=high"
+            echo "    1. Demandez l'approbation explicite de l'utilisateur"
             echo "    2. Activez: export ALLOW_PROTECTED_EDIT=1"
             echo "    3. Fournissez une justification"
             echo ""

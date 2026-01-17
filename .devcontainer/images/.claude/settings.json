@@ -74,31 +74,34 @@
       "Bash(date:*)",
       "Bash(env:*)",
       "Bash(printenv:*)",
-      "Bash(task:*)",
-      "Bash(task-init.sh:*)",
-      "Bash(task-epic.sh:*)",
-      "Bash(task-add.sh:*)",
-      "Bash(task-start.sh:*)",
-      "Bash(task-done.sh:*)",
+      "Bash(grepai:*)",
       "Bash(/home/vscode/.claude/scripts/*:*)",
       "Read(**/*)",
       "Glob(**/*)",
-      "Grep(**/*)"
+      "Grep(**/*)",
+      "mcp__grepai__*"
     ],
     "deny": [],
     "additionalDirectories": []
   },
   "enableAllProjectMcpServers": true,
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/vscode/.claude/scripts/post-compact.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
-          {
-            "type": "command",
-            "command": "/home/vscode/.claude/scripts/bash-validate.sh",
-            "timeout": 10
-          },
           {
             "type": "command",
             "command": "/home/vscode/.claude/scripts/commit-validate.sh",
@@ -106,23 +109,13 @@
           },
           {
             "type": "command",
-            "command": "/home/vscode/.claude/scripts/phase-validate.sh",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/home/vscode/.claude/scripts/task-validate.sh",
-            "timeout": 10
+            "command": "/home/vscode/.claude/scripts/security.sh",
+            "timeout": 30
           },
           {
             "type": "command",
-            "command": "/home/vscode/.claude/scripts/phase-validate.sh",
-            "timeout": 10
+            "command": "/home/vscode/.claude/scripts/log.sh",
+            "timeout": 5
           }
         ]
       },
@@ -138,16 +131,6 @@
       }
     ],
     "PostToolUse": [
-      {
-        "matcher": "Write|Edit|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/home/vscode/.claude/scripts/task-log.sh",
-            "timeout": 10
-          }
-        ]
-      },
       {
         "matcher": "Write|Edit",
         "hooks": [
@@ -175,6 +158,16 @@
             "type": "command",
             "command": "/home/vscode/.claude/scripts/test.sh \"$CLAUDE_FILE_PATH\"",
             "timeout": 60
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Write|Edit|Read|Glob|Grep|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/vscode/.claude/scripts/log.sh",
+            "timeout": 5
           }
         ]
       }

@@ -1,14 +1,34 @@
-# Git - Workflow Git Automation
+---
+name: git
+description: |
+  Workflow Git Automation with RLM decomposition.
+  Handles branch management, conventional commits, and CI validation.
+  Use when: committing changes, creating PRs, or merging with CI checks.
+allowed-tools:
+  - "Bash(git:*)"
+  - "Bash(gh:*)"
+  - "mcp__github__*"
+  - "Read(**/*)"
+  - "Glob(**/*)"
+  - "Grep(**/*)"
+  - "mcp__grepai__*"
+  - "Task(*)"
+---
+
+# /git - Workflow Git Automation (RLM Architecture)
 
 $ARGUMENTS
 
 ---
 
-## Description
+## Overview
 
-Commande unifiée pour les opérations Git :
-- **--commit** : Workflow complet (branch, commit, push, PR)
-- **--merge** : Merge avec CI validation et auto-fix
+Automatisation Git avec patterns **RLM** :
+
+- **Peek** - Analyser l'état git avant action
+- **Decompose** - Identifier les fichiers par catégorie
+- **Parallelize** - Checks en parallèle (lint, test, CI)
+- **Synthesize** - Rapport consolidé
 
 ---
 
@@ -27,7 +47,6 @@ Commande unifiée pour les opérations Git :
 | `--branch <nom>` | Force le nom de branche |
 | `--no-pr` | Skip la création de PR |
 | `--amend` | Amend le dernier commit |
-| `--rename <nom>` | Renomme la branche avant push/PR |
 
 ### Options --merge
 
@@ -35,19 +54,16 @@ Commande unifiée pour les opérations Git :
 |--------|--------|
 | `--pr <number>` | Merge une PR spécifique |
 | `--strategy <type>` | Méthode: merge/squash/rebase (défaut: squash) |
-| `--no-delete` | Ne pas supprimer la branche après merge |
 | `--dry-run` | Vérifier sans merger |
 
 ---
 
 ## --help
 
-Quand `--help` est passé, afficher :
-
 ```
-═══════════════════════════════════════════════
-  /git - Workflow Git Automation
-═══════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
+  /git - Workflow Git Automation (RLM)
+═══════════════════════════════════════════════════════════════
 
 Usage: /git <action> [options]
 
@@ -55,16 +71,20 @@ Actions:
   --commit          Workflow complet (branch, commit, push, PR)
   --merge           Merge avec CI validation et auto-fix
 
+RLM Patterns:
+  1. Peek       - Analyser état git
+  2. Decompose  - Catégoriser fichiers
+  3. Parallelize - Checks simultanés
+  4. Synthesize - Rapport consolidé
+
 Options --commit:
   --branch <nom>    Force le nom de branche
   --no-pr           Skip la création de PR
   --amend           Amend le dernier commit
-  --rename <nom>    Renomme la branche avant push/PR
 
 Options --merge:
   --pr <number>     Merge une PR spécifique
   --strategy <type> Méthode: merge/squash/rebase (défaut: squash)
-  --no-delete       Garder la branche après merge
   --dry-run         Vérifier sans merger
 
 Exemples:
@@ -72,12 +92,13 @@ Exemples:
   /git --commit --no-pr         Commit sans créer de PR
   /git --merge                  Merge la PR courante
   /git --merge --pr 42          Merge la PR #42
-═══════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════════
 ```
 
 ---
 
-## Priorité des outils
+## Priorité MCP vs CLI
 
 **IMPORTANT** : Toujours privilégier les outils MCP GitHub quand disponibles.
 
@@ -89,263 +110,254 @@ Exemples:
 | Voir PR | `mcp__github__get_pull_request` | `gh pr view` |
 | Status CI | `mcp__github__get_pull_request_status` | `gh pr checks` |
 | Merger PR | `mcp__github__merge_pull_request` | `gh pr merge` |
-| Commenter | `mcp__github__add_issue_comment` | `gh pr comment` |
-
-**Git local** (toujours CLI - pas de MCP) :
-- `git status`, `git add`, `git commit`, `git push`
-- `git branch`, `git checkout`, `git diff`
-
-**Extraction owner/repo pour MCP** :
-```bash
-git remote get-url origin | sed -E 's#.*[:/]([^/]+)/([^/.]+)(\.git)?$#\1 \2#'
-```
 
 ---
 
 ## Action: --commit
 
-Workflow complet pour commiter et créer une PR.
+### Phase 1 : Peek (RLM Pattern)
 
-### 1. Vérifier les changements
+**Analyser l'état git AVANT toute action :**
 
-```bash
-git status --porcelain
+```yaml
+peek_workflow:
+  1_status:
+    action: "Vérifier l'état du repo"
+    commands:
+      - "git status --porcelain"
+      - "git branch --show-current"
+      - "git log -1 --format='%h %s'"
+
+  2_changes:
+    action: "Analyser les changements"
+    tools: [Bash(git diff --stat)]
+
+  3_branch_check:
+    action: "Vérifier la branche courante"
+    decision:
+      - "main/master → MUST create new branch"
+      - "feat/* | fix/* → Check coherence"
 ```
 
-- **Si aucun changement** : Erreur "Aucun changement à commiter"
-- **Si changements** : Continuer
-
-### 2. Gestion de la branche (AUTONOME)
-
-**Règles de décision AUTOMATIQUE** :
-
-1. **Si `main` ou `master`** : CRÉER nouvelle branche automatiquement
-2. **Si autre branche** : Analyser la cohérence :
-   - Extraire le type et scope du nom de branche
-   - Analyser les fichiers modifiés
-   - **Si cohérent** : Utiliser la branche existante
-   - **Si NON cohérent** : CRÉER nouvelle branche depuis main
-
-**Détection de cohérence** :
-
-| Branche | Fichiers modifiés | Décision |
-|---------|-------------------|----------|
-| `feat/auth` | `src/auth/*` | Cohérent |
-| `feat/auth` | `docs/readme.md` | Nouvelle branche |
-| `fix/api-error` | `src/api/*` | Cohérent |
-
-**IMPORTANT** : Ne JAMAIS demander à l'utilisateur quelle branche utiliser.
-
-### 3. Stage et Commit
-
-**Stage tous les fichiers** :
-```bash
-git add -A
-```
-
-**Générer le message** (Conventional Commits) :
-```
-<type>(<scope>): <description>
-
-[body optionnel]
-```
-
-| Type | Usage |
-|------|-------|
-| `feat` | Nouvelle fonctionnalité |
-| `fix` | Correction de bug |
-| `refactor` | Refactoring |
-| `docs` | Documentation |
-| `test` | Tests |
-| `chore` | Maintenance |
-| `ci` | CI/CD |
-
-**INTERDIT** :
-- Jamais de mention d'IA dans le message
-- Jamais de "Generated by", "Co-authored-by AI"
-
-### 4. Push
-
-```bash
-git push -u origin <branch>
-```
-
-### 5. Création de PR
-
-**Via MCP (priorité)** :
-```
-mcp__github__create_pull_request:
-  owner: <owner>
-  repo: <repo>
-  title: "<type>(<scope>): <description>"
-  head: <branch>
-  base: main
-  body: <description>
-```
-
-**Format du body** :
-```markdown
-## Summary
-<2-3 bullet points>
-
-## Changes
-<Liste des fichiers modifiés>
-
-## Test plan
-<Comment tester>
-```
-
-### Output --commit
+**Output Phase 1 :**
 
 ```
-═══════════════════════════════════════════════
-  /git --commit
-═══════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
+  /git --commit - Peek Analysis
+═══════════════════════════════════════════════════════════════
+
+  Branch: main (protected)
+  Status: 5 files modified, 2 untracked
+
+  Changes detected:
+    ├─ src/auth/login.ts (+45, -12)
+    ├─ src/auth/logout.ts (+23, -5)
+    ├─ tests/auth.test.ts (+80, -0) [new]
+    ├─ package.json (+2, -1)
+    └─ README.md (+15, -3)
+
+  Decision: CREATE new branch (on protected main)
+
+═══════════════════════════════════════════════════════════════
+```
+
+---
+
+### Phase 2 : Decompose (RLM Pattern)
+
+**Catégoriser les fichiers modifiés :**
+
+```yaml
+decompose_workflow:
+  categories:
+    features:
+      patterns: ["src/**/*.ts", "src/**/*.js"]
+      prefix: "feat"
+
+    fixes:
+      patterns: ["*fix*", "*bug*"]
+      prefix: "fix"
+
+    tests:
+      patterns: ["tests/**", "**/*.test.*"]
+      prefix: "test"
+
+    docs:
+      patterns: ["*.md", "docs/**"]
+      prefix: "docs"
+
+    config:
+      patterns: ["*.json", "*.yaml", "*.toml"]
+      prefix: "chore"
+
+  auto_detect:
+    action: "Déduire le type dominant"
+    output: "commit_type, scope, branch_name"
+```
+
+---
+
+### Phase 3 : Parallelize (RLM Pattern)
+
+**Pré-commit checks en parallèle :**
+
+```yaml
+parallel_checks:
+  mode: "PARALLEL (single message, multiple calls)"
+
+  agents:
+    - task: "lint-check"
+      action: "Run linter on modified files"
+      command: "{lint_command}"
+
+    - task: "test-check"
+      action: "Run related tests"
+      command: "{test_command} --findRelatedTests"
+
+    - task: "build-check"
+      action: "Verify build works"
+      command: "{build_command}"
+```
+
+**IMPORTANT** : Lancer les 3 checks dans UN SEUL message.
+
+---
+
+### Phase 4 : Execute & Synthesize
+
+```yaml
+execute_workflow:
+  1_branch:
+    action: "Créer ou utiliser branche"
+    auto: true
+
+  2_stage:
+    action: "Stage tous les fichiers"
+    command: "git add -A"
+
+  3_commit:
+    action: "Créer le commit"
+    format: |
+      <type>(<scope>): <description>
+
+      [body optionnel]
+
+  4_push:
+    action: "Push vers origin"
+    command: "git push -u origin <branch>"
+
+  5_pr:
+    action: "Créer la PR"
+    tool: mcp__github__create_pull_request
+    skip_if: "--no-pr"
+```
+
+**Output Final :**
+
+```
+═══════════════════════════════════════════════════════════════
+  /git --commit - Completed
+═══════════════════════════════════════════════════════════════
 
 | Étape   | Status                           |
 |---------|----------------------------------|
-| Branche | `feat/add-user-auth`             |
+| Peek    | ✓ 5 files analyzed               |
+| Checks  | ✓ lint, test, build PASS         |
+| Branch  | `feat/add-user-auth`             |
 | Commit  | `feat(auth): add user auth`      |
 | Push    | origin/feat/add-user-auth        |
 | PR      | #42 - feat(auth): add user auth  |
 
 URL: https://github.com/<owner>/<repo>/pull/42
-═══════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════════
 ```
 
 ---
 
 ## Action: --merge
 
-Merge intelligent avec validation CI et auto-fix.
+### Phase 1 : Peek (RLM Pattern)
 
-### Workflow
+```yaml
+peek_workflow:
+  1_pr_info:
+    action: "Récupérer info PR"
+    tool: mcp__github__get_pull_request
+    output: "pr_number, status, checks"
 
-1. **Sync avec main** (rebase)
-2. **Attente CI** si en cours
-3. **Auto-fix** si CI échoue (max 3 tentatives)
-4. **Merge squash**
-5. **Cleanup** branche
+  2_ci_status:
+    action: "Vérifier statut CI"
+    tool: mcp__github__get_pull_request_status
 
-### 1. Détection du contexte
-
-```bash
-BRANCH=$(git branch --show-current)
-MAIN_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+  3_conflicts:
+    action: "Vérifier les conflits"
+    command: "git fetch && git merge-base..."
 ```
 
-### 2. Trouver la PR
+---
 
-**MCP (prioritaire)** :
-```
-mcp__github__list_pull_requests:
-  owner: <owner>
-  repo: <repo>
-  head: "owner:BRANCH"
-  state: "open"
-```
+### Phase 2 : Parallelize (CI checks)
 
-**Si aucune PR trouvée** :
-```
-❌ Aucune PR trouvée pour cette branche
-→ Créez d'abord une PR avec /git --commit
-```
+```yaml
+parallel_ci:
+  mode: "PARALLEL (if CI pending, wait in parallel)"
 
-### 3. Validation garde-fous
+  checks:
+    - task: "Wait for CI"
+      poll: "every 30s"
+      timeout: "10min"
 
-- Pas sur main/master
-- PR existe et est ouverte
-- Pas de conflits
-- **Toutes les tasks Taskwarrior sont DONE** (si session existe)
+    - task: "Check conflicts"
+      action: "Verify no merge conflicts"
 
-**Validation des tasks :**
-```bash
-SESSION_FILE="$HOME/.claude/sessions/${BRANCH#*/}.json"
-if [[ -f "$SESSION_FILE" ]]; then
-    PROJECT=$(jq -r '.project' "$SESSION_FILE")
-    PENDING=$(task project:"$PROJECT" status:pending count 2>/dev/null || echo "0")
-    if [[ "$PENDING" -gt 0 ]]; then
-        echo "❌ BLOQUÉ: $PENDING task(s) non terminée(s)"
-        task project:"$PROJECT" status:pending
-        echo "→ Terminez toutes les tasks avant le merge"
-        exit 1
-    fi
-fi
+    - task: "Sync with main"
+      action: "Rebase if behind"
 ```
 
-### 4. Sync avec main (REBASE)
+---
 
-```bash
-git fetch origin "$MAIN_BRANCH"
-BEHIND=$(git rev-list --count HEAD.."origin/$MAIN_BRANCH")
-if [[ "$BEHIND" -gt 0 ]]; then
-    git rebase "origin/$MAIN_BRANCH"
-    git push --force-with-lease
-fi
+### Phase 3 : Auto-fix Loop
+
+```yaml
+autofix_loop:
+  max_attempts: 3
+
+  on_ci_failure:
+    1_analyze: "Identifier l'erreur CI"
+    2_fix: "Appliquer correction automatique"
+    3_commit: "Commit fix"
+    4_push: "Push et attendre CI"
+
+  on_max_reached:
+    action: "Poster commentaire détaillé sur PR"
+    status: "ABORT"
 ```
 
-### 5. Boucle CI avec auto-fix
+---
 
-```
-MAX_FIX_ATTEMPTS = 3
-CI_POLL_INTERVAL = 30 secondes
+### Phase 4 : Synthesize (Merge & Cleanup)
 
-WHILE true:
-    status = get_ci_status(PR_NUMBER)
+```yaml
+merge_workflow:
+  1_merge:
+    tool: mcp__github__merge_pull_request
+    method: "squash"
 
-    CASE "success":
-        → Procéder au merge
-
-    CASE "pending":
-        → Attendre 30 secondes
-
-    CASE "failure":
-        fix_attempts++
-        IF fix_attempts > 3:
-            → Poster commentaire détaillé sur PR
-            → Abandon
-        ELSE:
-            → Analyser l'erreur CI
-            → Appliquer fix automatique
-            → Commit + Push
+  2_cleanup:
+    actions:
+      - "git push origin --delete <branch>"
+      - "git branch -D <branch>"
+      - "git checkout main"
+      - "git pull origin main"
 ```
 
-### 6. Merge (SQUASH)
+**Output Final :**
 
 ```
-mcp__github__merge_pull_request:
-  owner: <owner>
-  repo: <repo>
-  pull_number: <number>
-  merge_method: "squash"
-```
-
-### 7. Cleanup
-
-```bash
-# Nettoyer les branches
-git push origin --delete "$BRANCH"
-git branch -D "$BRANCH"
-git checkout "$MAIN_BRANCH"
-git pull origin "$MAIN_BRANCH"
-
-# Nettoyer la session Taskwarrior (si existe)
-SESSION_FILE="$HOME/.claude/sessions/${BRANCH#*/}.json"
-if [[ -f "$SESSION_FILE" ]]; then
-    PROJECT=$(jq -r '.project' "$SESSION_FILE")
-    # Archiver les tasks (pas delete, status:deleted)
-    yes | task project:"$PROJECT" modify status:deleted 2>/dev/null || true
-    # Supprimer le fichier de session
-    rm -f "$SESSION_FILE"
-fi
-```
-
-### Output --merge
-
-```
-═══════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
   ✓ PR #42 merged successfully
-═══════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 
   Branch  : feat/add-auth → main
   Method  : squash
@@ -358,56 +370,41 @@ fi
     ✓ Local branch deleted
     ✓ Switched to main
     ✓ Pulled latest (now at abc1234)
-    ✓ Session archived
 
-═══════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 ```
+
+---
+
+## Conventional Commits
+
+| Type | Usage |
+|------|-------|
+| `feat` | Nouvelle fonctionnalité |
+| `fix` | Correction de bug |
+| `refactor` | Refactoring |
+| `docs` | Documentation |
+| `test` | Tests |
+| `chore` | Maintenance |
+| `ci` | CI/CD |
 
 ---
 
 ## GARDE-FOUS (ABSOLUS)
 
-| Action | Status |
-|--------|--------|
-| Merge automatique sans validation | ❌ **INTERDIT** |
-| Push sur main/master | ❌ **INTERDIT** |
-| Force merge si CI échoue x3 | ❌ **INTERDIT** |
-| Push sans --force-with-lease | ❌ **INTERDIT** |
-| Mentions IA dans commits | ❌ **INTERDIT** |
-| Merge avec conflits | ❌ **INTERDIT** |
+| Action | Status | Raison |
+|--------|--------|--------|
+| Skip Phase 1 (Peek) | ❌ **INTERDIT** | git status avant action |
+| Merge automatique sans CI | ❌ **INTERDIT** | Qualité code |
+| Push sur main/master | ❌ **INTERDIT** | Branche protégée |
+| Force merge si CI échoue x3 | ❌ **INTERDIT** | Limite tentatives |
+| Push sans --force-with-lease | ❌ **INTERDIT** | Sécurité |
+| Mentions IA dans commits | ❌ **INTERDIT** | Discrétion |
 
----
+### Parallélisation légitime
 
-## Cas spéciaux
-
-### --commit --amend
-
-1. Vérifier qu'on n'est PAS sur main/master
-2. Vérifier que le dernier commit n'est pas pushé
-3. `git commit --amend --no-edit`
-
-### --commit --no-pr
-
-Skip la création de PR, s'arrête après le push.
-
-### --merge --dry-run
-
-Vérifie tout sans merger :
-- Valide les garde-fous
-- Vérifie le statut CI
-- Affiche ce qui serait fait
-
-### --merge --strategy
-
-Force une stratégie de merge différente :
-- `squash` (défaut) : Combine tous les commits
-- `merge` : Crée un merge commit
-- `rebase` : Applique les commits sur main
-
----
-
-## Voir aussi
-
-- `/feature <description>` - Développer une fonctionnalité
-- `/fix <description>` - Corriger un bug
-- `/review --pr` - Demander une review CodeRabbit
+| Élément | Parallèle? | Raison |
+|---------|------------|--------|
+| Pré-commit checks (lint+test+build) | ✅ Parallèle | Indépendants |
+| Opérations git (branch→commit→push→PR) | ❌ Séquentiel | Chaîne de dépendances |
+| CI checks en attente | ❌ Séquentiel | Attendre résultat |

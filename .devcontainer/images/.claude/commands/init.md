@@ -1,316 +1,435 @@
-# Init - Project Initialization Check
+---
+name: init
+description: |
+  Project initialization check with RLM decomposition.
+  Validates environment, dependencies, configuration, and grepai indexing.
+  Use when: starting work on a project, verifying setup,
+  or troubleshooting environment issues.
+allowed-tools:
+  - "Bash(git:*)"
+  - "Bash(docker:*)"
+  - "Bash(terraform:*)"
+  - "Bash(kubectl:*)"
+  - "Bash(node:*)"
+  - "Bash(python:*)"
+  - "Bash(go:*)"
+  - "Bash(grepai:*)"
+  - "Bash(curl:*)"
+  - "Bash(pgrep:*)"
+  - "Bash(nohup:*)"
+  - "Read(**/*)"
+  - "Glob(**/*)"
+  - "Task(*)"
+  - "mcp__github__*"
+  - "mcp__codacy__*"
+  - "mcp__grepai__*"
+---
+
+# /init - Project Initialization (RLM Architecture)
 
 $ARGUMENTS
 
 ---
 
-## Description
+## Overview
 
-Commande d'initialisation automatique du projet. Exécutée au démarrage du devcontainer via `postStart.sh`.
+Vérification d'initialisation projet avec patterns **RLM** :
 
-**Objectif :** Vérifier que le projet est personnalisé (CLAUDE.md et README.md différents du template).
+- **Peek** - Scan rapide du projet (type, structure)
+- **Decompose** - Catégoriser les vérifications (tools, deps, config, env)
+- **Parallelize** - Checks simultanés par catégorie
+- **Synthesize** - Rapport consolidé avec actions
 
 ---
 
-## Arguments
+## Usage
 
-| Pattern | Action |
-|---------|--------|
-| (vide) | Vérifie si le projet est initialisé |
-| `--force` | Force la réinitialisation |
-| `--status` | Affiche le statut d'initialisation |
-| `--help` | Affiche l'aide |
+```
+/init                      # Full initialization check
+/init --tools              # Check tools only
+/init --deps               # Check dependencies only
+/init --env                # Check environment only
+/init --fix                # Attempt auto-fix issues
+/init --help               # Show help
+```
 
 ---
 
 ## --help
 
-Quand `--help` est passé, afficher :
-
 ```
-═══════════════════════════════════════════════
-  /init - Project Initialization Check
-═══════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
+  /init - Project Initialization (RLM)
+═══════════════════════════════════════════════════════════════
 
 Usage: /init [options]
 
 Options:
-  (vide)      Vérifie et initialise si nécessaire
-  --force     Force la réinitialisation
-  --status    Affiche le statut actuel
-  --help      Affiche cette aide
+  (none)            Full initialization check
+  --tools           Check tools only
+  --deps            Check dependencies only
+  --env             Check environment only
+  --fix             Attempt auto-fix issues
+  --help            Show this help
 
-Comportement:
-  - Compare CLAUDE.md et README.md avec le template
-  - Si identiques → guide l'utilisateur pour personnaliser
-  - Si différents → projet déjà initialisé
+RLM Patterns:
+  1. Peek       - Detect project type
+  2. Decompose  - Categorize checks
+  3. Parallelize - Run checks simultaneously
+  4. Synthesize - Consolidated report
 
-Fichiers vérifiés:
-  - ./CLAUDE.md (doit être personnalisé)
-  - ./README.md (doit être personnalisé)
+Exemples:
+  /init                       Full check
+  /init --tools               Tools versions only
+  /init --fix                 Auto-fix issues
 
-Template de référence:
-  https://github.com/kodflow/devcontainer-template
-═══════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 ```
 
 ---
 
-## Logique d'initialisation
+## Phase 1 : Peek (RLM Pattern)
 
-### Étape 1 : Récupérer les footprints du template
+**Scan rapide du projet :**
+
+```yaml
+peek_workflow:
+  1_structure:
+    action: "Scanner la structure du projet"
+    tools: [Glob]
+    patterns:
+      - "package.json"
+      - "go.mod"
+      - "Cargo.toml"
+      - "pyproject.toml"
+      - "*.tf"
+      - "Dockerfile"
+      - "*.yaml"
+
+  2_identify_type:
+    action: "Identifier le type de projet"
+    mapping:
+      - "package.json → Node.js"
+      - "go.mod → Go"
+      - "Cargo.toml → Rust"
+      - "pyproject.toml → Python"
+      - "*.tf → Terraform"
+      - "Dockerfile → Container"
+      - "deployment.yaml → Kubernetes"
+
+  3_detect_requirements:
+    action: "Extraire les requirements"
+    tools: [Grep]
+    patterns:
+      - "engines" in package.json
+      - "go" version in go.mod
+      - "rust-version" in Cargo.toml
+```
+
+**Output Phase 1 :**
+
+```
+═══════════════════════════════════════════════════════════════
+  /init - Peek Analysis
+═══════════════════════════════════════════════════════════════
+
+  Project: /workspace
+
+  Detected Types:
+    ✓ Node.js (package.json)
+    ✓ Terraform (*.tf)
+    ✓ Docker (Dockerfile)
+
+  Requirements extracted:
+    - Node.js >= 20.x
+    - Terraform >= 1.6.x
+    - Docker >= 24.x
+
+═══════════════════════════════════════════════════════════════
+```
+
+---
+
+## Phase 2 : Decompose (RLM Pattern)
+
+**Catégoriser les vérifications :**
+
+```yaml
+decompose_workflow:
+  categories:
+    tools:
+      description: "Vérifier les outils installés et versions"
+      checks:
+        - git
+        - node/npm
+        - go
+        - terraform
+        - docker
+        - kubectl
+        - grepai
+
+    dependencies:
+      description: "Vérifier les dépendances du projet"
+      checks:
+        - "npm ci / npm install"
+        - "go mod download"
+        - "terraform init"
+
+    configuration:
+      description: "Vérifier les fichiers de configuration"
+      checks:
+        - ".env exists if .env.example"
+        - "Config files valid syntax"
+        - "CLAUDE.md present"
+
+    environment:
+      description: "Vérifier les variables d'environnement"
+      checks:
+        - "Required env vars set"
+        - "MCP servers configured"
+        - "Tokens available"
+
+    semantic_search:
+      description: "Initialiser grepai pour recherche sémantique"
+      checks:
+        - "Ollama sidecar accessible"
+        - ".grepai/ config exists"
+        - "grepai watch daemon running"
+        - "Index status (files indexed)"
+```
+
+---
+
+## Phase 3 : Parallelize (RLM Pattern)
+
+**Lancer les checks en PARALLÈLE via Task agents :**
+
+```yaml
+parallel_checks:
+  mode: "PARALLEL (single message, 5 Task calls)"
+
+  agents:
+    - task: "tools-checker"
+      type: "Explore"
+      prompt: |
+        Check installed tools:
+        - git --version
+        - node --version
+        - go version
+        - terraform version
+        - docker version
+        - grepai version
+        Return: {tool, required, installed, status}
+
+    - task: "deps-checker"
+      type: "Explore"
+      prompt: |
+        Check dependencies:
+        - npm ci (if package.json)
+        - go mod download (if go.mod)
+        - terraform init (if *.tf)
+        Return: {manager, status, issues}
+
+    - task: "config-checker"
+      type: "Explore"
+      prompt: |
+        Check configuration:
+        - .env exists if .env.example
+        - CLAUDE.md present
+        - Config files valid
+        Return: {file, status, issue}
+
+    - task: "env-checker"
+      type: "Explore"
+      prompt: |
+        Check environment:
+        - Required env vars
+        - MCP tokens (GITHUB_TOKEN, CODACY_TOKEN)
+        Return: {variable, status, source}
+
+    - task: "grepai-checker"
+      type: "Explore"
+      prompt: |
+        Initialize and check grepai semantic search:
+        1. Check Ollama: curl -sf http://ollama:11434/api/tags
+        2. Check .grepai/config.yaml exists
+        3. If missing: grepai init --provider ollama --backend gob --yes
+        4. Fix endpoint: sed -i 's/localhost:11434/ollama:11434/g' .grepai/config.yaml
+        5. Check daemon: pgrep -f "grepai watch"
+        6. If not running: nohup grepai watch >/dev/null 2>&1 &
+        7. Check index: mcp__grepai__grepai_index_status
+        Return: {ollama, config, daemon, index_files, status}
+```
+
+**IMPORTANT** : Lancer les 5 agents dans UN SEUL message.
+
+---
+
+## Phase 4 : Synthesize (RLM Pattern)
+
+**Consolider les résultats :**
+
+```yaml
+synthesize_workflow:
+  1_collect:
+    action: "Rassembler les résultats des 4 agents"
+
+  2_categorize:
+    action: "Classer par sévérité"
+    levels:
+      - CRITICAL: "Bloquant, impossible de travailler"
+      - WARNING: "Problème potentiel"
+      - INFO: "Suggestion d'amélioration"
+      - PASS: "OK"
+
+  3_generate_report:
+    action: "Générer rapport structuré"
+
+  4_suggest_fixes:
+    action: "Proposer des actions correctives"
+```
+
+**Output Final :**
+
+```
+═══════════════════════════════════════════════════════════════
+  /init - Project Initialization Report
+═══════════════════════════════════════════════════════════════
+
+  Project: example-app
+  Types  : Node.js, Terraform, Docker
+
+## Tools Status
+
+| Tool | Required | Installed | Status |
+|------|----------|-----------|--------|
+| git | 2.40+ | 2.42.0 | ✓ PASS |
+| node | 20.x | 20.10.0 | ✓ PASS |
+| terraform | 1.6+ | 1.7.0 | ✓ PASS |
+| docker | 24+ | 24.0.7 | ✓ PASS |
+
+## Dependencies
+
+| Manager | Status | Issues |
+|---------|--------|--------|
+| npm | ✓ PASS | 0 vulnerabilities |
+| terraform | ✓ PASS | Initialized |
+
+## Configuration
+
+| File | Status | Issue |
+|------|--------|-------|
+| .env | ⚠ MISSING | Copy from .env.example |
+| CLAUDE.md | ✓ PASS | - |
+| .gitignore | ✓ PASS | - |
+
+## Environment
+
+| Variable | Status | Source |
+|----------|--------|--------|
+| GITHUB_TOKEN | ✓ SET | mcp.json |
+| CODACY_TOKEN | ⚠ MISSING | Required |
+| DATABASE_URL | ⚠ MISSING | .env |
+
+## Semantic Search (grepai)
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| Ollama | ✓ READY | ollama:11434 |
+| Config | ✓ EXISTS | .grepai/config.yaml |
+| Daemon | ✓ RUNNING | grepai watch (PID 1234) |
+| Index | ✓ INDEXED | 296 files, 1.2MB |
+
+## Recommended Actions
+
+1. `cp .env.example .env` - Create env file
+2. Set `CODACY_TOKEN` in environment
+3. Set `DATABASE_URL` in .env
+
+## Quick Start
 
 ```bash
-REPO="kodflow/devcontainer-template"
-BRANCH="main"
-
-# Footprint = premiers 500 caractères + hash SHA256
-get_footprint() {
-    local file="$1"
-    echo "$(head -c 500 "$file" 2>/dev/null | sha256sum | cut -d' ' -f1)"
-}
-
-# Footprints distants
-REMOTE_CLAUDE=$(curl -sL "https://raw.githubusercontent.com/$REPO/$BRANCH/CLAUDE.md" | head -c 500 | sha256sum | cut -d' ' -f1)
-REMOTE_README=$(curl -sL "https://raw.githubusercontent.com/$REPO/$BRANCH/README.md" | head -c 500 | sha256sum | cut -d' ' -f1)
-
-# Footprints locaux
-LOCAL_CLAUDE=$(get_footprint "./CLAUDE.md")
-LOCAL_README=$(get_footprint "./README.md")
+cp .env.example .env
+# Edit .env with your values
+npm install
+npm run dev
 ```
 
-### Étape 2 : Comparer les footprints
-
-| Condition | Action |
-|-----------|--------|
-| CLAUDE.md identique au template | ⚠️ Demander personnalisation |
-| README.md identique au template | ⚠️ Demander personnalisation |
-| Les deux personnalisés | ✅ Projet initialisé |
-
-### Étape 3 : Guider la personnalisation
-
-Si un fichier n'est pas personnalisé, afficher les instructions :
-
-```
-═══════════════════════════════════════════════
-  /init - Initialisation requise
-═══════════════════════════════════════════════
-
-  ⚠️ Fichiers non personnalisés détectés :
-
-  ○ CLAUDE.md (identique au template)
-  ○ README.md (identique au template)
-
-─────────────────────────────────────────────
-
-  CLAUDE.md doit contenir :
-    - Description de VOTRE projet
-    - Structure de VOTRE codebase
-    - Conventions de VOTRE équipe
-    - Règles spécifiques au projet
-
-  README.md doit contenir :
-    - Nom de VOTRE projet
-    - Description du projet
-    - Instructions d'installation
-    - Guide d'utilisation
-
-─────────────────────────────────────────────
-
-  Voulez-vous que je vous aide à personnaliser
-  ces fichiers maintenant ?
-
-═══════════════════════════════════════════════
-```
-
-Puis utiliser `AskUserQuestion` :
+## Search Usage
 
 ```yaml
-questions:
-  - question: "Voulez-vous personnaliser ces fichiers maintenant ?"
-    header: "Init"
-    options:
-      - label: "Oui, guidez-moi"
-        description: "Questions interactives pour personnaliser"
-      - label: "Non, plus tard"
-        description: "Rappel au prochain démarrage"
-    multiSelect: false
+# MANDATORY: Use grepai MCP for ALL code searches
+semantic_search: mcp__grepai__grepai_search(query="...")
+call_analysis: mcp__grepai__grepai_trace_callers(symbol="...")
+fallback_only: Grep tool (only if grepai fails)
+```
+
+═══════════════════════════════════════════════════════════════
 ```
 
 ---
 
-## --status
+## --fix Mode
 
-Afficher le statut d'initialisation :
+**Auto-fix avec parallélisation :**
 
-```
-═══════════════════════════════════════════════
-  /init --status
-═══════════════════════════════════════════════
+```yaml
+fix_workflow:
+  parallel_fixes:
+    - action: "cp .env.example .env"
+      condition: ".env missing && .env.example exists"
 
-  Projet : <nom du dossier>
-  Statut : ✅ Initialisé / ⚠️ Non initialisé
+    - action: "npm audit fix"
+      condition: "npm vulnerabilities > 0"
 
-─────────────────────────────────────────────
-  Fichiers
-─────────────────────────────────────────────
+    - action: "terraform init -upgrade"
+      condition: "terraform not initialized"
 
-  CLAUDE.md : ✅ Personnalisé / ⚠️ Template
-  README.md : ✅ Personnalisé / ⚠️ Template
-
-─────────────────────────────────────────────
-  Footprints
-─────────────────────────────────────────────
-
-  Template CLAUDE.md : <hash court>
-  Local CLAUDE.md    : <hash court>
-  Match              : Oui/Non
-
-  Template README.md : <hash court>
-  Local README.md    : <hash court>
-  Match              : Oui/Non
-
-═══════════════════════════════════════════════
+  mode: "PARALLEL where independent"
 ```
 
 ---
 
-## Workflow de personnalisation interactive
-
-Si l'utilisateur choisit "Oui, guidez-moi" :
-
-### Pour CLAUDE.md
+## Detection Patterns
 
 ```yaml
-questions:
-  - question: "Quel est le nom de votre projet ?"
-    header: "Projet"
-    options:
-      - label: "Utiliser le nom du dossier"
-        description: "<nom_dossier_courant>"
-      - label: "Autre"
-        description: "Je saisis un nom personnalisé"
-    multiSelect: false
+project_types:
+  nodejs:
+    files: ["package.json"]
+    tools: ["node", "npm"]
+    deps: "npm ci"
 
-  - question: "Quel type de projet est-ce ?"
-    header: "Type"
-    options:
-      - label: "API/Backend"
-        description: "REST, GraphQL, gRPC..."
-      - label: "Frontend/Web"
-        description: "React, Vue, Angular..."
-      - label: "CLI/Tool"
-        description: "Outil en ligne de commande"
-      - label: "Library"
-        description: "Package/Module réutilisable"
-    multiSelect: false
+  go:
+    files: ["go.mod"]
+    tools: ["go"]
+    deps: "go mod download"
 
-  - question: "Quelle architecture utilisez-vous ?"
-    header: "Archi"
-    options:
-      - label: "Clean Architecture"
-        description: "Couches indépendantes"
-      - label: "Hexagonal"
-        description: "Ports & Adapters"
-      - label: "MVC"
-        description: "Model-View-Controller"
-      - label: "Flat"
-        description: "Structure simple"
-    multiSelect: false
-```
+  python:
+    files: ["pyproject.toml", "requirements.txt"]
+    tools: ["python", "pip"]
+    deps: "pip install -r requirements.txt"
 
-### Pour README.md
+  terraform:
+    files: ["*.tf"]
+    tools: ["terraform", "tflint"]
+    deps: "terraform init"
 
-```yaml
-questions:
-  - question: "Décrivez brièvement le projet (1-2 phrases)"
-    header: "Desc"
-    options:
-      - label: "Je saisis"
-        description: "Saisie libre"
-    multiSelect: false
-```
+  kubernetes:
+    files: ["**/deployment.yaml", "helm/"]
+    tools: ["kubectl", "helm"]
 
-### Génération des fichiers
-
-Après les réponses, générer des fichiers personnalisés :
-
-**CLAUDE.md template personnalisé :**
-
-```markdown
-# <Nom du projet>
-
-## Project Structure
-
-```text
-/workspace
-├── src/                # Source code
-│   └── ...
-├── tests/              # Unit tests
-└── docs/               # Documentation
-```
-
-## Type
-
-`<Type>` project using `<Architecture>` pattern.
-
-## Conventions
-
-- All code in `/src`
-- Tests in `/tests`
-- Follow language-specific rules in `.devcontainer/features/languages/`
-
-## Key Commands
-
-- `/update --context` - Generate context files
-- `/feature <desc>` - Start new feature
-- `/fix <desc>` - Fix a bug
-
-```
-
-**README.md template personnalisé :**
-
-```markdown
-# <Nom du projet>
-
-<Description du projet>
-
-## Getting Started
-
-### Prerequisites
-
-- Docker
-- VS Code with Remote Containers extension
-
-### Installation
-
-1. Clone the repository
-2. Open in VS Code
-3. "Reopen in Container"
-
-## Usage
-
-TODO: Add usage instructions
-
-## License
-
-TODO: Add license
+  docker:
+    files: ["Dockerfile", "docker-compose.yml"]
+    tools: ["docker"]
 ```
 
 ---
 
-## GARDE-FOUS
+## GARDE-FOUS (ABSOLUS)
 
 | Action | Status |
 |--------|--------|
-| Écraser CLAUDE.md personnalisé | ❌ **INTERDIT** |
-| Écraser README.md personnalisé | ❌ **INTERDIT** |
-| Skip vérification footprint | ❌ **INTERDIT** |
-| Ignorer choix utilisateur | ❌ **INTERDIT** |
-
----
-
-## Voir aussi
-
-- `/update --context` - Générer le contexte après init
-- `/feature <description>` - Commencer une fonctionnalité
+| Skip Phase 1 (Peek) | ❌ **INTERDIT** |
+| Checks séquentiels | ❌ **INTERDIT** |
+| Ignorer CRITICAL issues | ❌ **INTERDIT** |
+| Auto-fix sans --fix flag | ⚠ WARNING |
