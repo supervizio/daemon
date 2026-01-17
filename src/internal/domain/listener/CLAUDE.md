@@ -14,9 +14,9 @@ Domain entities for network listeners.
 ### State (Enum)
 ```go
 const (
-    Closed    State = iota  // Port not open
-    Listening               // Port open, accepting connections
-    Ready                   // Health checks passed
+    StateClosed    State = iota  // Port not open
+    StateListening               // Port open, accepting connections
+    StateReady                   // Health checks passed
 )
 ```
 
@@ -51,8 +51,8 @@ type Listener struct {
 
 - `WithProbe(type, config, target)` - Add probe configuration
 - `SetState(state)` - Transition state (validates transitions)
-- `MarkListening()` - Transition to Listening
-- `MarkReady()` - Transition to Ready
-- `MarkClosed()` - Transition to Closed
+- `MarkListening()` - Transition to StateListening
+- `MarkReady()` - Transition to StateReady
+- `MarkClosed()` - Transition to StateClosed
 - `HasProbe()` - Check if probe configured
-- `GetProbeAddress()` - Get address for probing
+- `ProbeAddress()` - Get address for probing

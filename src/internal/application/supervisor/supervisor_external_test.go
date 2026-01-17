@@ -13,14 +13,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kodflow/daemon/internal/application/supervisor"
+	"github.com/kodflow/daemon/internal/domain/config"
 	domain "github.com/kodflow/daemon/internal/domain/process"
-	"github.com/kodflow/daemon/internal/domain/service"
 )
 
 // mockLoader implements appconfig.Loader for testing.
 type mockLoader struct {
 	// cfg is the configuration to return.
-	cfg *service.Config
+	cfg *config.Config
 	// err is the error to return.
 	err error
 }
@@ -31,9 +31,9 @@ type mockLoader struct {
 //   - path: the configuration path (unused).
 //
 // Returns:
-//   - *service.Config: the mock configuration.
+//   - *config.Config: the mock configuration.
 //   - error: the mock error.
-func (ml *mockLoader) Load(_ string) (*service.Config, error) {
+func (ml *mockLoader) Load(_ string) (*config.Config, error) {
 	// Return the configured mock values.
 	return ml.cfg, ml.err
 }
@@ -103,12 +103,12 @@ func (m *mockExecutor) Signal(_ int, _ os.Signal) error {
 // createValidConfig creates a valid test configuration.
 //
 // Returns:
-//   - *service.Config: a valid configuration for testing.
-func createValidConfig() *service.Config {
-	// Return a valid configuration with one service.
-	return &service.Config{
+//   - *config.Config: a valid configuration for testing.
+func createValidConfig() *config.Config {
+	// Return a valid configuration with one config.
+	return &config.Config{
 		ConfigPath: "/test/config.yaml",
-		Services: []service.ServiceConfig{
+		Services: []config.ServiceConfig{
 			{
 				Name:    "test-service",
 				Command: "/bin/echo",
@@ -121,12 +121,12 @@ func createValidConfig() *service.Config {
 // createMultiServiceConfig creates a configuration with multiple services.
 //
 // Returns:
-//   - *service.Config: a configuration with multiple services.
-func createMultiServiceConfig() *service.Config {
+//   - *config.Config: a configuration with multiple services.
+func createMultiServiceConfig() *config.Config {
 	// Return a configuration with two services.
-	return &service.Config{
+	return &config.Config{
 		ConfigPath: "/test/config.yaml",
-		Services: []service.ServiceConfig{
+		Services: []config.ServiceConfig{
 			{
 				Name:    "service-1",
 				Command: "/bin/echo",
@@ -344,7 +344,7 @@ func TestNewSupervisor(t *testing.T) {
 		// name is the test case name.
 		name string
 		// cfg is the configuration to use.
-		cfg *service.Config
+		cfg *config.Config
 		// wantErr indicates if an error is expected.
 		wantErr bool
 		// errContains is the expected error substring.
@@ -357,7 +357,7 @@ func TestNewSupervisor(t *testing.T) {
 		},
 		{
 			name: "nil_services_returns_error",
-			cfg: &service.Config{
+			cfg: &config.Config{
 				ConfigPath: "/test/config.yaml",
 				Services:   nil,
 			},
@@ -366,13 +366,13 @@ func TestNewSupervisor(t *testing.T) {
 		},
 		{
 			name:        "empty_command_returns_error",
-			cfg:         &service.Config{ConfigPath: "/test/config.yaml", Services: []service.ServiceConfig{{Name: "test", Command: ""}}},
+			cfg:         &config.Config{ConfigPath: "/test/config.yaml", Services: []config.ServiceConfig{{Name: "test", Command: ""}}},
 			wantErr:     true,
 			errContains: "invalid configuration",
 		},
 		{
 			name:        "empty_service_name_returns_error",
-			cfg:         &service.Config{ConfigPath: "/test/config.yaml", Services: []service.ServiceConfig{{Name: "", Command: "/bin/echo"}}},
+			cfg:         &config.Config{ConfigPath: "/test/config.yaml", Services: []config.ServiceConfig{{Name: "", Command: "/bin/echo"}}},
 			wantErr:     true,
 			errContains: "invalid configuration",
 		},
@@ -533,7 +533,7 @@ func TestSupervisor_Services(t *testing.T) {
 		// name is the test case name.
 		name string
 		// cfg is the configuration to use.
-		cfg *service.Config
+		cfg *config.Config
 		// expectedCount is the expected number of services.
 		expectedCount int
 		// expectedNames are the expected service names.
@@ -922,7 +922,7 @@ func TestSupervisor_AllStats(t *testing.T) {
 		// name is the test case name.
 		name string
 		// cfg is the configuration to use.
-		cfg *service.Config
+		cfg *config.Config
 		// expectedCount is the expected number of stat entries.
 		expectedCount int
 	}{
@@ -992,6 +992,50 @@ func TestSupervisor_SetEventHandler(t *testing.T) {
 
 			// Set nil handler - should not panic.
 			sup.SetEventHandler(nil)
+		})
+	}
+}
+
+// TestSupervisor_SetErrorHandler tests the SetErrorHandler method on the Supervisor type.
+// This test validates the SetErrorHandler method behavior using black-box testing.
+//
+// Params:
+//   - t: the testing context.
+func TestSupervisor_SetErrorHandler(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// handler is the error handler to set.
+		handler supervisor.ErrorHandler
+	}{
+		{
+			name:    "set_nil_error_handler",
+			handler: nil,
+		},
+		{
+			name: "set_valid_error_handler",
+			handler: func(_ string, _ string, _ error) {
+				// Handler implementation for testing.
+			},
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createValidConfig()
+			loader := &mockLoader{cfg: cfg}
+			executor := &mockExecutor{}
+
+			sup, err := supervisor.NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			// Set the handler - should not panic.
+			sup.SetErrorHandler(tt.handler)
+
+			// Verify supervisor is still operational.
+			assert.Equal(t, supervisor.StateStopped, sup.State())
 		})
 	}
 }

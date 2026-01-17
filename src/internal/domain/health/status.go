@@ -36,9 +36,13 @@ func (s Status) String() string {
 	case StatusDegraded:
 		// Return the degraded status string.
 		return "degraded"
-	// Default case for unknown or unrecognized status.
+	// Case for unknown status.
+	case StatusUnknown:
+		// Return the unknown status string.
+		return "unknown"
+	// Default case for unexpected status values.
 	default:
-		// Return the unknown status string for unrecognized values.
+		// Return the unknown status string for invalid values.
 		return "unknown"
 	}
 }

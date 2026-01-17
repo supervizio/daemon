@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/domain/process"
-	"github.com/kodflow/daemon/internal/domain/service"
 	"github.com/kodflow/daemon/internal/domain/shared"
 )
 
@@ -22,19 +22,19 @@ func TestNewRestartTracker(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		policy     service.RestartPolicy
+		policy     config.RestartPolicy
 		maxRetries int
 		delay      shared.Duration
 	}{
 		{
 			name:       "on failure policy",
-			policy:     service.RestartOnFailure,
+			policy:     config.RestartOnFailure,
 			maxRetries: 5,
 			delay:      shared.Seconds(2),
 		},
 		{
 			name:       "always policy",
-			policy:     service.RestartAlways,
+			policy:     config.RestartAlways,
 			maxRetries: 3,
 			delay:      shared.Seconds(1),
 		},
@@ -44,7 +44,7 @@ func TestNewRestartTracker(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
+			cfg := &config.RestartConfig{
 				Policy:     tt.policy,
 				MaxRetries: tt.maxRetries,
 				Delay:      tt.delay,
@@ -99,8 +99,8 @@ func TestRestartTracker_ShouldRestart_Always(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
-				Policy:     service.RestartAlways,
+			cfg := &config.RestartConfig{
+				Policy:     config.RestartAlways,
 				MaxRetries: tt.maxRetries,
 				Delay:      shared.Seconds(1),
 			}
@@ -165,8 +165,8 @@ func TestRestartTracker_ShouldRestart_OnFailure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
-				Policy:     service.RestartOnFailure,
+			cfg := &config.RestartConfig{
+				Policy:     config.RestartOnFailure,
 				MaxRetries: tt.maxRetries,
 				Delay:      shared.Seconds(1),
 			}
@@ -212,8 +212,8 @@ func TestRestartTracker_ShouldRestart_Never(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
-				Policy:     service.RestartNever,
+			cfg := &config.RestartConfig{
+				Policy:     config.RestartNever,
 				MaxRetries: 3,
 				Delay:      shared.Seconds(1),
 			}
@@ -262,8 +262,8 @@ func TestRestartTracker_ShouldRestart_Unless(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
-				Policy:     service.RestartUnless,
+			cfg := &config.RestartConfig{
+				Policy:     config.RestartUnless,
 				MaxRetries: 3,
 				Delay:      shared.Seconds(1),
 			}
@@ -318,8 +318,8 @@ func TestRestartTracker_RecordAttempt(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
-				Policy:     service.RestartOnFailure,
+			cfg := &config.RestartConfig{
+				Policy:     config.RestartOnFailure,
 				MaxRetries: 5,
 				Delay:      shared.Seconds(1),
 			}
@@ -365,8 +365,8 @@ func TestRestartTracker_Reset(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
-				Policy:     service.RestartOnFailure,
+			cfg := &config.RestartConfig{
+				Policy:     config.RestartOnFailure,
 				MaxRetries: 5,
 				Delay:      shared.Seconds(1),
 			}
@@ -427,8 +427,8 @@ func TestRestartTracker_MaybeReset(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
-				Policy:     service.RestartOnFailure,
+			cfg := &config.RestartConfig{
+				Policy:     config.RestartOnFailure,
 				MaxRetries: 5,
 				Delay:      shared.Seconds(1),
 			}
@@ -497,8 +497,8 @@ func TestRestartTracker_NextDelay(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
-				Policy:     service.RestartOnFailure,
+			cfg := &config.RestartConfig{
+				Policy:     config.RestartOnFailure,
 				MaxRetries: 10,
 				Delay:      tt.baseDelay,
 				DelayMax:   tt.maxDelay,
@@ -547,8 +547,8 @@ func TestRestartTracker_NextDelay_NoMax(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
-				Policy:     service.RestartOnFailure,
+			cfg := &config.RestartConfig{
+				Policy:     config.RestartOnFailure,
 				MaxRetries: 10,
 				Delay:      tt.baseDelay,
 				// No DelayMax set - should default to base * 10.
@@ -616,8 +616,8 @@ func TestRestartTracker_IsExhausted(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
-				Policy:     service.RestartOnFailure,
+			cfg := &config.RestartConfig{
+				Policy:     config.RestartOnFailure,
 				MaxRetries: tt.maxRetries,
 				Delay:      shared.Seconds(1),
 			}
@@ -644,22 +644,22 @@ func TestRestartTracker_ShouldRestart_UnknownPolicy(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		policy   service.RestartPolicy
+		policy   config.RestartPolicy
 		exitCode int
 	}{
 		{
 			name:     "unknown policy returns false on exit code 0",
-			policy:   service.RestartPolicy("unknown-policy"),
+			policy:   config.RestartPolicy("unknown-policy"),
 			exitCode: 0,
 		},
 		{
 			name:     "unknown policy returns false on exit code 1",
-			policy:   service.RestartPolicy("invalid"),
+			policy:   config.RestartPolicy("invalid"),
 			exitCode: 1,
 		},
 		{
 			name:     "empty policy returns false",
-			policy:   service.RestartPolicy(""),
+			policy:   config.RestartPolicy(""),
 			exitCode: 1,
 		},
 	}
@@ -668,7 +668,7 @@ func TestRestartTracker_ShouldRestart_UnknownPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &service.RestartConfig{
+			cfg := &config.RestartConfig{
 				Policy:     tt.policy,
 				MaxRetries: 3,
 				Delay:      shared.Seconds(1),

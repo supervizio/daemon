@@ -3,8 +3,6 @@
 package process_test
 
 import (
-	"bytes"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,54 +66,6 @@ func TestNewSpec_TableDriven(t *testing.T) {
 	}
 }
 
-// TestSpec_WithOutput validates output writer attachment to a Spec.
-// It ensures stdout and stderr writers are correctly set and the original spec is unchanged.
-//
-// Params:
-//   - t: the testing context
-func TestSpec_WithOutput(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		command string
-		stdout  io.Writer
-		stderr  io.Writer
-	}{
-		{
-			name:    "attach buffer writers",
-			command: "/bin/echo",
-			stdout:  &bytes.Buffer{},
-			stderr:  &bytes.Buffer{},
-		},
-		{
-			name:    "attach nil writers",
-			command: "/bin/cat",
-			stdout:  nil,
-			stderr:  nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Create a base spec.
-			spec := process.NewSpec(process.SpecParams{Command: tt.command})
-
-			// Attach output writers.
-			specWithOutput := spec.WithOutput(tt.stdout, tt.stderr)
-
-			// Verify writers are attached.
-			assert.Equal(t, tt.stdout, specWithOutput.Stdout, "stdout should be set")
-			assert.Equal(t, tt.stderr, specWithOutput.Stderr, "stderr should be set")
-
-			// Verify original spec is unchanged (immutability).
-			assert.Nil(t, spec.Stdout, "original stdout should be nil")
-			assert.Nil(t, spec.Stderr, "original stderr should be nil")
-		})
-	}
-}
 
 // TestSpec_Fields validates direct field access on Spec struct.
 // It ensures all struct fields can be accessed directly.

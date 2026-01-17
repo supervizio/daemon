@@ -4,7 +4,7 @@ package process
 import (
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/service"
+	"github.com/kodflow/daemon/internal/domain/config"
 )
 
 // Restart tracker constants.
@@ -26,7 +26,7 @@ const (
 // exponential backoff logic to prevent rapid restart cycles.
 type RestartTracker struct {
 	// config holds the restart configuration from the service definition.
-	config *service.RestartConfig
+	config *config.RestartConfig
 
 	// attempts tracks the current number of restart attempts since the last reset.
 	attempts int
@@ -46,7 +46,7 @@ type RestartTracker struct {
 //
 // Returns:
 //   - *RestartTracker: a new restart tracker instance
-func NewRestartTracker(cfg *service.RestartConfig) *RestartTracker {
+func NewRestartTracker(cfg *config.RestartConfig) *RestartTracker {
 	// Initialize and return a new tracker with default stability window.
 	return &RestartTracker{
 		config: cfg,
@@ -66,11 +66,11 @@ func (rt *RestartTracker) ShouldRestart(exitCode int) bool {
 	// Evaluate restart decision based on the configured policy.
 	switch rt.config.Policy {
 	// RestartAlways: restart up to MaxRetries regardless of exit code.
-	case service.RestartAlways:
+	case config.RestartAlways:
 		// Return true if attempts remain within the configured limit.
 		return rt.attempts < rt.config.MaxRetries
 	// RestartOnFailure: restart only if the process exited with an error.
-	case service.RestartOnFailure:
+	case config.RestartOnFailure:
 		// Check if the process exited successfully (exit code 0).
 		if exitCode == 0 {
 			// Do not restart on successful exit.
@@ -79,11 +79,11 @@ func (rt *RestartTracker) ShouldRestart(exitCode int) bool {
 		// Restart if attempts remain within the configured limit.
 		return rt.attempts < rt.config.MaxRetries
 	// RestartNever: never restart the process.
-	case service.RestartNever:
+	case config.RestartNever:
 		// Always return false for never-restart policy.
 		return false
 	// RestartUnless: always restart unless explicitly stopped.
-	case service.RestartUnless:
+	case config.RestartUnless:
 		// Always return true for unless-stopped policy.
 		return true
 	// Default case: unknown policy, do not restart.

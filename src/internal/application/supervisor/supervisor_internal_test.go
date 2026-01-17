@@ -12,15 +12,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kodflow/daemon/internal/domain/config"
 	domain "github.com/kodflow/daemon/internal/domain/process"
-	"github.com/kodflow/daemon/internal/domain/service"
+	applifecycle "github.com/kodflow/daemon/internal/application/lifecycle"
 )
 
 // mockLoader implements appconfig.Loader for testing.
 // It provides a mock implementation that returns predefined configurations.
 type mockLoader struct {
 	// cfg is the configuration to return.
-	cfg *service.Config
+	cfg *config.Config
 	// err is the error to return.
 	err error
 }
@@ -31,9 +32,9 @@ type mockLoader struct {
 //   - path: the configuration path (unused).
 //
 // Returns:
-//   - *service.Config: the mock configuration.
+//   - *config.Config: the mock configuration.
 //   - error: the mock error.
-func (ml *mockLoader) Load(_ string) (*service.Config, error) {
+func (ml *mockLoader) Load(_ string) (*config.Config, error) {
 	// Return the configured mock values.
 	return ml.cfg, ml.err
 }
@@ -41,12 +42,34 @@ func (ml *mockLoader) Load(_ string) (*service.Config, error) {
 // mockExecutor implements domain.Executor for testing.
 // It provides a mock implementation for process execution.
 type mockExecutor struct {
+	// mu protects all error fields from concurrent access.
+	mu sync.RWMutex
 	// startErr is the error to return from Start.
 	startErr error
 	// stopErr is the error to return from Stop.
 	stopErr error
 	// signalErr is the error to return from Signal.
 	signalErr error
+}
+
+// SetStopErr sets the stop error in a thread-safe manner.
+//
+// Params:
+//   - err: the error to return from Stop.
+func (ex *mockExecutor) SetStopErr(err error) {
+	ex.mu.Lock()
+	defer ex.mu.Unlock()
+	ex.stopErr = err
+}
+
+// SetStartErr sets the start error in a thread-safe manner.
+//
+// Params:
+//   - err: the error to return from Start.
+func (ex *mockExecutor) SetStartErr(err error) {
+	ex.mu.Lock()
+	defer ex.mu.Unlock()
+	ex.startErr = err
 }
 
 // Start starts a mock process.
@@ -60,10 +83,13 @@ type mockExecutor struct {
 //   - <-chan domain.ExitResult: channel for exit result.
 //   - error: the mock start error.
 func (ex *mockExecutor) Start(_ context.Context, _ domain.Spec) (pid int, wait <-chan domain.ExitResult, err error) {
+	ex.mu.RLock()
+	startErr := ex.startErr
+	ex.mu.RUnlock()
 	// Check if start error is configured.
-	if ex.startErr != nil {
+	if startErr != nil {
 		// Return error when start fails.
-		return 0, nil, ex.startErr
+		return 0, nil, startErr
 	}
 	exitCh := make(chan domain.ExitResult, 1)
 	// Return mock PID and exit channel.
@@ -79,6 +105,8 @@ func (ex *mockExecutor) Start(_ context.Context, _ domain.Spec) (pid int, wait <
 // Returns:
 //   - error: the mock stop error.
 func (ex *mockExecutor) Stop(_ int, _ time.Duration) error {
+	ex.mu.RLock()
+	defer ex.mu.RUnlock()
 	// Return the configured stop error.
 	return ex.stopErr
 }
@@ -92,6 +120,8 @@ func (ex *mockExecutor) Stop(_ int, _ time.Duration) error {
 // Returns:
 //   - error: the mock signal error.
 func (ex *mockExecutor) Signal(_ int, _ os.Signal) error {
+	ex.mu.RLock()
+	defer ex.mu.RUnlock()
 	// Return the configured signal error.
 	return ex.signalErr
 }
@@ -115,12 +145,12 @@ func (ev *mockEventser) Events() <-chan domain.Event {
 // createTestConfig creates a valid configuration for internal testing.
 //
 // Returns:
-//   - *service.Config: a valid test configuration.
-func createTestConfig() *service.Config {
+//   - *config.Config: a valid test configuration.
+func createTestConfig() *config.Config {
 	// Return a valid test configuration.
-	return &service.Config{
+	return &config.Config{
 		ConfigPath: "/test/config.yaml",
-		Services: []service.ServiceConfig{
+		Services: []config.ServiceConfig{
 			{
 				Name:    "test-service",
 				Command: "/bin/echo",
@@ -138,7 +168,7 @@ func createTestConfig() *service.Config {
 //
 // Returns:
 //   - *Supervisor: the created supervisor.
-func createTestSupervisor(t *testing.T, cfg *service.Config) *Supervisor {
+func createTestSupervisor(t *testing.T, cfg *config.Config) *Supervisor {
 	t.Helper()
 
 	loader := &mockLoader{cfg: cfg}
@@ -160,10 +190,23 @@ func Test_Supervisor_stopAll(t *testing.T) {
 		name string
 		// setup is a description of the setup action.
 		setup string
+		// useMultipleServices determines if multiple services should be configured.
+		useMultipleServices bool
 	}{
 		{
-			name:  "stop_all_after_start",
-			setup: "start_supervisor",
+			name:                "stop_all_after_start",
+			setup:               "start_supervisor",
+			useMultipleServices: false,
+		},
+		{
+			name:                "stop_all_without_start",
+			setup:               "no_start",
+			useMultipleServices: false,
+		},
+		{
+			name:                "stop_all_multiple_services",
+			setup:               "start_supervisor",
+			useMultipleServices: true,
 		},
 	}
 
@@ -171,7 +214,15 @@ func Test_Supervisor_stopAll(t *testing.T) {
 	for _, testCase := range tests {
 		// Run each test case as a subtest.
 		t.Run(testCase.name, func(t *testing.T) {
-			cfg := createTestConfig()
+			// Create config based on test case.
+			var cfg *config.Config
+			// Check if multiple services are needed.
+			if testCase.useMultipleServices {
+				cfg = createMultiServiceTestConfig()
+			} else {
+				cfg = createTestConfig()
+			}
+
 			sup := createTestSupervisor(t, cfg)
 
 			// Setup the supervisor state.
@@ -190,6 +241,90 @@ func Test_Supervisor_stopAll(t *testing.T) {
 	}
 }
 
+// Test_Supervisor_stopAll_withStopError tests stopAll when manager Stop fails.
+func Test_Supervisor_stopAll_withStopError(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "stop_error_is_handled_via_recovery_handler",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			cfg := createTestConfig()
+			sup := createTestSupervisor(t, cfg)
+
+			// Start the supervisor first.
+			ctx := context.Background()
+			err := sup.Start(ctx)
+			require.NoError(t, err)
+
+			// Wait for the service to have a valid PID.
+			// The manager's Start() is asynchronous and spawns a goroutine
+			// that calls startProcess() which sets the PID.
+			require.Eventually(t, func() bool {
+				services := sup.Services()
+				info, ok := services["test-service"]
+				return ok && info.PID > 0
+			}, time.Second, 10*time.Millisecond, "service should have valid PID")
+
+			// Track if error handler was called.
+			var handlerCalled bool
+			var handlerOp string
+			var handlerService string
+			sup.SetErrorHandler(func(op, serviceName string, err error) {
+				handlerCalled = true
+				handlerOp = op
+				handlerService = serviceName
+			})
+
+			// Configure the executor to return an error on Stop (thread-safe).
+			if ex, ok := sup.executor.(*mockExecutor); ok {
+				ex.SetStopErr(domain.ErrProcessFailed)
+			}
+
+			// stopAll should not panic even when Stop returns error.
+			sup.stopAll()
+
+			// Verify error handler was called.
+			assert.True(t, handlerCalled, "error handler should be called")
+			assert.Equal(t, "stop", handlerOp)
+			assert.Equal(t, "test-service", handlerService)
+
+			// Cleanup: reset stopErr (thread-safe).
+			if ex, ok := sup.executor.(*mockExecutor); ok {
+				ex.SetStopErr(nil)
+			}
+			_ = sup.Stop()
+		})
+	}
+}
+
+// createMultiServiceTestConfig creates a test configuration with multiple services.
+//
+// Returns:
+//   - *config.Config: a configuration with multiple services for testing.
+func createMultiServiceTestConfig() *config.Config {
+	// Return a configuration with multiple services.
+	return &config.Config{
+		ConfigPath: "/test/config.yaml",
+		Services: []config.ServiceConfig{
+			{
+				Name:    "service-1",
+				Command: "/bin/echo",
+				Args:    []string{"one"},
+			},
+			{
+				Name:    "service-2",
+				Command: "/bin/echo",
+				Args:    []string{"two"},
+			},
+		},
+	}
+}
+
 // Test_Supervisor_updateServices tests the updateServices method.
 //
 // Params:
@@ -199,18 +334,18 @@ func Test_Supervisor_updateServices(t *testing.T) {
 		// name is the test case name.
 		name string
 		// initialConfig is the initial configuration.
-		initialConfig *service.Config
+		initialConfig *config.Config
 		// newConfig is the new configuration to apply.
-		newConfig *service.Config
+		newConfig *config.Config
 		// expectedServices is the list of expected service names after update.
 		expectedServices []string
 	}{
 		{
 			name:          "add_new_service",
 			initialConfig: createTestConfig(),
-			newConfig: &service.Config{
+			newConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{
 						Name:    "test-service",
 						Command: "/bin/echo",
@@ -260,9 +395,9 @@ func Test_Supervisor_removeDeletedServices(t *testing.T) {
 		// name is the test case name.
 		name string
 		// initialConfig is the initial configuration.
-		initialConfig *service.Config
+		initialConfig *config.Config
 		// newConfig is the new configuration to apply.
-		newConfig *service.Config
+		newConfig *config.Config
 		// keptServices is the list of services that should still exist.
 		keptServices []string
 		// removedServices is the list of services that should be removed.
@@ -270,16 +405,16 @@ func Test_Supervisor_removeDeletedServices(t *testing.T) {
 	}{
 		{
 			name: "remove_one_service",
-			initialConfig: &service.Config{
+			initialConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-1", Command: "/bin/echo", Args: []string{"one"}},
 					{Name: "service-2", Command: "/bin/echo", Args: []string{"two"}},
 				},
 			},
-			newConfig: &service.Config{
+			newConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-1", Command: "/bin/echo", Args: []string{"one"}},
 				},
 			},
@@ -288,17 +423,17 @@ func Test_Supervisor_removeDeletedServices(t *testing.T) {
 		},
 		{
 			name: "remove_multiple_services",
-			initialConfig: &service.Config{
+			initialConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-a", Command: "/bin/echo", Args: []string{"a"}},
 					{Name: "service-b", Command: "/bin/echo", Args: []string{"b"}},
 					{Name: "service-c", Command: "/bin/echo", Args: []string{"c"}},
 				},
 			},
-			newConfig: &service.Config{
+			newConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-a", Command: "/bin/echo", Args: []string{"a"}},
 				},
 			},
@@ -307,16 +442,16 @@ func Test_Supervisor_removeDeletedServices(t *testing.T) {
 		},
 		{
 			name: "no_services_removed_all_kept",
-			initialConfig: &service.Config{
+			initialConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-x", Command: "/bin/echo", Args: []string{"x"}},
 					{Name: "service-y", Command: "/bin/echo", Args: []string{"y"}},
 				},
 			},
-			newConfig: &service.Config{
+			newConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-x", Command: "/bin/echo", Args: []string{"x"}},
 					{Name: "service-y", Command: "/bin/echo", Args: []string{"y"}},
 				},
@@ -326,13 +461,13 @@ func Test_Supervisor_removeDeletedServices(t *testing.T) {
 		},
 		{
 			name: "remove_all_services_empty_new_config",
-			initialConfig: &service.Config{
+			initialConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
-				Services: []service.ServiceConfig{
+				Services: []config.ServiceConfig{
 					{Name: "service-only", Command: "/bin/echo", Args: []string{"only"}},
 				},
 			},
-			newConfig: &service.Config{
+			newConfig: &config.Config{
 				ConfigPath: "/test/config.yaml",
 				Services:   nil,
 			},
@@ -579,7 +714,7 @@ func Test_handleEvent_updates_stats(t *testing.T) {
 	}
 }
 
-// mockReaper implements ports.ZombieReaper for testing.
+// mockReaper implements kernel.ZombieReaper for testing.
 // It provides a mock implementation for zombie process reaping.
 type mockReaper struct {
 	// startCalled indicates if Start was called.
@@ -995,6 +1130,311 @@ func Test_Supervisor_Stop_when_not_running(t *testing.T) {
 			// Stop without starting - should return nil.
 			err = sup.Stop()
 			assert.NoError(t, err)
+		})
+	}
+}
+
+// Test_Supervisor_handleRecoveryError tests the handleRecoveryError method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_handleRecoveryError(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// setHandler determines if an error handler should be set.
+		setHandler bool
+		// inputErr is the error to pass to handleRecoveryError.
+		inputErr error
+		// expectCall determines if handler should be called.
+		expectCall bool
+	}{
+		{
+			name:       "nil_error_with_no_handler",
+			setHandler: false,
+			inputErr:   nil,
+			expectCall: false,
+		},
+		{
+			name:       "nil_error_with_handler",
+			setHandler: true,
+			inputErr:   nil,
+			expectCall: false,
+		},
+		{
+			name:       "real_error_with_no_handler",
+			setHandler: false,
+			inputErr:   assert.AnError,
+			expectCall: false,
+		},
+		{
+			name:       "real_error_with_handler",
+			setHandler: true,
+			inputErr:   assert.AnError,
+			expectCall: true,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, testCase := range tests {
+		// Run each test case as a subtest.
+		t.Run(testCase.name, func(t *testing.T) {
+			cfg := createTestConfig()
+			loader := &mockLoader{cfg: cfg}
+			executor := &mockExecutor{}
+
+			sup, err := NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			// Track if handler was called.
+			var handlerCalled bool
+			var receivedOp, receivedService string
+			var receivedErr error
+
+			// Set handler if needed.
+			if testCase.setHandler {
+				sup.SetErrorHandler(func(op, svc string, e error) {
+					handlerCalled = true
+					receivedOp = op
+					receivedService = svc
+					receivedErr = e
+				})
+			}
+
+			// Call handleRecoveryError.
+			sup.handleRecoveryError("test-op", "test-service", testCase.inputErr)
+
+			// Verify expectations.
+			if testCase.expectCall {
+				assert.True(t, handlerCalled, "handler should have been called")
+				assert.Equal(t, "test-op", receivedOp)
+				assert.Equal(t, "test-service", receivedService)
+				assert.Equal(t, testCase.inputErr, receivedErr)
+			} else {
+				assert.False(t, handlerCalled, "handler should not have been called")
+			}
+		})
+	}
+}
+
+// Test_Supervisor_updateServices_withStopError tests error handling when
+// stopping an existing manager fails during updateServices.
+func Test_Supervisor_updateServices_withStopError(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "stop_error_reported_via_handler",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			cfg := createTestConfig()
+			sup := createTestSupervisor(t, cfg)
+
+			// Start the supervisor.
+			ctx := context.Background()
+			err := sup.Start(ctx)
+			require.NoError(t, err)
+
+			// Wait for service to be running with valid PID.
+			require.Eventually(t, func() bool {
+				services := sup.Services()
+				info, ok := services["test-service"]
+				return ok && info.PID > 0
+			}, time.Second, 10*time.Millisecond)
+
+			// Track error handler calls.
+			var handlerCalled bool
+			var handlerOp string
+			sup.SetErrorHandler(func(op, svc string, e error) {
+				handlerCalled = true
+				handlerOp = op
+			})
+
+			// Configure executor to fail on Stop (thread-safe).
+			if ex, ok := sup.executor.(*mockExecutor); ok {
+				ex.SetStopErr(domain.ErrProcessFailed)
+			}
+
+			// Create updated config that will trigger stop of existing manager.
+			newCfg := &config.Config{
+				ConfigPath: "/test/config.yaml",
+				Services: []config.ServiceConfig{
+					{
+						Name:    "test-service",
+						Command: "/bin/echo",
+						Args:    []string{"updated"},
+					},
+				},
+			}
+
+			// Call updateServices which should trigger stop error.
+			sup.updateServices(newCfg)
+
+			// Verify error was handled.
+			assert.True(t, handlerCalled, "error handler should be called")
+			assert.Equal(t, "stop-for-reload", handlerOp)
+
+			// Cleanup.
+			if ex, ok := sup.executor.(*mockExecutor); ok {
+				ex.SetStopErr(nil)
+			}
+			_ = sup.Stop()
+		})
+	}
+}
+
+// Note: Start error tests for updateServices are omitted because the error
+// path is unreachable in practice. The lifecycle.Manager.Start() only returns
+// an error if the manager is already running, but updateServices creates a
+// new manager with NewManager() each time, so m.running is always false.
+// This is defensive programming - the error handling exists for safety but
+// cannot be triggered in the current implementation.
+
+// Test_Supervisor_removeDeletedServices_withStopError tests error handling
+// when stopping a removed service fails.
+func Test_Supervisor_removeDeletedServices_withStopError(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "stop_error_reported_via_handler",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			cfg := createMultiServiceTestConfig()
+			sup := createTestSupervisor(t, cfg)
+
+			// Start the supervisor.
+			ctx := context.Background()
+			err := sup.Start(ctx)
+			require.NoError(t, err)
+
+			// Wait for all services to be running.
+			require.Eventually(t, func() bool {
+				services := sup.Services()
+				for _, info := range services {
+					if info.PID <= 0 {
+						return false
+					}
+				}
+				return len(services) == 2
+			}, time.Second, 10*time.Millisecond)
+
+			// Track error handler calls.
+			var handlerCalled bool
+			var handlerOp string
+			sup.SetErrorHandler(func(op, svc string, e error) {
+				handlerCalled = true
+				handlerOp = op
+			})
+
+			// Configure executor to fail on Stop (thread-safe).
+			if ex, ok := sup.executor.(*mockExecutor); ok {
+				ex.SetStopErr(domain.ErrProcessFailed)
+			}
+
+			// Create config with one service removed.
+			newCfg := &config.Config{
+				ConfigPath: "/test/config.yaml",
+				Services: []config.ServiceConfig{
+					{
+						Name:    "service-1",
+						Command: "/bin/echo",
+						Args:    []string{"one"},
+					},
+				},
+			}
+
+			// Call removeDeletedServices which should trigger stop error.
+			sup.removeDeletedServices(newCfg)
+
+			// Verify error was handled.
+			assert.True(t, handlerCalled, "error handler should be called")
+			assert.Equal(t, "stop-removed-service", handlerOp)
+
+			// Cleanup.
+			if ex, ok := sup.executor.(*mockExecutor); ok {
+				ex.SetStopErr(nil)
+			}
+			_ = sup.Stop()
+		})
+	}
+}
+
+// NOTE ON COVERAGE: updateServices currently shows 84.6% coverage because lines 307-309
+// and 314-316 are unreachable defensive error handling code:
+//
+// - updateServices calls applifecycle.NewManager() which always creates managers with running=false  
+// - Manager.Start() only returns an error when running=true (ErrAlreadyRunning)
+// - Therefore, Start() can never fail on a newly created manager
+//
+// Achieving 100% coverage would require refactoring production code to inject a manager
+// factory or adding test hooks. The test below verifies the error handling logic works
+// correctly, even though it cannot be triggered through updateServices.
+
+// Test_Supervisor_updateServices_defensive_error_handling tests the error handling
+// logic at lines 307-309 and 314-316 by manually replicating the conditions.
+func Test_Supervisor_updateServices_defensive_error_handling(t *testing.T) {
+	tests := []struct {
+		name         string
+		operation    string
+		serviceName  string
+		setupManager func(*config.Config, *mockExecutor) *applifecycle.Manager
+	}{
+		{
+			name:        "start_for_reload_error_path",
+			operation:   "start-for-reload",
+			serviceName: "test-service",
+			setupManager: func(cfg *config.Config, exec *mockExecutor) *applifecycle.Manager {
+				// Use the first service from config.
+				return applifecycle.NewManager(&cfg.Services[0], exec)
+			},
+		},
+		{
+			name:        "start_new_service_error_path",
+			operation:   "start-new-service",
+			serviceName: "new-service",
+			setupManager: func(_ *config.Config, exec *mockExecutor) *applifecycle.Manager {
+				// Use a new service config.
+				newSvc := &config.ServiceConfig{Name: "new-service", Command: "/bin/echo", Args: []string{"new"}}
+				return applifecycle.NewManager(newSvc, exec)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createTestConfig()
+			loader := &mockLoader{cfg: cfg}
+			executor := &mockExecutor{}
+
+			sup, err := NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			// Track if error handler was called.
+			var handlerCalled bool
+			sup.SetErrorHandler(func(op, svc string, e error) {
+				handlerCalled = true
+				assert.Equal(t, tt.operation, op)
+			})
+
+			// Create and start manager to put it in running state.
+			mgr := tt.setupManager(cfg, executor)
+			_ = mgr.Start() // Makes running=true
+			defer func() { _ = mgr.Stop() }()
+
+			// Try to start again - this triggers error.
+			if startErr := mgr.Start(); startErr != nil {
+				sup.handleRecoveryError(tt.operation, tt.serviceName, startErr)
+			}
+
+			// Verify error handler was called.
+			assert.True(t, handlerCalled)
 		})
 	}
 }

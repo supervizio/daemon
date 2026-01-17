@@ -4,18 +4,19 @@ package health
 import (
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/process"
 )
 
 // AggregatedHealth represents the combined health status of a service.
-// It aggregates process state, listener states, and custom status.
+// It aggregates process state, subject states, and custom status.
+// Uses SubjectState (domain-owned type) to avoid coupling to listener/process packages.
 type AggregatedHealth struct {
 	// ProcessState is the current state of the process.
 	ProcessState process.State
 
-	// Listeners contains the status of each listener.
-	Listeners []ListenerStatus
+	// Subjects contains the status of each monitored subject (listeners, processes).
+	// Backward compatible alias: Listeners.
+	Subjects []SubjectStatus
 
 	// CustomStatus is an optional custom status string.
 	// Examples: "DRAINING", "DEGRADED", "MAINTENANCE".
@@ -27,6 +28,17 @@ type AggregatedHealth struct {
 
 	// Latency is the latest probe latency measurement.
 	Latency time.Duration
+}
+
+// Listeners returns the subjects slice for backward compatibility.
+//
+// Returns:
+//   - []SubjectStatus: the list of subject statuses.
+//
+// Deprecated: Use Subjects field directly instead.
+func (h *AggregatedHealth) Listeners() []SubjectStatus {
+	// Return subjects slice for backward compatibility.
+	return h.Subjects
 }
 
 // NewAggregatedHealth creates a new aggregated health status.
@@ -44,14 +56,25 @@ func NewAggregatedHealth(processState process.State) *AggregatedHealth {
 	}
 }
 
-// AddListener adds a listener status.
+// AddSubject adds a subject status from a snapshot.
+//
+// Params:
+//   - snapshot: the subject snapshot.
+func (h *AggregatedHealth) AddSubject(snapshot SubjectSnapshot) {
+	// Append subject status using constructor.
+	h.Subjects = append(h.Subjects, NewSubjectStatus(snapshot))
+}
+
+// AddListener adds a listener status (backward compatibility).
 //
 // Params:
 //   - name: the listener name.
-//   - state: the listener's current state.
-func (h *AggregatedHealth) AddListener(name string, state listener.State) {
-	// Append listener status using constructor.
-	h.Listeners = append(h.Listeners, NewListenerStatus(name, state))
+//   - state: the subject's current state.
+//
+// Deprecated: Use AddSubject instead.
+func (h *AggregatedHealth) AddListener(name string, state SubjectState) {
+	// Append subject status using constructor.
+	h.Subjects = append(h.Subjects, NewSubjectStatusFromState(name, state))
 }
 
 // SetCustomStatus sets a custom status string.
@@ -83,7 +106,7 @@ func (h *AggregatedHealth) SetLatency(latency time.Duration) {
 //   - Status: the computed listener status.
 func (h *AggregatedHealth) computeListenerStatus() Status {
 	// No listeners configured means no listener-based health concerns.
-	if len(h.Listeners) == 0 {
+	if len(h.Subjects) == 0 {
 		// Return healthy since there are no listeners to fail.
 		return StatusHealthy
 	}
@@ -116,7 +139,7 @@ func (h *AggregatedHealth) computeListenerStatus() Status {
 //   - bool: true if any listener is listening, false otherwise.
 func (h *AggregatedHealth) hasAnyListenerListening() bool {
 	// Iterate through all listeners to find one in listening state.
-	for _, ls := range h.Listeners {
+	for _, ls := range h.Subjects {
 		// Check if this listener is listening.
 		if ls.State.IsListening() {
 			// Found a listening listener.
@@ -204,7 +227,7 @@ func (h *AggregatedHealth) IsUnhealthy() bool {
 //   - bool: true if all listeners are in Ready state.
 func (h *AggregatedHealth) AllListenersReady() bool {
 	// Check each listener state.
-	for _, ls := range h.Listeners {
+	for _, ls := range h.Subjects {
 		// Check if this listener is not ready.
 		if !ls.State.IsReady() {
 			// Return false if any listener is not ready.
@@ -224,7 +247,7 @@ func (h *AggregatedHealth) ReadyListenerCount() int {
 	count := 0
 
 	// Count ready listeners by iterating through all listeners.
-	for _, ls := range h.Listeners {
+	for _, ls := range h.Subjects {
 		// Check if this listener is ready.
 		if ls.State.IsReady() {
 			// Increment count for ready listener.
@@ -242,5 +265,5 @@ func (h *AggregatedHealth) ReadyListenerCount() int {
 //   - int: the total number of listeners.
 func (h *AggregatedHealth) TotalListenerCount() int {
 	// Return length of listeners slice.
-	return len(h.Listeners)
+	return len(h.Subjects)
 }

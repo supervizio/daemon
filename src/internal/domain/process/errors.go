@@ -9,8 +9,6 @@ var (
 	ErrAlreadyRunning error = errors.New("process already running")
 	// ErrNotRunning indicates an attempt to operate on a non-running process.
 	ErrNotRunning error = errors.New("process not running")
-	// ErrEmptyCommand indicates the command configuration is empty.
-	ErrEmptyCommand error = errors.New("empty command")
 	// ErrMaxRetriesExceeded indicates the maximum restart retries have been exceeded.
 	ErrMaxRetriesExceeded error = errors.New("max retries exceeded")
 	// ErrInvalidTransition indicates an invalid state transition was attempted.

@@ -1,0 +1,8 @@
+version: "1"
+logging:
+  level: error
+services:
+  - name: dummy
+    command: /bin/true
+    restart:
+      policy: never
