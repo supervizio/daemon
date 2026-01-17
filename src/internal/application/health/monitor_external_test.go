@@ -255,14 +255,28 @@ func TestProbeMonitor_Start(t *testing.T) {
 		name string
 		// callTwice indicates whether to call Start twice.
 		callTwice bool
+		// setRunning indicates whether to set process state to running.
+		setRunning bool
+		// expectedHealthy is the expected healthy state after start.
+		expectedHealthy bool
 	}{
 		{
-			name:      "starts_monitor",
-			callTwice: false,
+			name:            "starts_monitor_unhealthy_when_stopped",
+			callTwice:       false,
+			setRunning:      false,
+			expectedHealthy: false,
 		},
 		{
-			name:      "start_is_idempotent",
-			callTwice: true,
+			name:            "starts_monitor_healthy_when_running",
+			callTwice:       false,
+			setRunning:      true,
+			expectedHealthy: true,
+		},
+		{
+			name:            "start_is_idempotent",
+			callTwice:       true,
+			setRunning:      true,
+			expectedHealthy: true,
 		},
 	}
 
@@ -275,20 +289,26 @@ func TestProbeMonitor_Start(t *testing.T) {
 				Factory: &mockCreator{},
 			})
 
+			// Set process state if requested.
+			if tt.setRunning {
+				monitor.SetProcessState(process.StateRunning)
+			}
+
 			// Create context from test context.
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
-			// Start monitor should not panic.
-			assert.NotPanics(t, func() {
-				monitor.Start(ctx)
-			})
+			// Start monitor.
+			monitor.Start(ctx)
+
+			// Verify health state after start.
+			assert.Equal(t, tt.expectedHealthy, monitor.IsHealthy())
 
 			// Call start again if requested.
 			if tt.callTwice {
-				assert.NotPanics(t, func() {
-					monitor.Start(ctx)
-				})
+				monitor.Start(ctx)
+				// Verify health state remains consistent after second start.
+				assert.Equal(t, tt.expectedHealthy, monitor.IsHealthy())
 			}
 
 			// Stop monitor.
@@ -332,24 +352,33 @@ func TestProbeMonitor_Stop(t *testing.T) {
 			monitor := apphealth.NewProbeMonitor(apphealth.ProbeMonitorConfig{
 				Factory: &mockCreator{},
 			})
+			require.NotNil(t, monitor)
+
+			// Set running state to test stop behavior.
+			monitor.SetProcessState(process.StateRunning)
 
 			// Start monitor if requested.
 			if tt.startFirst {
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 				monitor.Start(ctx)
+				// Verify monitor is healthy before stop.
+				assert.True(t, monitor.IsHealthy())
 			}
 
-			// Stop should not panic.
-			assert.NotPanics(t, func() {
-				monitor.Stop()
-			})
+			// Stop monitor.
+			monitor.Stop()
+
+			// Verify monitor can still report status after stop.
+			status := monitor.Status()
+			assert.NotEmpty(t, status)
 
 			// Call stop again if requested.
 			if tt.callTwice {
-				assert.NotPanics(t, func() {
-					monitor.Stop()
-				})
+				monitor.Stop()
+				// Verify status remains accessible after double stop.
+				statusAfter := monitor.Status()
+				assert.Equal(t, status, statusAfter)
 			}
 		})
 	}

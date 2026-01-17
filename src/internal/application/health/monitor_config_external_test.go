@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	apphealth "github.com/kodflow/daemon/internal/application/health"
 )
@@ -48,15 +49,20 @@ func TestNewProbeMonitorConfig(t *testing.T) {
 
 // TestProbeMonitorConfig_struct tests the ProbeMonitorConfig struct fields.
 func TestProbeMonitorConfig_struct(t *testing.T) {
+	mockFactory := &mockCreator{}
+
 	tests := []struct {
 		// name is the test case name.
 		name string
 		// config is the configuration to test.
 		config apphealth.ProbeMonitorConfig
+		// hasFactory indicates whether the config has a factory.
+		hasFactory bool
 	}{
 		{
-			name:   "empty_config",
-			config: apphealth.ProbeMonitorConfig{},
+			name:       "empty_config",
+			config:     apphealth.ProbeMonitorConfig{},
+			hasFactory: false,
 		},
 		{
 			name: "config_with_timeouts",
@@ -64,12 +70,14 @@ func TestProbeMonitorConfig_struct(t *testing.T) {
 				DefaultTimeout:  5 * time.Second,
 				DefaultInterval: 10 * time.Second,
 			},
+			hasFactory: false,
 		},
 		{
 			name: "config_with_factory",
 			config: apphealth.ProbeMonitorConfig{
-				Factory: &mockCreator{},
+				Factory: mockFactory,
 			},
+			hasFactory: true,
 		},
 	}
 
@@ -77,10 +85,19 @@ func TestProbeMonitorConfig_struct(t *testing.T) {
 	for _, tt := range tests {
 		// Run each test case as a subtest.
 		t.Run(tt.name, func(t *testing.T) {
-			// Verify config can be created without panic.
-			assert.NotPanics(t, func() {
-				_ = apphealth.NewProbeMonitor(tt.config)
-			})
+			// Create monitor from config.
+			monitor := apphealth.NewProbeMonitor(tt.config)
+
+			// Verify monitor was created successfully.
+			require.NotNil(t, monitor)
+			// Verify initial status is unhealthy (process not running).
+			assert.False(t, monitor.IsHealthy())
+			// Verify factory configuration.
+			if tt.hasFactory {
+				assert.Equal(t, mockFactory, tt.config.Factory)
+			} else {
+				assert.Nil(t, tt.config.Factory)
+			}
 		})
 	}
 }
