@@ -43,6 +43,14 @@ engines:
       - "src/internal/infrastructure/proc/**"
       # Exclude process command - uses trusted config input
       - "src/internal/infrastructure/process/command.go"
+      # Exclude cgroup readers - must read /sys/fs/cgroup dynamically
+      - "src/internal/infrastructure/resources/cgroup/**"
+      # Exclude Linux metrics collectors - must read /proc dynamically
+      - "src/internal/infrastructure/resources/metrics/linux/**"
+      # Exclude signals - requires unsafe for prctl syscalls
+      - "src/internal/infrastructure/process/signals/**"
+      # Exclude gRPC server - local IPC, TLS handled at deployment
+      - "src/internal/infrastructure/transport/grpc/server.go"
 
   # Markdownlint disabled - using ktn-linter for docs
   markdownlint:
