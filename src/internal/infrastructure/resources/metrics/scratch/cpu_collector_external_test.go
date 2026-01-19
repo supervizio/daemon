@@ -16,22 +16,28 @@ import (
 // Params:
 //   - t: the testing context
 func TestCPUCollector_CollectSystem(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewCPUCollector()
-			require.NotNil(t, collector)
+	t.Parallel()
 
-			_, err := collector.CollectSystem(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewCPUCollector()
+		require.NotNil(t, collector)
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectSystem(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewCPUCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectSystem(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestCPUCollector_CollectProcess tests process CPU metrics collection.
@@ -39,24 +45,36 @@ func TestCPUCollector_CollectSystem(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestCPUCollector_CollectProcess(t *testing.T) {
-	tests := []struct {
-		name        string
-		pid         int
-		expectedErr error
-	}{
-		{name: "pid 1", pid: 1, expectedErr: scratch.ErrNotSupported},
-		{name: "pid 0", pid: 0, expectedErr: scratch.ErrInvalidPID},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewCPUCollector()
+	t.Parallel()
 
-			_, err := collector.CollectProcess(context.Background(), tt.pid)
+	t.Run("pid 1 returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewCPUCollector()
 
-			// Verify expected error is returned
-			assert.True(t, errors.Is(err, tt.expectedErr))
-		})
-	}
+		_, err := collector.CollectProcess(context.Background(), 1)
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("pid 0 returns ErrInvalidPID", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewCPUCollector()
+
+		_, err := collector.CollectProcess(context.Background(), 0)
+
+		assert.True(t, errors.Is(err, scratch.ErrInvalidPID))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewCPUCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectProcess(ctx, 1)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestCPUCollector_CollectAllProcesses tests all processes CPU metrics collection.
@@ -64,21 +82,27 @@ func TestCPUCollector_CollectProcess(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestCPUCollector_CollectAllProcesses(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewCPUCollector()
+	t.Parallel()
 
-			_, err := collector.CollectAllProcesses(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewCPUCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectAllProcesses(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewCPUCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectAllProcesses(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestCPUCollector_CollectLoadAverage tests load average collection.
@@ -86,21 +110,27 @@ func TestCPUCollector_CollectAllProcesses(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestCPUCollector_CollectLoadAverage(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewCPUCollector()
+	t.Parallel()
 
-			_, err := collector.CollectLoadAverage(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewCPUCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectLoadAverage(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewCPUCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectLoadAverage(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestCPUCollector_CollectPressure tests CPU pressure collection.
@@ -108,21 +138,27 @@ func TestCPUCollector_CollectLoadAverage(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestCPUCollector_CollectPressure(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewCPUCollector()
+	t.Parallel()
 
-			_, err := collector.CollectPressure(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewCPUCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectPressure(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewCPUCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectPressure(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // Test_NewCPUCollector verifies NewCPUCollector creates a valid collector.

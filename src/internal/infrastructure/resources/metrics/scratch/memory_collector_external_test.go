@@ -16,22 +16,28 @@ import (
 // Params:
 //   - t: the testing context
 func TestMemoryCollector_CollectSystem(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewMemoryCollector()
-			require.NotNil(t, collector)
+	t.Parallel()
 
-			_, err := collector.CollectSystem(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewMemoryCollector()
+		require.NotNil(t, collector)
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectSystem(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewMemoryCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectSystem(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestMemoryCollector_CollectProcess tests process memory metrics collection.
@@ -39,24 +45,36 @@ func TestMemoryCollector_CollectSystem(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestMemoryCollector_CollectProcess(t *testing.T) {
-	tests := []struct {
-		name        string
-		pid         int
-		expectedErr error
-	}{
-		{name: "pid 1", pid: 1, expectedErr: scratch.ErrNotSupported},
-		{name: "pid 0", pid: 0, expectedErr: scratch.ErrInvalidPID},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewMemoryCollector()
+	t.Parallel()
 
-			_, err := collector.CollectProcess(context.Background(), tt.pid)
+	t.Run("pid 1 returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewMemoryCollector()
 
-			// Verify expected error is returned
-			assert.True(t, errors.Is(err, tt.expectedErr))
-		})
-	}
+		_, err := collector.CollectProcess(context.Background(), 1)
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("pid 0 returns ErrInvalidPID", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewMemoryCollector()
+
+		_, err := collector.CollectProcess(context.Background(), 0)
+
+		assert.True(t, errors.Is(err, scratch.ErrInvalidPID))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewMemoryCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectProcess(ctx, 1)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestMemoryCollector_CollectAllProcesses tests all processes memory metrics collection.
@@ -64,21 +82,27 @@ func TestMemoryCollector_CollectProcess(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestMemoryCollector_CollectAllProcesses(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewMemoryCollector()
+	t.Parallel()
 
-			_, err := collector.CollectAllProcesses(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewMemoryCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectAllProcesses(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewMemoryCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectAllProcesses(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestMemoryCollector_CollectPressure tests memory pressure collection.
@@ -86,21 +110,27 @@ func TestMemoryCollector_CollectAllProcesses(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestMemoryCollector_CollectPressure(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewMemoryCollector()
+	t.Parallel()
 
-			_, err := collector.CollectPressure(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewMemoryCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectPressure(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewMemoryCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectPressure(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // Test_NewMemoryCollector verifies NewMemoryCollector creates a valid collector.
@@ -110,27 +140,11 @@ func TestMemoryCollector_CollectPressure(t *testing.T) {
 func Test_NewMemoryCollector(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name        string
-		wantNotNil  bool
-		description string
-	}{
-		{
-			name:        "returns_valid_collector",
-			wantNotNil:  true,
-			description: "NewMemoryCollector should return a non-nil collector",
-		},
-	}
+	t.Run("returns valid collector", func(t *testing.T) {
+		t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+		collector := scratch.NewMemoryCollector()
 
-			collector := scratch.NewMemoryCollector()
-
-			if tt.wantNotNil {
-				assert.NotNil(t, collector, tt.description)
-			}
-		})
-	}
+		assert.NotNil(t, collector, "NewMemoryCollector should return a non-nil collector")
+	})
 }

@@ -30,6 +30,7 @@ func TestVersion_String(t *testing.T) {
 		{name: "v2", version: cgroup.VersionV2, want: "v2"},
 		{name: "hybrid", version: cgroup.VersionHybrid, want: "hybrid"},
 		{name: "unknown", version: cgroup.VersionUnknown, want: "unknown"},
+		{name: "invalid_value", version: cgroup.Version(99), want: "unknown"},
 	}
 
 	// Iterate through test cases.

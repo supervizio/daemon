@@ -16,22 +16,28 @@ import (
 // Params:
 //   - t: the testing context
 func TestDiskCollector_ListPartitions(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewDiskCollector()
-			require.NotNil(t, collector)
+	t.Parallel()
 
-			_, err := collector.ListPartitions(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
+		require.NotNil(t, collector)
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.ListPartitions(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.ListPartitions(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestDiskCollector_CollectUsage tests disk usage collection.
@@ -39,23 +45,45 @@ func TestDiskCollector_ListPartitions(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestDiskCollector_CollectUsage(t *testing.T) {
-	tests := []struct {
-		name       string
-		mountpoint string
-	}{
-		{name: "root mount", mountpoint: "/"},
-		{name: "home mount", mountpoint: "/home"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewDiskCollector()
+	t.Parallel()
 
-			_, err := collector.CollectUsage(context.Background(), tt.mountpoint)
+	t.Run("root mount returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectUsage(context.Background(), "/")
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("home mount returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
+
+		_, err := collector.CollectUsage(context.Background(), "/home")
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectUsage(ctx, "/")
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("empty path returns ErrEmptyPath", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
+
+		_, err := collector.CollectUsage(context.Background(), "")
+
+		assert.True(t, errors.Is(err, scratch.ErrEmptyPath))
+	})
 }
 
 // TestDiskCollector_CollectAllUsage tests all disk usage collection.
@@ -63,21 +91,27 @@ func TestDiskCollector_CollectUsage(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestDiskCollector_CollectAllUsage(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewDiskCollector()
+	t.Parallel()
 
-			_, err := collector.CollectAllUsage(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectAllUsage(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectAllUsage(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestDiskCollector_CollectIO tests I/O stats collection.
@@ -85,21 +119,27 @@ func TestDiskCollector_CollectAllUsage(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestDiskCollector_CollectIO(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewDiskCollector()
+	t.Parallel()
 
-			_, err := collector.CollectIO(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectIO(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectIO(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestDiskCollector_CollectDeviceIO tests device I/O stats collection.
@@ -107,23 +147,45 @@ func TestDiskCollector_CollectIO(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestDiskCollector_CollectDeviceIO(t *testing.T) {
-	tests := []struct {
-		name   string
-		device string
-	}{
-		{name: "sda device", device: "sda"},
-		{name: "nvme device", device: "nvme0n1"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewDiskCollector()
+	t.Parallel()
 
-			_, err := collector.CollectDeviceIO(context.Background(), tt.device)
+	t.Run("sda device returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectDeviceIO(context.Background(), "sda")
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("nvme device returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
+
+		_, err := collector.CollectDeviceIO(context.Background(), "nvme0n1")
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectDeviceIO(ctx, "sda")
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("empty device returns ErrEmptyDevice", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewDiskCollector()
+
+		_, err := collector.CollectDeviceIO(context.Background(), "")
+
+		assert.True(t, errors.Is(err, scratch.ErrEmptyDevice))
+	})
 }
 
 // Test_NewDiskCollector verifies NewDiskCollector creates a valid collector.
@@ -133,27 +195,11 @@ func TestDiskCollector_CollectDeviceIO(t *testing.T) {
 func Test_NewDiskCollector(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name        string
-		wantNotNil  bool
-		description string
-	}{
-		{
-			name:        "returns_valid_collector",
-			wantNotNil:  true,
-			description: "NewDiskCollector should return a non-nil collector",
-		},
-	}
+	t.Run("returns valid collector", func(t *testing.T) {
+		t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+		collector := scratch.NewDiskCollector()
 
-			collector := scratch.NewDiskCollector()
-
-			if tt.wantNotNil {
-				assert.NotNil(t, collector, tt.description)
-			}
-		})
-	}
+		assert.NotNil(t, collector, "NewDiskCollector should return a non-nil collector")
+	})
 }

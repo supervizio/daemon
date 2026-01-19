@@ -16,22 +16,28 @@ import (
 // Params:
 //   - t: the testing context
 func TestNetworkCollector_ListInterfaces(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewNetworkCollector()
-			require.NotNil(t, collector)
+	t.Parallel()
 
-			_, err := collector.ListInterfaces(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewNetworkCollector()
+		require.NotNil(t, collector)
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.ListInterfaces(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewNetworkCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.ListInterfaces(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestNetworkCollector_CollectStats tests interface stats collection.
@@ -39,23 +45,45 @@ func TestNetworkCollector_ListInterfaces(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestNetworkCollector_CollectStats(t *testing.T) {
-	tests := []struct {
-		name  string
-		iface string
-	}{
-		{name: "eth0 interface", iface: "eth0"},
-		{name: "lo interface", iface: "lo"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewNetworkCollector()
+	t.Parallel()
 
-			_, err := collector.CollectStats(context.Background(), tt.iface)
+	t.Run("eth0 interface returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewNetworkCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectStats(context.Background(), "eth0")
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("lo interface returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewNetworkCollector()
+
+		_, err := collector.CollectStats(context.Background(), "lo")
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewNetworkCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectStats(ctx, "eth0")
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("empty interface returns ErrEmptyInterface", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewNetworkCollector()
+
+		_, err := collector.CollectStats(context.Background(), "")
+
+		assert.True(t, errors.Is(err, scratch.ErrEmptyInterface))
+	})
 }
 
 // TestNetworkCollector_CollectAllStats tests all interface stats collection.
@@ -63,21 +91,27 @@ func TestNetworkCollector_CollectStats(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestNetworkCollector_CollectAllStats(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewNetworkCollector()
+	t.Parallel()
 
-			_, err := collector.CollectAllStats(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewNetworkCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectAllStats(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewNetworkCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectAllStats(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // Test_NewNetworkCollector verifies NewNetworkCollector creates a valid collector.
@@ -87,27 +121,11 @@ func TestNetworkCollector_CollectAllStats(t *testing.T) {
 func Test_NewNetworkCollector(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name        string
-		wantNotNil  bool
-		description string
-	}{
-		{
-			name:        "returns_valid_collector",
-			wantNotNil:  true,
-			description: "NewNetworkCollector should return a non-nil collector",
-		},
-	}
+	t.Run("returns valid collector", func(t *testing.T) {
+		t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+		collector := scratch.NewNetworkCollector()
 
-			collector := scratch.NewNetworkCollector()
-
-			if tt.wantNotNil {
-				assert.NotNil(t, collector, tt.description)
-			}
-		})
-	}
+		assert.NotNil(t, collector, "NewNetworkCollector should return a non-nil collector")
+	})
 }

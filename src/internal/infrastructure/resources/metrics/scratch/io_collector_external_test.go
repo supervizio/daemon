@@ -16,22 +16,28 @@ import (
 // Params:
 //   - t: the testing context
 func TestIOCollector_CollectStats(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewIOCollector()
-			require.NotNil(t, collector)
+	t.Parallel()
 
-			_, err := collector.CollectStats(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewIOCollector()
+		require.NotNil(t, collector)
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectStats(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewIOCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectStats(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestIOCollector_CollectPressure tests I/O pressure collection.
@@ -39,21 +45,27 @@ func TestIOCollector_CollectStats(t *testing.T) {
 // Params:
 //   - t: the testing context
 func TestIOCollector_CollectPressure(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "returns ErrNotSupported"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			collector := scratch.NewIOCollector()
+	t.Parallel()
 
-			_, err := collector.CollectPressure(context.Background())
+	t.Run("returns ErrNotSupported", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewIOCollector()
 
-			// Verify ErrNotSupported is returned
-			assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-		})
-	}
+		_, err := collector.CollectPressure(context.Background())
+
+		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
+	})
+
+	t.Run("returns context error when canceled", func(t *testing.T) {
+		t.Parallel()
+		collector := scratch.NewIOCollector()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := collector.CollectPressure(ctx)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // Test_NewIOCollector verifies NewIOCollector creates a valid collector.
@@ -63,27 +75,11 @@ func TestIOCollector_CollectPressure(t *testing.T) {
 func Test_NewIOCollector(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name        string
-		wantNotNil  bool
-		description string
-	}{
-		{
-			name:        "returns_valid_collector",
-			wantNotNil:  true,
-			description: "NewIOCollector should return a non-nil collector",
-		},
-	}
+	t.Run("returns valid collector", func(t *testing.T) {
+		t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+		collector := scratch.NewIOCollector()
 
-			collector := scratch.NewIOCollector()
-
-			if tt.wantNotNil {
-				assert.NotNil(t, collector, tt.description)
-			}
-		})
-	}
+		assert.NotNil(t, collector, "NewIOCollector should return a non-nil collector")
+	})
 }
