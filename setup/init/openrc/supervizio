@@ -1,0 +1,42 @@
+#!/sbin/openrc-run
+# SPDX-License-Identifier: MIT
+# OpenRC init script for supervizio daemon
+
+name="supervizio"
+description="PID1-capable process supervisor"
+
+command="/usr/local/bin/supervizio"
+command_args="--config /etc/supervizio/config.yaml"
+command_background="yes"
+
+pidfile="/var/run/supervizio.pid"
+start_stop_daemon_args="--make-pidfile"
+
+depend() {
+    need localmount
+    after bootmisc
+}
+
+start_pre() {
+    checkpath --file --owner root:root --mode 0644 /etc/supervizio/config.yaml
+}
+
+stop() {
+    ebegin "Stopping ${name}"
+    start-stop-daemon --stop \
+        --pidfile "${pidfile}" \
+        --signal TERM \
+        --retry "TERM/30/KILL/5"
+    eend $?
+}
+
+status() {
+    if [ -f "${pidfile}" ]; then
+        if kill -0 "$(cat "${pidfile}")" 2>/dev/null; then
+            einfo "status: started"
+            return 0
+        fi
+    fi
+    einfo "status: stopped"
+    return 3
+}

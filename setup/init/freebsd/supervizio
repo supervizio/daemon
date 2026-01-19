@@ -1,0 +1,45 @@
+#!/bin/sh
+
+# PROVIDE: supervizio
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="supervizio"
+rcvar="supervizio_enable"
+
+load_rc_config $name
+
+: ${supervizio_enable:="NO"}
+: ${supervizio_config:="/usr/local/etc/supervizio/config.yaml"}
+: ${supervizio_user:="root"}
+: ${supervizio_group:="wheel"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/local/bin/${name}"
+command_args="--config ${supervizio_config} --pidfile ${pidfile}"
+
+start_precmd="supervizio_prestart"
+stop_postcmd="supervizio_poststop"
+
+supervizio_prestart()
+{
+    if [ ! -f "${supervizio_config}" ]; then
+        warn "Configuration file ${supervizio_config} not found"
+        return 1
+    fi
+
+    if [ ! -d "/var/run" ]; then
+        mkdir -p /var/run
+    fi
+
+    return 0
+}
+
+supervizio_poststop()
+{
+    rm -f "${pidfile}"
+}
+
+run_rc_command "$1"

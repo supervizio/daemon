@@ -1,0 +1,13 @@
+#!/bin/ksh
+#
+# $OpenBSD$
+
+daemon="/usr/local/bin/supervizio"
+daemon_flags="--config /etc/supervizio/config.yaml"
+
+. /etc/rc.d/rc.subr
+
+rc_bg=YES
+rc_reload=NO
+
+rc_cmd $1

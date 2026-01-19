@@ -88,10 +88,12 @@ vendor/
 composer.lock
 
 # .NET
-bin/
 obj/
 *.dll
-*.exe
+
+# Build output (but keep .gitkeep)
+bin/*
+!bin/.gitkeep
 
 # ============================================
 # IDE & Editor files
@@ -112,6 +114,12 @@ dist/
 out/
 *.log
 
+
+# ============================================
+# Vagrant (E2E testing VMs)
+# ============================================
+.vagrant/
+**/.vagrant/
 
 #Ignore vscode AI rules
 .github/instructions/codacy.instructions.md

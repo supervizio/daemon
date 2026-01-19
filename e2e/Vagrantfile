@@ -1,0 +1,90 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+# supervizio E2E testing Vagrantfile
+# Runs VMs to test installation on various platforms
+
+Vagrant.configure("2") do |config|
+  # Shared folders
+  config.vm.synced_folder "../setup", "/setup", type: "rsync"
+  config.vm.synced_folder "../bin", "/bin-local", type: "rsync"
+  config.vm.synced_folder ".", "/vagrant", type: "rsync"
+
+  # QEMU provider settings (for macOS ARM64/x86_64)
+  config.vm.provider "qemu" do |qe|
+    qe.memory = "2048"
+    qe.smp = "2"
+    # Enable VNC display for debugging boot issues
+    qe.extra_qemu_args = %w(-vnc :0)
+  end
+
+  # Debian 12 (Bookworm) - systemd
+  config.vm.define "debian", primary: true do |debian|
+    debian.vm.box = "generic/debian12"
+    debian.vm.hostname = "e2e-debian"
+
+    debian.vm.provision "shell", inline: <<-SHELL
+      apt-get update -qq
+      apt-get install -y -qq curl
+    SHELL
+  end
+
+  # Alpine 3.19 - OpenRC
+  config.vm.define "alpine", autostart: false do |alpine|
+    alpine.vm.box = "generic/alpine319"
+    alpine.vm.hostname = "e2e-alpine"
+
+    alpine.vm.provision "shell", inline: <<-SHELL
+      apk update
+      apk add curl
+    SHELL
+  end
+
+  # Ubuntu 24.04 - systemd
+  config.vm.define "ubuntu", autostart: false do |ubuntu|
+    ubuntu.vm.box = "generic/ubuntu2404"
+    ubuntu.vm.hostname = "e2e-ubuntu"
+
+    ubuntu.vm.provision "shell", inline: <<-SHELL
+      apt-get update -qq
+      apt-get install -y -qq curl
+    SHELL
+  end
+
+  # Rocky Linux 9 - systemd (RHEL-compatible)
+  config.vm.define "rocky", autostart: false do |rocky|
+    rocky.vm.box = "generic/rocky9"
+    rocky.vm.hostname = "e2e-rocky"
+
+    rocky.vm.provision "shell", inline: <<-SHELL
+      dnf install -y curl
+    SHELL
+  end
+
+  # FreeBSD 14 - rc.d
+  config.vm.define "freebsd", autostart: false do |freebsd|
+    freebsd.vm.box = "generic/freebsd14"
+    freebsd.vm.hostname = "e2e-freebsd"
+
+    freebsd.vm.provision "shell", inline: <<-SHELL
+      pkg install -y curl
+    SHELL
+  end
+
+  # OpenBSD 7.5 - rc.d
+  config.vm.define "openbsd", autostart: false do |openbsd|
+    openbsd.vm.box = "generic/openbsd75"
+    openbsd.vm.hostname = "e2e-openbsd"
+
+    # OpenBSD has curl by default
+  end
+
+  # NetBSD 10 - rc.d
+  config.vm.define "netbsd", autostart: false do |netbsd|
+    netbsd.vm.box = "generic/netbsd10"
+    netbsd.vm.hostname = "e2e-netbsd"
+
+    netbsd.vm.provision "shell", inline: <<-SHELL
+      pkgin -y install curl
+    SHELL
+  end
+end
