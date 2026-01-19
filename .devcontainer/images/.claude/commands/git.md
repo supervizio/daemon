@@ -186,6 +186,32 @@ identity_validation:
     commands:
       - "git config user.name '{user}'"
       - "git config user.email '{email}'"
+
+  5_check_gpg:
+    action: "Vérifier si GPG signing est configuré"
+    commands:
+      - "git config --get commit.gpgsign"
+      - "git config --get user.signingkey"
+
+  6_configure_gpg_if_missing:
+    condition: "commit.gpgsign != true OR user.signingkey is empty"
+    action: "Lister les clés GPG et demander sélection si nécessaire"
+    workflow:
+      1_list_keys: "gpg --list-secret-keys --keyid-format LONG"
+      2_find_matching:
+        rule: "Chercher clé correspondant à GIT_EMAIL"
+        action: "grep -B1 '{email}' dans output gpg"
+      3_if_no_match_but_keys_exist:
+        tool: AskUserQuestion
+        questions:
+          - question: "Quelle clé GPG utiliser pour signer les commits ?"
+            header: "GPG Key"
+            options: "<dynamically generated from gpg output>"
+      4_configure:
+        commands:
+          - "git config --global user.signingkey {selected_key}"
+          - "git config --global commit.gpgsign true"
+          - "git config --global tag.forceSignAnnotated true"
 ```
 
 **Question si .env absent ou incomplet :**
@@ -224,7 +250,7 @@ GIT_EMAIL="john.doe@example.com"
 
 ```
 ═══════════════════════════════════════════════════════════════
-  /git --commit - Git Identity Validation
+  /git --commit - Git Identity & GPG Validation
 ═══════════════════════════════════════════════════════════════
 
   .env check:
@@ -236,7 +262,11 @@ GIT_EMAIL="john.doe@example.com"
     ├─ user.name: "John Doe" ✓ (match)
     └─ user.email: "john.doe@example.com" ✓ (match)
 
-  Status: ✓ Identity validated, proceeding to Phase 1
+  GPG config:
+    ├─ commit.gpgsign: true ✓
+    └─ user.signingkey: ABCD1234EF567890 ✓
+
+  Status: ✓ Identity & GPG validated, proceeding to Phase 1
 
 ═══════════════════════════════════════════════════════════════
 ```

@@ -31,6 +31,47 @@ else
     log_info "Git safe.directory already configured"
 fi
 
+# ============================================================================
+# Git SSL and GPG Configuration
+# ============================================================================
+
+# Disable SSL verification (for corporate proxies/self-signed certs)
+git config --global http.sslVerify false
+log_success "Git SSL verification disabled"
+
+# GPG commit signing configuration
+if [ -d "/home/vscode/.gnupg" ] && [ -n "$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null)" ]; then
+    # Get GIT_EMAIL from .env or git config
+    GIT_EMAIL=""
+    if [ -f "/workspace/.env" ]; then
+        GIT_EMAIL=$(grep -E "^GIT_EMAIL=" /workspace/.env 2>/dev/null | cut -d'=' -f2 | tr -d '"')
+    fi
+    if [ -z "$GIT_EMAIL" ]; then
+        GIT_EMAIL=$(git config --global user.email 2>/dev/null)
+    fi
+
+    GPG_KEY=""
+    if [ -n "$GIT_EMAIL" ]; then
+        # Priority: Find GPG key matching the configured GIT_EMAIL
+        GPG_KEY=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null | \
+            grep -B1 "$GIT_EMAIL" | \
+            grep -E "^sec" | head -1 | awk '{print $2}' | cut -d'/' -f2)
+    fi
+
+    if [ -n "$GPG_KEY" ]; then
+        git config --global user.signingkey "$GPG_KEY"
+        git config --global commit.gpgsign true
+        git config --global tag.forceSignAnnotated true
+        git config --global gpg.program gpg
+        log_success "Git GPG signing configured with key: $GPG_KEY (matching $GIT_EMAIL)"
+    else
+        # No matching key found - GPG signing will be configured via /git skill
+        log_warn "No GPG key found for email '$GIT_EMAIL' - configure via /git skill"
+    fi
+else
+    log_info "No GPG keys available - commit signing disabled"
+fi
+
 # Note: Tools (status-line, ktn-linter) are now baked into the Docker image
 # No longer need to update on each rebuild
 
