@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC1090,SC1091
 # ============================================================================
 # postStart.sh - Runs EVERY TIME the container starts
 # ============================================================================
@@ -26,9 +27,9 @@ if [ -d "$CLAUDE_DEFAULTS" ]; then
     # Ensure base directory exists
     mkdir -p "$HOME/.claude"
 
-    # CLEAN commands, scripts and agents to avoid legacy pollution
+    # CLEAN commands, scripts, agents and docs to avoid legacy pollution
     # Only these directories are managed by the image - sessions/plans are user data
-    rm -rf "$HOME/.claude/commands" "$HOME/.claude/scripts" "$HOME/.claude/agents"
+    rm -rf "$HOME/.claude/commands" "$HOME/.claude/scripts" "$HOME/.claude/agents" "$HOME/.claude/docs"
 
     # Restore commands (fresh copy from image)
     if [ -d "$CLAUDE_DEFAULTS/commands" ]; then
@@ -50,6 +51,12 @@ if [ -d "$CLAUDE_DEFAULTS" ]; then
         chmod -R 755 "$HOME/.claude/agents/"
     fi
 
+    # Restore docs (Design Patterns Knowledge Base - fresh copy from image)
+    if [ -d "$CLAUDE_DEFAULTS/docs" ]; then
+        mkdir -p "$HOME/.claude/docs"
+        cp -r "$CLAUDE_DEFAULTS/docs/"* "$HOME/.claude/docs/" 2>/dev/null || true
+    fi
+
     # Restore settings.json only if it does not exist (user customizations preserved)
     if [ -f "$CLAUDE_DEFAULTS/settings.json" ] && [ ! -f "$HOME/.claude/settings.json" ]; then
         cp "$CLAUDE_DEFAULTS/settings.json" "$HOME/.claude/settings.json"
@@ -64,73 +71,6 @@ fi
 mkdir -p "$HOME/.claude/sessions" "$HOME/.claude/plans"
 log_success "Claude directories initialized"
 
-# ============================================================================
-# GNOME Keyring Setup (for credential storage - libsecret/Secret Service API)
-# ============================================================================
-# Required by: CodeRabbit CLI, GitHub CLI, VS Code, Claude Code
-# Works on all platforms: Mac, Windows, Linux, WSL (container is always Linux)
-setup_gnome_keyring() {
-    # Check if gnome-keyring-daemon is available
-    if ! command -v gnome-keyring-daemon &> /dev/null; then
-        log_warning "gnome-keyring-daemon not found - credential storage may fail"
-        return 1
-    fi
-
-    # Check if already running
-    if pgrep -u "$(id -u)" gnome-keyring-daemon &> /dev/null; then
-        log_info "gnome-keyring-daemon already running"
-        return 0
-    fi
-
-    # Start D-Bus session if not available
-    if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-        log_info "Starting D-Bus session bus..."
-        if command -v dbus-launch &> /dev/null; then
-            eval "$(dbus-launch --sh-syntax)"
-            export DBUS_SESSION_BUS_ADDRESS
-        else
-            log_warning "dbus-launch not found - using fallback"
-            export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
-        fi
-    fi
-
-    # Start gnome-keyring-daemon with secrets component
-    log_info "Starting gnome-keyring-daemon..."
-    # Use --unlock with empty password for headless operation
-    eval "$(echo '' | gnome-keyring-daemon --unlock --components=secrets 2>/dev/null)" || {
-        log_warning "gnome-keyring-daemon failed to start with unlock, trying without..."
-        eval "$(gnome-keyring-daemon --start --components=secrets 2>/dev/null)" || {
-            log_warning "gnome-keyring-daemon failed to start"
-            return 1
-        }
-    }
-
-    log_success "gnome-keyring-daemon started successfully"
-    return 0
-}
-
-# Run keyring setup and export env vars for shell sessions
-if setup_gnome_keyring; then
-    DC_ENV="$HOME/.devcontainer-env.sh"
-    if [ -f "$DC_ENV" ]; then
-        # Remove existing entries to avoid duplicates
-        sed -i '/^export DBUS_SESSION_BUS_ADDRESS=/d' "$DC_ENV"
-        sed -i '/^export GNOME_KEYRING_CONTROL=/d' "$DC_ENV"
-        sed -i '/^export SSH_AUTH_SOCK=/d' "$DC_ENV"
-    fi
-    # Export D-Bus and keyring variables for all shells
-    if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-        echo "export DBUS_SESSION_BUS_ADDRESS=\"$DBUS_SESSION_BUS_ADDRESS\"" >> "$DC_ENV"
-    fi
-    if [ -n "${GNOME_KEYRING_CONTROL:-}" ]; then
-        echo "export GNOME_KEYRING_CONTROL=\"$GNOME_KEYRING_CONTROL\"" >> "$DC_ENV"
-    fi
-    if [ -n "${SSH_AUTH_SOCK:-}" ]; then
-        echo "export SSH_AUTH_SOCK=\"$SSH_AUTH_SOCK\"" >> "$DC_ENV"
-    fi
-    log_success "Keyring environment variables exported to $DC_ENV"
-fi
-
 # Reload .env file to get updated tokens
 ENV_FILE="/workspace/.devcontainer/.env"
 if [ -f "$ENV_FILE" ]; then
@@ -141,11 +81,190 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 # ============================================================================
+# Ollama + grepai Initialization (for semantic code search MCP)
+# ============================================================================
+# Ollama runs as a sidecar container (see docker-compose.yml)
+# Accessible via OLLAMA_HOST env var (default: ollama:11434)
+# Model: qwen3-embedding:0.6b (fast, high-quality, 32K context, code-aware)
+GREPAI_BIN="/usr/local/bin/grepai"
+GREPAI_CONFIG_TPL="/etc/grepai/config.yaml"
+OLLAMA_ENDPOINT="${OLLAMA_HOST:-ollama:11434}"
+EMBEDDING_MODEL="qwen3-embedding:0.6b"
+
+init_semantic_search() {
+    local grepai_dir="/workspace/.grepai"
+    local grepai_config="${grepai_dir}/config.yaml"
+    local ollama_ready=false
+
+    # =========================================================================
+    # STEP 1: Initialize grepai config FIRST (before checking Ollama)
+    # This ensures config exists even if Ollama is not available
+    # =========================================================================
+    if [ -x "$GREPAI_BIN" ]; then
+        # Always create/update .grepai config from template
+        log_info "Initializing grepai configuration..."
+        mkdir -p "$grepai_dir"
+
+        if [ -f "$GREPAI_CONFIG_TPL" ]; then
+            if cp "$GREPAI_CONFIG_TPL" "$grepai_config"; then
+                log_success "grepai config initialized from template"
+                # Log provider and model for visibility
+                local cfg_provider cfg_model cfg_endpoint
+                cfg_provider=$(grep -E "^[[:space:]]+provider:" "$grepai_config" | head -1 | awk '{print $2}' || echo "unknown")
+                cfg_model=$(grep -E "^[[:space:]]+model:" "$grepai_config" | head -1 | awk '{print $2}' || echo "unknown")
+                cfg_endpoint=$(grep -E "^[[:space:]]+endpoint:" "$grepai_config" | head -1 | awk '{print $2}' || echo "unknown")
+                log_info "grepai config: provider=$cfg_provider model=$cfg_model endpoint=$cfg_endpoint"
+            else
+                log_warning "Failed to copy grepai config template"
+            fi
+        else
+            # Fallback to grepai init if template not found
+            log_warning "Config template not found at $GREPAI_CONFIG_TPL, using grepai init..."
+            if (cd /workspace && "$GREPAI_BIN" init --provider ollama --backend gob --yes 2>/dev/null); then
+                log_success "grepai initialized via CLI"
+            else
+                log_warning "grepai init failed"
+            fi
+        fi
+
+        # Ensure Ollama endpoint is correct in config
+        if [ -f "$grepai_config" ]; then
+            if ! grep -q "endpoint: http://${OLLAMA_ENDPOINT}" "$grepai_config"; then
+                log_info "Updating grepai endpoint to $OLLAMA_ENDPOINT..."
+                sed -i -E "s|(endpoint: http://)[^[:space:]]+|\1${OLLAMA_ENDPOINT}|" "$grepai_config"
+            fi
+        fi
+    else
+        log_warning "grepai binary not found at $GREPAI_BIN"
+        return 0
+    fi
+
+    # =========================================================================
+    # STEP 2: Wait for Ollama sidecar (optional - grepai config already exists)
+    # =========================================================================
+    log_info "Waiting for Ollama sidecar at $OLLAMA_ENDPOINT..."
+    local retries=15
+    while [ $retries -gt 0 ]; do
+        if curl -sf "http://${OLLAMA_ENDPOINT}/api/tags" >/dev/null 2>&1; then
+            log_success "Ollama sidecar is ready"
+            ollama_ready=true
+            break
+        fi
+        retries=$((retries - 1))
+        sleep 2
+    done
+
+    if [ "$ollama_ready" = false ]; then
+        log_warning "Ollama sidecar not responding at $OLLAMA_ENDPOINT"
+        log_warning "grepai config exists but semantic search will not work until Ollama is available"
+        log_info "To start Ollama manually: docker compose up -d ollama"
+        return 0
+    fi
+
+    # Check if embedding model is already available
+    local model_available=false
+    if curl -sf "http://${OLLAMA_ENDPOINT}/api/tags" 2>/dev/null | grep -q "$EMBEDDING_MODEL"; then
+        model_available=true
+        log_success "Model $EMBEDDING_MODEL already available"
+    fi
+
+    # Pull embedding model if not present (with progress feedback)
+    if [ "$model_available" = false ]; then
+        log_info "Pulling $EMBEDDING_MODEL model..."
+        local pull_start=$(date +%s)
+        local pull_timeout=120  # 2 minutes max for model pull
+        local pull_pid
+
+        # Start pull in background to allow timeout
+        curl -sf "http://${OLLAMA_ENDPOINT}/api/pull" -d "{\"name\":\"$EMBEDDING_MODEL\"}" >/dev/null 2>&1 &
+        pull_pid=$!
+
+        # Wait for pull with timeout and progress dots
+        local elapsed=0
+        while kill -0 $pull_pid 2>/dev/null; do
+            sleep 5
+            elapsed=$(($(date +%s) - pull_start))
+            if [ $elapsed -ge $pull_timeout ]; then
+                log_warning "Model pull taking too long, continuing in background..."
+                break
+            fi
+            printf "."  # Progress indicator
+        done
+        echo ""  # Newline after progress dots
+
+        # Verify model is now available
+        sleep 2  # Brief pause for Ollama to register model
+        if curl -sf "http://${OLLAMA_ENDPOINT}/api/tags" 2>/dev/null | grep -q "$EMBEDDING_MODEL"; then
+            local pull_duration=$(($(date +%s) - pull_start))
+            log_success "Model $EMBEDDING_MODEL ready (${pull_duration}s)"
+        else
+            log_warning "Model $EMBEDDING_MODEL may still be downloading"
+        fi
+    fi
+
+    # Show currently loaded models for debugging
+    local loaded_models
+    loaded_models=$(curl -sf "http://${OLLAMA_ENDPOINT}/api/tags" 2>/dev/null | grep -o '"name":"[^"]*"' | sed 's/"name":"//g;s/"//g' | tr '\n' ' ' || echo "none")
+    log_info "Available Ollama models: ${loaded_models:-none}"
+
+    # =========================================================================
+    # STEP 3: Start grepai watch daemon (config already initialized in STEP 1)
+    # =========================================================================
+    local grepai_pid
+    grepai_pid=$(pgrep -f "$GREPAI_BIN watch" 2>/dev/null || true)
+
+    if [ -z "$grepai_pid" ]; then
+        log_info "Starting grepai watch daemon for real-time indexing..."
+        (cd /workspace && nohup "$GREPAI_BIN" watch >/dev/null 2>&1 &)
+        sleep 2
+        grepai_pid=$(pgrep -f "$GREPAI_BIN watch" 2>/dev/null || true)
+        if [ -n "$grepai_pid" ]; then
+            log_success "grepai watch daemon started (PID: $grepai_pid)"
+        else
+            log_warning "grepai watch daemon failed to start"
+        fi
+    else
+        log_info "grepai watch daemon already running (PID: $grepai_pid)"
+    fi
+
+    # Check initial indexing status
+    sleep 3  # Give grepai time to start indexing
+    local index_status
+    index_status=$(cd /workspace && "$GREPAI_BIN" status 2>/dev/null || echo "")
+    if [ -n "$index_status" ]; then
+        # Extract key metrics from status
+        local indexed_files
+        indexed_files=$(echo "$index_status" | grep -oE 'Indexed: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+        local pending_files
+        pending_files=$(echo "$index_status" | grep -oE 'Pending: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+
+        if [ "$indexed_files" != "0" ] || [ "$pending_files" != "0" ]; then
+            log_info "grepai index: $indexed_files files indexed, $pending_files pending"
+        else
+            # Try alternative parsing
+            local file_count
+            file_count=$(echo "$index_status" | grep -oE '[0-9]+ files?' | head -1 || echo "")
+            if [ -n "$file_count" ]; then
+                log_info "grepai index: $file_count"
+            else
+                log_info "grepai indexing in progress..."
+            fi
+        fi
+    else
+        log_info "grepai indexing starting (status check pending)..."
+    fi
+}
+
+# Run in background to not block container startup
+init_semantic_search &
+
+# ============================================================================
 # MCP Configuration Setup (inject secrets into template)
 # ============================================================================
-VAULT_ID="ypahjj334ixtiyjkytu5hij2im"
+# 1Password vault ID (can be overridden via OP_VAULT_ID env var)
+VAULT_ID="${OP_VAULT_ID:-ypahjj334ixtiyjkytu5hij2im}"
 MCP_TPL="/etc/mcp/mcp.json.tpl"
-MCP_OUTPUT="/workspace/.mcp.json"
+MCP_OUTPUT="/workspace/mcp.json"
 
 # Helper function to get 1Password field (tries multiple field names)
 # Usage: get_1password_field <item_name> <vault_id>
@@ -168,7 +287,6 @@ get_1password_field() {
 # Initialize tokens from environment variables (fallback)
 CODACY_TOKEN="${CODACY_API_TOKEN:-}"
 GITHUB_TOKEN="${GITHUB_API_TOKEN:-}"
-CODERABBIT_TOKEN="${CODERABBIT_API_KEY:-}"
 
 # ============================================================================
 # 1Password CLI Config Directory Permissions Fix
@@ -214,40 +332,151 @@ if [ -n "$OP_SERVICE_ACCOUNT_TOKEN" ] && command -v op &> /dev/null; then
 
     OP_CODACY=$(get_1password_field "mcp-codacy" "$VAULT_ID")
     OP_GITHUB=$(get_1password_field "mcp-github" "$VAULT_ID")
-    OP_CODERABBIT=$(get_1password_field "coderabbit" "$VAULT_ID")
 
     [ -n "$OP_CODACY" ] && CODACY_TOKEN="$OP_CODACY"
     [ -n "$OP_GITHUB" ] && GITHUB_TOKEN="$OP_GITHUB"
-    [ -n "$OP_CODERABBIT" ] && CODERABBIT_TOKEN="$OP_CODERABBIT"
 fi
 
-# Show warnings if tokens are missing
-[ -z "$CODACY_TOKEN" ] && log_warning "Codacy token not available"
+# Show status of tokens (INFO for optional, WARNING for essential)
+[ -z "$CODACY_TOKEN" ] && log_info "Codacy token not configured (optional)"
 [ -z "$GITHUB_TOKEN" ] && log_warning "GitHub token not available"
-[ -z "$CODERABBIT_TOKEN" ] && log_warning "CodeRabbit token not available"
+
+# Helper: escape special chars for sed replacement
+# Handles: & \ | / and strips newlines/CR (covers all token formats)
+# LC_ALL=C ensures deterministic behavior across locales
+escape_for_sed() {
+    LC_ALL=C printf '%s' "$1" | tr -d '\n\r' | sed -e 's/[&/|\\]/\\&/g'
+}
+
+# Security: refuse to write secrets through symlinks or unsafe directories
+MCP_DIR=$(dirname -- "$MCP_OUTPUT")
+if [ ! -d "$MCP_DIR" ] || [ -L "$MCP_DIR" ]; then
+    log_error "Refusing to write mcp.json: unsafe parent directory ($MCP_DIR)"
+    # Skip all MCP generation but continue with rest of postStart
+elif [ -e "$MCP_OUTPUT" ] && { [ -L "$MCP_OUTPUT" ] || [ ! -f "$MCP_OUTPUT" ]; }; then
+    log_error "Refusing to write mcp.json: not a regular file ($MCP_OUTPUT)"
+    # Skip all MCP generation but continue with rest of postStart
+else
+
+# Migrate legacy .mcp.json to mcp.json (renamed in v2)
+if [ -f "/workspace/.mcp.json" ] && [ ! -e "$MCP_OUTPUT" ]; then
+    log_info "Migrating legacy .mcp.json to mcp.json..."
+
+    if ! command -v jq >/dev/null 2>&1; then
+        log_warning "jq not found; migrating without JSON validation"
+        if cp "/workspace/.mcp.json" "$MCP_OUTPUT"; then
+            chown "$(id -u):$(id -g)" "$MCP_OUTPUT" 2>/dev/null || true
+            chmod 600 "$MCP_OUTPUT"
+            rm -f "/workspace/.mcp.json" || log_warning "Could not remove legacy .mcp.json (permissions?)"
+            log_success "Migration complete: .mcp.json → mcp.json"
+        else
+            log_error "Migration failed: unable to copy legacy file"
+        fi
+    else
+        MCP_MIG_TMP=$(mktemp "${MCP_OUTPUT}.migrate.XXXXXX") || {
+            log_error "Migration failed: unable to create temp file"
+            MCP_MIG_TMP=""
+        }
+        if [ -n "$MCP_MIG_TMP" ] && cp "/workspace/.mcp.json" "$MCP_MIG_TMP"; then
+            # Validate JSON before completing migration
+            if jq empty "$MCP_MIG_TMP" 2>/dev/null; then
+                mv "$MCP_MIG_TMP" "$MCP_OUTPUT"
+                chown "$(id -u):$(id -g)" "$MCP_OUTPUT" 2>/dev/null || true
+                chmod 600 "$MCP_OUTPUT"
+                rm -f "/workspace/.mcp.json" || log_warning "Could not remove legacy .mcp.json (permissions?)"
+                log_success "Migration complete: .mcp.json → mcp.json"
+            else
+                log_error "Legacy .mcp.json is invalid JSON; keeping legacy file"
+                rm -f "$MCP_MIG_TMP"
+            fi
+        elif [ -n "$MCP_MIG_TMP" ]; then
+            log_error "Migration failed"
+            rm -f "$MCP_MIG_TMP"
+        fi
+    fi
+fi
 
 # Generate mcp.json from template (baked in Docker image)
+# ALWAYS regenerate from template to ensure latest MCP config is applied
 if [ -f "$MCP_TPL" ]; then
-    log_info "Generating .mcp.json from template..."
-    sed -e "s|{{CODACY_TOKEN}}|${CODACY_TOKEN}|g" \
-        -e "s|{{GITHUB_TOKEN}}|${GITHUB_TOKEN}|g" \
-        "$MCP_TPL" > "$MCP_OUTPUT"
-    log_success "mcp.json generated successfully"
+    if [ -z "$CODACY_TOKEN" ] && [ -z "$GITHUB_TOKEN" ]; then
+        # No tokens available - create minimal config for optional MCPs (grepai, playwright, etc.)
+        log_warning "No tokens available, creating minimal mcp.json"
+        printf '%s\n' '{"mcpServers":{}}' > "$MCP_OUTPUT"
+        chown "$(id -u):$(id -g)" "$MCP_OUTPUT" 2>/dev/null || true
+        chmod 600 "$MCP_OUTPUT"
+        log_info "Created minimal mcp.json (optional MCPs will be added below)"
+    else
+        # Generate mcp.json from template (uses subshell to avoid global trap clobbering)
+        generate_mcp_from_template() {
+            local escaped_codacy escaped_github mcp_tmp
+            escaped_codacy=$(escape_for_sed "${CODACY_TOKEN}")
+            escaped_github=$(escape_for_sed "${GITHUB_TOKEN}")
+
+            mcp_tmp=$(mktemp "${MCP_OUTPUT}.tmp.XXXXXX") || {
+                log_error "Failed to create temp file for mcp.json generation"
+                return 0
+            }
+
+            # Cleanup on function exit (does not affect other traps)
+            trap 'rm -f "$mcp_tmp" 2>/dev/null || true' RETURN
+
+            if ! sed -e "s|{{CODACY_TOKEN}}|${escaped_codacy}|g" \
+                    -e "s|{{GITHUB_TOKEN}}|${escaped_github}|g" \
+                    "$MCP_TPL" > "$mcp_tmp"; then
+                log_error "Failed to render mcp.json template"
+                return 0
+            fi
+
+            if jq empty "$mcp_tmp" 2>/dev/null; then
+                mv "$mcp_tmp" "$MCP_OUTPUT"
+                chown "$(id -u):$(id -g)" "$MCP_OUTPUT" 2>/dev/null || true
+                chmod 600 "$MCP_OUTPUT"
+                log_success "mcp.json generated successfully"
+            else
+                log_error "Generated mcp.json is invalid JSON, keeping original"
+            fi
+        }
+        log_info "Regenerating mcp.json from template (forced)..."
+        generate_mcp_from_template
+    fi
 
     # =========================================================================
     # Add optional MCPs based on installed features
     # =========================================================================
-    # Helper function to add a conditional MCP server
+    # Helper function to add a conditional MCP server (uses atomic temp file)
     add_optional_mcp() {
         local name="$1"
         local binary="$2"
         local output="$3"
 
+        # Nothing to do if there is no base config to modify
+        [ -f "$output" ] || return 0
+
+        # jq is required for JSON manipulation
+        if ! command -v jq >/dev/null 2>&1; then
+            log_warning "Skipping $name MCP injection (jq not found)"
+            return 0
+        fi
+
         if [ -x "$binary" ]; then
             log_info "Adding $name MCP (binary found at $binary)"
-            jq --arg name "$name" --arg bin "$binary" \
-               '.mcpServers[$name] = {"command": $bin, "args": [], "env": {}}' \
-               "$output" > "$output.tmp" && mv "$output.tmp" "$output"
+            local tmp_file
+            tmp_file=$(mktemp "${output}.tmp.XXXXXX") || {
+                log_warning "Failed to add $name MCP (unable to create temp file)"
+                return 0
+            }
+            if jq --arg name "$name" --arg bin "$binary" \
+               '.mcpServers = (.mcpServers // {}) | .mcpServers[$name] = {"command": $bin, "args": [], "env": {}}' \
+               "$output" > "$tmp_file" && jq empty "$tmp_file" 2>/dev/null; then
+                mv "$tmp_file" "$output"
+                # Ensure correct ownership and secure permissions
+                chown "$(id -u):$(id -g)" "$output" 2>/dev/null || true
+                chmod 600 "$output" 2>/dev/null || true
+            else
+                log_warning "Failed to add $name MCP, keeping original"
+                rm -f "$tmp_file"
+            fi
         else
             log_info "Skipping $name MCP (binary not found)"
         fi
@@ -263,6 +492,8 @@ else
     log_warning "MCP template not found at $MCP_TPL"
 fi
 
+fi  # End of symlink security check
+
 # ============================================================================
 # Git Credential Cleanup (remove macOS-specific helpers)
 # ============================================================================
@@ -277,16 +508,6 @@ log_success "Git credential helpers cleaned"
 # Note: ~/.devcontainer-env.sh is created by postCreate.sh with static content
 # We only append dynamic variables here (secrets from 1Password)
 DC_ENV="$HOME/.devcontainer-env.sh"
-
-# Export CodeRabbit API key if available (append to existing file)
-if [ -n "$CODERABBIT_TOKEN" ]; then
-    # Remove any existing CODERABBIT_API_KEY line to avoid duplicates
-    if [ -f "$DC_ENV" ]; then
-        sed -i '/^export CODERABBIT_API_KEY=/d' "$DC_ENV"
-    fi
-    echo "export CODERABBIT_API_KEY=\"$CODERABBIT_TOKEN\"" >> "$DC_ENV"
-    log_success "CODERABBIT_API_KEY exported to $DC_ENV"
-fi
 
 # ============================================================================
 # Auto-run /init for project initialization check

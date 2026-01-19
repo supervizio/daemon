@@ -6,7 +6,7 @@
 #
 # Exit 0 = OK, Exit 2 = blocked (secrets found)
 
-set -e
+set +e  # Fail-open: don't exit on errors (hook should never block unexpectedly)
 
 # === Single file scan function ===
 scan_file() {

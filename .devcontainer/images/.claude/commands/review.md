@@ -1,16 +1,20 @@
 ---
 name: review
 description: |
-  AI-powered code review (RLM decomposition) for PRs or local diffs.
-  Focus: security, quality, maintainability, shell safety, and review synthesis.
-  Works in Claude Code with Git + MCP (GitHub/Codacy).
+  AI-powered code review (RLM decomposition) for PRs/MRs or local diffs.
+  Focus: correctness, security, design, quality, shell safety.
+  12 phases, 5 agents (opus for deep analysis, haiku for patterns).
+  Cyclic workflow: /review --loop for iterative perfection.
+  Local-only output with /plan generation for /do execution.
 allowed-tools:
   - "Bash(git *)"
   - "Bash(gh *)"
+  - "Bash(glab *)"
   - "Read(**/*)"
   - "Glob(**/*)"
   - "Grep(**/*)"
   - "mcp__github__*"
+  - "mcp__gitlab__*"
   - "mcp__codacy__*"
   - "mcp__grepai__*"
   - "Task(*)"
@@ -24,30 +28,62 @@ Intelligent code review using **Recursive Language Model** decomposition:
 
 | Phase | Name | Action |
 |-------|------|--------|
-| 0 | Context | Detect PR, branch, CI status |
-| 1 | Intent | Analyze PR title/description/scope |
-| 1.5 | Describe | Auto-generate PR description if empty (PR-Agent inspired) |
+| 0 | Context | Detect PR/MR, branch, CI status (GitHub/GitLab) |
+| 0.5 | **Repo Profile** | Cache conventions, architecture, ownership (7d TTL) |
+| 1 | Intent | Analyze PR/MR + **Risk Model** calibration |
+| 1.5 | Describe | Auto-generate PR/MR description (drift detection) |
 | 2 | Feedback | Collect ALL comments/reviews |
-| 3 | Peek | Snapshot diff, categorize files |
-| 4 | Analyze | Parallel sub-agents (security, quality, shell) |
+| 2.3 | **CI Diagnostics** | Extract CI failure context (conditional) |
+| 2.5 | Questions | Handle human questions |
+| 3 | Peek | Snapshot diff, categorize files, route agents |
+| 4 | **Analyze** | **5 parallel agents** (correctness, security, design, quality, shell) |
+| 4.7 | **Merge & Dedupe** | Normalize findings, deduplicate, require evidence |
 | 5 | Challenge | Evaluate feedback relevance with context |
-| 6 | Plan | Generate prioritized action plan |
+| 6 | Output | Generate LOCAL report + /plan file (no GitHub/GitLab post) |
+| 6.5 | **Dispatch** | Route fixes to language-specialist via /do |
+| 7 | **Cyclic** | Loop until perfect OR --loop limit |
 
 **Principe RLM** : Peek → Decompose → Parallelize → Synthesize
+
+**5 Agents (opus for reasoning, haiku for patterns):**
+- `developer-executor-correctness` (opus) - Algorithmic errors, invariants
+- `developer-executor-security` (opus) - Taint analysis, OWASP, supply chain
+- `developer-executor-design` (opus) - Antipatterns, DDD, layering, SOLID
+- `developer-executor-quality` (haiku) - Style, complexity, metrics
+- `developer-executor-shell` (haiku) - Shell safety, Dockerfile, CI/CD
+
+**Platform Support:** GitHub (PRs) + GitLab (MRs) - auto-detected from git remote.
+**Output:** LOCAL only (no comments posted). Generates /plan for /do execution.
 
 ---
 
 ## Usage
 
 ```
-/review                    # Review current changes (auto-detect PR or local)
-/review --pr [number]      # Review specific PR
+/review                    # Single review (no loop, no fix)
+/review --loop             # Cyclic review until PERFECT (infinite)
+/review --loop 5           # Cyclic review (max 5 iterations)
+/review --pr [number]      # Review specific PR (GitHub)
+/review --mr [number]      # Review specific MR (GitLab)
 /review --staged           # Review staged changes only
 /review --file <path>      # Review specific file
 /review --security         # Security-focused review only
+/review --correctness      # Correctness-focused review only
+/review --design           # Design/architecture review only
 /review --quality          # Quality-focused review only
-/review --triage           # Large PR mode (>30 files or >1500 lines)
-/review --describe         # Force auto-describe even if PR has description
+/review --triage           # Large PR/MR mode (>30 files or >1500 lines)
+/review --describe         # Force auto-describe even if PR/MR has description
+```
+
+**Cyclic Workflow:**
+```
+/review --loop
+    │
+    ├─→ Phase 0-6: Full analysis (5 agents)
+    ├─→ Phase 6.5: Generate /plan with fixes
+    ├─→ /do executes fixes via language-specialist
+    ├─→ Loop: re-review → fix → re-review
+    └─→ Exit when: no HIGH/CRITICAL OR limit reached
 ```
 
 ---
@@ -90,7 +126,7 @@ budget_controller:
 
 ## Phase 0 : Context Detection
 
-**Identifier le contexte d'exécution :**
+**Identifier le contexte d'exécution (GitHub/GitLab auto-détecté) :**
 
 ```yaml
 context_detection:
@@ -104,19 +140,36 @@ context_detection:
       upstream: string
       remote: "origin" | "upstream"
 
-  2_pr_detection:
-    tools:
-      - "mcp__github__list_pull_requests(head: current_branch)"
+  1.5_platform_detection:
+    rule: |
+      remote_url = git remote get-url origin
+      SI remote_url contains "github.com":
+        platform = "github"
+        mcp_prefix = "mcp__github__"
+      SINON SI remote_url contains "gitlab.com" OR "gitlab.":
+        platform = "gitlab"
+        mcp_prefix = "mcp__gitlab__"
+      SINON:
+        platform = "local"
+        mcp_prefix = null
     output:
-      on_pr: boolean
-      pr_number: number | null
-      pr_url: string | null
-      target_branch: string  # base branch de la PR
+      platform: "github" | "gitlab" | "local"
+      mcp_prefix: string | null
+
+  2_pr_mr_detection:
+    tools:
+      github: "mcp__github__list_pull_requests(head: current_branch)"
+      gitlab: "mcp__gitlab__list_merge_requests(source_branch: current_branch)"
+    output:
+      on_pr_mr: boolean
+      pr_mr_number: number | null
+      pr_mr_url: string | null
+      target_branch: string  # base branch
 
   3_diff_source:
     rule: |
-      SI on_pr == true:
-        source = "PR diff via MCP"
+      SI on_pr_mr == true:
+        source = "PR/MR diff via MCP"
         base = target_branch
         head = current_branch
       SINON:
@@ -124,13 +177,15 @@ context_detection:
         base = "git merge-base origin/main HEAD"
         head = "HEAD"
     output:
-      diff_source: "pr" | "local"
+      diff_source: "pr" | "mr" | "local"
       merge_base: string
       display: "Reviewing: {base}...{head}"
 
   4_ci_status:
-    condition: "on_pr == true"
-    tool: "mcp__github__get_pull_request_status"
+    condition: "on_pr_mr == true"
+    tools:
+      github: "mcp__github__get_pull_request_status"
+      gitlab: "mcp__gitlab__list_pipelines(ref: current_branch)"
     strategy:
       max_polls: 2
       poll_interval: 30s
@@ -141,13 +196,14 @@ context_detection:
       ci_jobs: [{name, status, conclusion}]
 ```
 
-**Output Phase 0 :**
+**Output Phase 0 (GitHub) :**
 
 ```
 ═══════════════════════════════════════════════════════════════
   /review - Context Detection
 ═══════════════════════════════════════════════════════════════
 
+  Platform: GitHub
   Branch: feat/post-compact-hook
   PR: #97 (open) → main
   Diff source: PR (mcp__github)
@@ -163,18 +219,93 @@ context_detection:
 ═══════════════════════════════════════════════════════════════
 ```
 
+**Output Phase 0 (GitLab) :**
+
+```
+═══════════════════════════════════════════════════════════════
+  /review - Context Detection
+═══════════════════════════════════════════════════════════════
+
+  Platform: GitLab
+  Branch: feat/post-compact-hook
+  MR: !42 (open) → main
+  Diff source: MR (mcp__gitlab)
+  Merge base: a60a896...847d6db
+
+  CI Status: ✓ passed (pipeline #12345)
+    ├─ build: passed (1m 23s)
+    ├─ test: passed (2m 45s)
+    └─ lint: passed (45s)
+
+  Mode: NORMAL (18 files, 375 lines)
+
+═══════════════════════════════════════════════════════════════
+```
+
+---
+
+## Phase 0.5 : Repo Profile (NEW - Cacheable)
+
+**Build stable repo understanding BEFORE analysis:**
+
+```yaml
+repo_profile:
+  cache:
+    location: ".claude/.cache/repo_profile.json"
+    key: "repo_profile@{default_branch}"
+    ttl: "7 days"
+
+  inputs:
+    priority_files:
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "ARCHITECTURE.md"
+      - ".editorconfig"
+      - ".golangci*"
+      - ".eslintrc*"
+      - "pyproject.toml"
+      - "CODEOWNERS"
+      - ".claude/docs/**"
+
+  extract:
+    languages: [string]
+    build_tools: [string]
+    test_frameworks: [string]
+    lint_tools: [string]
+    architecture_style: "hexagonal|layered|cqrs|microservices|monolith"
+    error_conventions: [string]  # "wrap with fmt.Errorf", etc.
+    naming_conventions: [string]
+    ownership:
+      codeowners_present: boolean
+      owners_by_path: [{path, owners}]
+
+  output:
+    repo_profile_summary: "max 50 lines, JSON"
+
+  usage: |
+    Injected into EVERY agent so they:
+    - Adapt checks to repo conventions
+    - Avoid false positives on intentional patterns
+    - Respect established style
+```
+
 ---
 
 ## Phase 1 : Intent Analysis
 
-**Comprendre l'intention de la PR AVANT analyse lourde :**
+**Comprendre l'intention de la PR/MR AVANT analyse lourde :**
 
 ```yaml
 intent_analysis:
   inputs:
-    - "mcp__github__get_pull_request (title, body, labels)"
-    - "mcp__github__get_pull_request_files (file list)"
-    - "git diff --stat"
+    github:
+      - "mcp__github__get_pull_request (title, body, labels)"
+      - "mcp__github__get_pull_request_files (file list)"
+    gitlab:
+      - "mcp__gitlab__get_merge_request (title, description, labels)"
+      - "mcp__gitlab__get_merge_request_changes (file list)"
+    common:
+      - "git diff --stat"
 
   extract:
     title: string
@@ -202,6 +333,37 @@ intent_analysis:
         force_security_scan = true
       SINON:
         analysis_depth = "normal"
+
+  risk_model:
+    goal: "Identify critical zones BEFORE heavy analysis"
+
+    risk_tags:
+      - "authn_authz"      # auth, jwt, oauth, rbac, acl, session
+      - "crypto"           # crypto, x509, tls, sign, encrypt, hash
+      - "secrets"          # secret, token, key, vault, password
+      - "network"          # http, grpc, tcp, udp, dns, socket
+      - "db_migrations"    # migrate, schema, sql, gorm, prisma
+      - "concurrency"      # goroutine, mutex, channel, lock, atomic
+      - "supply_chain"     # Dockerfile, go.sum, package-lock
+      - "state_machine"    # state, transition, fsm, workflow
+      - "pagination"       # cursor, offset, limit, page
+      - "caching"          # cache, ttl, invalidate, redis
+
+    calibration:
+      rule: |
+        SI any(risk_tags):
+          analysis_depth = "deep"
+          prioritize_files = "risk-touched first"
+          enable_agents = ["correctness", "security", "design"]
+        SI risk_tags contains ["authn_authz", "crypto", "secrets"]:
+          force_security_deep = true
+        SI risk_tags contains ["concurrency", "state_machine"]:
+          force_correctness_deep = true
+
+    output:
+      risk_tags: [string]
+      risk_files: [{path, risk_tags}]
+      review_priorities: ["correctness", "security", "design", "quality"]
 ```
 
 **Output Phase 1 :**
@@ -231,25 +393,27 @@ intent_analysis:
 
 ## Phase 1.5 : Auto-Describe (PR-Agent inspired)
 
-**Générer description si PR vide ou insuffisante :**
+**Générer description si PR/MR vide ou insuffisante :**
 
 ```yaml
 auto_describe:
   trigger:
-    - "pr_body is empty OR pr_body.length < 50"
-    - "pr_body contains only template placeholders"
+    - "pr_mr_body is empty OR pr_mr_body.length < 50"
+    - "pr_mr_body contains only template placeholders"
     - "--describe flag passed"
 
   skip_if:
-    - "pr_body.length >= 200 AND contains_summary_section"
-    - "mode == 'local' (no PR)"
+    - "pr_mr_body.length >= 200 AND contains_summary_section"
+    - "mode == 'local' (no PR/MR)"
 
   workflow:
     1_analyze_diff:
       inputs:
-        - "mcp__github__get_pull_request_files"
-        - "git diff --stat"
-        - "git log --oneline {base}..HEAD"
+        github: "mcp__github__get_pull_request_files"
+        gitlab: "mcp__gitlab__get_merge_request_changes"
+        common:
+          - "git diff --stat"
+          - "git log --oneline {base}..HEAD"
       extract:
         main_changes: [string]  # Max 5 key changes
         breaking_changes: [string]
@@ -285,23 +449,27 @@ auto_describe:
     3_user_validation:
       tool: AskUserQuestion
       prompt: |
-        📝 Description générée pour PR #{pr_number}:
+        📝 Description générée pour {PR|MR} #{pr_mr_number}:
 
         {generated_description}
 
         Action?
       options:
         - label: "Poster"
-          description: "Mettre à jour la description PR"
+          description: "Mettre à jour la description"
         - label: "Éditer"
           description: "Modifier avant de poster"
         - label: "Ignorer"
-          description: "Ne pas modifier la PR"
+          description: "Ne pas modifier"
 
-    4_update_pr:
+    4_update_pr_mr:
       condition: "user_choice in ['Poster', 'Éditer']"
-      tool: "gh pr edit {pr_number} --body '{final_description}'"
-      fallback: "mcp__github__update_issue (body: final_description)"
+      tools:
+        github: "gh pr edit {pr_number} --body '{final_description}'"
+        gitlab: "glab mr update {mr_number} --description '{final_description}'"
+      fallback:
+        github: "mcp__github__update_pull_request (body: final_description)"
+        gitlab: "mcp__gitlab__update_merge_request (description: final_description)"
 ```
 
 **Output Phase 1.5 :**
@@ -340,9 +508,14 @@ auto_describe:
 feedback_collection:
   1_fetch:
     tools:
-      - "mcp__github__get_pull_request_reviews"
-      - "mcp__github__get_pull_request_comments"
-      - "mcp__codacy__codacy_list_pull_request_issues"
+      github:
+        - "mcp__github__get_pull_request_reviews"
+        - "mcp__github__get_pull_request_comments"
+      gitlab:
+        - "mcp__gitlab__list_merge_request_notes"
+        - "mcp__gitlab__list_merge_request_discussions"
+      common:
+        - "mcp__codacy__codacy_list_pull_request_issues"
 
   2_budget_filter:
     rule: |
@@ -381,8 +554,52 @@ feedback_collection:
 |----------|------|-------|----------|
 | Human | Question | 2 | HIGH |
 | Human | Comment | 3 | MEDIUM |
-| AI (coderabbit) | Suggestion | 5 | EXTRACT |
 | AI (qodo) | Suggestion | 3 | EXTRACT |
+
+---
+
+## Phase 2.3 : CI Diagnostics (NEW - Conditional)
+
+**Extract actionable signal from CI failures:**
+
+```yaml
+ci_diagnostics:
+  trigger: "on_pr_mr == true AND ci_status in ['failing', 'pending']"
+
+  goal: "Extract exploitable signal from CI failures without noise"
+
+  tools:
+    github:
+      - "mcp__github__get_workflow_run_logs"
+      - "gh run view --log-failed"
+    gitlab:
+      - "mcp__gitlab__get_pipeline_jobs"
+      - "glab ci trace"
+
+  extract:
+    failing_jobs: [{name, conclusion, url}]
+    top_errors: [string]  # max 5 representative lines
+    affected_files: [string]
+    error_categories:
+      - "build_error"
+      - "test_failure"
+      - "lint_error"
+      - "security_scan"
+      - "timeout"
+
+  output:
+    ci_first_section: |
+      IF failing:
+        Prepend review with CI-First section
+        Focus analysis on affected_files first
+
+    rule: |
+      SI ci_status == "failing":
+        priority = ["fix CI errors", "then review rest"]
+        inject_ci_context = true
+      SI ci_status == "pending":
+        warning = "CI still running, results may change"
+```
 
 ---
 
@@ -417,7 +634,9 @@ question_handling:
         [Post / Edit / Skip]
 
     4_user_validates: "AskUserQuestion avant de poster"
-    5_post: "mcp__github__add_issue_comment (si validé)"
+    5_post:
+      github: "mcp__github__add_issue_comment (si validé)"
+      gitlab: "mcp__gitlab__create_merge_request_note (si validé)"
 ```
 
 ---
@@ -460,8 +679,10 @@ behavior_extraction:
 peek_decompose:
   1_diff_snapshot:
     tool: |
-      SI diff_source == "pr":
+      SI diff_source == "pr" (GitHub):
         mcp__codacy__codacy_get_pull_request_git_diff
+      SINON SI diff_source == "mr" (GitLab):
+        mcp__gitlab__get_merge_request_changes
       SINON:
         git diff --merge-base {base}...HEAD
 
@@ -496,38 +717,112 @@ peek_decompose:
 
 ---
 
-## Phase 4 : Parallel Analysis
+## Phase 4 : Parallel Analysis (5 AGENTS)
 
-**Lancer sub-agents avec contrat JSON strict :**
+**Launch 5 sub-agents with strict JSON contract:**
 
 ```yaml
 parallel_analysis:
   dispatch:
-    mode: "parallel (single message, multiple Task calls)"
+    mode: "parallel (single message, 5 Task calls)"
     agents:
-      - security-scanner
-      - quality-checker
-      - shell-safety-checker (si shell files > 0)
+      correctness:
+        name: "developer-executor-correctness"
+        model: opus
+        trigger: "always (MANDATORY for code stability)"
+        focus:
+          - "Algorithmic errors (off-by-one, bounds, indexes)"
+          - "Invariant violations"
+          - "State machine correctness"
+          - "Concurrency issues (races, deadlocks)"
+          - "Error surfacing (silent failures)"
+          - "Idempotence violations"
+          - "Ordering/determinism issues"
+
+      security:
+        name: "developer-executor-security"
+        model: opus
+        trigger: "always"
+        focus:
+          - "OWASP Top 10"
+          - "Taint analysis (source → sink)"
+          - "Supply chain risks"
+          - "AuthN/AuthZ issues"
+          - "Crypto misuse"
+          - "Secrets exposure"
+
+      design:
+        name: "developer-executor-design"
+        model: opus
+        trigger: "risk_tags contains architecture OR files in core/, domain/, pkg/"
+        focus:
+          - "Antipatterns (God object, Feature envy, etc.)"
+          - "DDD violations"
+          - "Layering violations"
+          - "SOLID violations"
+          - "Design pattern misuse"
+
+      quality:
+        name: "developer-executor-quality"
+        model: haiku
+        trigger: "always"
+        focus:
+          - "Complexity metrics"
+          - "Code duplication"
+          - "Style issues"
+          - "DTO convention check"
+
+      shell:
+        name: "developer-executor-shell"
+        model: haiku
+        trigger: "shell_files > 0 OR Dockerfile exists OR ci_config exists"
+        focus:
+          - "Shell safety (6 axes)"
+          - "Dockerfile best practices"
+          - "CI/CD script safety"
 
   agent_contract:
     input:
       files: [string]
       diff: string
       mode: "normal|triage"
+      repo_profile: object  # From Phase 0.5
 
     output_schema:
       agent: string
       summary: string (max 200 chars)
       findings:
         - severity: "CRITICAL|HIGH|MEDIUM|LOW"
-          category: "security|quality|shell|tests|config"
+          impact: "correctness|security|design|quality|shell"
+          category: string (ex: "injection", "invariant", "antipattern")
+
+          # Location
           file: string
           line: number
-          title: string (max 80 chars)
-          evidence: string (max 200 chars, NO SECRETS)
-          recommendation: string
-          confidence: "HIGH|MEDIUM|LOW"
           in_modified_lines: boolean
+
+          # Description
+          title: string (max 80 chars)
+          evidence: string (MANDATORY, max 300 chars, NO SECRETS)
+
+          # For correctness/security
+          oracle: "invariant|counterexample|boundary|error-surfacing|taint"
+          failure_mode: string (what can go wrong)
+          repro: string (scenario: input → expected vs actual)
+
+          # For security
+          source: string (taint origin)
+          sink: string (vulnerable point)
+          taint_path_summary: string
+          references: ["CWE-XX", "OWASP-AXX"]
+
+          # Fix
+          recommendation: string (MANDATORY)
+          fix_patch: string (MANDATORY for HIGH+)
+          effort: "XS|S|M|L"
+          confidence: "HIGH|MEDIUM|LOW"
+
+      commendations: [string]
       metrics:
         files_scanned: number
         findings_count: number
@@ -537,17 +832,21 @@ parallel_analysis:
       - "Vuln exploitable (RCE, injection, auth bypass)"
       - "Secret/token exposé"
       - "Supply chain non vérifiée"
+      - "Data loss certain (invariant violation)"
+      - "Infinite loop (pagination bug)"
     HIGH:
       - "Bug probable (null deref, race condition)"
-      - "Data loss potentiel"
-      - "Performance killer"
+      - "Silent failure (error swallowed)"
+      - "Layering violation (domain → infra)"
+      - "State machine corruption"
     MEDIUM:
       - "Dette technique"
-      - "Qualité/maintainabilité"
+      - "Design antipattern"
+      - "SOLID violation"
       - "Missing validation"
     LOW:
       - "Style/polish"
-      - "Documentation"
+      - "Maintainability antipattern"
       - "Naming conventions"
 ```
 
@@ -566,6 +865,70 @@ secret_masking:
     - "Bearer [a-zA-Z0-9._-]+"
 
   action: "Remplacer par [REDACTED] dans evidence/recommendation"
+```
+
+---
+
+## Phase 4.7 : Merge & Dedupe (NEW)
+
+**Normalize, deduplicate, require evidence:**
+
+```yaml
+merge_dedupe:
+  goal: "Normalize findings, remove duplicates, enforce evidence"
+
+  inputs:
+    - "correctness_agent.findings"
+    - "security_agent.findings"
+    - "design_agent.findings"
+    - "quality_agent.findings"
+    - "shell_agent.findings"
+
+  normalize:
+    required_fields:
+      - severity
+      - impact
+      - category
+      - file
+      - line
+      - title
+      - evidence
+      - recommendation
+      - confidence
+
+    optional_enriched:
+      - oracle (correctness)
+      - failure_mode (correctness)
+      - repro (correctness)
+      - source, sink (security)
+      - taint_path_summary (security)
+      - references (security/design)
+      - fix_patch (all)
+      - effort (all)
+
+  drop_rules:
+    - "evidence is missing OR evidence is empty"
+    - "recommendation is missing OR recommendation is empty"
+    - "impact == 'correctness' AND severity >= HIGH AND (repro is missing OR repro is empty) AND (failure_mode is missing OR failure_mode is empty)"
+    - "impact == 'security' AND category == 'injection' AND severity >= HIGH AND (source is missing OR source is empty)"
+
+  dedupe:
+    key: "{impact}:{category}:{file}:{line}:{normalize(title)}"
+    merge_strategy: "keep highest severity, merge evidence"
+
+  promote:
+    rule: |
+      SI file has >= 3 MEDIUM findings in same impact:
+        Create 1 HIGH umbrella finding
+        Reference the 3 MEDIUM as sub-findings
+
+  output:
+    findings_normalized: [{...}]
+    stats:
+      total_before: number
+      total_after: number
+      dropped: number
+      promoted: number
 ```
 
 ---
@@ -626,64 +989,150 @@ challenge_feedback:
 
 ---
 
-## Phase 6 : Generate Plan
+## Phase 6 : Output Generation (LOCAL ONLY)
 
-**Synthèse finale avec actions priorisées :**
+**Generate LOCAL report + /plan file (NO GitHub/GitLab posting):**
 
 ```yaml
-plan_generation:
+output_generation:
+  mode: "LOCAL ONLY - No PR/MR comments"
+
   inputs:
-    - our_findings: "Phase 4 agent results"
+    - findings_normalized: "Phase 4.7 output"
     - validated_suggestions: "Phase 5 KEEP items"
-    - questions: "Phase 2.5 pending questions"
-    - behaviors: "Phase 2.6 extracted patterns"
-    - deferred: "Phase 5 DEFER items"
+    - repo_profile: "Phase 0.5 output"
 
-  prioritize:
-    order:
-      1: "CRITICAL (security, exploitable)"
-      2: "HIGH (validated suggestions, bugs)"
-      3: "MEDIUM (quality, maintainability)"
-      4: "LOW (style, polish)"
-      5: "WORKFLOW (behavior extraction)"
-      6: "QUESTIONS (pending user validation)"
-      7: "DEFERRED (issues to create)"
+  outputs:
+    1_terminal_report:
+      format: "Markdown to terminal"
+      sections:
+        - summary
+        - critical_issues
+        - high_priority
+        - medium (max 5)
+        - low (max 3)
+        - commendations
+        - metrics
 
-  format: |
-    ## /plan - Review Implementation
+    2_plan_file:
+      location: ".claude/plans/review-fixes-{timestamp}.md"
+      content:
+        header: |
+          # Review Fixes Plan
+          Generated: {timestamp}
+          Branch: {branch}
+          Files: {files_count}
+          Findings: CRIT={n}, HIGH={n}, MED={n}
 
-    ### Critical (must fix before merge)
-    | # | Issue | File:Line | Action |
-    |---|-------|-----------|--------|
-    | 1 | {title} | {file}:{line} | {fix} |
+        sections:
+          critical:
+            title: "## Critical (MUST FIX)"
+            items: |
+              ### {title}
+              - **File:** {file}:{line}
+              - **Impact:** {impact}
+              - **Evidence:** {evidence}
+              - **Fix:** {fix_patch}
+              - **Language:** {language}
+              - **Specialist:** developer-specialist-{lang}
 
-    ### High Priority
-    | # | Source | Suggestion | Action |
-    |---|--------|------------|--------|
-    | 1 | {bot} | {suggestion} | {implementation} |
+          high:
+            title: "## High Priority"
+            items: "Same format as critical"
 
-    ### Medium
-    ...
+          medium:
+            title: "## Medium"
+            items: "Same format, max 5"
 
-    ### Questions (pending validation)
-    | # | Author | Question | Proposed Answer |
-    |---|--------|----------|-----------------|
-    | 1 | {author} | {question} | {answer} |
+  no_github_gitlab:
+    rule: "NEVER post comments to PR/MR"
+    reason: "Reviews are local, fixes via /do"
+```
 
-    ### Deferred (issues to create)
-    | # | Title | Rationale |
-    |---|-------|-----------|
-    | 1 | {title} | {why_deferred} |
+---
 
-  user_validation:
-    prompt: |
-      Plan généré:
-      - CRITICAL: {n}
-      - HIGH: {n}
-      - MEDIUM: {n}
-      - Questions: {n}
+## Phase 6.5 : Language-Specialist Dispatch (NEW)
 
-      Exécuter? [Oui / Modifier / Refuser]
+**Route fixes to language-specialist agent via /do:**
+
+```yaml
+language_specialist_dispatch:
+  goal: "Delegate fixes to language specialist"
+
+  routing:
+    ".go":    "developer-specialist-go"
+    ".py":    "developer-specialist-python"
+    ".java":  "developer-specialist-java"
+    ".kt":    "developer-specialist-kotlin"
+    ".ts":    "developer-specialist-nodejs"
+    ".js":    "developer-specialist-nodejs"
+    ".rs":    "developer-specialist-rust"
+    ".rb":    "developer-specialist-ruby"
+    ".ex":    "developer-specialist-elixir"
+    ".php":   "developer-specialist-php"
+    ".scala": "developer-specialist-scala"
+    ".cpp":   "developer-specialist-cpp"
+    ".dart":  "developer-specialist-dart"
+
+  dispatch:
+    command: "/do --plan .claude/plans/review-fixes-{timestamp}.md"
+    executor: "developer-specialist-{lang}"
+
+  integration_with_do:
+    workflow:
+      1: "/review generates plan with findings + fix_patch"
+      2: "/do loads plan"
+      3: "/do groups by language"
+      4: "/do dispatches to language-specialist agents"
+      5: "Language-specialists apply fixes"
+      6: "/do returns control to /review"
+      7: "If --loop, re-run /review"
+```
+
+---
+
+## Phase 7 : Cyclic Validation (NEW)
+
+**Loop until perfect OR --loop limit:**
+
+```yaml
+cyclic_workflow:
+  trigger: "/review --loop [N]"
+
+  modes:
+    no_flag: "Single review, no fix, no loop"
+    loop_only: "--loop → Infinite until perfect"
+    loop_N: "--loop 5 → Max 5 iterations"
+
+  flow:
+    iteration_1:
+      1_review: "Full analysis (12 phases, 5 agents)"
+      2_generate_plan: ".claude/plans/review-fixes-{timestamp}.md"
+      3_dispatch_to_do: "/do --plan {plan_file}"
+
+    iteration_2_to_N:
+      1_review_validation: "/review (re-scan post-fix)"
+      2_check_remaining:
+        if: "findings.CRITICAL + findings.HIGH > 0"
+        then: "Generate new plan, continue loop"
+        else: "Exit loop (success)"
+      3_check_loop_limit:
+        if: "iteration >= N"
+        then: "Exit loop (limit reached)"
+
+  exit_conditions:
+    - "No CRITICAL/HIGH findings remaining"
+    - "--loop limit reached"
+    - "User interrupt (Ctrl+C)"
+
+  output_per_iteration:
+    format: |
+      ═══════════════════════════════════════════════════════════════
+        Iteration {X}/{N}
+        Findings: CRIT={a}, HIGH={b}, MED={c}, LOW={d}
+        Fixes applied: {n} files modified
+        Status: {CONTINUE|SUCCESS|LIMIT_REACHED}
+      ═══════════════════════════════════════════════════════════════
 ```
 
 ---
@@ -836,6 +1285,56 @@ shell_safety_axes:
 
 ---
 
+## DTO Convention Check (Go files)
+
+**Vérifier les DTOs Go utilisent `dto:"direction,context,security"`:**
+
+```yaml
+dto_validation:
+  trigger: "*.go files in diff"
+  severity: MEDIUM
+
+  detection:
+    suffixes:
+      - Request
+      - Response
+      - DTO
+      - Input
+      - Output
+      - Payload
+      - Message
+      - Event
+      - Command
+      - Query
+    serialization_tags: ["json:", "yaml:", "xml:"]
+
+  check: |
+    Struct name matches *Request/*Response/*DTO/etc.
+    AND has serialization tags
+    → MUST have dto:"dir,ctx,sec" on each PUBLIC field
+
+  valid_format: 'dto:"<direction>,<context>,<security>"'
+  valid_values:
+    direction: [in, out, inout]
+    context: [api, cmd, query, event, msg, priv]
+    security: [pub, priv, pii, secret]
+
+  purpose: |
+    Le tag dto:"..." exempte les structs de KTN-STRUCT-ONEFILE
+    (groupement de plusieurs DTOs dans un même fichier autorisé)
+
+  report_format: |
+    ### DTO Convention
+    | File | Struct | Status | Issue |
+    |------|--------|--------|-------|
+    | user_dto.go | CreateUserRequest | ✓ | - |
+    | order.go | OrderResponse | ✗ | Missing dto:"..." tags |
+
+  reference: ".claude/docs/conventions/dto-tags.md"
+```
+
+---
+
 ## Guard-rails
 
 | Action | Status |
@@ -890,27 +1389,52 @@ error_handling:
 ## Agents Architecture
 
 ```
-/review
+/review (12 phases, 5 agents)
     │
-    ├─→ Phase 0-2: Context + Feedback (sequential)
+    ├─→ Phase 0-2.5: Context + Feedback (sequential)
+    │     ├─→ 0: Context Detection (GitHub/GitLab auto)
+    │     ├─→ 0.5: Repo Profile (cached 7d)
+    │     ├─→ 1: Intent + Risk Model
+    │     ├─→ 1.5: Auto-Describe (drift detection)
+    │     ├─→ 2: Feedback Collection
+    │     ├─→ 2.3: CI Diagnostics (conditional)
+    │     └─→ 2.5: Question Handling
     │
-    ├─→ Phase 3-4: Parallel Analysis
+    ├─→ Phase 3-4.7: Parallel Analysis
     │       │
-    │       ├─→ security-scanner (Task, context: fork)
-    │       │     Schema: agent_contract
-    │       │     Focus: OWASP, secrets, injection
+    │       ├─→ 3: Peek & Route (categorize files)
     │       │
-    │       ├─→ quality-checker (Task, context: fork)
-    │       │     Schema: agent_contract
-    │       │     Focus: complexity, duplication, style
+    │       ├─→ 4: PARALLEL (5 agents)
+    │       │       │
+    │       │       ├─→ developer-executor-correctness (opus)
+    │       │       │     Focus: Invariants, bounds, state, concurrency
+    │       │       │     Output: oracle, failure_mode, repro
+    │       │       │
+    │       │       ├─→ developer-executor-security (opus)
+    │       │       │     Focus: OWASP, taint analysis, supply chain
+    │       │       │     Output: source, sink, taint_path, CWE refs
+    │       │       │
+    │       │       ├─→ developer-executor-design (opus)
+    │       │       │     Focus: Antipatterns, DDD, layering, SOLID
+    │       │       │     Output: pattern_reference, official_reference
+    │       │       │
+    │       │       ├─→ developer-executor-quality (haiku)
+    │       │       │     Focus: Complexity, duplication, style, DTOs
+    │       │       │
+    │       │       └─→ developer-executor-shell (haiku)
+    │       │             Condition: *.sh OR Dockerfile exists
+    │       │             Focus: 6 shell safety axes
     │       │
-    │       └─→ shell-safety-checker (Task, context: fork)
-    │             Condition: shell files > 0
-    │             Focus: 6 behavioral axes
+    │       └─→ 4.7: Merge & Dedupe (normalize, evidence-required)
     │
     ├─→ Phase 5: Challenge (with full context)
     │
-    └─→ Phase 6: Plan Generation
+    ├─→ Phase 6-6.5: Output (LOCAL ONLY)
+    │       ├─→ 6: Generate report + /plan file
+    │       └─→ 6.5: Dispatch to language-specialist via /do
+    │
+    └─→ Phase 7: Cyclic Validation (--loop)
+          Loop: review → fix → review until perfect
 ```
 
 ---

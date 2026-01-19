@@ -8,8 +8,8 @@ description: |
 allowed-tools:
   - "Read(**/*)"
   - "Glob(**/*)"
-  - "Grep(**/*)"
   - "mcp__grepai__*"
+  - "Grep(**/*)"
   - "Write(**/*)"
   - "Edit(**/*)"
   - "Bash(*)"
@@ -627,14 +627,95 @@ todo_pattern:
 
 ---
 
+## Intégration avec /review (Cyclic Workflow)
+
+**`/review --loop` génère des plans que `/do` exécute automatiquement.**
+
+```yaml
+review_integration:
+  detection:
+    trigger: "plan filename contains 'review-fixes-'"
+    location: ".claude/plans/review-fixes-*.md"
+
+  mode: "REVIEW_EXECUTION"
+
+  workflow:
+    1_load_plan:
+      action: "Read .claude/plans/review-fixes-{timestamp}.md"
+      extract:
+        - findings: [{file, line, fix_patch, language, specialist}]
+        - priorities: ["CRITICAL", "HIGH", "MEDIUM"]
+
+    2_group_by_language:
+      action: "Group findings by file extension"
+      example:
+        ".go": ["finding1", "finding2"]
+        ".ts": ["finding3"]
+
+    3_dispatch_to_specialists:
+      mode: "parallel (by language)"
+      for_each_language:
+        agent: "developer-specialist-{lang}"
+        prompt: |
+          You are the {language} specialist.
+
+          ## Findings to Fix
+          {findings_json}
+
+          ## Constraints
+          - Apply fixes in priority order (CRITICAL → HIGH)
+          - Use fix_patch as starting point
+          - Verify fix doesn't introduce new issues
+          - Follow repo conventions
+
+          ## Output
+          For each fix applied:
+          - File modified
+          - Lines changed
+          - Brief explanation
+
+    4_validate:
+      action: "Run quick /review (no loop) on modified files"
+      check:
+        - "Were original issues from the plan fixed?"
+        - "Were any new CRITICAL/HIGH issues introduced?"
+
+    5_report:
+      action: "Summary of fixes applied"
+      format: |
+        Files modified: {n}
+        Findings fixed: CRIT={a}, HIGH={b}, MED={c}
+        New issues: {new_count}
+
+    6_return_to_review:
+      condition: "Called from /review --loop"
+      action: "Return control to /review for re-validation"
+```
+
+**Language-Specialist Routing:**
+
+| Extension | Specialist Agent |
+|-----------|------------------|
+| `.go` | `developer-specialist-go` |
+| `.py` | `developer-specialist-python` |
+| `.java` | `developer-specialist-java` |
+| `.ts`, `.js` | `developer-specialist-nodejs` |
+| `.rs` | `developer-specialist-rust` |
+| `.rb` | `developer-specialist-ruby` |
+| `.ex` | `developer-specialist-elixir` |
+| `.php` | `developer-specialist-php` |
+
+---
+
 ## Intégration avec autres skills
 
 | Avant /do | Après /do |
 |-----------|-----------|
 | `/plan` (optionnel mais recommandé) | `/git --commit` |
-| `/search` (si research needed) | `/review` (optionnel) |
+| `/review` (génère plan) | `/review` (re-validate si --loop) |
+| `/search` (si research needed) | N/A |
 
-**Workflow recommandé :**
+**Workflow recommandé (plan standard) :**
 
 ```
 /search "vitest migration from jest"  # Si besoin de recherche
@@ -648,6 +729,20 @@ todo_pattern:
 (review diff)                          # Vérifier les changements
     ↓
 /git --commit                          # Commiter + PR
+```
+
+**Workflow cyclique (avec /review --loop) :**
+
+```
+/review --loop 5                       # Analyse + génère plan fixes
+    ↓
+/do (auto-triggered)                   # Exécute via language-specialists
+    ↓
+/review (auto-triggered)               # Re-valide les corrections
+    ↓
+(loop until no CRITICAL/HIGH OR limit)
+    ↓
+/git --commit                          # Commiter les corrections
 ```
 
 **Workflow rapide (sans plan) :**

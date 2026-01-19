@@ -3,16 +3,22 @@ name: git
 description: |
   Workflow Git Automation with RLM decomposition.
   Handles branch management, conventional commits, and CI validation.
-  Use when: committing changes, creating PRs, or merging with CI checks.
+  Use when: committing changes, creating PRs/MRs, or merging with CI checks.
+  Supports GitHub (PRs) and GitLab (MRs) - auto-detected from git remote.
 allowed-tools:
   - "Bash(git:*)"
   - "Bash(gh:*)"
+  - "Bash(glab:*)"
   - "mcp__github__*"
+  - "mcp__gitlab__*"
   - "Read(**/*)"
+  - "Write(.env)"
+  - "Edit(.env)"
   - "Glob(**/*)"
-  - "Grep(**/*)"
   - "mcp__grepai__*"
+  - "Grep(**/*)"
   - "Task(*)"
+  - "AskUserQuestion(*)"
 ---
 
 # /git - Workflow Git Automation (RLM Architecture)
@@ -25,10 +31,13 @@ $ARGUMENTS
 
 Automatisation Git avec patterns **RLM** :
 
+- **Identity** - Vérifier/configurer l'identité git via `.env`
 - **Peek** - Analyser l'état git avant action
 - **Decompose** - Identifier les fichiers par catégorie
 - **Parallelize** - Checks en parallèle (lint, test, CI)
 - **Synthesize** - Rapport consolidé
+
+**Note :** L'identité git (user.name/user.email) est stockée dans `/workspace/.env` et synchronisée automatiquement avec git config à chaque exécution.
 
 ---
 
@@ -36,8 +45,8 @@ Automatisation Git avec patterns **RLM** :
 
 | Pattern | Action |
 |---------|--------|
-| `--commit` | Workflow complet : branch, commit, push, PR |
-| `--merge` | Merge la PR avec CI validation |
+| `--commit` | Workflow complet : branch, commit, push, PR/MR |
+| `--merge` | Merge la PR/MR avec CI validation |
 | `--help` | Affiche l'aide |
 
 ### Options --commit
@@ -45,14 +54,16 @@ Automatisation Git avec patterns **RLM** :
 | Option | Action |
 |--------|--------|
 | `--branch <nom>` | Force le nom de branche |
-| `--no-pr` | Skip la création de PR |
+| `--no-pr` | Skip la création de PR/MR |
 | `--amend` | Amend le dernier commit |
+| `--skip-identity` | Skip la vérification d'identité git |
 
 ### Options --merge
 
 | Option | Action |
 |--------|--------|
-| `--pr <number>` | Merge une PR spécifique |
+| `--pr <number>` | Merge une PR spécifique (GitHub) |
+| `--mr <number>` | Merge une MR spécifique (GitLab) |
 | `--strategy <type>` | Méthode: merge/squash/rebase (défaut: squash) |
 | `--dry-run` | Vérifier sans merger |
 
@@ -68,29 +79,38 @@ Automatisation Git avec patterns **RLM** :
 Usage: /git <action> [options]
 
 Actions:
-  --commit          Workflow complet (branch, commit, push, PR)
+  --commit          Workflow complet (branch, commit, push, PR/MR)
   --merge           Merge avec CI validation et auto-fix
 
 RLM Patterns:
-  1. Peek       - Analyser état git
-  2. Decompose  - Catégoriser fichiers
-  3. Parallelize - Checks simultanés
-  4. Synthesize - Rapport consolidé
+  0.5. Identity    - Vérifier/configurer git user via .env
+  1. Peek          - Analyser état git
+  2. Decompose     - Catégoriser fichiers
+  3. Parallelize   - Checks simultanés
+  4. Synthesize    - Rapport consolidé
 
 Options --commit:
   --branch <nom>    Force le nom de branche
-  --no-pr           Skip la création de PR
+  --no-pr           Skip la création de PR/MR
   --amend           Amend le dernier commit
+  --skip-identity   Skip la vérification d'identité
 
 Options --merge:
-  --pr <number>     Merge une PR spécifique
+  --pr <number>     Merge une PR spécifique (GitHub)
+  --mr <number>     Merge une MR spécifique (GitLab)
   --strategy <type> Méthode: merge/squash/rebase (défaut: squash)
   --dry-run         Vérifier sans merger
+
+Identity (.env):
+  - GIT_USER et GIT_EMAIL stockés dans /workspace/.env
+  - Synchronisé automatiquement avec git config
+  - Demandé à l'utilisateur si absent
 
 Exemples:
   /git --commit                 Commit + PR automatique
   /git --commit --no-pr         Commit sans créer de PR
-  /git --merge                  Merge la PR courante
+  /git --commit --skip-identity Skip vérification identité
+  /git --merge                  Merge la PR/MR courante
   /git --merge --pr 42          Merge la PR #42
 
 ═══════════════════════════════════════════════════════════════
@@ -100,7 +120,11 @@ Exemples:
 
 ## Priorité MCP vs CLI
 
-**IMPORTANT** : Toujours privilégier les outils MCP GitHub quand disponibles.
+**IMPORTANT** : Toujours privilégier les outils MCP quand disponibles.
+
+**Platform auto-détectée :** `git remote get-url origin` → github.com | gitlab.*
+
+### GitHub (PRs)
 
 | Action | Priorité 1 (MCP) | Fallback (CLI) |
 |--------|------------------|----------------|
@@ -111,9 +135,162 @@ Exemples:
 | Status CI | `mcp__github__get_pull_request_status` | `gh pr checks` |
 | Merger PR | `mcp__github__merge_pull_request` | `gh pr merge` |
 
+### GitLab (MRs)
+
+| Action | Priorité 1 (MCP) | Fallback (CLI) |
+|--------|------------------|----------------|
+| Créer branche | `git checkout -b` + push | `git checkout -b` |
+| Créer MR | `mcp__gitlab__create_merge_request` | `glab mr create` |
+| Lister MRs | `mcp__gitlab__list_merge_requests` | `glab mr list` |
+| Voir MR | `mcp__gitlab__get_merge_request` | `glab mr view` |
+| Status CI | `mcp__gitlab__list_pipelines` | `glab ci status` |
+| Merger MR | `mcp__gitlab__merge_merge_request` | `glab mr merge` |
+
 ---
 
 ## Action: --commit
+
+### Phase 0.5 : Git Identity Validation (OBLIGATOIRE)
+
+**Vérifier et configurer l'identité git AVANT toute action :**
+
+```yaml
+identity_validation:
+  env_file: "/workspace/.env"
+
+  1_check_env:
+    action: "Vérifier si .env existe et contient GIT_USER/GIT_EMAIL"
+    tool: Read("/workspace/.env")
+    fallback: "Fichier non trouvé → créer"
+
+  2_extract_or_ask:
+    rule: |
+      SI .env existe ET contient GIT_USER ET GIT_EMAIL:
+        user = extract(GIT_USER)
+        email = extract(GIT_EMAIL)
+      SINON:
+        → AskUserQuestion (voir ci-dessous)
+        → Créer/Mettre à jour .env
+
+  3_verify_git_config:
+    action: "Comparer avec git config actuel"
+    commands:
+      - "git config user.name"
+      - "git config user.email"
+    decision:
+      if_match: "→ Continuer vers Phase 1"
+      if_mismatch: "→ Corriger git config"
+
+  4_fix_if_needed:
+    action: "Appliquer la configuration correcte"
+    commands:
+      - "git config user.name '{user}'"
+      - "git config user.email '{email}'"
+```
+
+**Question si .env absent ou incomplet :**
+
+```yaml
+ask_identity:
+  tool: AskUserQuestion
+  questions:
+    - question: "Quel nom utiliser pour les commits git ?"
+      header: "Git User"
+      options:
+        - label: "{detected_user}"
+          description: "Détecté depuis git config global"
+        - label: "{github_user}"
+          description: "Détecté depuis GitHub/GitLab"
+      # L'utilisateur peut aussi entrer "Other" avec valeur custom
+
+    - question: "Quelle adresse email utiliser pour les commits ?"
+      header: "Git Email"
+      options:
+        - label: "{detected_email}"
+          description: "Détecté depuis git config global"
+        - label: "{noreply_email}"
+          description: "Email noreply GitHub/GitLab"
+```
+
+**Format .env généré/mis à jour :**
+
+```bash
+# Git identity for commits (managed by /git)
+GIT_USER="John Doe"
+GIT_EMAIL="john.doe@example.com"
+```
+
+**Output Phase 0.5 :**
+
+```
+═══════════════════════════════════════════════════════════════
+  /git --commit - Git Identity Validation
+═══════════════════════════════════════════════════════════════
+
+  .env check:
+    ├─ File: /workspace/.env
+    ├─ GIT_USER: "John Doe" ✓
+    └─ GIT_EMAIL: "john.doe@example.com" ✓
+
+  Git config:
+    ├─ user.name: "John Doe" ✓ (match)
+    └─ user.email: "john.doe@example.com" ✓ (match)
+
+  Status: ✓ Identity validated, proceeding to Phase 1
+
+═══════════════════════════════════════════════════════════════
+```
+
+**Output si correction nécessaire :**
+
+```
+═══════════════════════════════════════════════════════════════
+  /git --commit - Git Identity Validation
+═══════════════════════════════════════════════════════════════
+
+  .env check:
+    ├─ File: /workspace/.env
+    ├─ GIT_USER: "John Doe" ✓
+    └─ GIT_EMAIL: "john.doe@example.com" ✓
+
+  Git config:
+    ├─ user.name: "johndoe" ✗ (mismatch)
+    └─ user.email: "old@email.com" ✗ (mismatch)
+
+  Action: Correcting git config...
+    ├─ git config user.name "John Doe"
+    └─ git config user.email "john.doe@example.com"
+
+  Status: ✓ Identity corrected, proceeding to Phase 1
+
+═══════════════════════════════════════════════════════════════
+```
+
+**Output si .env absent :**
+
+```
+═══════════════════════════════════════════════════════════════
+  /git --commit - Git Identity Validation
+═══════════════════════════════════════════════════════════════
+
+  .env check:
+    └─ File: NOT FOUND → Creating...
+
+  User input required...
+    ├─ Git User: "John Doe" (entered)
+    └─ Git Email: "john.doe@example.com" (entered)
+
+  Actions:
+    ├─ Created /workspace/.env with GIT_USER, GIT_EMAIL
+    ├─ git config user.name "John Doe"
+    └─ git config user.email "john.doe@example.com"
+
+  Status: ✓ Identity configured, proceeding to Phase 1
+
+═══════════════════════════════════════════════════════════════
+```
+
+---
 
 ### Phase 1 : Peek (RLM Pattern)
 
@@ -246,17 +423,19 @@ execute_workflow:
     action: "Push vers origin"
     command: "git push -u origin <branch>"
 
-  5_pr:
-    action: "Créer la PR"
-    tool: mcp__github__create_pull_request
+  5_pr_mr:
+    action: "Créer la PR/MR"
+    tools:
+      github: mcp__github__create_pull_request
+      gitlab: mcp__gitlab__create_merge_request
     skip_if: "--no-pr"
 ```
 
-**Output Final :**
+**Output Final (GitHub) :**
 
 ```
 ═══════════════════════════════════════════════════════════════
-  /git --commit - Completed
+  /git --commit - Completed (GitHub)
 ═══════════════════════════════════════════════════════════════
 
 | Étape   | Status                           |
@@ -273,6 +452,27 @@ URL: https://github.com/<owner>/<repo>/pull/42
 ═══════════════════════════════════════════════════════════════
 ```
 
+**Output Final (GitLab) :**
+
+```
+═══════════════════════════════════════════════════════════════
+  /git --commit - Completed (GitLab)
+═══════════════════════════════════════════════════════════════
+
+| Étape   | Status                           |
+|---------|----------------------------------|
+| Peek    | ✓ 5 files analyzed               |
+| Checks  | ✓ lint, test, build PASS         |
+| Branch  | `feat/add-user-auth`             |
+| Commit  | `feat(auth): add user auth`      |
+| Push    | origin/feat/add-user-auth        |
+| MR      | !42 - feat(auth): add user auth  |
+
+URL: https://gitlab.com/<owner>/<repo>/-/merge_requests/42
+
+═══════════════════════════════════════════════════════════════
+```
+
 ---
 
 ## Action: --merge
@@ -281,14 +481,18 @@ URL: https://github.com/<owner>/<repo>/pull/42
 
 ```yaml
 peek_workflow:
-  1_pr_info:
-    action: "Récupérer info PR"
-    tool: mcp__github__get_pull_request
-    output: "pr_number, status, checks"
+  1_pr_mr_info:
+    action: "Récupérer info PR/MR"
+    tools:
+      github: mcp__github__get_pull_request
+      gitlab: mcp__gitlab__get_merge_request
+    output: "pr_mr_number, status, checks"
 
   2_ci_status:
     action: "Vérifier statut CI"
-    tool: mcp__github__get_pull_request_status
+    tools:
+      github: mcp__github__get_pull_request_status
+      gitlab: mcp__gitlab__list_pipelines
 
   3_conflicts:
     action: "Vérifier les conflits"
@@ -341,7 +545,9 @@ autofix_loop:
 ```yaml
 merge_workflow:
   1_merge:
-    tool: mcp__github__merge_pull_request
+    tools:
+      github: mcp__github__merge_pull_request
+      gitlab: mcp__gitlab__merge_merge_request
     method: "squash"
 
   2_cleanup:
@@ -352,7 +558,7 @@ merge_workflow:
       - "git pull origin main"
 ```
 
-**Output Final :**
+**Output Final (GitHub) :**
 
 ```
 ═══════════════════════════════════════════════════════════════
@@ -363,6 +569,27 @@ merge_workflow:
   Method  : squash
   Rebase  : ✓ Synced (was 3 commits behind)
   CI      : ✓ Passed (2m 34s)
+  Commits : 5 commits → 1 squashed
+
+  Cleanup:
+    ✓ Remote branch deleted
+    ✓ Local branch deleted
+    ✓ Switched to main
+    ✓ Pulled latest (now at abc1234)
+
+═══════════════════════════════════════════════════════════════
+```
+
+**Output Final (GitLab) :**
+
+```
+═══════════════════════════════════════════════════════════════
+  ✓ MR !42 merged successfully
+═══════════════════════════════════════════════════════════════
+
+  Branch  : feat/add-auth → main
+  Method  : squash
+  Pipeline: ✓ Passed (#12345, 2m 34s)
   Commits : 5 commits → 1 squashed
 
   Cleanup:
@@ -394,12 +621,14 @@ merge_workflow:
 
 | Action | Status | Raison |
 |--------|--------|--------|
+| Skip Phase 0.5 (Identity) sans flag | ❌ **INTERDIT** | Identité git requise |
 | Skip Phase 1 (Peek) | ❌ **INTERDIT** | git status avant action |
 | Merge automatique sans CI | ❌ **INTERDIT** | Qualité code |
 | Push sur main/master | ❌ **INTERDIT** | Branche protégée |
 | Force merge si CI échoue x3 | ❌ **INTERDIT** | Limite tentatives |
 | Push sans --force-with-lease | ❌ **INTERDIT** | Sécurité |
 | Mentions IA dans commits | ❌ **INTERDIT** | Discrétion |
+| Commit sans identité validée | ❌ **INTERDIT** | Traçabilité |
 
 ### Parallélisation légitime
 

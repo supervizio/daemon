@@ -10,9 +10,9 @@
 #   make test              # Run all tests
 #   make test FILE=path    # Run tests for specific file
 
-set -e
+set +e  # Fail-open: hooks should never block unexpectedly
 
-FILE="$1"
+FILE="${1:-}"
 if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
     exit 0
 fi

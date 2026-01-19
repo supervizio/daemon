@@ -85,6 +85,7 @@
     "additionalDirectories": []
   },
   "enableAllProjectMcpServers": true,
+  "disabledMcpjsonServers": ["codacy", "playwright"],
   "hooks": {
     "SessionStart": [
       {

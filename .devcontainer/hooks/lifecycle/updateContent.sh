@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC1091
 # ============================================================================
 # updateContent.sh - Runs INSIDE container for cache/content refresh
 # ============================================================================

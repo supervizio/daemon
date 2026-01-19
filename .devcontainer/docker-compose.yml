@@ -1,5 +1,27 @@
 services:
+  # ========== OLLAMA (LLM Runtime) ==========
+  # For grepai semantic code search embeddings
+  # NOTE: No container_name to avoid conflicts between projects
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ========== DEVCONTAINER ==========
   devcontainer:
+    depends_on:
+      ollama:
+        condition: service_healthy
+
     # Build from Dockerfile (uses GHCR base image)
     build:
       context: .
@@ -104,6 +126,9 @@ services:
       - CARBON_PATH=/home/vscode/.cache/carbon
       - BAZEL_USER_ROOT=/home/vscode/.cache/bazel
 
+      # Ollama (LLM runtime for grepai) - connects to sidecar
+      - OLLAMA_HOST=ollama:11434
+
       # Cloud CLIs (AWS / Google Cloud / Azure)
       - AWS_CONFIG_FILE=/home/vscode/.config/aws/config
       - AWS_SHARED_CREDENTIALS_FILE=/home/vscode/.config/aws/credentials
@@ -133,6 +158,7 @@ volumes:
   claude-config:
   op-config:
   op-cache:
+  ollama-data:
 
 networks:
   default:

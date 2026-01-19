@@ -9,9 +9,9 @@
 # Note: This focuses on CODE QUALITY (style, errors, best practices).
 # typecheck.sh handles strict type checking.
 
-set -e
+set +e  # Fail-open: hooks should never block unexpectedly
 
-FILE="$1"
+FILE="${1:-}"
 if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
     exit 0
 fi

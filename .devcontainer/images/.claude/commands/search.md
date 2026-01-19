@@ -10,6 +10,7 @@ allowed-tools:
   - "WebFetch(*)"
   - "Read(**/*)"
   - "Glob(**/*)"
+  - "mcp__grepai__*"
   - "Grep(**/*)"
   - "Write(.context.md)"
   - "Task(*)"
@@ -121,6 +122,8 @@ Workflow:
 | Docker | docs.docker.com |
 | Kubernetes | kubernetes.io |
 | Terraform | developer.hashicorp.com |
+| GitLab | docs.gitlab.com |
+| GitHub | docs.github.com |
 
 ### Frameworks
 | Framework | Domaines |

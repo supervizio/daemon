@@ -3,10 +3,10 @@
 # Usage: post-edit.sh <file_path>
 # Note: format.sh handles imports (goimports, ruff, rustfmt, etc.)
 
-set -e
+set +e  # Fail-open: hooks should never block unexpectedly
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FILE="$1"
+FILE="${1:-}"
 
 if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
     exit 0

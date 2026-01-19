@@ -19,10 +19,11 @@ allowed-tools:
   - "Bash(nohup:*)"
   - "Read(**/*)"
   - "Glob(**/*)"
+  - "mcp__grepai__*"
+  - "Grep(**/*)"
   - "Task(*)"
   - "mcp__github__*"
   - "mcp__codacy__*"
-  - "mcp__grepai__*"
 ---
 
 # /init - Project Initialization (RLM Architecture)

@@ -8,9 +8,9 @@
 #
 # Note: Most formatters also handle import sorting (goimports, ruff, rustfmt).
 
-set -e
+set +e  # Fail-open: hooks should never block unexpectedly
 
-FILE="$1"
+FILE="${1:-}"
 if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
     exit 0
 fi

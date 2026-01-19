@@ -380,6 +380,38 @@ sans poser les questions interactives.
 
 ---
 
+## DTO Convention (Go)
+
+**Si le plan implique des DTOs, rappeler la convention :**
+
+```yaml
+dto_reminder:
+  trigger: "Plan includes DTO/Request/Response structs"
+
+  convention:
+    format: 'dto:"<direction>,<context>,<security>"'
+    values:
+      direction: [in, out, inout]
+      context: [api, cmd, query, event, msg, priv]
+      security: [pub, priv, pii, secret]
+
+  purpose: |
+    Exempte les structs de KTN-STRUCT-ONEFILE
+    (groupement de plusieurs DTOs dans un même fichier autorisé)
+
+  include_in_plan: |
+    ### DTO Convention
+    All DTO structs MUST use `dto:"dir,ctx,sec"` tags:
+    ```go
+    type CreateUserRequest struct {
+        Email string `dto:"in,api,pii" json:"email"`
+    }
+    ```
+    Ref: `.claude/docs/conventions/dto-tags.md`
+```
+
+---
+
 ## GARDE-FOUS (ABSOLUS)
 
 | Action | Status |
