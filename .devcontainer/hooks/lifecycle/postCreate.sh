@@ -34,6 +34,51 @@ fi
 # Note: Tools (status-line, ktn-linter) are now baked into the Docker image
 # No longer need to update on each rebuild
 
+# ============================================================================
+# GPG Key Setup for Git Commit Signing
+# ============================================================================
+GPG_KEY_DIR="/workspace/.devcontainer/gpg"
+if [ -f "$GPG_KEY_DIR/kodflow.key" ]; then
+    log_info "Setting up GPG key for commit signing..."
+
+    # Create dedicated GNUPGHOME for kodflow key
+    export GNUPGHOME="/home/vscode/.gnupg-kodflow"
+    mkdir -p "$GNUPGHOME"
+    chmod 700 "$GNUPGHOME"
+
+    # Configure GPG for non-interactive use
+    echo "pinentry-mode loopback" > "$GNUPGHOME/gpg.conf"
+    echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
+
+    # Import the key
+    gpg --batch --import "$GPG_KEY_DIR/kodflow.key" 2>/dev/null || true
+
+    # Trust the key ultimately
+    KEY_ID=$(gpg --list-keys --keyid-format long 2>/dev/null | grep "pub" | head -1 | awk '{print $2}' | cut -d'/' -f2)
+    if [ -n "$KEY_ID" ]; then
+        echo "${KEY_ID}:6:" | gpg --import-ownertrust 2>/dev/null || true
+
+        # Create GPG wrapper script
+        mkdir -p /home/vscode/.local/bin
+        cat > /home/vscode/.local/bin/gpg-kodflow << GPGEOF
+#!/bin/bash
+exec gpg --homedir /home/vscode/.gnupg-kodflow "\$@"
+GPGEOF
+        chmod +x /home/vscode/.local/bin/gpg-kodflow
+
+        # Configure git to use this key
+        git config --global user.signingkey "$KEY_ID"
+        git config --global gpg.program /home/vscode/.local/bin/gpg-kodflow
+        git config --global commit.gpgsign true
+        git config --global tag.gpgsign true
+        git config --global user.email "133899878+kodflow@users.noreply.github.com"
+        git config --global user.name "Kodflow"
+
+        log_success "GPG key configured: $KEY_ID"
+    fi
+    unset GNUPGHOME
+fi
+
 # Check if already initialized
 if [ -f /home/vscode/.devcontainer-initialized ]; then
     log_success "DevContainer already initialized"
