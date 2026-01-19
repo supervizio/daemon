@@ -82,7 +82,12 @@ type writerConfig interface {
 //   - *Writer: new writer instance
 //   - error: nil on success, error on failure
 func NewWriterFromConfig(path string, cfg writerConfig) (*Writer, error) {
-	// Check if directory creation succeeds for the log file location.
+	// SECURITY: Directory permissions 0o750 (rwxr-x---) are intentional:
+	// - Owner (daemon process): full access for log management and rotation
+	// - Group (admin/ops): read+execute for log inspection and aggregation
+	// - Other: no access for confidentiality of service logs
+	// This is more restrictive than typical 0o755 used by syslog/logrotate.
+	// nosemgrep: go.lang.correctness.permissions.file_permission.incorrect-default-permission
 	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
 		// Return directory creation error to caller.
 		return nil, fmt.Errorf("creating log directory: %w", err)
@@ -139,7 +144,12 @@ func NewWriterFromConfig(path string, cfg writerConfig) (*Writer, error) {
 //   - *Writer: new writer instance
 //   - error: nil on success, error on failure
 func NewWriter(path string, cfg writerConfig) (*Writer, error) {
-	// Check if directory creation succeeds for the log file location.
+	// SECURITY: Directory permissions 0o750 (rwxr-x---) are intentional:
+	// - Owner (daemon process): full access for log management and rotation
+	// - Group (admin/ops): read+execute for log inspection and aggregation
+	// - Other: no access for confidentiality of service logs
+	// This is more restrictive than typical 0o755 used by syslog/logrotate.
+	// nosemgrep: go.lang.correctness.permissions.file_permission.incorrect-default-permission
 	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
 		// Directory creation failed - return error to caller.
 		return nil, fmt.Errorf("creating log directory: %w", err)
