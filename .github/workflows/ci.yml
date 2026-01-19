@@ -77,7 +77,14 @@ jobs:
 
       - name: Run tests
         working-directory: src
-        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+        run: go test -race -coverprofile=coverage.raw.out -covermode=atomic ./...
+
+      - name: Filter coverage (exclude generated files)
+        working-directory: src
+        run: |
+          # Keep header line and filter out generated files
+          head -1 coverage.raw.out > coverage.out
+          grep -v -E '\.pb\.go:|wire_gen\.go:|mock_.*\.go:' coverage.raw.out >> coverage.out || true
 
       - name: Upload coverage to Codacy
         continue-on-error: true
