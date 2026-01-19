@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC1090,SC1091
 # ============================================================================
 # postCreate.sh - Runs ONCE after container is assigned to user
 # ============================================================================
@@ -28,31 +29,6 @@ if ! git config --global --get-all safe.directory | grep -q "^/workspace$"; then
     log_success "Git safe.directory configured for /workspace"
 else
     log_info "Git safe.directory already configured"
-fi
-
-# ============================================================================
-# Git Hooks Installation (commit-msg hook to sanitize messages)
-# ============================================================================
-if [ -d /workspace/.git ]; then
-    HOOKS_SRC="/workspace/.devcontainer/hooks/commit-msg"
-    HOOKS_DST="/workspace/.git/hooks/commit-msg"
-    if [ -f "$HOOKS_SRC" ]; then
-        cp "$HOOKS_SRC" "$HOOKS_DST"
-        chmod +x "$HOOKS_DST"
-        log_success "Git commit-msg hook installed"
-    fi
-fi
-
-# ============================================================================
-# GPG Signing Configuration (conditional - only if key is available)
-# ============================================================================
-GPG_KEY_ID="C8ED18EE4E425956"
-if gpg --list-secret-keys "$GPG_KEY_ID" &>/dev/null; then
-    git config --global user.signingkey "$GPG_KEY_ID"
-    git config --global commit.gpgsign true
-    log_success "GPG signing enabled with key $GPG_KEY_ID"
-else
-    log_info "GPG key $GPG_KEY_ID not found - signing disabled"
 fi
 
 # Note: Tools (status-line, ktn-linter) are now baked into the Docker image
@@ -148,7 +124,19 @@ export BAZEL_USER_ROOT="/home/vscode/.cache/bazel"
 # Aliases
 # super-claude: runs claude with MCP config if available, otherwise without
 super-claude() {
-    local mcp_config="/workspace/.mcp.json"
+    local mcp_config="/workspace/mcp.json"
+
+    # Check if jq is available for JSON validation
+    if ! command -v jq &>/dev/null; then
+        echo "Warning: jq not found, skipping MCP config validation" >&2
+        # Still use mcp config if it looks like JSON (skip leading whitespace/newlines)
+        if [ -s "$mcp_config" ] && LC_ALL=C tr -d ' \t\r\n' < "$mcp_config" 2>/dev/null | head -c 1 | grep -q '{'; then
+            claude --dangerously-skip-permissions --mcp-config "$mcp_config" "$@"
+        else
+            claude --dangerously-skip-permissions "$@"
+        fi
+        return
+    fi
 
     if [ -f "$mcp_config" ] && jq empty "$mcp_config" 2>/dev/null; then
         claude --dangerously-skip-permissions --mcp-config "$mcp_config" "$@"
@@ -232,35 +220,6 @@ fi
 if command -v gh &> /dev/null; then
     source <(gh completion -s zsh) 2>/dev/null || true
 fi
-
-# ============================================================================
-# D-Bus Session Detection (for credential storage)
-# ============================================================================
-# Dynamically detect D-Bus session for gnome-keyring support
-# Required by: CodeRabbit CLI, GitHub CLI, VS Code credential storage
-_dc_init_dbus() {
-    # Skip if D-Bus already configured and socket exists
-    if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-        local socket_path="${DBUS_SESSION_BUS_ADDRESS#unix:path=}"
-        socket_path="${socket_path%%,*}"
-        [ -S "$socket_path" ] && return 0
-    fi
-
-    # Find existing D-Bus socket in /tmp
-    local dbus_socket
-    dbus_socket=$(find /tmp -maxdepth 1 -name 'dbus-*' -type s -user "$(id -u)" 2>/dev/null | head -1)
-    if [ -n "$dbus_socket" ] && [ -S "$dbus_socket" ]; then
-        export DBUS_SESSION_BUS_ADDRESS="unix:path=$dbus_socket"
-    fi
-
-    # Find existing keyring control socket
-    if [ -z "${GNOME_KEYRING_CONTROL:-}" ]; then
-        local keyring_dir
-        keyring_dir=$(find "$HOME/.cache" -maxdepth 1 -name 'keyring-*' -type d 2>/dev/null | head -1)
-        [ -n "$keyring_dir" ] && [ -S "$keyring_dir/control" ] && export GNOME_KEYRING_CONTROL="$keyring_dir"
-    fi
-}
-_dc_init_dbus
 ENVEOF
 
 log_success "Environment script created at ~/.devcontainer-env.sh"

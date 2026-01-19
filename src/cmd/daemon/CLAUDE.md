@@ -1,54 +1,43 @@
 # superviz.io CLI - Main Entry Point
 
-Main binary for the process supervisor.
+Minimal entry point for the process supervisor.
 
 ## Structure
 
 ```
 daemon/
-└── main.go    # Single entry point
+└── main.go    # Single minimal entry point
 ```
 
 ## main.go
 
-### Responsibilities
-
-1. Parse CLI arguments
-2. Create infrastructure components (config loader, executor)
-3. Load YAML configuration
-4. Initialize Supervisor with dependencies
-5. Set up signal handlers
-6. Manage main loop
-
-### Dependency Injection
+The main.go file is intentionally minimal (5 lines of code).
+All dependency injection and application logic is handled by the `bootstrap` package.
 
 ```go
-// Infrastructure layer
-loader := infraconfig.NewLoader()
-executor := infraprocess.NewUnixExecutor()
-reaper := kernel.Default.Reaper
+package main
 
-// Application layer
-cfg, _ := loader.Load(configPath)
-sup, _ := appsupervisor.NewSupervisor(cfg, loader, executor, reaper)
-```
+import (
+    "os"
+    "github.com/kodflow/daemon/internal/bootstrap"
+)
 
-### Signal Handling
-
-```go
-sigCh := make(chan os.Signal, 1)
-signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-
-for sig := range sigCh {
-    switch sig {
-    case syscall.SIGHUP:
-        sup.Reload()
-    case syscall.SIGTERM, syscall.SIGINT:
-        sup.Stop()
-        return
-    }
+func main() {
+    os.Exit(bootstrap.Run())
 }
 ```
+
+### Responsibilities
+
+The `main` function only:
+1. Calls `bootstrap.Run()` to start the application
+2. Exits with the returned exit code
+
+All other responsibilities are delegated to `internal/bootstrap/`:
+- CLI flag parsing (`--config`, `--version`)
+- Dependency injection via Wire
+- Signal handling (SIGTERM, SIGINT, SIGHUP)
+- Supervisor lifecycle management
 
 ## Build
 
@@ -57,14 +46,27 @@ for sig := range sigCh {
 go build -o supervizio ./cmd/daemon
 
 # With version
-go build -ldflags "-X main.version=1.0.0" -o supervizio ./cmd/daemon
+go build -ldflags "-X github.com/kodflow/daemon/internal/bootstrap.version=1.0.0" -o supervizio ./cmd/daemon
 ```
+
+## CLI Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--config` | YAML config path | `/etc/daemon/config.yaml` |
+| `--version` | Show version | - |
+
+## Signal Handling
+
+| Signal | Action |
+|--------|--------|
+| `SIGTERM`, `SIGINT` | Graceful shutdown |
+| `SIGHUP` | Configuration reload |
 
 ## Related Directories
 
 | Directory | Relation |
 |-----------|----------|
-| `../../internal/infrastructure/config/yaml/` | Config loader |
-| `../../internal/infrastructure/process/` | Process executor |
-| `../../internal/application/supervisor/` | Supervisor |
-| `../../internal/infrastructure/kernel/` | OS abstraction |
+| `../../internal/bootstrap/` | All application logic |
+| `../../internal/application/supervisor/` | Supervisor orchestration |
+| `../../internal/infrastructure/` | Infrastructure adapters |

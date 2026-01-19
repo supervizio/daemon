@@ -3,13 +3,11 @@ package listener_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kodflow/daemon/internal/domain/listener"
-	"github.com/kodflow/daemon/internal/domain/probe"
 )
 
 // TestNewListener tests listener creation.
@@ -29,7 +27,7 @@ func TestNewListener(t *testing.T) {
 			protocol:         "tcp",
 			address:          "localhost",
 			port:             8080,
-			expectedState:    listener.Closed,
+			expectedState:    listener.StateClosed,
 			expectedProtocol: "tcp",
 		},
 		{
@@ -38,7 +36,7 @@ func TestNewListener(t *testing.T) {
 			protocol:         "udp",
 			address:          "0.0.0.0",
 			port:             53,
-			expectedState:    listener.Closed,
+			expectedState:    listener.StateClosed,
 			expectedProtocol: "udp",
 		},
 	}
@@ -129,42 +127,6 @@ func TestNewUDP(t *testing.T) {
 	}
 }
 
-// TestListener_WithProbe tests probe configuration.
-func TestListener_WithProbe(t *testing.T) {
-	tests := []struct {
-		name      string
-		probeType string
-		config    probe.Config
-		target    probe.Target
-	}{
-		{
-			name:      "tcp_probe",
-			probeType: "tcp",
-			config:    probe.NewConfig(),
-			target:    probe.NewTCPTarget("localhost:8080"),
-		},
-		{
-			name:      "http_probe",
-			probeType: "http",
-			config:    probe.NewConfig().WithTimeout(10 * time.Second),
-			target:    probe.NewHTTPTarget("http://localhost:8080/health", "GET", 200),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create listener with probe.
-			l := listener.NewTCP("http", "localhost", 8080)
-			l.WithProbe(tt.probeType, tt.config, tt.target)
-
-			// Verify probe configuration.
-			assert.True(t, l.HasProbe())
-			assert.Equal(t, tt.probeType, l.ProbeType)
-			require.NotNil(t, l.ProbeConfig)
-		})
-	}
-}
-
 // TestListener_SetState tests state transitions.
 func TestListener_SetState(t *testing.T) {
 	tests := []struct {
@@ -175,20 +137,20 @@ func TestListener_SetState(t *testing.T) {
 	}{
 		{
 			name:          "closed_to_listening",
-			initialState:  listener.Closed,
-			targetState:   listener.Listening,
+			initialState:  listener.StateClosed,
+			targetState:   listener.StateListening,
 			shouldSucceed: true,
 		},
 		{
 			name:          "closed_to_ready_invalid",
-			initialState:  listener.Closed,
-			targetState:   listener.Ready,
+			initialState:  listener.StateClosed,
+			targetState:   listener.StateReady,
 			shouldSucceed: false,
 		},
 		{
 			name:          "listening_to_ready",
-			initialState:  listener.Listening,
-			targetState:   listener.Ready,
+			initialState:  listener.StateListening,
+			targetState:   listener.StateReady,
 			shouldSucceed: true,
 		},
 	}
@@ -223,15 +185,15 @@ func TestListener_MarkListening(t *testing.T) {
 	}{
 		{
 			name:          "from_closed",
-			initialState:  listener.Closed,
+			initialState:  listener.StateClosed,
 			shouldSucceed: true,
-			expectedState: listener.Listening,
+			expectedState: listener.StateListening,
 		},
 		{
 			name:          "from_ready_valid",
-			initialState:  listener.Ready,
+			initialState:  listener.StateReady,
 			shouldSucceed: true,
-			expectedState: listener.Listening,
+			expectedState: listener.StateListening,
 		},
 	}
 
@@ -261,15 +223,15 @@ func TestListener_MarkReady(t *testing.T) {
 	}{
 		{
 			name:          "from_listening",
-			initialState:  listener.Listening,
+			initialState:  listener.StateListening,
 			shouldSucceed: true,
-			expectedState: listener.Ready,
+			expectedState: listener.StateReady,
 		},
 		{
 			name:          "from_closed_invalid",
-			initialState:  listener.Closed,
+			initialState:  listener.StateClosed,
 			shouldSucceed: false,
-			expectedState: listener.Closed,
+			expectedState: listener.StateClosed,
 		},
 	}
 
@@ -299,15 +261,15 @@ func TestListener_MarkClosed(t *testing.T) {
 	}{
 		{
 			name:          "from_listening",
-			initialState:  listener.Listening,
+			initialState:  listener.StateListening,
 			shouldSucceed: true,
-			expectedState: listener.Closed,
+			expectedState: listener.StateClosed,
 		},
 		{
 			name:          "from_ready",
-			initialState:  listener.Ready,
+			initialState:  listener.StateReady,
 			shouldSucceed: true,
-			expectedState: listener.Closed,
+			expectedState: listener.StateClosed,
 		},
 	}
 
@@ -323,86 +285,6 @@ func TestListener_MarkClosed(t *testing.T) {
 			// Verify result.
 			assert.Equal(t, tt.shouldSucceed, result)
 			assert.Equal(t, tt.expectedState, l.State)
-		})
-	}
-}
-
-// TestListener_HasProbe tests HasProbe method.
-func TestListener_HasProbe(t *testing.T) {
-	tests := []struct {
-		name     string
-		setup    func(*listener.Listener)
-		expected bool
-	}{
-		{
-			name: "without_probe",
-			setup: func(_ *listener.Listener) {
-				// No setup needed.
-			},
-			expected: false,
-		},
-		{
-			name: "with_probe",
-			setup: func(l *listener.Listener) {
-				l.WithProbe("tcp", probe.NewConfig(), probe.NewTCPTarget("localhost:8080"))
-			},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create listener and apply setup.
-			l := listener.NewListener("test", "tcp", "localhost", 8080)
-			tt.setup(l)
-
-			// Verify HasProbe.
-			assert.Equal(t, tt.expected, l.HasProbe())
-		})
-	}
-}
-
-// TestListener_ProbeAddress tests ProbeAddress method.
-func TestListener_ProbeAddress(t *testing.T) {
-	tests := []struct {
-		name     string
-		address  string
-		port     int
-		expected string
-	}{
-		{
-			name:     "localhost",
-			address:  "localhost",
-			port:     8080,
-			expected: "localhost:8080",
-		},
-		{
-			name:     "empty_address",
-			address:  "",
-			port:     9090,
-			expected: "127.0.0.1:9090",
-		},
-		{
-			name:     "any_address",
-			address:  "0.0.0.0",
-			port:     80,
-			expected: "127.0.0.1:80",
-		},
-		{
-			name:     "ip_address",
-			address:  "192.168.1.1",
-			port:     443,
-			expected: "192.168.1.1:443",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create listener.
-			l := listener.NewListener("test", "tcp", tt.address, tt.port)
-
-			// Verify probe address.
-			assert.Equal(t, tt.expected, l.ProbeAddress())
 		})
 	}
 }

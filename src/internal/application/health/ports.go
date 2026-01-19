@@ -4,7 +4,7 @@ package health
 import (
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/probe"
+	"github.com/kodflow/daemon/internal/domain/health"
 )
 
 // Creator creates probers based on type.
@@ -17,7 +17,7 @@ type Creator interface {
 	//   - timeout: the timeout for the prober.
 	//
 	// Returns:
-	//   - probe.Prober: the created prober.
+	//   - health.Prober: the created prober.
 	//   - error: if creation fails.
-	Create(proberType string, timeout time.Duration) (probe.Prober, error)
+	Create(proberType string, timeout time.Duration) (health.Prober, error)
 }

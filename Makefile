@@ -1,9 +1,8 @@
-.PHONY: help lint
+.PHONY: coverage
 
-.DEFAULT_GOAL := help
-
-help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
-
-lint: ## Run linters (ktn-linter + golangci-lint)
-	@ktn-linter lint -c src/.ktn-linter.yaml ./...
+coverage:
+	@cd src && gotestsum --format pkgname -- -race -coverprofile=coverage.out \
+		-coverpkg=./internal/... ./internal/...
+	@echo ""
+	@cd src && go tool cover -func=coverage.out | tail -1
+	@rm -f src/coverage.out

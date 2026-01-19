@@ -5,7 +5,23 @@
 # Exit 0 = autorisé, Exit 2 = bloqué
 # ============================================================================
 
-set -euo pipefail
+set -uo pipefail
+
+# === Read hook input (JSON from stdin) - fail gracefully ===
+set +o pipefail
+INPUT="$(cat 2>/dev/null)"
+set -o pipefail
+INPUT="${INPUT:-{}}"
+
+# Fail gracefully if no input or invalid JSON
+if [[ -z "$INPUT" ]] || [[ "$INPUT" == "{}" ]]; then
+    exit 0
+fi
+
+# Verify jq is available
+if ! command -v jq &>/dev/null; then
+    exit 0
+fi
 
 # Patterns interdits (case insensitive)
 FORBIDDEN_PATTERNS=(
@@ -37,10 +53,9 @@ FORBIDDEN_PATTERNS=(
     "copilot"
 )
 
-# Lire l'input JSON de Claude
-INPUT=$(cat)
-TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+# Extraire tool_name et command (fail gracefully)
+TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // "unknown"' 2>/dev/null) || TOOL="unknown"
+COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null) || COMMAND=""
 
 # Vérifier si c'est un git commit
 if [[ "$TOOL" != "Bash" ]]; then

@@ -1,4 +1,911 @@
-# KTN-Linter configuration for superviz.io
-# No exclusions - all issues must be fixed properly
+# ═══════════════════════════════════════════════════════════════════════════════
+# KTN-Linter Configuration File
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This file configures which rules are enabled/disabled and their settings.
+#
+# Documentation: https://github.com/kodflow/ktn-linter
+#
+# ═══════════════════════════════════════════════════════════════════════════════
 
-exclude: []
+# Configuration version (do not change)
+version: 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GLOBAL OPTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │ STRICT MODE                                                                  │
+# │                                                                              │
+# │ When enabled, ALL built-in exclusions are disabled:                          │
+# │   - Rules normally skipped for *_test.go files will be enforced              │
+# │   - Rules normally skipped for testdata/ will be enforced                    │
+# │   - Generated files will be analyzed                                         │
+# │                                                                              │
+# │ Use this when you want maximum strictness across your entire codebase.       │
+# │                                                                              │
+# │ IMPORTANT: Even if a rule is set to enabled: false below, strict_mode: true  │
+# │ will NOT re-enable it. strict_mode only affects built-in file exclusions,    │
+# │ not per-rule enabled/disabled settings.                                      │
+# └─────────────────────────────────────────────────────────────────────────────┘
+strict_mode: false
+
+# Skip files with generation markers (DO NOT EDIT, Code generated, etc.)
+# Default: true
+skip_generated: true
+
+# Serialization tags to recognize for struct tag validation (KTN-STRUCT-JSONTAG)
+# Add custom tags if you use them (e.g., "msgpack", "avro")
+serialization_tags:
+  - json
+  - xml
+  - yaml
+  - toml
+  - protobuf
+
+# Global file exclusions (apply to ALL rules)
+# Patterns support glob syntax: *, **, ?
+exclude:
+  - "vendor/**"
+  - "**/api/proto/**"
+  - "**/*.pb.go"
+  - "**/wire_gen.go"
+  - "api/**"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RULES CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Each rule can be configured with:
+#   enabled: true/false          - Enable or disable the rule
+#   threshold: N                 - Numeric threshold (for rules that support it)
+#   skip_test_files: true/false  - Skip *_test.go files (override built-in)
+#   skip_testdata: true/false    - Skip testdata/ directories (override built-in)
+#   exclude: [patterns]          - Rule-specific file exclusions
+#
+# BUILT-IN TEST FILE EXCLUSIONS
+# ─────────────────────────────────────────────────────────────────────────────
+# Some rules are skipped for *_test.go files by default because tests have
+# different requirements (readability over performance, mock patterns, etc.)
+#
+# Rules excluded by default for test files:
+#   - Performance rules (BIGSTRUCT, SLICECAP, MAPCAP, etc.)
+#   - Documentation rules (COMMENT-*, PKGDOC)
+#   - Complexity rules (MAXLOC, MAXSTMT, CYCLO)
+#   - Style rules (GROUPARG, NOMAGIC, NILSLICE)
+#   - Mock patterns (BLANKPARAM, UNUSEDARG)
+#
+# To force a rule on test files, set: skip_test_files: false
+# To disable all built-in exclusions globally, set: strict_mode: true
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+rules:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # API Rules (1 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-API-MINIF [WARN]
+  # use consumer-side minimal interfaces for external dependencies
+  KTN-API-MINIF:
+    enabled: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # COMMENT Rules (7 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-COMMENT-BLOCK [WARN]
+  # All control blocks (if/else/switch/for), returns and significant logic must be commented
+  # Note: Skipped for *_test.go files by default
+  KTN-COMMENT-BLOCK:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-COMMENT-CONST [WARN]
+  # Checks that every constant has an associated comment
+  # Note: Skipped for *_test.go files by default
+  KTN-COMMENT-CONST:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-COMMENT-FUNC [WARN]
+  # All functions must have documentation in strict format (description, Params, Returns)
+  # Note: Skipped for *_test.go files by default
+  KTN-COMMENT-FUNC:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-COMMENT-LINELEN [INFO]
+  # inline comment too long (>150 chars)
+  KTN-COMMENT-LINELEN:
+    enabled: true
+    # threshold: 80
+
+  # KTN-COMMENT-PKGDOC [WARN]
+  # each .go file must have a descriptive comment before the package declaration
+  # Note: Skipped for *_test.go files by default
+  KTN-COMMENT-PKGDOC:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-COMMENT-STRUCT [WARN]
+  # Every exported struct must have complete documentation
+  # Note: Skipped for *_test.go files by default
+  KTN-COMMENT-STRUCT:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-COMMENT-VAR [WARN]
+  # Checks that every package-level variable has an associated comment
+  # Note: Skipped for *_test.go files by default
+  KTN-COMMENT-VAR:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # CONST Rules (6 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-CONST-CAMEL [INFO]
+  # Checks that constants use standard Go naming conventions (CamelCase)
+  KTN-CONST-CAMEL:
+    enabled: true
+
+  # KTN-CONST-MAXLEN [WARN]
+  # Checks that constant names have at most 30 characters
+  KTN-CONST-MAXLEN:
+    enabled: true
+    # threshold: 30
+
+  # KTN-CONST-MINLEN [WARN]
+  # Checks that constant names have at least 2 characters
+  KTN-CONST-MINLEN:
+    enabled: true
+    # threshold: 3
+
+  # KTN-CONST-ORDER [INFO]
+  # Checks that constants are grouped and placed at the top (order: const -> var -> type -> func)
+  KTN-CONST-ORDER:
+    enabled: true
+
+  # KTN-CONST-SHADOW [ERROR]
+  # Checks that constants do not shadow built-in identifiers
+  KTN-CONST-SHADOW:
+    enabled: true
+
+  # KTN-CONST-TYPED [WARN]
+  # Checks that constants have an explicit type
+  KTN-CONST-TYPED:
+    enabled: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # FUNC Rules (19 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-FUNC-BLANKPARAM [WARN]
+  # Detects blank identifier _ in parameters with interface context
+  # Note: Skipped for *_test.go files by default
+  KTN-FUNC-BLANKPARAM:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-FUNC-CTXFIRST [ERROR]
+  # context.Context must always be the first parameter (after the receiver for methods)
+  KTN-FUNC-CTXFIRST:
+    enabled: true
+
+  # KTN-FUNC-CYCLO [INFO]
+  # Cyclomatic complexity must not exceed 8
+  # Note: Skipped for *_test.go files by default
+  KTN-FUNC-CYCLO:
+    enabled: true
+    # threshold: 8
+    # skip_test_files: true  # (default)
+
+  # KTN-FUNC-DEADCODE [ERROR]
+  # private functions not used in production code (dead code)
+  KTN-FUNC-DEADCODE:
+    enabled: true
+
+  # KTN-FUNC-EARLYRET [ERROR]
+  # Avoid else after return/continue/break/panic (prefer early return)
+  KTN-FUNC-EARLYRET:
+    enabled: true
+
+  # KTN-FUNC-ERRFMT [INFO]
+  # error strings should not start with capital letter or end with punctuation
+  KTN-FUNC-ERRFMT:
+    enabled: true
+
+  # KTN-FUNC-ERRLAST [ERROR]
+  # Error must always be the last return value
+  KTN-FUNC-ERRLAST:
+    enabled: true
+
+  # KTN-FUNC-GROUPARG [INFO]
+  # Parameters of same type should be grouped
+  # Note: Skipped for *_test.go files by default
+  KTN-FUNC-GROUPARG:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-FUNC-MAXLOC [WARN]
+  # Functions must not exceed 50 lines of code
+  # Note: Skipped for *_test.go files by default
+  KTN-FUNC-MAXLOC:
+    enabled: true
+    # threshold: 50
+    # skip_test_files: true  # (default)
+
+  # KTN-FUNC-MAXPARAM [WARN]
+  # Functions must not exceed 5 parameters
+  KTN-FUNC-MAXPARAM:
+    enabled: true
+    # threshold: 5
+
+  # KTN-FUNC-MAXSTMT [WARN]
+  # Functions must not exceed 35 statements (logical instructions)
+  # Note: Skipped for *_test.go files by default
+  KTN-FUNC-MAXSTMT:
+    enabled: true
+    # threshold: 35
+    # skip_test_files: true  # (default)
+
+  # KTN-FUNC-MINMAX [INFO]
+  # prefer min/max builtins (Go 1.21+)
+  KTN-FUNC-MINMAX:
+    enabled: true
+
+  # KTN-FUNC-NAKEDRET [INFO]
+  # Naked returns are forbidden except for very short functions (<5 lines)
+  KTN-FUNC-NAKEDRET:
+    enabled: true
+
+  # KTN-FUNC-NAMERET [INFO]
+  # Functions with more than 3 return values must use named returns
+  KTN-FUNC-NAMERET:
+    enabled: true
+
+  # KTN-FUNC-NOMAGIC [INFO]
+  # Literal numbers must be named constants (no magic numbers)
+  # Note: Skipped for *_test.go files by default
+  KTN-FUNC-NOMAGIC:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-FUNC-PUREGET [WARN]
+  # Getters (Get*/Is*/Has*) should not have side effects (assignments, function calls modifying state)
+  KTN-FUNC-PUREGET:
+    enabled: true
+
+  # KTN-FUNC-RANGEINT [INFO]
+  # use range N instead of for i := 0; i < N; i++ (Go 1.22+)
+  KTN-FUNC-RANGEINT:
+    enabled: true
+
+  # KTN-FUNC-UNUSEDARG [WARN]
+  # unused parameters must be prefixed with _ or assigned to _
+  # Note: Skipped for *_test.go files by default
+  KTN-FUNC-UNUSEDARG:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-FUNC-USECLEAR [INFO]
+  # use clear builtin (Go 1.21+)
+  KTN-FUNC-USECLEAR:
+    enabled: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # GENERIC Rules (5 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-GENERIC-CMPEQ [WARN]
+  # Generic functions using == or != must have comparable constraint
+  KTN-GENERIC-CMPEQ:
+    enabled: true
+
+  # KTN-GENERIC-NOANY [WARN]
+  # Detect unnecessary generics on interface types
+  KTN-GENERIC-NOANY:
+    enabled: true
+
+  # KTN-GENERIC-ORDERED [WARN]
+  # Generic functions using <, >, +, -, *, /, % must have cmp.Ordered constraint
+  KTN-GENERIC-ORDERED:
+    enabled: true
+
+  # KTN-GENERIC-SHADOW [WARN]
+  # Type parameters must not shadow predeclared identifiers
+  KTN-GENERIC-SHADOW:
+    enabled: true
+
+  # KTN-GENERIC-USECMP [INFO]
+  # Deprecated golang.org/x/exp/constraints package should be replaced by cmp
+  KTN-GENERIC-USECMP:
+    enabled: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # GOROUTINE Rules (2 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-GOROUTINE-DEFER [WARN]
+  # defer must immediately follow resource acquisition
+  KTN-GOROUTINE-DEFER:
+    enabled: true
+
+  # KTN-GOROUTINE-LIFECYCLE [WARN]
+  # document goroutine lifecycle
+  KTN-GOROUTINE-LIFECYCLE:
+    enabled: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # GOVET Rules (25 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-GOVET-APPENDS [WARN]
+  # append results must be assigned
+  KTN-GOVET-APPENDS:
+    enabled: true
+
+  # KTN-GOVET-ASSIGN [WARN]
+  # useless variable assignments
+  KTN-GOVET-ASSIGN:
+    enabled: true
+
+  # KTN-GOVET-ATOMIC [WARN]
+  # atomic operations correctness
+  KTN-GOVET-ATOMIC:
+    enabled: true
+
+  # KTN-GOVET-BOOLS [WARN]
+  # boolean operation mistakes
+  KTN-GOVET-BOOLS:
+    enabled: true
+
+  # KTN-GOVET-COPYLOCKS [WARN]
+  # lock copying detection
+  KTN-GOVET-COPYLOCKS:
+    enabled: true
+
+  # KTN-GOVET-DIRECTIVE [WARN]
+  # go directive correctness
+  KTN-GOVET-DIRECTIVE:
+    enabled: true
+
+  # KTN-GOVET-ERRORSAS [WARN]
+  # errors.As usage correctness
+  KTN-GOVET-ERRORSAS:
+    enabled: true
+
+  # KTN-GOVET-HTTPRESPONSE [WARN]
+  # HTTP response body must be closed
+  KTN-GOVET-HTTPRESPONSE:
+    enabled: true
+
+  # KTN-GOVET-IFACEASSERT [WARN]
+  # impossible interface assertions
+  KTN-GOVET-IFACEASSERT:
+    enabled: true
+
+  # KTN-GOVET-LOOPCLOSURE [WARN]
+  # loop variable capture in closures
+  KTN-GOVET-LOOPCLOSURE:
+    enabled: true
+
+  # KTN-GOVET-NILFUNC [WARN]
+  # nil function comparison
+  KTN-GOVET-NILFUNC:
+    enabled: true
+
+  # KTN-GOVET-SHIFT [WARN]
+  # shift operations correctness
+  KTN-GOVET-SHIFT:
+    enabled: true
+
+  # KTN-GOVET-SIGCHANYZER [WARN]
+  # signal.Notify channel misuse
+  KTN-GOVET-SIGCHANYZER:
+    enabled: true
+
+  # KTN-GOVET-SLOG [WARN]
+  # slog usage mistakes
+  KTN-GOVET-SLOG:
+    enabled: true
+
+  # KTN-GOVET-SORTSLICE [WARN]
+  # sort.Slice misuse
+  KTN-GOVET-SORTSLICE:
+    enabled: true
+
+  # KTN-GOVET-STDMETHODS [WARN]
+  # standard method signatures
+  KTN-GOVET-STDMETHODS:
+    enabled: true
+
+  # KTN-GOVET-STRINGINTCONV [WARN]
+  # string(int) conversion
+  KTN-GOVET-STRINGINTCONV:
+    enabled: true
+
+  # KTN-GOVET-STRUCTTAG [WARN]
+  # struct tag format validation
+  KTN-GOVET-STRUCTTAG:
+    enabled: true
+
+  # KTN-GOVET-TESTINGGOROUTINE [WARN]
+  # testing goroutine misuse
+  KTN-GOVET-TESTINGGOROUTINE:
+    enabled: true
+
+  # KTN-GOVET-TESTS [WARN]
+  # test function signature
+  KTN-GOVET-TESTS:
+    enabled: true
+
+  # KTN-GOVET-TIMEFORMAT [WARN]
+  # time format mistakes
+  KTN-GOVET-TIMEFORMAT:
+    enabled: true
+
+  # KTN-GOVET-UNMARSHAL [WARN]
+  # unmarshal into wrong types
+  KTN-GOVET-UNMARSHAL:
+    enabled: true
+
+  # KTN-GOVET-UNREACHABLE [WARN]
+  # unreachable code detection
+  KTN-GOVET-UNREACHABLE:
+    enabled: true
+
+  # KTN-GOVET-UNUSEDRESULT [WARN]
+  # unused function results
+  KTN-GOVET-UNUSEDRESULT:
+    enabled: true
+
+  # KTN-GOVET-WAITGROUP [WARN]
+  # WaitGroup misuse detection
+  KTN-GOVET-WAITGROUP:
+    enabled: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # INTERFACE Rules (3 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-INTERFACE-ANYUSE [INFO]
+  # overuse of interface{}/any
+  KTN-INTERFACE-ANYUSE:
+    enabled: true
+
+  # KTN-INTERFACE-ERNAME [INFO]
+  # single-method interfaces must follow the -er naming convention
+  KTN-INTERFACE-ERNAME:
+    enabled: true
+
+  # KTN-INTERFACE-UNUSED [WARN]
+  # unused private interface
+  KTN-INTERFACE-UNUSED:
+    enabled: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # ITER Rules (5 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-ITER-COLLECT [INFO]
+  # use slices.Collect to collect iterators
+  KTN-ITER-COLLECT:
+    enabled: true
+
+  # KTN-ITER-MAPKEYS [INFO]
+  # prefer maps.Keys/Values over manual loops
+  KTN-ITER-MAPKEYS:
+    enabled: true
+
+  # KTN-ITER-PULLSTOP [WARN]
+  # iter.Pull/Pull2 stop function must be deferred
+  KTN-ITER-PULLSTOP:
+    enabled: true
+
+  # KTN-ITER-SIGNATURE [ERROR]
+  # valid iterator signature (func(yield func(...) bool))
+  KTN-ITER-SIGNATURE:
+    enabled: true
+
+  # KTN-ITER-YIELD [WARN]
+  # yield contract respected (check bool return)
+  KTN-ITER-YIELD:
+    enabled: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # RECEIVER Rules (4 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-RECEIVER-GENERIC [WARN]
+  # receiver consistency for generic types
+  KTN-RECEIVER-GENERIC:
+    enabled: true
+
+  # KTN-RECEIVER-MIXPTR [ERROR]
+  # do not mix value and pointer receivers on the same type
+  KTN-RECEIVER-MIXPTR:
+    enabled: true
+
+  # KTN-RECEIVER-NAME [INFO]
+  # receiver names must be 1-2 letters, not this/self/me
+  KTN-RECEIVER-NAME:
+    enabled: true
+
+  # KTN-RECEIVER-PTRMAP [WARN]
+  # unnecessary pointer to map/func/chan
+  KTN-RECEIVER-PTRMAP:
+    enabled: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # STRUCT Rules (9 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-STRUCT-ACCESSOR [WARN]
+  # Getter/setter naming convention (Field() and SetField())
+  KTN-STRUCT-ACCESSOR:
+    enabled: true
+
+  # KTN-STRUCT-CTOR [WARN]
+  # Exported struct with methods must have a NewX() constructor
+  KTN-STRUCT-CTOR:
+    enabled: true
+
+  # KTN-STRUCT-JSONTAG [INFO]
+  # Exported DTO fields must have json/xml tags
+  KTN-STRUCT-JSONTAG:
+    enabled: true
+
+  # KTN-STRUCT-NOGET [WARN]
+  # Getters should not have the 'Get' prefix (idiomatic Go convention)
+  KTN-STRUCT-NOGET:
+    enabled: true
+
+  # KTN-STRUCT-ONEFILE [INFO]
+  # A Go file should contain only one struct (avoids 10000-line files)
+  # Note: Skipped for *_test.go files by default
+  KTN-STRUCT-ONEFILE:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-STRUCT-PRIVTAG [INFO]
+  # Private fields of a DTO should not have serialization tags
+  KTN-STRUCT-PRIVTAG:
+    enabled: true
+
+  # KTN-STRUCT-PUBFIRST [INFO]
+  # Exported fields must be placed before private fields in a struct
+  KTN-STRUCT-PUBFIRST:
+    enabled: true
+
+  # KTN-STRUCT-RECVNAME [WARN]
+  # Receiver names must be consistent across methods
+  KTN-STRUCT-RECVNAME:
+    enabled: true
+
+  # KTN-STRUCT-RECVTYPE [WARN]
+  # Receiver type must be consistent (pointer or value)
+  KTN-STRUCT-RECVTYPE:
+    enabled: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # TEST Rules (20 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-TEST-ASSERT [WARN]
+  # Tests must contain assertions and actually test something
+  KTN-TEST-ASSERT:
+    enabled: true
+
+  # KTN-TEST-CASECNT [WARN]
+  # Table-driven tests must have enough cases for the complexity
+  KTN-TEST-CASECNT:
+    enabled: true
+
+  # KTN-TEST-CHDIR [INFO]
+  # Prefer t.Chdir() over os.Chdir() in tests (Go 1.24+)
+  KTN-TEST-CHDIR:
+    enabled: true
+
+  # KTN-TEST-CLEANUP [WARN]
+  # Use t.Cleanup() instead of defer with parallel subtests
+  KTN-TEST-CLEANUP:
+    enabled: true
+
+  # KTN-TEST-COVERAGE [WARN]
+  # All functions (public and private) must have tests
+  KTN-TEST-COVERAGE:
+    enabled: true
+
+  # KTN-TEST-ERRCASES [WARN]
+  # Tests must cover error and exception cases
+  KTN-TEST-ERRCASES:
+    enabled: true
+
+  # KTN-TEST-EXTPUB [WARN]
+  # Tests for public (exported) functions must be in _external_test.go only (black-box testing)
+  KTN-TEST-EXTPUB:
+    enabled: true
+
+  # KTN-TEST-HASGO [WARN]
+  # Each _test.go file must have a corresponding .go file
+  KTN-TEST-HASGO:
+    enabled: true
+
+  # KTN-TEST-INTPRIV [WARN]
+  # Tests for private (non-exported) functions must be in _internal_test.go only (white-box testing)
+  KTN-TEST-INTPRIV:
+    enabled: true
+
+  # KTN-TEST-MKDIR [WARN]
+  # Use t.TempDir() instead of os.MkdirTemp() in tests
+  KTN-TEST-MKDIR:
+    enabled: true
+
+  # KTN-TEST-NOSKIP [WARN]
+  # Prohibition of using t.Skip() in tests
+  KTN-TEST-NOSKIP:
+    enabled: true
+
+  # KTN-TEST-PARALLELPOS [INFO]
+  # t.Parallel() should be the first statement
+  KTN-TEST-PARALLELPOS:
+    enabled: true
+
+  # KTN-TEST-PKGNAME [WARN]
+  # Files _internal_test.go must use 'package xxx', files _external_test.go must use 'package xxx_test'
+  KTN-TEST-PKGNAME:
+    enabled: true
+
+  # KTN-TEST-SETENV [ERROR]
+  # t.Setenv()/t.Chdir() forbidden in parallel tests
+  KTN-TEST-SETENV:
+    enabled: true
+
+  # KTN-TEST-SPLIT [WARN]
+  # Each .go file must have appropriate test files (xxx_internal_test.go for private functions, xxx_external_test.go for public functions)
+  KTN-TEST-SPLIT:
+    enabled: true
+
+  # KTN-TEST-SUBPARALLEL [WARN]
+  # Subtest must call t.Parallel() when parent test does
+  KTN-TEST-SUBPARALLEL:
+    enabled: true
+
+  # KTN-TEST-SUFFIX [ERROR]
+  # test file must end with _internal_test.go, _external_test.go, _bench_test.go or _integration_test.go
+  KTN-TEST-SUFFIX:
+    enabled: true
+
+  # KTN-TEST-TABLE [WARN]
+  # All tests must use the table-driven pattern
+  KTN-TEST-TABLE:
+    enabled: true
+
+  # KTN-TEST-TMPDIR [INFO]
+  # Prefer t.TempDir() over os.TempDir() in tests
+  KTN-TEST-TMPDIR:
+    enabled: true
+
+  # KTN-TEST-TMPFILE [WARN]
+  # Use t.TempDir() instead of empty string in os.CreateTemp
+  KTN-TEST-TMPFILE:
+    enabled: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # VAR Rules (36 rules)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # KTN-VAR-ARRAY [INFO]
+  # Checks usage of [N]T instead of make([]T, N)
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-ARRAY:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-BIGSTRUCT [WARN]
+  # Use pointers for structs >64 bytes
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-BIGSTRUCT:
+    enabled: true
+    # threshold: 64
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-CAMEL [ERROR]
+  # Variables must use camelCase (no underscores)
+  KTN-VAR-CAMEL:
+    enabled: true
+
+  # KTN-VAR-CMPOR [INFO]
+  # Use cmp.Or() instead of if x != zeroValue pattern (Go 1.22+)
+  KTN-VAR-CMPOR:
+    enabled: true
+
+  # KTN-VAR-COLLECTKEYS [INFO]
+  # Use slices.Collect(maps.Keys/Values()) instead of range loop (Go 1.23+)
+  KTN-VAR-COLLECTKEYS:
+    enabled: true
+
+  # KTN-VAR-CONTAINS [INFO]
+  # Use slices.Contains() instead of manual for-range pattern (Go 1.21+)
+  KTN-VAR-CONTAINS:
+    enabled: true
+
+  # KTN-VAR-EXPLICIT [WARN]
+  # Package variables must have the format 'var name type = value'
+  KTN-VAR-EXPLICIT:
+    enabled: true
+
+  # KTN-VAR-GROUP [INFO]
+  # Checks that package variables are grouped in a single var block
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-GROUP:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-GROW [WARN]
+  # Preallocate bytes.Buffer/strings.Builder with Grow
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-GROW:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-HOTLOOP [WARN]
+  # Avoid slice/map allocations in hot loops
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-HOTLOOP:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-INDEX [INFO]
+  # Use slices.Index() instead of manual search pattern (Go 1.21+)
+  KTN-VAR-INDEX:
+    enabled: true
+
+  # KTN-VAR-LOOPVAR [INFO]
+  # The v := v pattern in loops is obsolete since Go 1.22
+  KTN-VAR-LOOPVAR:
+    enabled: true
+
+  # KTN-VAR-MAKEAPPEND [WARN]
+  # Avoid make([]T, length) when used with append
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-MAKEAPPEND:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-MAPCAP [INFO]
+  # Preallocate maps with capacity when known
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-MAPCAP:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-MAPCLONE [INFO]
+  # Use maps.Clone() instead of make+range pattern (Go 1.21+)
+  KTN-VAR-MAPCLONE:
+    enabled: true
+
+  # KTN-VAR-MAXLEN [WARN]
+  # Variable names must not exceed 30 characters
+  KTN-VAR-MAXLEN:
+    enabled: true
+    # threshold: 30
+
+  # KTN-VAR-MINLEN [WARN]
+  # Variable names must be at least 2 characters long
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-MINLEN:
+    enabled: true
+    # threshold: 2
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-NILSLICE [INFO]
+  # Prefer nil slice over []T{} or make([]T, 0)
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-NILSLICE:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-ORDER [INFO]
+  # Checks that package-level variables are declared after constants
+  KTN-VAR-ORDER:
+    enabled: true
+
+  # KTN-VAR-PTRINTF [WARN]
+  # Detects pointers to interfaces (*io.Reader, *interface{}, *any)
+  KTN-VAR-PTRINTF:
+    enabled: true
+
+  # KTN-VAR-RANGEINT [INFO]
+  # Use 'for i := range n' instead of 'for i := 0; i < n; i++'
+  KTN-VAR-RANGEINT:
+    enabled: true
+
+  # KTN-VAR-RECVCONS [WARN]
+  # Checks receiver consistency (all pointer or all value)
+  KTN-VAR-RECVCONS:
+    enabled: true
+
+  # KTN-VAR-SHADOW [WARN]
+  # Checks that variables do not shadow built-in identifiers
+  KTN-VAR-SHADOW:
+    enabled: true
+
+  # KTN-VAR-SHORTDECL [WARN]
+  # Checks that local variables use ':=' instead of 'var'
+  KTN-VAR-SHORTDECL:
+    enabled: true
+
+  # KTN-VAR-SLICECAP [WARN]
+  # Checks that slices are preallocated with capacity if known
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-SLICECAP:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-SLICECLONE [INFO]
+  # Use slices.Clone() instead of manual copy patterns (Go 1.21+)
+  KTN-VAR-SLICECLONE:
+    enabled: true
+
+  # KTN-VAR-SLICEGROW [INFO]
+  # Use slices.Grow() instead of manual grow pattern (Go 1.21+)
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-SLICEGROW:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-STRBUILDER [WARN]
+  # Use strings.Builder for >2 concatenations
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-STRBUILDER:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-STRCONV [WARN]
+  # Checks for repeated string() conversions
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-STRCONV:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-SYNCPOOL [WARN]
+  # Checks that repeated buffers use sync.Pool
+  # Note: Skipped for *_test.go files by default
+  KTN-VAR-SYNCPOOL:
+    enabled: true
+    # skip_test_files: true  # (default)
+
+  # KTN-VAR-TYPEASSERT [WARN]
+  # Unchecked type assertion (use comma-ok idiom)
+  KTN-VAR-TYPEASSERT:
+    enabled: true
+
+  # KTN-VAR-USEANY [INFO]
+  # Prefer any over interface{}
+  KTN-VAR-USEANY:
+    enabled: true
+
+  # KTN-VAR-USECLEAR [INFO]
+  # Use clear() instead of range delete/zero loops
+  KTN-VAR-USECLEAR:
+    enabled: true
+
+  # KTN-VAR-USEMINMAX [INFO]
+  # Use min()/max() built-in (Go 1.21+)
+  KTN-VAR-USEMINMAX:
+    enabled: true
+
+  # KTN-VAR-WEAKRAND [WARN]
+  # Detects math/rand usage in security context
+  KTN-VAR-WEAKRAND:
+    enabled: true
+
+  # KTN-VAR-WGGO [INFO]
+  # Detects wg.Add(1)+go func()+defer wg.Done() - use wg.Go() (Go 1.25+)
+  KTN-VAR-WGGO:
+    enabled: true

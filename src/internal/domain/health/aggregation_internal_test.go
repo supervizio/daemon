@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kodflow/daemon/internal/domain/listener"
 	"github.com/kodflow/daemon/internal/domain/process"
 )
 
@@ -14,35 +13,35 @@ import (
 func Test_AggregatedHealth_computeListenerStatus(t *testing.T) {
 	tests := []struct {
 		name           string
-		listeners      []ListenerStatus
+		subjects       []SubjectStatus
 		expectedStatus Status
 	}{
 		{
-			name:           "empty_listeners_healthy",
-			listeners:      nil,
+			name:           "empty_subjects_healthy",
+			subjects:       nil,
 			expectedStatus: StatusHealthy,
 		},
 		{
 			name: "all_ready_healthy",
-			listeners: []ListenerStatus{
-				{Name: "http", State: listener.Ready},
-				{Name: "grpc", State: listener.Ready},
+			subjects: []SubjectStatus{
+				{Name: "http", State: SubjectReady},
+				{Name: "grpc", State: SubjectReady},
 			},
 			expectedStatus: StatusHealthy,
 		},
 		{
 			name: "some_listening_degraded",
-			listeners: []ListenerStatus{
-				{Name: "http", State: listener.Ready},
-				{Name: "grpc", State: listener.Listening},
+			subjects: []SubjectStatus{
+				{Name: "http", State: SubjectReady},
+				{Name: "grpc", State: SubjectListening},
 			},
 			expectedStatus: StatusDegraded,
 		},
 		{
 			name: "all_closed_unhealthy",
-			listeners: []ListenerStatus{
-				{Name: "http", State: listener.Closed},
-				{Name: "grpc", State: listener.Closed},
+			subjects: []SubjectStatus{
+				{Name: "http", State: SubjectClosed},
+				{Name: "grpc", State: SubjectClosed},
 			},
 			expectedStatus: StatusUnhealthy,
 		},
@@ -54,7 +53,7 @@ func Test_AggregatedHealth_computeListenerStatus(t *testing.T) {
 			// Create aggregated health with running process.
 			h := &AggregatedHealth{
 				ProcessState: process.StateRunning,
-				Listeners:    tt.listeners,
+				Subjects:     tt.subjects,
 			}
 
 			// Compute listener status.
@@ -69,28 +68,28 @@ func Test_AggregatedHealth_computeListenerStatus(t *testing.T) {
 // Test_AggregatedHealth_hasAnyListenerListening tests the hasAnyListenerListening helper method.
 func Test_AggregatedHealth_hasAnyListenerListening(t *testing.T) {
 	tests := []struct {
-		name      string
-		listeners []ListenerStatus
-		expected  bool
+		name     string
+		subjects []SubjectStatus
+		expected bool
 	}{
 		{
-			name:      "empty_listeners",
-			listeners: nil,
-			expected:  false,
+			name:     "empty_subjects",
+			subjects: nil,
+			expected: false,
 		},
 		{
 			name: "none_listening",
-			listeners: []ListenerStatus{
-				{Name: "http", State: listener.Closed},
-				{Name: "grpc", State: listener.Closed},
+			subjects: []SubjectStatus{
+				{Name: "http", State: SubjectClosed},
+				{Name: "grpc", State: SubjectClosed},
 			},
 			expected: false,
 		},
 		{
 			name: "some_listening",
-			listeners: []ListenerStatus{
-				{Name: "http", State: listener.Listening},
-				{Name: "grpc", State: listener.Ready},
+			subjects: []SubjectStatus{
+				{Name: "http", State: SubjectListening},
+				{Name: "grpc", State: SubjectReady},
 			},
 			expected: true,
 		},
@@ -102,7 +101,7 @@ func Test_AggregatedHealth_hasAnyListenerListening(t *testing.T) {
 			// Create aggregated health.
 			h := &AggregatedHealth{
 				ProcessState: process.StateRunning,
-				Listeners:    tt.listeners,
+				Subjects:     tt.subjects,
 			}
 
 			// Check if any listener is listening.

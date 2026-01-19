@@ -3,9 +3,10 @@
 # Usage: pre-validate.sh <file_path>
 # Exit 0 = allow, Exit 2 = block
 
-set -euo pipefail
+set -uo pipefail
+# Note: Removed -e (errexit) to fail-open on unexpected errors
 
-FILE="$1"
+FILE="${1:-}"
 if [ -z "$FILE" ]; then
     exit 0
 fi
@@ -86,7 +87,8 @@ fi
 # === Vérification avec yq si disponible ===
 if [[ "$USE_YQ" == "true" ]]; then
     # Lire les patterns protégés depuis le fichier YAML
-    YAML_PATTERNS=$(yq -r '.protected[]' "$CONFIG_FILE" 2>/dev/null || echo "")
+    # mikefarah/yq syntax (no -r flag needed, raw output is default)
+    YAML_PATTERNS=$(yq '.protected[]' "$CONFIG_FILE" 2>/dev/null || echo "")
 
     for pattern in $YAML_PATTERNS; do
         [[ -z "$pattern" ]] && continue
@@ -104,7 +106,7 @@ if [[ "$USE_YQ" == "true" ]]; then
             echo "  accidentelles par .claude/protected-paths.yml"
             echo ""
             echo "  Pour modifier ce fichier:"
-            echo "    1. Utilisez une task avec risk=high"
+            echo "    1. Demandez l'approbation explicite de l'utilisateur"
             echo "    2. Activez: export ALLOW_PROTECTED_EDIT=1"
             echo "    3. Fournissez une justification"
             echo ""

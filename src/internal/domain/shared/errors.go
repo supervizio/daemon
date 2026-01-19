@@ -20,4 +20,8 @@ var (
 	// ErrInvalidArgument indicates an invalid argument was provided.
 	// This error is returned when a function receives an argument that is not valid.
 	ErrInvalidArgument error = errors.New("invalid argument")
+
+	// ErrEmptyCommand indicates the command configuration is empty.
+	// This error is returned when a command is required but not provided.
+	ErrEmptyCommand error = errors.New("empty command")
 )

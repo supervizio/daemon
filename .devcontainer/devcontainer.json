@@ -41,13 +41,20 @@
         "editor.formatOnSave": true,
         "files.eol": "\n",
         "files.insertFinalNewline": true,
-        "files.trimTrailingWhitespace": true
+        "files.trimTrailingWhitespace": true,
+        "go.coverOnSave": true,
+        "go.coverageDecorator": {
+          "type": "highlight",
+          "coveredHighlightColor": "rgba(64,128,64,0.4)",
+          "uncoveredHighlightColor": "rgba(128,64,64,0.4)"
+        }
       },
       "extensions": [
         "vscode-icons-team.vscode-icons",
         "redhat.vscode-yaml",
         "tamasfe.even-better-toml",
-        "bierner.markdown-mermaid"
+        "bierner.markdown-mermaid",
+        "golang.go"
       ]
     }
   },

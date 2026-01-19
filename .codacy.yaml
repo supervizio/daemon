@@ -2,25 +2,64 @@
 # Codacy configuration for supervizio/daemon
 # Documentation: https://docs.codacy.com/repositories-configure/codacy-configuration-file/
 
+# Global path exclusions (analysis + coverage)
+exclude_paths:
+  # DevContainer and IDE configuration
+  - ".devcontainer/**"
+  - ".claude/**"
+  - ".github/**"
+  - ".vscode/**"
+
+  # Documentation and examples
+  - "docs/**"
+  - "examples/**"
+  - "**/*.md"
+
+  # Build artifacts and dependencies
+  - "vendor/**"
+  - "dist/**"
+  - "build/**"
+
+  # Generated code (protobuf, wire, mocks)
+  - "**/*.pb.go"
+  - "**/*_grpc.pb.go"
+  - "**/wire_gen.go"
+  - "**/mock_*.go"
+  - "src/api/proto/**"
+
+  # Test files and test data
+  - "**/*_test.go"
+  - "**/testdata/**"
+
+  # Config files
+  - "src/.golangci.yml"
+  - "src/.ktn-linter.yaml"
+
 engines:
   # Semgrep configuration
   semgrep:
     exclude_paths:
-      # Exclude /proc filesystem readers from file access warnings
-      # These files MUST construct dynamic paths to read Linux /proc filesystem
-      # The paths are controlled internally (default "/proc") or via constructor for testing
-      # No user input reaches these file operations
+      # Exclude /proc filesystem readers - paths are controlled internally
       - "src/internal/infrastructure/proc/**"
-      # Exclude linter configs - valid YAML structure flagged as duplicate IDs
-      - "**/.golangci.yml"
-      - "**/golangci.yml"
+      # Exclude process command - uses trusted config input
+      - "src/internal/infrastructure/process/command.go"
+      # Exclude cgroup readers - must read /sys/fs/cgroup dynamically
+      - "src/internal/infrastructure/resources/cgroup/**"
+      # Exclude Linux metrics collectors - must read /proc dynamically
+      - "src/internal/infrastructure/resources/metrics/linux/**"
+      # Exclude signals - requires unsafe for prctl syscalls
+      - "src/internal/infrastructure/process/signals/**"
+      # Exclude gRPC server - local IPC, TLS handled at deployment
+      - "src/internal/infrastructure/transport/grpc/server.go"
 
-  # Markdownlint configuration
+  # Markdownlint disabled - using ktn-linter for docs
   markdownlint:
-    exclude_paths:
-      # CLAUDE.md files are AI context files, not user documentation
-      - "**/CLAUDE.md"
+    enabled: false
 
-exclude_paths:
-  # Test files don't need security analysis
-  - "**/*_test.go"
+# Coverage configuration
+coverage:
+  exclude_paths:
+    - "**/*.pb.go"
+    - "**/*_grpc.pb.go"
+    - "**/wire_gen.go"
+    - "src/api/proto/**"

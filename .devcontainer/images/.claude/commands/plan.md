@@ -1,22 +1,38 @@
-# Plan - Infrastructure as Code Planning
+---
+name: plan
+description: |
+  Enter Claude Code planning mode with RLM decomposition.
+  Analyzes codebase, designs approach, creates step-by-step plan.
+  Use when: starting a new feature, refactoring, or complex task.
+allowed-tools:
+  - "Read(**/*)"
+  - "Glob(**/*)"
+  - "Grep(**/*)"
+  - "mcp__grepai__*"
+  - "mcp__context7__*"
+  - "Task(*)"
+  - "WebFetch(*)"
+  - "WebSearch(*)"
+  - "mcp__github__*"
+  - "mcp__playwright__*"
+---
+
+# /plan - Claude Code Planning Mode (RLM Architecture)
 
 $ARGUMENTS
 
 ---
 
-## Description
+## Overview
 
-Commande de planification façon Terraform. Crée un état déterministe dans Taskwarrior :
-- Analyse complète (6 phases **OBLIGATOIRES**)
-- Génération des epics/tasks
-- État reproductible et versionné
+Mode planning avec patterns **RLM** :
 
-**Comportement intelligent :**
-- **Sur `main`** → Création automatique de branche (pas de question)
-- **`/plan` répété** → Met à jour le plan existant (affinage itératif)
-- **Refus validation** → Reset complet Phase 1 (ré-analyse intégrale)
+- **Peek** - Scan rapide du codebase
+- **Decompose** - Diviser en sous-tâches
+- **Parallelize** - Exploration multi-domaine
+- **Synthesize** - Plan structuré
 
-**Workflow** : `/plan <desc>` → (affiner) → `/plan` → validation → `/apply`
+**Principe** : Planifier → Valider → Implémenter (jamais l'inverse)
 
 ---
 
@@ -24,484 +40,385 @@ Commande de planification façon Terraform. Crée un état déterministe dans Ta
 
 | Pattern | Action |
 |---------|--------|
-| `<description>` | Nouveau plan OU mise à jour du plan existant |
-| `--fix` | Mode bugfix (branche fix/ au lieu de feat/) |
-| `--status` | Afficher l'état du plan actuel |
-| `--destroy` | Abandonner le plan et nettoyer |
+| `<description>` | Planifie l'implémentation de la feature/fix |
+| `--context` | Charge le .context.md généré par /search |
 | `--help` | Affiche l'aide |
 
 ---
 
 ## --help
 
-Quand `--help` est passé, afficher :
-
 ```
-═══════════════════════════════════════════════
-  /plan - Infrastructure as Code Planning
-═══════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
+  /plan - Claude Code Planning Mode (RLM)
+═══════════════════════════════════════════════════════════════
 
 Usage: /plan <description> [options]
 
 Options:
-  <description>     Nouveau plan ou mise à jour
-  --fix             Mode bugfix (branche fix/)
-  --status          Afficher l'état du plan
-  --destroy         Abandonner et nettoyer
+  <description>     Ce qu'il faut implémenter
+  --context         Utilise .context.md comme base
   --help            Affiche cette aide
 
-Comportement:
-  Sur main          → Crée branche automatiquement
-  /plan répété      → Met à jour le plan existant
-  Refus validation  → Reset Phase 1
-
-Exemples:
-  /plan add-auth            Nouveau plan feature
-  /plan                     Affiner le plan en cours
-  /plan login-bug --fix     Nouveau plan bugfix
-  /plan --status            Voir l'état
+RLM Patterns:
+  1. Peek       - Scan rapide codebase
+  2. Decompose  - Diviser en sous-tâches
+  3. Parallelize - Exploration parallèle
+  4. Synthesize - Plan structuré
 
 Workflow:
-  /plan <desc> → /plan (affiner) → /apply
-═══════════════════════════════════════════════
+  /search <topic> → /plan <feature> → (approve) → /do
+
+Exemples:
+  /plan "Add user authentication with JWT"
+  /plan "Refactor database layer" --context
+  /plan "Fix memory leak in worker process"
+
+═══════════════════════════════════════════════════════════════
 ```
 
 ---
 
-## Concept : État déterministe
+## Phase 1 : Peek (RLM Pattern)
 
-Comme Terraform, `/plan` produit un état reproductible :
+**Scan rapide AVANT exploration approfondie :**
 
-```
-Session JSON = État du plan (comme terraform.tfstate)
-Taskwarrior  = Ressources déclarées (comme les resources TF)
-/apply       = Application de l'état (comme terraform apply)
-```
+```yaml
+peek_workflow:
+  1_context_check:
+    action: "Vérifier si .context.md existe"
+    tool: [Read]
+    output: "context_available"
 
-### Fichier de session (schéma v3)
+  2_structure_scan:
+    action: "Scanner la structure du projet"
+    tools: [Glob]
+    patterns:
+      - "src/**/*"
+      - "tests/**/*"
+      - "package.json | go.mod | Cargo.toml"
 
-```json
-{
-  "schemaVersion": 3,
-  "state": "planning",
-  "type": "feature|fix",
-  "project": "<project-name>",
-  "branch": "feat/<name>|fix/<name>",
-  "currentPhase": 1,
-  "completedPhases": [],
-  "validated": false,
-  "validatedAt": null,
-  "validationToken": null,
-  "validationHistory": [],
-  "rejectionHistory": [],
-  "actions": [],
-  "epics": [],
-  "createdAt": "2024-01-01T00:00:00Z"
-}
+  3_pattern_grep:
+    action: "Identifier les patterns pertinents"
+    tools: [Grep]
+    searches:
+      - Keywords from description
+      - Related function names
+      - Existing patterns
 ```
 
-**Champs v3 :**
+**Output Phase 1 :**
 
-- `currentPhase` : Phase en cours (1-6)
-- `completedPhases` : Historique des phases complétées avec timestamps
-- `validated` : Validation utilisateur obtenue
-- `validationToken` : Hash unique de validation (traçabilité)
-- `validationHistory` : Historique de toutes les validations/rejets
-- `rejectionHistory` : Historique des refus avec feedback
-- `actions` : Tableau d'événements horodatés (audit trail)
-
-### États possibles
-
-| State | Description | Transition |
-|-------|-------------|------------|
-| `planning` | En cours d'analyse | → `planned` |
-| `planned` | Prêt pour /apply | → `applying` |
-| `applying` | Exécution en cours | → `applied` |
-| `applied` | Terminé (PR créée) | FIN |
-
----
-
-## Scripts de transition (OBLIGATOIRES)
-
-**IMPORTANT** : Les transitions de phase sont gérées par des scripts atomiques.
-Ne JAMAIS utiliser de commandes jq directes pour modifier la session.
-
-### session-transition.sh
-
-```bash
-# Compléter une phase
-/home/vscode/.claude/scripts/session-transition.sh --complete-phase 1
-
-# Voir l'état
-/home/vscode/.claude/scripts/session-transition.sh --status
-
-# Reset à une phase antérieure (si manque info)
-/home/vscode/.claude/scripts/session-transition.sh --to-phase 2
-
-# Reset complet (refus utilisateur)
-/home/vscode/.claude/scripts/session-transition.sh --reset "feedback utilisateur"
-
-# Finaliser planning → state=planned
-/home/vscode/.claude/scripts/session-transition.sh --finalize
 ```
+═══════════════════════════════════════════════════════════════
+  /plan - Peek Analysis
+═══════════════════════════════════════════════════════════════
 
-### session-validate.sh
+  Description: "Add user authentication with JWT"
 
-```bash
-# Approuver le plan (génère token de validation)
-/home/vscode/.claude/scripts/session-validate.sh --approve
+  Context:
+    ✓ .context.md loaded (from /search)
+    ✓ 47 source files scanned
+    ✓ 23 test files found
 
-# Rejeter le plan (reset complet phase 1)
-/home/vscode/.claude/scripts/session-validate.sh --reject "raison du refus"
+  Patterns identified:
+    - Existing auth: src/middleware/auth.ts
+    - User model: src/models/user.ts
+    - Routes: src/routes/*.ts
 
-# Voir état validation
-/home/vscode/.claude/scripts/session-validate.sh --status
+  Keywords matched: 15 occurrences
+
+═══════════════════════════════════════════════════════════════
 ```
 
 ---
 
-## Workflow complet
+## Phase 2 : Decompose (RLM Pattern)
 
-### Étape 0 : Initialisation
+**Diviser la tâche en sous-tâches :**
 
-```bash
-CURRENT_BRANCH=$(git branch --show-current)
-MAIN_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
-SESSION_FILE=$(ls -t $HOME/.claude/sessions/*.json 2>/dev/null | head -1)
+```yaml
+decompose_workflow:
+  1_analyze_description:
+    action: "Extraire les objectifs"
+    example:
+      description: "Add user authentication with JWT"
+      objectives:
+        - "Setup JWT utilities"
+        - "Create auth middleware"
+        - "Add login/logout endpoints"
+        - "Protect existing routes"
+        - "Add tests"
 
-# CAS 1 : Sur main → Créer nouvelle branche (AUTOMATIQUE, LOCAL)
-if [[ "$CURRENT_BRANCH" == "$MAIN_BRANCH" || "$CURRENT_BRANCH" == "master" ]]; then
-    TYPE="${HAS_FIX:+fix}" || "feature"
-    PREFIX="${TYPE:0:4}"
-    BRANCH="$PREFIX/$(echo "$DESCRIPTION" | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g')"
+  2_identify_domains:
+    action: "Catégoriser par domaine"
+    domains:
+      - backend: "API, middleware, database"
+      - frontend: "UI components, state"
+      - infrastructure: "config, deployment"
+      - testing: "unit, integration, e2e"
 
-    git checkout -b "$BRANCH" "$MAIN_BRANCH"
-    /home/vscode/.claude/scripts/task-init.sh "$TYPE" "<description>"
-fi
-
-# CAS 2 : Session existante → Mise à jour du plan
-if [[ -f "$SESSION_FILE" ]]; then
-    STATE=$(jq -r '.state' "$SESSION_FILE")
-    if [[ "$STATE" == "planning" || "$STATE" == "planned" ]]; then
-        echo "Plan existant détecté, mise à jour..."
-    fi
-fi
-
-# CAS 3 : Sur branche sans session → Créer session
-if [[ ! -f "$SESSION_FILE" && "$CURRENT_BRANCH" != "$MAIN_BRANCH" ]]; then
-    TYPE=$([[ "$CURRENT_BRANCH" == fix/* ]] && echo "fix" || echo "feature")
-    /home/vscode/.claude/scripts/task-init.sh "$TYPE" "${CURRENT_BRANCH#*/}"
-fi
+  3_order_dependencies:
+    action: "Ordonner par dépendance"
+    output: "ordered_tasks[]"
 ```
 
 ---
 
-### Étape 1 : PLAN MODE (6 phases OBLIGATOIRES)
+## Phase 3 : Parallelize (RLM Pattern)
 
-**INTERDIT en PLAN MODE :**
-- ❌ Write/Edit sur fichiers code
-- ❌ Bash modifiant l'état du projet (voir bash-validate.sh)
-- ❌ Sauter des phases (hook phase-validate.sh)
-- ❌ Écrire dans Taskwarrior sans validation
-- ❌ Commandes jq directes sur la session
-- ✅ Write/Edit sur `/plans/` uniquement
-- ✅ Scripts session-*.sh
+**Exploration multi-domaine en parallèle :**
 
-#### Phase 1 : Analyse de la demande
+```yaml
+parallel_exploration:
+  mode: "PARALLEL (single message, multiple Task calls)"
 
-**Objectif :** Comprendre ce que l'utilisateur veut
+  agents:
+    - task: "backend-explorer"
+      type: "Explore"
+      prompt: |
+        Analyze backend for: {description}
+        Find: related files, existing patterns, dependencies
+        Return: {files[], patterns[], recommendations[]}
 
-**Actions :**
-- Lire et reformuler la demande
-- Identifier contraintes et exigences
-- Pour un fix : identifier les étapes de reproduction
+    - task: "frontend-explorer"
+      type: "Explore"
+      prompt: |
+        Analyze frontend for: {description}
+        Find: components, state, API calls
+        Return: {files[], components[], state_management}
 
-**Fin de phase :**
-```bash
-/home/vscode/.claude/scripts/session-transition.sh --complete-phase 1
+    - task: "test-explorer"
+      type: "Explore"
+      prompt: |
+        Analyze tests for: {description}
+        Find: existing coverage, test patterns
+        Return: {coverage, patterns[], gaps[]}
+
+    - task: "patterns-consultant"
+      type: "Explore"
+      prompt: |
+        Consult .claude/docs/ for: {description}
+        Find: applicable design patterns
+        Return: {patterns[], references[]}
 ```
 
-#### Phase 2 : Recherche documentation
-
-**Objectif :** Collecter les informations externes nécessaires
-
-**Actions :**
-- WebSearch pour APIs/libs externes
-- Lire docs existantes du projet
-- Pour un fix : rechercher bugs similaires
-
-**Fin de phase :**
-```bash
-/home/vscode/.claude/scripts/session-transition.sh --complete-phase 2
-```
-
-#### Phase 3 : Analyse projet existant
-
-**Objectif :** Comprendre le code existant
-
-**Actions :**
-- Glob/Grep pour trouver code existant
-- Read fichiers pertinents
-- Comprendre patterns/architecture
-- Pour un fix : reproduire le bug
-
-**Fin de phase :**
-```bash
-/home/vscode/.claude/scripts/session-transition.sh --complete-phase 3
-```
-
-#### Phase 4 : Affûtage
-
-**Objectif :** Synthétiser et valider la compréhension
-
-**Actions :**
-- Croiser infos (demande + docs + existant)
-- Si manque info → **retour Phase 2** :
-  ```bash
-  /home/vscode/.claude/scripts/session-transition.sh --to-phase 2
-  ```
-- Identifier tous les fichiers à modifier
-- Pour un fix : identifier la cause racine
-
-**Fin de phase :**
-```bash
-/home/vscode/.claude/scripts/session-transition.sh --complete-phase 4
-```
-
-#### Phase 5 : Définition épics/tasks → VALIDATION OBLIGATOIRE
-
-**Output attendu :**
-```
-═══════════════════════════════════════════════
-  Plan généré
-═══════════════════════════════════════════════
-
-Epic 1: <nom>
-  ├─ T1.1: <description> [parallel:no]
-  │        files: [src/api.ts]
-  │        action: create
-  ├─ T1.2: <description> [parallel:yes]
-  └─ T1.3: <description> [parallel:yes]
-
-Epic 2: <nom>
-  ├─ T2.1: <description> [parallel:no]
-  └─ T2.2: <description> [parallel:no]
-
-─────────────────────────────────────────────
-  Résumé
-─────────────────────────────────────────────
-
-  Epics  : 2
-  Tasks  : 5
-  Files  : 8 fichiers modifiés
-
-═══════════════════════════════════════════════
-```
-
-**VALIDATION UTILISATEUR (OBLIGATOIRE) :**
-
-```
-AskUserQuestion: "Valider ce plan ?"
-```
-
-**Si OUI (approuvé) :**
-```bash
-/home/vscode/.claude/scripts/session-validate.sh --approve
-/home/vscode/.claude/scripts/session-transition.sh --complete-phase 5
-```
-
-**Si NON (rejeté) → RESET COMPLET Phase 1 :**
-```bash
-/home/vscode/.claude/scripts/session-validate.sh --reject "raison du refus"
-```
-
-```
-═══════════════════════════════════════════════
-  ⚠ Plan refusé - Reset Phase 1
-═══════════════════════════════════════════════
-
-  Feedback utilisateur stocké.
-  Ré-analyse complète en cours...
-
-  → Retour Phase 1 avec nouveau contexte
-
-═══════════════════════════════════════════════
-```
-
-#### Phase 6 : Écriture Taskwarrior
-
-**PRÉ-CONDITION :** `validated = true` (vérifié par session-transition.sh --finalize)
-
-Après validation utilisateur :
-
-```bash
-SESSION_FILE=$(cat /workspace/.claude/active-session)
-PROJECT=$(jq -r '.project' "$SESSION_FILE")
-
-# Créer les epics
-/home/vscode/.claude/scripts/task-epic.sh "$PROJECT" 1 "Epic 1 name"
-/home/vscode/.claude/scripts/task-epic.sh "$PROJECT" 2 "Epic 2 name"
-
-# Créer les tasks
-/home/vscode/.claude/scripts/task-add.sh "$PROJECT" 1 "<uuid>" "Task name" "no" '{"files":["..."],"action":"..."}'
-
-# Finaliser planning → state=planned
-/home/vscode/.claude/scripts/session-transition.sh --finalize
-```
-
-**Output final :**
-```
-═══════════════════════════════════════════════
-  ✓ Plan enregistré
-═══════════════════════════════════════════════
-
-  State   : planned
-  Phases  : 6/6 ✓
-  Epics   : 2
-  Tasks   : 5
-
-  Le plan est prêt. Pour l'exécuter :
-
-    /apply
-
-  Pour voir le plan :
-
-    /plan --status
-
-═══════════════════════════════════════════════
-```
+**IMPORTANT** : Lancer TOUS les agents dans UN SEUL message.
 
 ---
 
-## --fix
+## Phase 3.5 : Pattern Consultation (OBLIGATOIRE)
 
-Identique au workflow standard mais avec :
-- Branche `fix/<name>` au lieu de `feat/<name>`
-- Commit prefix `fix(scope):` au lieu de `feat(scope):`
-- PR body format "Bug / Root cause / Fix" au lieu de "Summary / Changes"
+**Consulter `.claude/docs/` pour les patterns :**
 
-```bash
-/home/vscode/.claude/scripts/task-init.sh "fix" "<description>"
-```
+```yaml
+pattern_consultation:
+  1_identify_category:
+    mapping:
+      - "Création d'objets?" → creational/README.md
+      - "Performance/Cache?" → performance/README.md
+      - "Concurrence?" → concurrency/README.md
+      - "Architecture?" → architectural/*.md
+      - "Intégration?" → messaging/README.md
+      - "Sécurité?" → security/README.md
 
----
+  2_read_patterns:
+    action: "Read(.claude/docs/<category>/README.md)"
+    output: "2-3 patterns applicables"
 
-## --status
-
-Afficher l'état complet du plan :
-
-```bash
-/home/vscode/.claude/scripts/session-transition.sh --status
-/home/vscode/.claude/scripts/session-validate.sh --status
-```
-
-```
-═══════════════════════════════════════════════
-  État du plan
-═══════════════════════════════════════════════
-
-  Project : <name>
-  Type    : feature|fix
-  State   : planning|planned|applying|applied
-  Branch  : <branch>
-  Phase   : 3/6
-
-─────────────────────────────────────────────
-  Phases
-─────────────────────────────────────────────
-
-  [✓] 1. Analyse demande
-  [✓] 2. Recherche docs
-  [→] 3. Analyse projet    ← EN COURS
-  [ ] 4. Affûtage
-  [ ] 5. Définition + Validation
-  [ ] 6. Écriture Taskwarrior
-
-─────────────────────────────────────────────
-  Validation
-─────────────────────────────────────────────
-
-  Validated : false
-  Token     : none
-
-═══════════════════════════════════════════════
-```
-
----
-
-## --destroy (safe, local only)
-
-Abandonner le plan et nettoyer **localement** :
-
-**Pré-conditions :**
-
-- ❌ INTERDIT si `state=applying` (exécution en cours)
-- ✅ Confirmation utilisateur obligatoire
-
-```bash
-SESSION_FILE=$(cat /workspace/.claude/active-session)
-PROJECT=$(jq -r '.project' "$SESSION_FILE")
-BRANCH=$(jq -r '.branch' "$SESSION_FILE")
-STATE=$(jq -r '.state' "$SESSION_FILE")
-MAIN_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
-
-# Bloquer si applying
-if [[ "$STATE" == "applying" ]]; then
-    echo "❌ Impossible de détruire un plan en cours d'exécution"
-    exit 1
-fi
-
-# Demander confirmation
-AskUserQuestion: "Abandonner le plan et supprimer la branche locale $BRANCH ?"
-```
-
-**Actions (après confirmation) :**
-```bash
-# Nettoyer LOCALEMENT
-git checkout "$MAIN_BRANCH"
-git branch -D "$BRANCH"
-rm "$SESSION_FILE"
-rm -f /workspace/.claude/active-session
-rm -f /workspace/.claude/state.json
-
-# Archiver tasks Taskwarrior
-task project:"$PROJECT" rc.confirmation=off modify status:deleted
+  3_integrate:
+    action: "Ajouter au plan avec justification"
 ```
 
 **Output :**
+
 ```
-═══════════════════════════════════════════════
-  ✓ Plan abandonné (local)
-═══════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
+  Pattern Analysis
+═══════════════════════════════════════════════════════════════
 
-  Branche locale supprimée : <branch>
-  Session supprimée        : <file>
-  Tasks archivées          : <count>
+  Patterns identifiés:
+    ✓ Repository (DDD) - Pour accès données user
+    ✓ Factory (Creational) - Pour création tokens
+    ✓ Middleware (Enterprise) - Pour auth chain
 
-  Note: La branche remote n'est pas supprimée.
+  Références consultées:
+    → .claude/docs/ddd/README.md
+    → .claude/docs/creational/README.md
+    → .claude/docs/enterprise/README.md
 
-═══════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
+```
+
+---
+
+## Phase 4 : Synthesize (RLM Pattern)
+
+**Générer le plan structuré :**
+
+```yaml
+synthesize_workflow:
+  1_collect:
+    action: "Rassembler résultats des agents"
+
+  2_consolidate:
+    action: "Fusionner en plan cohérent"
+
+  3_generate:
+    format: "Structured plan document"
+```
+
+**Plan Output Format :**
+
+```markdown
+# Implementation Plan: <description>
+
+## Overview
+<2-3 phrases résumant l'approche>
+
+## Design Patterns Applied
+
+| Pattern | Category | Justification | Reference |
+|---------|----------|---------------|-----------|
+| Repository | DDD | Data access abstraction | .claude/docs/ddd/README.md |
+| Factory | Creational | Token creation | .claude/docs/creational/README.md |
+
+## Prerequisites
+- [ ] <Dépendance ou setup requis>
+- [ ] <Autre prérequis>
+
+## Implementation Steps
+
+### Step 1: <Titre>
+**Files:** `src/file1.ts`, `src/file2.ts`
+**Actions:**
+1. <Action spécifique>
+2. <Action spécifique>
+
+**Code pattern:**
+```<lang>
+// Example of what will be implemented
+```
+
+### Step 2: <Titre>
+...
+
+## Testing Strategy
+- [ ] Unit tests for `component`
+- [ ] Integration test for `flow`
+
+## Rollback Plan
+Comment annuler si problème
+
+## Risks & Mitigations
+
+| Risk | Mitigation |
+|------|------------|
+| Risk description | Solution |
+```
+
+---
+
+## Phase 5 : Demande de Validation
+
+**OBLIGATOIRE : Attendre approbation utilisateur**
+
+```
+═══════════════════════════════════════════════════════════════
+  Plan ready for review
+═══════════════════════════════════════════════════════════════
+
+  Summary:
+    • 4 implementation steps
+    • 6 files to modify
+    • 2 new files to create
+    • 8 tests to add
+
+  Design Patterns:
+    • Repository (DDD)
+    • Factory (Creational)
+
+  Estimated complexity: MEDIUM
+
+  Actions:
+    → Review the plan above
+    → Run /do to execute (auto-detects plan)
+    → Or modify the plan manually
+
+═══════════════════════════════════════════════════════════════
+```
+
+---
+
+## Intégration avec autres skills
+
+| Avant /plan | Après /plan |
+|-------------|-------------|
+| `/search <topic>` | `/do` |
+| Génère .context.md | Exécute le plan (auto-détecté) |
+
+**Workflow complet :**
+
+```
+/search "JWT authentication best practices"
+    ↓
+.context.md généré
+    ↓
+/plan "Add JWT auth to API" --context
+    ↓
+Plan créé et affiché
+    ↓
+User: "OK, go ahead"
+    ↓
+/do                          # Détecte le plan automatiquement
+    ↓
+Implémentation exécutée
+```
+
+**Note** : `/do` détecte automatiquement le plan approuvé et l'exécute
+sans poser les questions interactives.
+
+---
+
+## DTO Convention (Go)
+
+**Si le plan implique des DTOs, rappeler la convention :**
+
+```yaml
+dto_reminder:
+  trigger: "Plan includes DTO/Request/Response structs"
+
+  convention:
+    format: 'dto:"<direction>,<context>,<security>"'
+    values:
+      direction: [in, out, inout]
+      context: [api, cmd, query, event, msg, priv]
+      security: [pub, priv, pii, secret]
+
+  purpose: |
+    Exempte les structs de KTN-STRUCT-ONEFILE
+    (groupement de plusieurs DTOs dans un même fichier autorisé)
+
+  include_in_plan: |
+    ### DTO Convention
+    All DTO structs MUST use `dto:"dir,ctx,sec"` tags:
+    ```go
+    type CreateUserRequest struct {
+        Email string `dto:"in,api,pii" json:"email"`
+    }
+    ```
+    Ref: `.claude/docs/conventions/dto-tags.md`
 ```
 
 ---
 
 ## GARDE-FOUS (ABSOLUS)
 
-| Action | Hook/Script | Status |
-|--------|-------------|--------|
-| Write/Edit code en PLAN MODE | `task-validate.sh` | ❌ **BLOQUÉ** |
-| Bash écriture en PLAN MODE | `bash-validate.sh` | ❌ **BLOQUÉ** |
-| Sauter des phases (1→4) | `session-transition.sh` | ❌ **BLOQUÉ** |
-| Taskwarrior sans validation | `phase-validate.sh` | ❌ **BLOQUÉ** |
-| Skip validation utilisateur | `session-validate.sh` | ❌ **INTERDIT** |
-| Passer à /apply sans "planned" | `task-validate.sh` | ❌ **BLOQUÉ** |
-| Commandes jq directes session | `bash-validate.sh` | ❌ **BLOQUÉ** |
-
----
-
-## Voir aussi
-
-- `/apply` - Exécuter le plan
-- `/review` - Demander une code review
-- `/git --commit` - Commit manuel
-- `.devcontainer/docs/workflow-plan-apply.md` - Diagrammes Mermaid
+| Action | Status |
+|--------|--------|
+| Skip Phase 1 (Peek) | ❌ **INTERDIT** |
+| Exploration séquentielle | ❌ **INTERDIT** |
+| Skip Pattern Consultation | ❌ **INTERDIT** |
+| Implémenter sans plan approuvé | ❌ **INTERDIT** |
+| Plan sans steps concrets | ❌ **INTERDIT** |
+| Plan sans rollback strategy | ⚠ **WARNING** |

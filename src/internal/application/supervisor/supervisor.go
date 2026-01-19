@@ -8,10 +8,10 @@ import (
 	"sync"
 
 	appconfig "github.com/kodflow/daemon/internal/application/config"
-	appprocess "github.com/kodflow/daemon/internal/application/process"
+	applifecycle "github.com/kodflow/daemon/internal/application/lifecycle"
+	domainconfig "github.com/kodflow/daemon/internal/domain/config"
+	domainlifecycle "github.com/kodflow/daemon/internal/domain/lifecycle"
 	domain "github.com/kodflow/daemon/internal/domain/process"
-	"github.com/kodflow/daemon/internal/domain/service"
-	"github.com/kodflow/daemon/internal/infrastructure/kernel/ports"
 )
 
 // State represents the supervisor state.
@@ -40,21 +40,31 @@ var (
 // It is called when a service emits a lifecycle event.
 type EventHandler func(serviceName string, event *domain.Event)
 
+// ErrorHandler is a callback function for handling non-fatal errors.
+// These errors occur in recovery/cleanup paths where the supervisor
+// continues operating despite the error. Examples include:
+//   - Errors stopping services during shutdown (best-effort cleanup)
+//   - Errors restarting services during configuration reload
+//
+// If no handler is set, these errors are silently discarded.
+// Setting a handler allows logging or monitoring of these conditions.
+type ErrorHandler func(operation string, serviceName string, err error)
+
 // Supervisor manages multiple services and their lifecycle.
 // It coordinates starting, stopping, and monitoring of all configured services.
 type Supervisor struct {
 	// mu is the mutex for thread-safe access.
 	mu sync.RWMutex
 	// config is the service configuration.
-	config *service.Config
+	config *domainconfig.Config
 	// loader is the configuration loader.
 	loader appconfig.Loader
-	// executor is the process executor.
+	// executor is the process execution.
 	executor domain.Executor
 	// managers is the map of service managers.
-	managers map[string]*appprocess.Manager
-	// reaper is the zombie process reaper.
-	reaper ports.ZombieReaper
+	managers map[string]*applifecycle.Manager
+	// reaper is the zombie process reaper (domain port).
+	reaper domainlifecycle.Reaper
 	// state is the current supervisor state.
 	state State
 	// ctx is the context for cancellation.
@@ -65,6 +75,8 @@ type Supervisor struct {
 	wg sync.WaitGroup
 	// eventHandler is the optional callback for events.
 	eventHandler EventHandler
+	// errorHandler is the optional callback for non-fatal errors in recovery paths.
+	errorHandler ErrorHandler
 	// stats holds per-service statistics.
 	stats map[string]*ServiceStats
 }
@@ -74,13 +86,13 @@ type Supervisor struct {
 // Params:
 //   - cfg: the service configuration.
 //   - loader: the configuration loader for reloading.
-//   - executor: the process executor.
+//   - executor: the process execution.
 //   - reaper: the zombie process reaper.
 //
 // Returns:
 //   - *Supervisor: the new supervisor instance.
 //   - error: an error if configuration is invalid.
-func NewSupervisor(cfg *service.Config, loader appconfig.Loader, executor domain.Executor, reaper ports.ZombieReaper) (*Supervisor, error) {
+func NewSupervisor(cfg *domainconfig.Config, loader appconfig.Loader, executor domain.Executor, reaper domainlifecycle.Reaper) (*Supervisor, error) {
 	// Validate the configuration before creating the supervisor.
 	if err := cfg.Validate(); err != nil {
 		// Return nil supervisor and validation error.
@@ -91,7 +103,7 @@ func NewSupervisor(cfg *service.Config, loader appconfig.Loader, executor domain
 		config:   cfg,
 		loader:   loader,
 		executor: executor,
-		managers: make(map[string]*appprocess.Manager, len(cfg.Services)),
+		managers: make(map[string]*applifecycle.Manager, len(cfg.Services)),
 		reaper:   reaper,
 		state:    StateStopped,
 		stats:    make(map[string]*ServiceStats, len(cfg.Services)),
@@ -100,7 +112,7 @@ func NewSupervisor(cfg *service.Config, loader appconfig.Loader, executor domain
 	// Create a manager for each configured service.
 	for i := range cfg.Services {
 		svc := &cfg.Services[i]
-		s.managers[svc.Name] = appprocess.NewManager(svc, executor)
+		s.managers[svc.Name] = applifecycle.NewManager(svc, executor)
 		s.stats[svc.Name] = NewServiceStats()
 	}
 
@@ -204,6 +216,7 @@ func (s *Supervisor) Stop() error {
 }
 
 // stopAll stops all managed services concurrently.
+// Errors during stop are reported via handleRecoveryError (best-effort cleanup).
 //
 // Goroutine lifecycle:
 //   - Spawns one goroutine per service for concurrent stop.
@@ -212,11 +225,15 @@ func (s *Supervisor) Stop() error {
 func (s *Supervisor) stopAll() {
 	var wg sync.WaitGroup
 	// Iterate through all managers.
-	for _, mgr := range s.managers {
+	for name, mgr := range s.managers {
+		serviceName := name
 		m := mgr
 		// Stop each manager in a goroutine using Go 1.25's wg.Go().
 		wg.Go(func() {
-			_ = m.Stop()
+			// Handle stop errors via recovery handler (best-effort cleanup).
+			if err := m.Stop(); err != nil {
+				s.handleRecoveryError("stop", serviceName, err)
+			}
 		})
 	}
 	wg.Wait()
@@ -266,6 +283,7 @@ func (s *Supervisor) Reload() error {
 }
 
 // updateServices updates or adds managers for services in the new configuration.
+// Errors during stop/start are reported via handleRecoveryError (best-effort reload).
 //
 // Params:
 //   - newCfg: the new service configuration.
@@ -274,19 +292,28 @@ func (s *Supervisor) Reload() error {
 //   - May spawn new goroutines for monitoring newly added services.
 //   - Goroutines run until Stop is called or context is cancelled.
 //   - Use Stop() to terminate all monitoring goroutines.
-func (s *Supervisor) updateServices(newCfg *service.Config) {
+func (s *Supervisor) updateServices(newCfg *domainconfig.Config) {
 	// Iterate through all services in the new configuration.
 	for i := range newCfg.Services {
 		svc := &newCfg.Services[i]
 		// Check if the service already exists.
 		if mgr, exists := s.managers[svc.Name]; exists {
-			_ = mgr.Stop()
-			s.managers[svc.Name] = appprocess.NewManager(svc, s.executor)
-			_ = s.managers[svc.Name].Start()
+			// Stop existing manager (best-effort).
+			if err := mgr.Stop(); err != nil {
+				s.handleRecoveryError("stop-for-reload", svc.Name, err)
+			}
+			s.managers[svc.Name] = applifecycle.NewManager(svc, s.executor)
+			// Start new manager (best-effort).
+			if err := s.managers[svc.Name].Start(); err != nil {
+				s.handleRecoveryError("start-for-reload", svc.Name, err)
+			}
 		} else {
 			// Create and start a new manager for the new service.
-			s.managers[svc.Name] = appprocess.NewManager(svc, s.executor)
-			_ = s.managers[svc.Name].Start()
+			s.managers[svc.Name] = applifecycle.NewManager(svc, s.executor)
+			// Start new manager (best-effort).
+			if err := s.managers[svc.Name].Start(); err != nil {
+				s.handleRecoveryError("start-new-service", svc.Name, err)
+			}
 			s.wg.Add(1)
 			go s.monitorService(svc.Name, s.managers[svc.Name])
 		}
@@ -294,10 +321,11 @@ func (s *Supervisor) updateServices(newCfg *service.Config) {
 }
 
 // removeDeletedServices removes managers for services no longer in configuration.
+// Errors during stop are reported via handleRecoveryError (best-effort cleanup).
 //
 // Params:
 //   - newCfg: the new service configuration.
-func (s *Supervisor) removeDeletedServices(newCfg *service.Config) {
+func (s *Supervisor) removeDeletedServices(newCfg *domainconfig.Config) {
 	newServices := make(map[string]bool, len(newCfg.Services))
 	// Build a map of services in the new configuration.
 	for i := range newCfg.Services {
@@ -307,7 +335,10 @@ func (s *Supervisor) removeDeletedServices(newCfg *service.Config) {
 	for name, mgr := range s.managers {
 		// Check if the service should be removed.
 		if !newServices[name] {
-			_ = mgr.Stop()
+			// Stop removed service (best-effort).
+			if err := mgr.Stop(); err != nil {
+				s.handleRecoveryError("stop-removed-service", name, err)
+			}
 			delete(s.managers, name)
 		}
 	}
@@ -391,6 +422,43 @@ func (s *Supervisor) SetEventHandler(handler EventHandler) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.eventHandler = handler
+}
+
+// SetErrorHandler sets the callback for non-fatal errors in recovery paths.
+// These errors occur during best-effort operations like shutdown cleanup
+// or configuration reload where the supervisor continues despite errors.
+//
+// Params:
+//   - handler: the callback function to invoke on non-fatal errors.
+func (s *Supervisor) SetErrorHandler(handler ErrorHandler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.errorHandler = handler
+}
+
+// handleRecoveryError reports a non-fatal error to the error handler if set.
+// This method is called from recovery/cleanup paths where errors don't stop
+// the overall operation.
+//
+// Params:
+//   - operation: description of the operation that failed (e.g., "stop", "start").
+//   - serviceName: the name of the affected service.
+//   - err: the error that occurred.
+func (s *Supervisor) handleRecoveryError(operation, serviceName string, err error) {
+	// Skip if no error.
+	if err == nil {
+		// Return early when there is no error to handle.
+		return
+	}
+
+	s.mu.RLock()
+	handler := s.errorHandler
+	s.mu.RUnlock()
+
+	// Call handler if registered.
+	if handler != nil {
+		handler(operation, serviceName, err)
+	}
 }
 
 // Stats returns statistics for a specific service.
@@ -477,9 +545,9 @@ func (s *Supervisor) Services() map[string]ServiceInfo {
 //   - name: the service name.
 //
 // Returns:
-//   - *appprocess.Manager: the manager if found.
+//   - *applifecycle.Manager: the manager if found.
 //   - bool: true if the service was found.
-func (s *Supervisor) Service(name string) (*appprocess.Manager, bool) {
+func (s *Supervisor) Service(name string) (*applifecycle.Manager, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	mgr, ok := s.managers[name]
