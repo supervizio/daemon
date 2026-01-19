@@ -8,7 +8,8 @@ GitHub Actions and instructions configuration.
 .github/
 ├── workflows/
 │   ├── ci.yml           # CI: lint, test, build
-│   └── release.yml      # Release: multi-platform builds
+│   ├── release.yml      # Release: multi-platform builds
+│   └── e2e-macos.yml    # E2E: macOS ARM64/AMD64 tests
 └── instructions/
     └── codacy.instructions.md
 ```
@@ -44,6 +45,17 @@ Platforms:
 - Linux: amd64, arm64, 386, armv7
 - BSD: amd64, arm64
 - macOS: amd64, arm64
+
+### e2e-macos.yml
+
+Triggered on: `workflow_run` (after Release), `workflow_dispatch`
+
+| Runner | Architecture | Tests |
+|--------|--------------|-------|
+| `macos-14` | Apple Silicon (ARM64) | Binary exec, config, signals |
+| `macos-13` | Intel (AMD64) | Binary exec, config, signals |
+
+Manual trigger: Actions → E2E macOS → Run workflow
 
 ## Versioning
 

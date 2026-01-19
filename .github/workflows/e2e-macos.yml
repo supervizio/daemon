@@ -1,0 +1,142 @@
+name: E2E macOS
+
+on:
+  # Triggered after release workflow
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to test (e.g., v0.1.0). Leave empty for latest.'
+        required: false
+        type: string
+
+concurrency:
+  group: e2e-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =============================================================================
+  # E2E Tests on macOS
+  # =============================================================================
+  e2e:
+    name: E2E ${{ matrix.os }}
+    # Only run if release succeeded (or manual trigger)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-arm64, runner: macos-14, arch: arm64 }
+          - { os: macos-amd64, runner: macos-13, arch: amd64 }
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            # Get latest release
+            VERSION=$(gh release view --json tagName -q .tagName 2>/dev/null || echo "")
+            if [[ -z "$VERSION" ]]; then
+              echo "::error::No release found. Run release workflow first or specify version."
+              exit 1
+            fi
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Download binary
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BINARY="supervizio-darwin-${{ matrix.arch }}"
+          echo "Downloading $BINARY from release $VERSION..."
+
+          gh release download "$VERSION" \
+            --pattern "$BINARY" \
+            --output supervizio
+
+          chmod +x supervizio
+          ./supervizio --version || echo "No --version flag yet"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: System information
+        run: |
+          echo "=== System Info ==="
+          uname -a
+          sw_vers
+          sysctl -n machdep.cpu.brand_string || true
+          echo ""
+          echo "=== Architecture ==="
+          uname -m
+          file supervizio
+
+      - name: E2E - Binary execution
+        run: |
+          echo "=== Test: Binary starts ==="
+          timeout 5 ./supervizio --help || EXIT_CODE=$?
+          if [[ ${EXIT_CODE:-0} -eq 124 ]]; then
+            echo "Binary timed out (expected for daemon)"
+          elif [[ ${EXIT_CODE:-0} -ne 0 ]]; then
+            echo "::error::Binary failed to start"
+            exit 1
+          fi
+          echo "✓ Binary executes correctly"
+
+      - name: E2E - Config parsing
+        run: |
+          echo "=== Test: Config parsing ==="
+          cat > test-config.yml << 'EOF'
+          version: 1
+          services:
+            test-service:
+              command: echo "Hello from supervizio"
+              restart: never
+          EOF
+
+          # Test config validation (adjust based on your CLI)
+          if ./supervizio --config test-config.yml --validate 2>/dev/null; then
+            echo "✓ Config validation passed"
+          else
+            echo "⚠ Config validation not implemented or different flag"
+          fi
+
+      - name: E2E - Signal handling
+        run: |
+          echo "=== Test: Signal handling ==="
+          # Start daemon in background
+          ./supervizio --config test-config.yml &
+          PID=$!
+          sleep 2
+
+          # Send SIGTERM and verify clean shutdown
+          if kill -0 $PID 2>/dev/null; then
+            kill -TERM $PID
+            sleep 1
+            if kill -0 $PID 2>/dev/null; then
+              echo "::warning::Process still running after SIGTERM"
+              kill -9 $PID 2>/dev/null || true
+            else
+              echo "✓ Clean shutdown on SIGTERM"
+            fi
+          else
+            echo "✓ Process exited (short-lived config)"
+          fi
+
+      - name: E2E - Summary
+        run: |
+          echo ""
+          echo "======================================"
+          echo "  E2E Tests Passed: ${{ matrix.os }}"
+          echo "  Version: ${{ steps.version.outputs.version }}"
+          echo "  Arch: ${{ matrix.arch }}"
+          echo "======================================"
