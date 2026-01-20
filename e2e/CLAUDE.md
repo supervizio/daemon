@@ -9,13 +9,12 @@ End-to-end testing for supervizio using Linux runners with KVM acceleration.
 | Runner | Architecture | Cores | RAM | VM | Container |
 |--------|--------------|-------|-----|-----|-----------|
 | ubuntu-24.04 | AMD64 | 4 | 16GB | Debian | Debian |
-| ubuntu-24.04-arm | ARM64 | 4 | 16GB | Debian | Debian |
+| ubuntu-24.04-arm | ARM64 | 4 | 16GB | - | Debian |
 
 **Total: 2 jobs** (1 AMD64 + 1 ARM64)
 
-Each job tests:
-1. **VM Test**: Debian via Vagrant + libvirt/KVM
-2. **Container Test**: Debian via Docker
+- **AMD64**: VM test (Vagrant + KVM) + Container test (Docker)
+- **ARM64**: Container test only (Vagrant not available for ARM64 Linux)
 
 ## Structure
 
@@ -39,14 +38,13 @@ E2E Tests (2 jobs)
 │   ├── Docker build Dockerfile.debian
 │   └── Docker run --version test
 │
-└── E2E ARM64 (Debian VM + Container)
+└── E2E ARM64 (Container only)
     ├── Build linux/arm64 binary
-    ├── Install libvirt + Vagrant
-    ├── Vagrant up debian (KVM)
-    ├── Run test-install.sh
     ├── Docker build Dockerfile.debian
     └── Docker run --version test
 ```
+
+Note: ARM64 VM tests skipped because Vagrant is not available for ARM64 Linux.
 
 ## Runners
 
