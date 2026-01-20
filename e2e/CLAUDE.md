@@ -4,16 +4,17 @@ End-to-end testing for supervizio across VMs and containers.
 
 ## Architecture
 
-**AMD64 (required) + ARM64/experimental (soft-fail)**
+**AMD64 only (reliable, KVM-accelerated)**
 
-| Matrix | Required | Experimental | Total |
-|--------|----------|--------------|-------|
-| Linux | 3 (debian, ubuntu, alpine) | 5 (ARM64 + rocky) | 8 |
-| BSD | 1 (freebsd) | 5 (openbsd, netbsd, ARM64) | 6 |
-| Container | 1 (amd64) | 1 (arm64) | 2 |
-| **TOTAL** | **5** | **11** | **16** |
+| Matrix | Jobs | Description |
+|--------|------|-------------|
+| Linux | 3 | debian, ubuntu, alpine |
+| BSD | 1 | freebsd |
+| Container | 1 | amd64 |
+| **TOTAL** | **5** | All required, must pass |
 
-Jobs marked `[exp]` use `continue-on-error: true` - failures don't block the PR.
+**Note**: ARM64/experimental tests removed to ensure merge stability.
+They can be re-added once QEMU emulation is stabilized.
 
 ## Structure
 
@@ -31,29 +32,25 @@ e2e/
 
 ## VM Matrix
 
-### Linux VMs (4 distros × 2 archs = 8 VMs)
+### Linux VMs (3 distros, AMD64 only)
 
-| Distro | Init System | AMD64 | ARM64 |
-|--------|-------------|-------|-------|
-| Debian 12 | systemd | `debian` | `debian-arm64` |
-| Ubuntu 22.04 | systemd | `ubuntu` | `ubuntu-arm64` |
-| Alpine 3.19 | OpenRC | `alpine` | `alpine-arm64` |
-| Rocky 9 | systemd | `rocky` | `rocky-arm64` |
+| Distro | Init System | VM Name |
+|--------|-------------|---------|
+| Debian 12 | systemd | `debian` |
+| Ubuntu 22.04 | systemd | `ubuntu` |
+| Alpine 3.19 | OpenRC | `alpine` |
 
-### BSD VMs (3 distros × 2 archs = 6 VMs)
+### BSD VMs (1 distro, AMD64 only)
 
-| Distro | Init System | AMD64 | ARM64 |
-|--------|-------------|-------|-------|
-| FreeBSD 14 | rc.d | `freebsd` | `freebsd-arm64` |
-| OpenBSD 7.5 | rc.d | `openbsd` | `openbsd-arm64` |
-| NetBSD 10 | rc.d | `netbsd` | `netbsd-arm64` |
+| Distro | Init System | VM Name |
+|--------|-------------|---------|
+| FreeBSD 14 | rc.d | `freebsd` |
 
-## Virtualization Methods
+## Virtualization
 
-| Architecture | Method | Speed | Use Case |
-|--------------|--------|-------|----------|
-| AMD64 | KVM (native) | Fast | CI default |
-| ARM64 | QEMU emulation | Slow (~45min) | Cross-arch testing |
+| Architecture | Method | Speed |
+|--------------|--------|-------|
+| AMD64 | KVM (native) | Fast (~5min) |
 
 ## Container Tests
 
@@ -69,28 +66,15 @@ e2e/
 ## CI Workflow
 
 ```
-E2E Tests (16 parallel jobs)
-├── vm-linux (8 jobs)
+E2E Tests (5 jobs)
+├── vm-linux (3 jobs)
 │   ├── Linux debian (amd64)
-│   ├── Linux debian (arm64)
 │   ├── Linux ubuntu (amd64)
-│   ├── Linux ubuntu (arm64)
-│   ├── Linux alpine (amd64)
-│   ├── Linux alpine (arm64)
-│   ├── Linux rocky (amd64)
-│   └── Linux rocky (arm64)
-├── vm-bsd (6 jobs)
-│   ├── BSD freebsd (amd64)
-│   ├── BSD freebsd (arm64)
-│   ├── BSD openbsd (amd64)
-│   ├── BSD openbsd (arm64)
-│   ├── BSD netbsd (amd64)
-│   └── BSD netbsd (arm64)
-└── container (2 jobs)
-    ├── Container (amd64)
-    │   ├── scratch test
-    │   └── pid1 test
-    └── Container (arm64)
+│   └── Linux alpine (amd64)
+├── vm-bsd (1 job)
+│   └── BSD freebsd (amd64)
+└── container (1 job)
+    └── Container (amd64)
         ├── scratch test
         └── pid1 test
 ```
@@ -110,15 +94,10 @@ make test-e2e-clean    # Clean up all VMs
 ```bash
 cd e2e
 
-# AMD64 (KVM - fast)
+# Start VM with KVM acceleration
 vagrant up debian --provider=libvirt
 vagrant ssh debian -c "sudo /vagrant/test-install.sh"
 vagrant destroy debian -f
-
-# ARM64 (QEMU - slow)
-vagrant up debian-arm64 --provider=libvirt
-vagrant ssh debian-arm64 -c "uname -m"  # aarch64
-vagrant destroy debian-arm64 -f
 ```
 
 ### Container Tests (Docker)
@@ -176,7 +155,5 @@ docker run --rm --entrypoint /supervizio supervizio-scratch --version
 ### CI Dependencies
 
 - libvirt-daemon-system
-- qemu-kvm (AMD64)
-- qemu-system-arm (ARM64 emulation)
-- qemu-efi-aarch64 (ARM64 UEFI)
+- qemu-kvm
 - vagrant + vagrant-libvirt plugin

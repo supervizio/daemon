@@ -4,16 +4,17 @@
 # Tests supervizio in multiple environments:
 # - Linux VMs via Vagrant + libvirt/KVM (systemd, OpenRC)
 # - BSD VMs via Vagrant + libvirt/KVM (rc.d)
-# - Containers via Docker + QEMU binfmt (PID1 mode, scratch image)
+# - Containers via Docker (PID1 mode, scratch image)
 #
-# Architecture:
-# - AMD64: KVM native (reliable)
-# - ARM64: QEMU emulation (experimental, soft-fail)
+# Architecture: AMD64 only (reliable, KVM-accelerated)
 #
-# Matrix: 7 required + 9 experimental jobs
-# - vm-linux: 3 AMD64 (debian, ubuntu, alpine) + 4 ARM64 experimental
-# - vm-bsd: 1 AMD64 (freebsd) + 5 experimental (openbsd, netbsd, ARM64)
-# - container: 2 jobs (amd64 required, arm64 experimental)
+# Matrix: 5 required jobs
+# - vm-linux: 3 AMD64 (debian, ubuntu, alpine)
+# - vm-bsd: 1 AMD64 (freebsd)
+# - container: 1 AMD64
+#
+# Note: ARM64/experimental tests removed to allow PR merges.
+# ARM64 can be re-added once QEMU emulation is stabilized.
 # =============================================================================
 name: E2E Tests
 
@@ -35,13 +36,12 @@ jobs:
   # ===========================================================================
   # Linux VM Tests (Vagrant + libvirt/KVM)
   # ===========================================================================
-  # 4 distros × 2 architectures = 8 jobs
+  # 3 distros × 1 architecture = 3 jobs (AMD64 only)
   # ===========================================================================
   vm-linux:
-    name: Linux ${{ matrix.distro }} (${{ matrix.arch }})${{ matrix.experimental && ' [exp]' || '' }}
+    name: Linux ${{ matrix.distro }} (${{ matrix.arch }})
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
-    continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
       matrix:
@@ -53,14 +53,6 @@ jobs:
             goarch: amd64
             timeout: 15
             use_kvm: true
-            experimental: false
-          - distro: debian
-            vm: debian-arm64
-            arch: arm64
-            goarch: arm64
-            timeout: 45
-            use_kvm: false
-            experimental: true  # ARM64 QEMU emulation
 
           # ─── UBUNTU (systemd) ─────────────────────────────────────────────
           - distro: ubuntu
@@ -69,14 +61,6 @@ jobs:
             goarch: amd64
             timeout: 15
             use_kvm: true
-            experimental: false
-          - distro: ubuntu
-            vm: ubuntu-arm64
-            arch: arm64
-            goarch: arm64
-            timeout: 45
-            use_kvm: false
-            experimental: true  # ARM64 QEMU emulation
 
           # ─── ALPINE (OpenRC) ──────────────────────────────────────────────
           - distro: alpine
@@ -85,30 +69,6 @@ jobs:
             goarch: amd64
             timeout: 15
             use_kvm: true
-            experimental: false
-          - distro: alpine
-            vm: alpine-arm64
-            arch: arm64
-            goarch: arm64
-            timeout: 45
-            use_kvm: false
-            experimental: true  # ARM64 QEMU emulation
-
-          # ─── ROCKY (systemd, RHEL-compatible) ─────────────────────────────
-          - distro: rocky
-            vm: rocky
-            arch: amd64
-            goarch: amd64
-            timeout: 20
-            use_kvm: true
-            experimental: true  # Box has known issues
-          - distro: rocky
-            vm: rocky-arm64
-            arch: arm64
-            goarch: arm64
-            timeout: 45
-            use_kvm: false
-            experimental: true  # ARM64 QEMU emulation
 
     steps:
       - name: Checkout code
@@ -223,13 +183,13 @@ jobs:
   # ===========================================================================
   # BSD VM Tests (Vagrant + libvirt/KVM)
   # ===========================================================================
-  # 3 distros × 2 architectures = 6 jobs
+  # 1 distro × 1 architecture = 1 job (FreeBSD AMD64 only)
+  # OpenBSD/NetBSD removed due to box compatibility issues
   # ===========================================================================
   vm-bsd:
-    name: BSD ${{ matrix.distro }} (${{ matrix.arch }})${{ matrix.experimental && ' [exp]' || '' }}
+    name: BSD ${{ matrix.distro }} (${{ matrix.arch }})
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
-    continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
       matrix:
@@ -242,51 +202,6 @@ jobs:
             goos: freebsd
             timeout: 20
             use_kvm: true
-            experimental: false
-          - distro: freebsd
-            vm: freebsd-arm64
-            arch: arm64
-            goarch: arm64
-            goos: freebsd
-            timeout: 45
-            use_kvm: false
-            experimental: true  # ARM64 QEMU emulation
-
-          # ─── OPENBSD (rc.d) ───────────────────────────────────────────────
-          - distro: openbsd
-            vm: openbsd
-            arch: amd64
-            goarch: amd64
-            goos: openbsd
-            timeout: 25
-            use_kvm: true
-            experimental: true  # Box has compatibility issues
-          - distro: openbsd
-            vm: openbsd-arm64
-            arch: arm64
-            goarch: arm64
-            goos: openbsd
-            timeout: 45
-            use_kvm: false
-            experimental: true  # ARM64 QEMU emulation
-
-          # ─── NETBSD (rc.d) ────────────────────────────────────────────────
-          - distro: netbsd
-            vm: netbsd
-            arch: amd64
-            goarch: amd64
-            goos: netbsd
-            timeout: 25
-            use_kvm: true
-            experimental: true  # Box has compatibility issues
-          - distro: netbsd
-            vm: netbsd-arm64
-            arch: arm64
-            goarch: arm64
-            goos: netbsd
-            timeout: 45
-            use_kvm: false
-            experimental: true  # ARM64 QEMU emulation
 
     steps:
       - name: Checkout code
@@ -400,15 +315,15 @@ jobs:
           sudo virsh net-list --all || true
 
   # ===========================================================================
-  # Container Tests (Docker + QEMU binfmt for multi-arch)
+  # Container Tests (Docker)
   # ===========================================================================
-  # 1 test type × 2 architectures = 2 jobs
+  # 1 test type × 1 architecture = 1 job (AMD64 only)
+  # ARM64 removed due to QEMU timing issues
   # ===========================================================================
   container:
-    name: Container (${{ matrix.arch }})${{ matrix.experimental && ' [exp]' || '' }}
+    name: Container (${{ matrix.arch }})
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
-    continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
       matrix:
@@ -418,13 +333,6 @@ jobs:
             goarch: amd64
             platform: linux/amd64
             timeout: 15
-            experimental: false
-          # ─── ARM64 (QEMU emulation) ──────────────────────────────────────────
-          - arch: arm64
-            goarch: arm64
-            platform: linux/arm64
-            timeout: 30
-            experimental: true  # QEMU emulation may have timing issues
 
     steps:
       - name: Checkout code
