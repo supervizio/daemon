@@ -26,6 +26,8 @@ Vagrant.configure("2") do |config|
     qe.smp = "2"
     # Set correct QEMU directory based on Homebrew location
     qe.qemu_dir = "#{homebrew_prefix}/share/qemu"
+    # Use TCG (software emulation) - HVF not available on GitHub runners
+    qe.machine_type = "virt,accel=tcg"
   end
 
   # Debian 12 (Bookworm) - systemd
@@ -50,9 +52,9 @@ Vagrant.configure("2") do |config|
     SHELL
   end
 
-  # Ubuntu 24.04 - systemd
+  # Ubuntu 22.04 - systemd
   config.vm.define "ubuntu", autostart: false do |ubuntu|
-    ubuntu.vm.box = "generic/ubuntu2404"
+    ubuntu.vm.box = "generic/ubuntu2204"
     ubuntu.vm.hostname = "e2e-ubuntu"
 
     ubuntu.vm.provision "shell", inline: <<-SHELL
