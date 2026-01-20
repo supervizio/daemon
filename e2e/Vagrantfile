@@ -32,9 +32,9 @@ Vagrant.configure("2") do |config|
 
     if is_ci
       # CI: Use software emulation (slower but compatible)
-      puts "[Vagrant] CI detected - using TCG software emulation"
-      qe.machine_type = "virt,accel=tcg"
-      qe.extra_qemu_args = %w(-cpu max)
+      # Force override via extra_qemu_args since machine_type may be ignored
+      puts "[Vagrant] CI detected - forcing TCG software emulation"
+      qe.extra_qemu_args = %w(-machine virt,accel=tcg -cpu max)
     else
       # Local: Use hardware acceleration (fast)
       puts "[Vagrant] Local mode - using HVF hardware acceleration"
