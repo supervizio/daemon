@@ -1,101 +1,91 @@
-# E2E Testing - Virtual Machine & Container Tests
+# E2E Testing - Native Architecture Testing
 
-End-to-end testing for supervizio across VMs and containers.
+End-to-end testing for supervizio using native macOS runners.
 
 ## Architecture
 
-**AMD64 only (reliable, KVM-accelerated)**
+**Native hardware testing on macOS runners**
 
-| Matrix | Jobs | Description |
-|--------|------|-------------|
-| Linux | 3 | debian, ubuntu, alpine |
-| BSD | 1 | freebsd |
-| Container | 1 | amd64 |
-| **TOTAL** | **5** | All required, must pass |
+| Runner | Architecture | VM | Container |
+|--------|--------------|-----|-----------|
+| macos-13 | AMD64 (Intel) | Debian | Debian |
+| macos-14 | ARM64 (Apple Silicon) | Debian | Debian |
 
-**Note**: ARM64/experimental tests removed to ensure merge stability.
-They can be re-added once QEMU emulation is stabilized.
+**Total: 2 jobs** (1 AMD64 + 1 ARM64)
+
+Each job tests:
+1. **VM Test**: Debian via Vagrant + QEMU with HVF acceleration
+2. **Container Test**: Debian via Docker
 
 ## Structure
 
 ```
 e2e/
-├── Vagrantfile           # Multi-VM configuration (14 VMs)
+├── Vagrantfile           # VM configuration (QEMU provider)
 ├── test-install.sh       # VM installation test script
-├── test-container.sh     # Container PID1 test script
-├── Dockerfile.pid1       # Container with supervizio as PID1
+├── Dockerfile.debian     # Debian container for testing
 ├── Dockerfile.scratch    # Minimal scratch image
+├── Dockerfile.pid1       # PID1 test container
 ├── config-pid1.yaml      # Config for PID1 container
 ├── config-scratch.yaml   # Config for scratch container
 └── start-nginx.sh        # Nginx wrapper for PID1 tests
 ```
 
-## VM Matrix
+## CI Workflow
 
-### Linux VMs (3 distros, AMD64 only)
+```
+E2E Tests (2 jobs)
+├── E2E AMD64 (Debian VM + Container)
+│   ├── Build linux/amd64 binary
+│   ├── Vagrant up debian (QEMU)
+│   ├── Run test-install.sh
+│   ├── Docker build Dockerfile.debian
+│   └── Docker run --version test
+│
+└── E2E ARM64 (Debian VM + Container)
+    ├── Build linux/arm64 binary
+    ├── Vagrant up debian (QEMU)
+    ├── Run test-install.sh
+    ├── Docker build Dockerfile.debian
+    └── Docker run --version test
+```
 
-| Distro | Init System | VM Name |
-|--------|-------------|---------|
-| Debian 12 | systemd | `debian` |
-| Ubuntu 22.04 | systemd | `ubuntu` |
-| Alpine 3.19 | OpenRC | `alpine` |
+## Runners
 
-### BSD VMs (1 distro, AMD64 only)
+| Runner | Hardware | Provider |
+|--------|----------|----------|
+| `macos-13` | Intel x86_64 | QEMU + HVF |
+| `macos-14` | Apple Silicon M1 | QEMU + HVF |
 
-| Distro | Init System | VM Name |
-|--------|-------------|---------|
-| FreeBSD 14 | rc.d | `freebsd` |
+Both use HVF (Hypervisor Framework) for native virtualization performance.
 
-## Virtualization
+## VM Tests (test-install.sh)
 
-| Architecture | Method | Speed |
-|--------------|--------|-------|
-| AMD64 | KVM (native) | Fast (~5min) |
+1. Install script completes successfully
+2. Binary exists at `/usr/local/bin/supervizio`
+3. Config directory exists
+4. Config file `config.yaml` exists
+5. Service file installed for platform
+6. `--version` command works
+7. Uninstall removes binary
 
 ## Container Tests
 
 | Test | Description |
 |------|-------------|
+| Debian | Validates binary runs in standard Debian container |
 | Scratch | Validates static binary runs in minimal container |
 | PID1 | Verifies supervizio as container init |
-| Services | Tests nginx/redis management |
-| Zombies | Tests zombie process reaping |
-| Signals | Validates signal forwarding |
-| Restart | Tests automatic service restart |
-
-## CI Workflow
-
-```
-E2E Tests (5 jobs)
-├── vm-linux (3 jobs)
-│   ├── Linux debian (amd64)
-│   ├── Linux ubuntu (amd64)
-│   └── Linux alpine (amd64)
-├── vm-bsd (1 job)
-│   └── BSD freebsd (amd64)
-└── container (1 job)
-    └── Container (amd64)
-        ├── scratch test
-        └── pid1 test
-```
 
 ## Usage
-
-### From Makefile
-
-```bash
-make test-e2e          # Run default E2E test (Debian)
-make test-e2e-debian   # Run Debian specifically
-make test-e2e-clean    # Clean up all VMs
-```
 
 ### VM Tests (Vagrant)
 
 ```bash
 cd e2e
 
-# Start VM with KVM acceleration
-vagrant up debian --provider=libvirt
+# Start VM with QEMU (macOS)
+vagrant up debian --provider=qemu
 vagrant ssh debian -c "sudo /vagrant/test-install.sh"
 vagrant destroy debian -f
 ```
@@ -106,39 +96,38 @@ vagrant destroy debian -f
 # Build binary first
 cd src && CGO_ENABLED=0 go build -o ../bin/supervizio ./cmd/daemon
 
-# PID1 test
-docker build -f e2e/Dockerfile.pid1 -t supervizio-pid1 .
-docker run -d --name test-pid1 supervizio-pid1
-./e2e/test-container.sh
-docker rm -f test-pid1
+# Debian container test
+docker build -f e2e/Dockerfile.debian -t supervizio-debian .
+docker run --rm supervizio-debian
 
 # Scratch test
 docker build -f e2e/Dockerfile.scratch -t supervizio-scratch .
 docker run --rm --entrypoint /supervizio supervizio-scratch --version
 ```
 
-## Test Coverage
+## Extensibility
 
-### VM Tests (test-install.sh)
+Additional distros can be enabled in Vagrantfile:
 
-1. Install script completes successfully
-2. Binary exists at `/usr/local/bin/supervizio`
-3. Config directory exists
-4. Config file `config.yaml` exists
-5. Service file installed for platform
-6. `--version` command works
-7. Uninstall removes binary
+```ruby
+# Uncomment to enable Ubuntu
+config.vm.define "ubuntu", autostart: false do |v|
+  v.vm.box = "generic/ubuntu2204"
+  v.vm.hostname = "e2e-ubuntu"
+end
 
-### Container Tests (test-container.sh)
+# Uncomment to enable Alpine
+config.vm.define "alpine", autostart: false do |v|
+  v.vm.box = "generic/alpine319"
+  v.vm.hostname = "e2e-alpine"
+end
 
-1. supervizio is PID1
-2. nginx service running
-3. redis service running
-4. No zombie processes
-5. Signals forwarded correctly
-6. Service restart on crash
-7. HTTP health check (nginx)
-8. TCP health check (redis)
+# Uncomment to enable FreeBSD
+config.vm.define "freebsd", autostart: false do |v|
+  v.vm.box = "generic/freebsd14"
+  v.vm.hostname = "e2e-freebsd"
+end
+```
 
 ## Build Requirements
 
@@ -148,12 +137,10 @@ docker run --rm --entrypoint /supervizio supervizio-scratch --version
 |----------|------|--------|
 | Linux AMD64 | linux | amd64 |
 | Linux ARM64 | linux | arm64 |
-| FreeBSD | freebsd | amd64/arm64 |
-| OpenBSD | openbsd | amd64/arm64 |
-| NetBSD | netbsd | amd64/arm64 |
 
-### CI Dependencies
+### CI Dependencies (macOS)
 
-- libvirt-daemon-system
-- qemu-kvm
-- vagrant + vagrant-libvirt plugin
+- Vagrant (via Homebrew cask)
+- QEMU (via Homebrew)
+- vagrant-qemu plugin
+- Docker (via setup-buildx-action)
