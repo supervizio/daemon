@@ -78,11 +78,16 @@ jobs:
 
       - name: Run E2E tests
         working-directory: e2e
+        env:
+          # Explicitly set CI flag for Vagrantfile to detect
+          CI: "true"
+          VAGRANT_DISABLE_HVF: "true"
         run: |
           # Ensure VM cleanup on exit (success or failure)
           trap 'echo "=== Cleaning up ==="; vagrant destroy debian -f' EXIT
 
           echo "=== Starting Debian VM (${{ matrix.arch }}) ==="
+          echo "CI=$CI VAGRANT_DISABLE_HVF=$VAGRANT_DISABLE_HVF"
           vagrant up debian --provider=qemu
 
           echo "=== Running installation tests ==="
