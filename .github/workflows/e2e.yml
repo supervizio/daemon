@@ -76,8 +76,13 @@ jobs:
 
       - name: Start Debian VM
         working-directory: e2e
+        env:
+          VAGRANT_LOG: info
         run: |
-          echo "=== Starting Debian VM (AMD64) ==="
+          echo "=== Environment ==="
+          echo "CI=$CI"
+          echo "GITHUB_ACTIONS=$GITHUB_ACTIONS"
+          echo "=== Starting Debian VM (AMD64 with TCG emulation) ==="
           vagrant up debian --provider=qemu
           echo "=== VM started ==="
 
@@ -172,8 +177,13 @@ jobs:
 
       - name: Start Debian VM
         working-directory: e2e
+        env:
+          VAGRANT_LOG: info
         run: |
-          echo "=== Starting Debian VM (ARM64) ==="
+          echo "=== Environment ==="
+          echo "CI=$CI"
+          echo "GITHUB_ACTIONS=$GITHUB_ACTIONS"
+          echo "=== Starting Debian VM (ARM64 with TCG emulation) ==="
           vagrant up debian --provider=qemu
           echo "=== VM started ==="
 
