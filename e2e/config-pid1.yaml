@@ -1,0 +1,28 @@
+# =============================================================================
+# E2E Test Configuration: supervizio as PID1
+# =============================================================================
+# Manages nginx and redis as child services for container PID1 testing.
+# =============================================================================
+
+log:
+  directory: /var/log/supervizio
+  rotation:
+    max_size_mb: 10
+    max_age_days: 1
+    max_backups: 3
+    compress: false
+
+services:
+  # Nginx web server (HTTP health check target)
+  - name: nginx
+    command: nginx -g "daemon off;"
+    restart: always
+    start_delay: 0s
+    stop_timeout: 10s
+
+  # Redis in-memory store (TCP health check target)
+  - name: redis
+    command: redis-server --daemonize no --port 6379
+    restart: always
+    start_delay: 0s
+    stop_timeout: 10s

@@ -1,0 +1,17 @@
+# =============================================================================
+# E2E Test Configuration: Minimal scratch container
+# =============================================================================
+# Minimal configuration for scratch container validation.
+# No services - just validates supervizio starts and runs as PID1.
+# =============================================================================
+
+log:
+  directory: /tmp
+  rotation:
+    max_size_mb: 10
+    max_age_days: 1
+    max_backups: 1
+    compress: false
+
+# No services - scratch container has no executables to run
+services: []

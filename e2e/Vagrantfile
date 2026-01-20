@@ -1,7 +1,12 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
-# supervizio E2E testing Vagrantfile
-# Supports: libvirt (Linux CI), QEMU (macOS local)
+# =============================================================================
+# supervizio E2E Testing Vagrantfile
+# =============================================================================
+# Supports: libvirt (Linux CI with KVM), QEMU (macOS local)
+# Primary target: Debian AMD64 (fast KVM tests)
+# Secondary: ARM64 via QEMU emulation, BSD variants
+# =============================================================================
 
 # Detect Homebrew path for macOS
 def homebrew_prefix
@@ -13,23 +18,25 @@ def homebrew_prefix
 end
 
 Vagrant.configure("2") do |config|
-  # Shared folders
+  # ===========================================================================
+  # Shared folders (rsync works with both providers)
+  # ===========================================================================
   config.vm.synced_folder "../setup", "/setup", type: "rsync"
   config.vm.synced_folder "../bin", "/bin-local", type: "rsync"
   config.vm.synced_folder ".", "/vagrant", type: "rsync"
 
-  # =============================================================================
-  # Libvirt provider (Linux CI with KVM - fast)
-  # =============================================================================
+  # ===========================================================================
+  # Libvirt provider (Linux CI with KVM - fast native virtualization)
+  # ===========================================================================
   config.vm.provider "libvirt" do |lv|
     lv.memory = 2048
     lv.cpus = 2
     lv.driver = "kvm"
   end
 
-  # =============================================================================
-  # QEMU provider (macOS local development)
-  # =============================================================================
+  # ===========================================================================
+  # QEMU provider (macOS local development with HVF acceleration)
+  # ===========================================================================
   config.vm.provider "qemu" do |qe|
     qe.memory = "2048"
     qe.smp = "2"
@@ -38,11 +45,13 @@ Vagrant.configure("2") do |config|
     qe.ssh_port = 50022
   end
 
-  # =============================================================================
-  # VM Definitions
-  # =============================================================================
+  # ===========================================================================
+  # PRIMARY VMs (Active - tested in CI)
+  # ===========================================================================
 
-  # Debian 12 (Bookworm) - systemd
+  # ---------------------------------------------------------------------------
+  # Debian 12 (Bookworm) AMD64 - systemd [PRIMARY]
+  # ---------------------------------------------------------------------------
   config.vm.define "debian", primary: true do |debian|
     debian.vm.box = "generic/debian12"
     debian.vm.hostname = "e2e-debian"
@@ -53,7 +62,38 @@ Vagrant.configure("2") do |config|
     SHELL
   end
 
+  # ---------------------------------------------------------------------------
+  # Debian 12 ARM64 - QEMU emulation on AMD64 hosts
+  # ---------------------------------------------------------------------------
+  config.vm.define "debian-arm64", autostart: false do |debian_arm|
+    debian_arm.vm.box = "generic/debian12"
+    debian_arm.vm.hostname = "e2e-debian-arm64"
+
+    # Override libvirt settings for ARM64 emulation
+    debian_arm.vm.provider "libvirt" do |lv|
+      lv.memory = 2048
+      lv.cpus = 2
+      lv.driver = "qemu"           # Use QEMU (not KVM) for cross-arch
+      lv.machine_type = "virt"
+      lv.cpu_mode = "custom"
+      lv.cpu_model = "cortex-a72"
+      lv.machine_arch = "aarch64"
+      lv.loader = "/usr/share/AAVMF/AAVMF_CODE.fd"
+    end
+
+    debian_arm.vm.provision "shell", inline: <<-SHELL
+      apt-get update -qq
+      apt-get install -y -qq curl
+    SHELL
+  end
+
+  # ===========================================================================
+  # SECONDARY VMs (Available but not autostart)
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
   # Alpine 3.19 - OpenRC
+  # ---------------------------------------------------------------------------
   config.vm.define "alpine", autostart: false do |alpine|
     alpine.vm.box = "generic/alpine319"
     alpine.vm.hostname = "e2e-alpine"
@@ -64,7 +104,9 @@ Vagrant.configure("2") do |config|
     SHELL
   end
 
+  # ---------------------------------------------------------------------------
   # Ubuntu 22.04 - systemd
+  # ---------------------------------------------------------------------------
   config.vm.define "ubuntu", autostart: false do |ubuntu|
     ubuntu.vm.box = "generic/ubuntu2204"
     ubuntu.vm.hostname = "e2e-ubuntu"
@@ -75,7 +117,9 @@ Vagrant.configure("2") do |config|
     SHELL
   end
 
+  # ---------------------------------------------------------------------------
   # Rocky Linux 9 - systemd (RHEL-compatible)
+  # ---------------------------------------------------------------------------
   config.vm.define "rocky", autostart: false do |rocky|
     rocky.vm.box = "generic/rocky9"
     rocky.vm.hostname = "e2e-rocky"
@@ -85,7 +129,9 @@ Vagrant.configure("2") do |config|
     SHELL
   end
 
+  # ---------------------------------------------------------------------------
   # FreeBSD 14 - rc.d
+  # ---------------------------------------------------------------------------
   config.vm.define "freebsd", autostart: false do |freebsd|
     freebsd.vm.box = "generic/freebsd14"
     freebsd.vm.hostname = "e2e-freebsd"
@@ -95,15 +141,18 @@ Vagrant.configure("2") do |config|
     SHELL
   end
 
+  # ---------------------------------------------------------------------------
   # OpenBSD 7.5 - rc.d
+  # ---------------------------------------------------------------------------
   config.vm.define "openbsd", autostart: false do |openbsd|
     openbsd.vm.box = "generic/openbsd75"
     openbsd.vm.hostname = "e2e-openbsd"
-
     # OpenBSD has curl by default
   end
 
+  # ---------------------------------------------------------------------------
   # NetBSD 10 - rc.d
+  # ---------------------------------------------------------------------------
   config.vm.define "netbsd", autostart: false do |netbsd|
     netbsd.vm.box = "generic/netbsd10"
     netbsd.vm.hostname = "e2e-netbsd"
@@ -112,4 +161,68 @@ Vagrant.configure("2") do |config|
       pkgin -y install curl
     SHELL
   end
+
+  # ===========================================================================
+  # EXTENDED VM MATRIX
+  # ===========================================================================
+
+  # ─── DEBIAN FAMILY ─────────────────────────────────────────────────────────
+  config.vm.define "debian11", autostart: false do |v|
+    v.vm.box = "generic/debian11"
+    v.vm.hostname = "e2e-debian11"
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
+  end
+
+  config.vm.define "debian10", autostart: false do |v|
+    v.vm.box = "generic/debian10"
+    v.vm.hostname = "e2e-debian10"
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
+  end
+
+  # ─── UBUNTU LTS ────────────────────────────────────────────────────────────
+  config.vm.define "ubuntu2404", autostart: false do |v|
+    v.vm.box = "generic/ubuntu2404"
+    v.vm.hostname = "e2e-ubuntu2404"
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
+  end
+
+  config.vm.define "ubuntu2004", autostart: false do |v|
+    v.vm.box = "generic/ubuntu2004"
+    v.vm.hostname = "e2e-ubuntu2004"
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
+  end
+
+  # ─── ALPINE LINUX ──────────────────────────────────────────────────────────
+  config.vm.define "alpine320", autostart: false do |v|
+    v.vm.box = "generic/alpine320"
+    v.vm.hostname = "e2e-alpine320"
+    v.vm.provision "shell", inline: "apk update && apk add curl"
+  end
+
+  # ─── RHEL FAMILY ───────────────────────────────────────────────────────────
+  config.vm.define "rocky8", autostart: false do |v|
+    v.vm.box = "generic/rocky8"
+    v.vm.hostname = "e2e-rocky8"
+    v.vm.provision "shell", inline: "dnf install -y curl"
+  end
+
+  config.vm.define "alma9", autostart: false do |v|
+    v.vm.box = "generic/alma9"
+    v.vm.hostname = "e2e-alma9"
+    v.vm.provision "shell", inline: "dnf install -y curl"
+  end
+
+  # ─── CUTTING EDGE ──────────────────────────────────────────────────────────
+  config.vm.define "fedora40", autostart: false do |v|
+    v.vm.box = "generic/fedora40"
+    v.vm.hostname = "e2e-fedora40"
+    v.vm.provision "shell", inline: "dnf install -y curl"
+  end
+
+  config.vm.define "arch", autostart: false do |v|
+    v.vm.box = "generic/arch"
+    v.vm.hostname = "e2e-arch"
+    v.vm.provision "shell", inline: "pacman -Sy --noconfirm curl"
+  end
+
 end

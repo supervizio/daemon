@@ -1,3 +1,10 @@
+# =============================================================================
+# E2E Tests - VM and Container Testing
+# =============================================================================
+# Tests supervizio in multiple environments:
+# - VMs via Vagrant + libvirt/KVM (installation on real OS)
+# - Containers via Docker (PID1 mode, scratch image)
+# =============================================================================
 name: E2E Tests
 
 on:
@@ -15,19 +22,113 @@ env:
   GO_VERSION: '1.25.5'
 
 jobs:
-  # =============================================================================
-  # E2E Tests on Linux with KVM acceleration (fast native VMs)
-  # =============================================================================
-  e2e-linux:
-    name: E2E Debian (${{ matrix.arch }})
+  # ===========================================================================
+  # VM Tests (Vagrant + libvirt/KVM)
+  # ===========================================================================
+  vm-linux:
+    name: VM ${{ matrix.vm }} (${{ matrix.arch }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
+          # ─── DEBIAN FAMILY (systemd) ──────────────────────────────────────
+          - vm: debian
+            arch: amd64
             goarch: amd64
+            timeout: 15
+            use_kvm: true
+          - vm: debian-arm64
+            arch: arm64
+            goarch: arm64
+            timeout: 30
+            use_kvm: false
+          - vm: debian11
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+          - vm: debian10
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+
+          # ─── UBUNTU LTS (systemd) ─────────────────────────────────────────
+          - vm: ubuntu
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+          - vm: ubuntu2404
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+          - vm: ubuntu2004
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+
+          # ─── ALPINE LINUX (OpenRC) ────────────────────────────────────────
+          - vm: alpine
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+          - vm: alpine320
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+
+          # ─── RHEL FAMILY (systemd) ────────────────────────────────────────
+          - vm: rocky
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+          - vm: rocky8
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+          - vm: alma9
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+
+          # ─── CUTTING EDGE (systemd) ───────────────────────────────────────
+          - vm: fedora40
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+          - vm: arch
+            arch: amd64
+            goarch: amd64
+            timeout: 15
+            use_kvm: true
+
+          # ─── BSD FAMILY (rc.d) ────────────────────────────────────────────
+          - vm: freebsd
+            arch: amd64
+            goarch: amd64
+            timeout: 20
+            use_kvm: true
+          - vm: openbsd
+            arch: amd64
+            goarch: amd64
+            timeout: 20
+            use_kvm: true
+          - vm: netbsd
+            arch: amd64
+            goarch: amd64
+            timeout: 20
+            use_kvm: true
 
     steps:
       - name: Checkout code
@@ -46,7 +147,7 @@ jobs:
         working-directory: src
         run: wire ./internal/bootstrap/
 
-      - name: Build supervizio binary
+      - name: Build supervizio binary (${{ matrix.arch }})
         working-directory: src
         env:
           CGO_ENABLED: 0
@@ -55,9 +156,12 @@ jobs:
         run: |
           go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
           chmod +x ../bin/supervizio
+          echo "=== Binary info ==="
           file ../bin/supervizio
+          ls -lh ../bin/supervizio
 
       - name: Enable KVM
+        if: matrix.use_kvm
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -72,6 +176,8 @@ jobs:
             libvirt-dev \
             libvirt-clients \
             qemu-kvm \
+            qemu-system-arm \
+            qemu-efi-aarch64 \
             ebtables \
             libguestfs-tools \
             ruby-dev \
@@ -97,23 +203,27 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.vagrant.d/boxes
-          key: vagrant-debian12-libvirt-${{ matrix.arch }}-v2
+          key: vagrant-${{ matrix.vm }}-libvirt-${{ matrix.arch }}-v3
 
       - name: Run E2E tests
         working-directory: e2e
         run: |
           # Cleanup on exit
-          trap 'sudo vagrant destroy debian -f 2>/dev/null || true' EXIT
+          trap 'sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true' EXIT
 
-          echo "=== Verifying KVM ==="
-          kvm-ok || true
-          ls -la /dev/kvm
+          if [ "${{ matrix.use_kvm }}" = "true" ]; then
+            echo "=== Verifying KVM ==="
+            kvm-ok || true
+            ls -la /dev/kvm
+          else
+            echo "=== QEMU emulation mode (no KVM) ==="
+          fi
 
-          echo "=== Starting Debian VM (${{ matrix.arch }}) ==="
-          sudo -E vagrant up debian --provider=libvirt --no-parallel
+          echo "=== Starting ${{ matrix.vm }} VM (${{ matrix.arch }}) ==="
+          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt --no-parallel
 
           echo "=== Running installation tests ==="
-          sudo -E vagrant ssh debian -c "sudo /vagrant/test-install.sh"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo /vagrant/test-install.sh"
 
           echo "=== E2E tests passed ==="
 
@@ -124,8 +234,119 @@ jobs:
           echo "=== Vagrant Status ==="
           sudo vagrant status || true
           echo "=== Vagrant Debug ==="
-          sudo vagrant up debian --provider=libvirt --debug 2>&1 | tail -100 || true
+          sudo vagrant up ${{ matrix.vm }} --provider=libvirt --debug 2>&1 | tail -100 || true
           echo "=== Libvirt VMs ==="
           sudo virsh list --all || true
           echo "=== Libvirt Networks ==="
           sudo virsh net-list --all || true
+
+  # ===========================================================================
+  # Container Tests (Docker - NO Vagrant)
+  # ===========================================================================
+  container:
+    name: Container Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: src/go.sum
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@latest
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build static binary
+        working-directory: src
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
+          chmod +x ../bin/supervizio
+          echo "=== Binary info ==="
+          file ../bin/supervizio
+          ls -lh ../bin/supervizio
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Scratch Test - Validates static binary works in minimal container
+      # ─────────────────────────────────────────────────────────────────────────
+      - name: Verify static binary
+        run: |
+          if file bin/supervizio | grep -q "dynamically linked"; then
+            echo "ERROR: Binary is dynamically linked!"
+            exit 1
+          fi
+          echo "✓ Binary is statically linked"
+
+      - name: Build scratch image
+        run: |
+          docker build -f e2e/Dockerfile.scratch -t supervizio-scratch .
+          echo "=== Image info ==="
+          docker images supervizio-scratch
+
+      - name: Test scratch container
+        run: |
+          docker run -d --name supervizio-scratch supervizio-scratch
+          sleep 5
+          if docker ps --format '{{.Names}}' | grep -q "supervizio-scratch"; then
+            echo "✓ Scratch container is running"
+          else
+            echo "ERROR: Scratch container crashed!"
+            docker logs supervizio-scratch 2>&1 || true
+            exit 1
+          fi
+          timeout 10 docker stop supervizio-scratch
+          echo "✓ Container stopped gracefully"
+          docker rm -f supervizio-scratch
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # PID1 Test - Validates supervizio as container init managing services
+      # ─────────────────────────────────────────────────────────────────────────
+      - name: Build PID1 test image
+        run: |
+          docker build -f e2e/Dockerfile.pid1 -t supervizio-pid1 .
+          echo "=== Image info ==="
+          docker images supervizio-pid1
+
+      - name: Start PID1 container
+        run: |
+          docker run -d --name supervizio-pid1 supervizio-pid1
+          echo "=== Waiting for services to start ==="
+          sleep 15
+          echo "=== Container status ==="
+          docker ps -a --filter name=supervizio-pid1
+          echo "=== Container logs ==="
+          docker logs supervizio-pid1 2>&1 | tail -50 || true
+
+      - name: Run PID1 container tests
+        run: |
+          chmod +x e2e/test-container.sh
+          CONTAINER_NAME=supervizio-pid1 ./e2e/test-container.sh
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== Container status ==="
+          docker ps -a || true
+          echo "=== Container logs ==="
+          docker logs supervizio-pid1 2>&1 || true
+          echo "=== Container processes ==="
+          docker exec supervizio-pid1 ps aux 2>&1 || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop supervizio-pid1 2>/dev/null || true
+          docker rm -f supervizio-pid1 2>/dev/null || true
+          docker rm -f supervizio-scratch 2>/dev/null || true
