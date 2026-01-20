@@ -68,12 +68,20 @@ jobs:
       # =========================================================================
       # VM Test: Debian via Vagrant + libvirt/KVM
       # =========================================================================
-      - name: Enable KVM
+      - name: Setup KVM
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          ls -la /dev/kvm
+          echo "=== Checking KVM availability ==="
+          if [ -e /dev/kvm ]; then
+            echo "KVM device found, configuring permissions..."
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            ls -la /dev/kvm
+            echo "KVM_AVAILABLE=true" >> $GITHUB_ENV
+          else
+            echo "WARNING: /dev/kvm not found - VM tests will use QEMU TCG (slower)"
+            echo "KVM_AVAILABLE=false" >> $GITHUB_ENV
+          fi
 
       - name: Install libvirt and dependencies
         run: |
@@ -83,6 +91,7 @@ jobs:
             libvirt-dev \
             libvirt-clients \
             qemu-kvm \
+            qemu-system-arm \
             ebtables \
             ruby-dev \
             ruby-libvirt \
@@ -191,12 +200,20 @@ jobs:
       # =========================================================================
       # VM Test: Debian via Vagrant + libvirt/KVM
       # =========================================================================
-      - name: Enable KVM
+      - name: Setup KVM
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          ls -la /dev/kvm
+          echo "=== Checking KVM availability ==="
+          if [ -e /dev/kvm ]; then
+            echo "KVM device found, configuring permissions..."
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            ls -la /dev/kvm
+            echo "KVM_AVAILABLE=true" >> $GITHUB_ENV
+          else
+            echo "WARNING: /dev/kvm not found - VM tests will use QEMU TCG (slower)"
+            echo "KVM_AVAILABLE=false" >> $GITHUB_ENV
+          fi
 
       - name: Install libvirt and dependencies
         run: |
@@ -206,6 +223,7 @@ jobs:
             libvirt-dev \
             libvirt-clients \
             qemu-kvm \
+            qemu-system-arm \
             ebtables \
             ruby-dev \
             ruby-libvirt \
