@@ -22,6 +22,7 @@ jobs:
   e2e-debian:
     name: E2E Debian (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -78,14 +79,14 @@ jobs:
       - name: Run E2E tests
         working-directory: e2e
         run: |
+          # Ensure VM cleanup on exit (success or failure)
+          trap 'echo "=== Cleaning up ==="; vagrant destroy debian -f' EXIT
+
           echo "=== Starting Debian VM (${{ matrix.arch }}) ==="
           vagrant up debian --provider=qemu
 
           echo "=== Running installation tests ==="
           vagrant ssh debian -c "sudo /vagrant/test-install.sh"
-
-          echo "=== Cleaning up ==="
-          vagrant destroy debian -f
 
       - name: Collect logs on failure
         if: failure()

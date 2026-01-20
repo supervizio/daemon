@@ -3,6 +3,17 @@
 # supervizio E2E testing Vagrantfile
 # Runs VMs to test installation on various platforms
 
+# Detect Homebrew path based on architecture
+# ARM64 (Apple Silicon): /opt/homebrew
+# x86_64 (Intel): /usr/local
+def homebrew_prefix
+  if RUBY_PLATFORM.include?("arm64") || `uname -m`.strip == "arm64"
+    "/opt/homebrew"
+  else
+    "/usr/local"
+  end
+end
+
 Vagrant.configure("2") do |config|
   # Shared folders
   config.vm.synced_folder "../setup", "/setup", type: "rsync"
@@ -13,8 +24,8 @@ Vagrant.configure("2") do |config|
   config.vm.provider "qemu" do |qe|
     qe.memory = "2048"
     qe.smp = "2"
-    # Enable VNC display for debugging boot issues
-    qe.extra_qemu_args = %w(-vnc :0)
+    # Set correct QEMU directory based on Homebrew location
+    qe.qemu_dir = "#{homebrew_prefix}/share/qemu"
   end
 
   # Debian 12 (Bookworm) - systemd
