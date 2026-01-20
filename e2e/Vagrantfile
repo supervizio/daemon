@@ -14,16 +14,6 @@ def homebrew_prefix
   end
 end
 
-# Detect if running in CI environment
-# CI doesn't support HVF (Hypervisor Framework), must use TCG (software emulation)
-def qemu_accelerator
-  if ENV['CI'] || ENV['GITHUB_ACTIONS']
-    "virt,accel=tcg"
-  else
-    "virt,accel=hvf,highmem=on"
-  end
-end
-
 Vagrant.configure("2") do |config|
   # Shared folders
   config.vm.synced_folder "../setup", "/setup", type: "rsync"
