@@ -33,7 +33,7 @@ jobs:
   # ===========================================================================
   e2e-amd64:
     name: E2E AMD64 (Debian VM + Container)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout code

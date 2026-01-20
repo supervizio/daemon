@@ -8,7 +8,7 @@ End-to-end testing for supervizio using Linux runners with KVM acceleration.
 
 | Runner | Architecture | Cores | RAM | VM | Container |
 |--------|--------------|-------|-----|-----|-----------|
-| ubuntu-latest | AMD64 | 4 | 16GB | Debian | Debian |
+| ubuntu-24.04 | AMD64 | 4 | 16GB | Debian | Debian |
 | ubuntu-24.04-arm | ARM64 | 4 | 16GB | Debian | Debian |
 
 **Total: 2 jobs** (1 AMD64 + 1 ARM64)
@@ -52,7 +52,7 @@ E2E Tests (2 jobs)
 
 | Runner | Hardware | Cores | RAM | Provider |
 |--------|----------|-------|-----|----------|
-| `ubuntu-latest` | x86_64 | 4 | 16GB | libvirt + KVM |
+| `ubuntu-24.04` | x86_64 | 4 | 16GB | libvirt + KVM |
 | `ubuntu-24.04-arm` | ARM64 | 4 | 16GB | libvirt + KVM |
 
 Both use KVM for native virtualization performance.
