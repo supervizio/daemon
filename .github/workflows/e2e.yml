@@ -280,7 +280,11 @@ jobs:
           echo "=== Container status ==="
           docker ps -a --filter name=supervizio-pid1
           echo "=== Container logs ==="
-          docker logs supervizio-pid1 2>&1 | tail -50 || true
+          docker logs supervizio-pid1 2>&1 | tail -100 || true
+          echo "=== Processes in container ==="
+          docker exec supervizio-pid1 ps aux 2>&1 || true
+          echo "=== Checking supervizio version ==="
+          docker exec supervizio-pid1 /usr/local/bin/supervizio --version 2>&1 || true
 
       - name: Run PID1 container tests
         run: |
