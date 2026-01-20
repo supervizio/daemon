@@ -44,9 +44,13 @@ jobs:
             goarch: amd64
             timeout: 15
             use_kvm: true
-          # TODO: Investigate failures
-          # - vm: debian-arm64 (arm64 QEMU emulation timeout)
-          # - vm: debian10 (old/deprecated)
+          # ARM64 via QEMU emulation (no KVM) - slower but validates cross-arch
+          - vm: debian-arm64
+            arch: arm64
+            goarch: arm64
+            timeout: 45
+            use_kvm: false
+          # TODO: debian10 (old/deprecated)
 
           # ─── UBUNTU LTS (systemd) ─────────────────────────────────────────
           - vm: ubuntu
