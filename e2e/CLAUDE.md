@@ -27,7 +27,7 @@ vagrant plugin install vagrant-qemu
 
 | VM | Box | Init System | autostart |
 |----|-----|-------------|-----------|
-| debian | generic/debian12 | systemd | yes |
+| debian | generic/debian13 | systemd | yes |
 | alpine | generic/alpine319 | OpenRC | no |
 | ubuntu | generic/ubuntu2404 | systemd | no |
 | rocky | generic/rocky9 | systemd | no |

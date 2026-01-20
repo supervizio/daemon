@@ -28,9 +28,9 @@ Vagrant.configure("2") do |config|
     qe.qemu_dir = "#{homebrew_prefix}/share/qemu"
   end
 
-  # Debian 12 (Bookworm) - systemd
+  # Debian 13 (Trixie) - systemd
   config.vm.define "debian", primary: true do |debian|
-    debian.vm.box = "generic/debian12"
+    debian.vm.box = "generic/debian13"
     debian.vm.hostname = "e2e-debian"
 
     debian.vm.provision "shell", inline: <<-SHELL

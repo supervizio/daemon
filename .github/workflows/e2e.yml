@@ -74,7 +74,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.vagrant.d/boxes
-          key: vagrant-debian12-${{ matrix.arch }}-v4
+          key: vagrant-debian13-${{ matrix.arch }}-v1
 
       - name: Run E2E tests
         working-directory: e2e
