@@ -1,12 +1,12 @@
 # =============================================================================
-# E2E Tests - Native Architecture Testing on macOS 15
+# E2E Tests - Linux VM Testing with KVM
 # =============================================================================
-# Tests supervizio on native hardware:
-# - AMD64: macos-15-intel (4 cores, 14GB RAM)
-# - ARM64: macos-15 (M1, 3 cores, 7GB RAM)
+# Tests supervizio on Linux VMs with KVM acceleration:
+# - AMD64: ubuntu-latest (KVM available)
+# - ARM64: ubuntu-24.04-arm (native ARM64)
 #
 # Each job tests:
-# 1. VM: Debian via Vagrant (installation test)
+# 1. VM: Debian via Vagrant + libvirt/KVM (installation test)
 # 2. Container: Debian via Docker (entrypoint test)
 #
 # Matrix: 2 jobs (1 AMD64 + 1 ARM64)
@@ -29,12 +29,12 @@ env:
 
 jobs:
   # ===========================================================================
-  # AMD64 E2E Tests (macOS 15 Intel)
+  # AMD64 E2E Tests (Ubuntu with KVM)
   # ===========================================================================
   e2e-amd64:
     name: E2E AMD64 (Debian VM + Container)
-    runs-on: macos-15-intel
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -66,49 +66,48 @@ jobs:
           ls -lh ../bin/supervizio
 
       # =========================================================================
-      # VM Test: Debian via Vagrant + QEMU
+      # VM Test: Debian via Vagrant + libvirt/KVM
       # =========================================================================
-      - name: Install Vagrant and QEMU
+      - name: Install libvirt and Vagrant
         run: |
-          brew install --cask vagrant
-          brew install qemu
-          vagrant plugin install vagrant-qemu
+          sudo apt-get update
+          sudo apt-get install -y libvirt-daemon-system libvirt-dev vagrant qemu-kvm
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt $USER
+          vagrant plugin install vagrant-libvirt
+
+      - name: Enable KVM
+        run: |
+          echo "=== KVM Status ==="
+          ls -la /dev/kvm || true
+          sudo chmod 666 /dev/kvm || true
+          kvm-ok || true
 
       - name: Start Debian VM
         working-directory: e2e
-        env:
-          VAGRANT_LOG: info
         run: |
-          echo "=== Environment ==="
-          echo "CI=$CI"
-          echo "GITHUB_ACTIONS=$GITHUB_ACTIONS"
-          echo "=== Starting Debian VM (AMD64 with TCG emulation) ==="
-          vagrant up debian --provider=qemu
+          echo "=== Starting Debian VM (AMD64 with KVM) ==="
+          sudo vagrant up debian --provider=libvirt
           echo "=== VM started ==="
 
       - name: Run VM installation test
         working-directory: e2e
         run: |
           echo "=== Running installation tests ==="
-          vagrant ssh debian -c "sudo /vagrant/test-install.sh"
+          sudo vagrant ssh debian -c "sudo /vagrant/test-install.sh"
           echo "=== VM tests passed ==="
 
       - name: Cleanup VM
         if: always()
         working-directory: e2e
-        run: vagrant destroy debian -f 2>/dev/null || true
+        run: sudo vagrant destroy debian -f 2>/dev/null || true
 
       # =========================================================================
       # Container Test: Debian via Docker
       # =========================================================================
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
-
       - name: Build Debian container (amd64)
         run: |
-          docker buildx build \
-            --platform linux/amd64 \
-            --load \
+          docker build \
             -f e2e/Dockerfile.debian \
             -t supervizio-debian:amd64 .
           echo "=== Image info ==="
@@ -117,7 +116,7 @@ jobs:
       - name: Test Debian container (amd64)
         run: |
           echo "=== Testing supervizio in Debian container (amd64) ==="
-          docker run --rm --platform linux/amd64 supervizio-debian:amd64
+          docker run --rm supervizio-debian:amd64
           echo "=== Container test passed ==="
 
       - name: Collect logs on failure
@@ -125,17 +124,19 @@ jobs:
         working-directory: e2e
         run: |
           echo "=== Vagrant Status ==="
-          vagrant status || true
+          sudo vagrant status || true
+          echo "=== libvirt VMs ==="
+          sudo virsh list --all || true
           echo "=== Docker Images ==="
           docker images || true
 
   # ===========================================================================
-  # ARM64 E2E Tests (macOS 15 Apple Silicon M1)
+  # ARM64 E2E Tests (Ubuntu ARM64)
   # ===========================================================================
   e2e-arm64:
     name: E2E ARM64 (Debian VM + Container)
-    runs-on: macos-15
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -167,49 +168,47 @@ jobs:
           ls -lh ../bin/supervizio
 
       # =========================================================================
-      # VM Test: Debian via Vagrant + QEMU
+      # VM Test: Debian via Vagrant + libvirt/KVM
       # =========================================================================
-      - name: Install Vagrant and QEMU
+      - name: Install libvirt and Vagrant
         run: |
-          brew install --cask vagrant
-          brew install qemu
-          vagrant plugin install vagrant-qemu
+          sudo apt-get update
+          sudo apt-get install -y libvirt-daemon-system libvirt-dev vagrant qemu-kvm
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt $USER
+          vagrant plugin install vagrant-libvirt
+
+      - name: Enable KVM
+        run: |
+          echo "=== KVM Status ==="
+          ls -la /dev/kvm || true
+          sudo chmod 666 /dev/kvm || true
 
       - name: Start Debian VM
         working-directory: e2e
-        env:
-          VAGRANT_LOG: info
         run: |
-          echo "=== Environment ==="
-          echo "CI=$CI"
-          echo "GITHUB_ACTIONS=$GITHUB_ACTIONS"
-          echo "=== Starting Debian VM (ARM64 with TCG emulation) ==="
-          vagrant up debian --provider=qemu
+          echo "=== Starting Debian VM (ARM64 with KVM) ==="
+          sudo vagrant up debian --provider=libvirt
           echo "=== VM started ==="
 
       - name: Run VM installation test
         working-directory: e2e
         run: |
           echo "=== Running installation tests ==="
-          vagrant ssh debian -c "sudo /vagrant/test-install.sh"
+          sudo vagrant ssh debian -c "sudo /vagrant/test-install.sh"
           echo "=== VM tests passed ==="
 
       - name: Cleanup VM
         if: always()
         working-directory: e2e
-        run: vagrant destroy debian -f 2>/dev/null || true
+        run: sudo vagrant destroy debian -f 2>/dev/null || true
 
       # =========================================================================
       # Container Test: Debian via Docker
       # =========================================================================
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
-
       - name: Build Debian container (arm64)
         run: |
-          docker buildx build \
-            --platform linux/arm64 \
-            --load \
+          docker build \
             -f e2e/Dockerfile.debian \
             -t supervizio-debian:arm64 .
           echo "=== Image info ==="
@@ -218,7 +217,7 @@ jobs:
       - name: Test Debian container (arm64)
         run: |
           echo "=== Testing supervizio in Debian container (arm64) ==="
-          docker run --rm --platform linux/arm64 supervizio-debian:arm64
+          docker run --rm supervizio-debian:arm64
           echo "=== Container test passed ==="
 
       - name: Collect logs on failure
@@ -226,6 +225,8 @@ jobs:
         working-directory: e2e
         run: |
           echo "=== Vagrant Status ==="
-          vagrant status || true
+          sudo vagrant status || true
+          echo "=== libvirt VMs ==="
+          sudo virsh list --all || true
           echo "=== Docker Images ==="
           docker images || true

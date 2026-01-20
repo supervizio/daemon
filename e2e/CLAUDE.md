@@ -1,27 +1,27 @@
-# E2E Testing - Native Architecture Testing
+# E2E Testing - Linux VM Testing with KVM
 
-End-to-end testing for supervizio using native macOS runners.
+End-to-end testing for supervizio using Linux runners with KVM acceleration.
 
 ## Architecture
 
-**Native hardware testing on macOS 15 runners**
+**Linux runners with KVM for native virtualization performance**
 
 | Runner | Architecture | Cores | RAM | VM | Container |
 |--------|--------------|-------|-----|-----|-----------|
-| macos-15-intel | AMD64 (Intel) | 4 | 14GB | Debian | Debian |
-| macos-15 | ARM64 (M1) | 3 | 7GB | Debian | Debian |
+| ubuntu-latest | AMD64 | 4 | 16GB | Debian | Debian |
+| ubuntu-24.04-arm | ARM64 | 4 | 16GB | Debian | Debian |
 
 **Total: 2 jobs** (1 AMD64 + 1 ARM64)
 
 Each job tests:
-1. **VM Test**: Debian via Vagrant + QEMU with HVF acceleration
+1. **VM Test**: Debian via Vagrant + libvirt/KVM
 2. **Container Test**: Debian via Docker
 
 ## Structure
 
 ```
 e2e/
-├── Vagrantfile           # VM configuration (QEMU provider)
+├── Vagrantfile           # VM configuration (libvirt + QEMU providers)
 ├── test-install.sh       # VM installation test script
 ├── Dockerfile.debian     # Debian container for testing
 ├── Dockerfile.scratch    # Minimal scratch image
@@ -37,14 +37,16 @@ e2e/
 E2E Tests (2 jobs)
 ├── E2E AMD64 (Debian VM + Container)
 │   ├── Build linux/amd64 binary
-│   ├── Vagrant up debian (QEMU)
+│   ├── Install libvirt + Vagrant
+│   ├── Vagrant up debian (KVM)
 │   ├── Run test-install.sh
 │   ├── Docker build Dockerfile.debian
 │   └── Docker run --version test
 │
 └── E2E ARM64 (Debian VM + Container)
     ├── Build linux/arm64 binary
-    ├── Vagrant up debian (QEMU)
+    ├── Install libvirt + Vagrant
+    ├── Vagrant up debian (KVM)
     ├── Run test-install.sh
     ├── Docker build Dockerfile.debian
     └── Docker run --version test
@@ -54,10 +56,10 @@ E2E Tests (2 jobs)
 
 | Runner | Hardware | Cores | RAM | Provider |
 |--------|----------|-------|-----|----------|
-| `macos-15-intel` | Intel x86_64 | 4 | 14GB | QEMU + HVF |
-| `macos-15` | Apple Silicon M1 | 3 | 7GB | QEMU + HVF |
+| `ubuntu-latest` | x86_64 | 4 | 16GB | libvirt + KVM |
+| `ubuntu-24.04-arm` | ARM64 | 4 | 16GB | libvirt + KVM |
 
-Both use HVF (Hypervisor Framework) for native virtualization performance.
+Both use KVM for native virtualization performance (much faster than QEMU TCG).
 
 ## VM Tests (test-install.sh)
 
@@ -84,8 +86,8 @@ Both use HVF (Hypervisor Framework) for native virtualization performance.
 ```bash
 cd e2e
 
-# Start VM with QEMU (macOS)
-vagrant up debian --provider=qemu
+# Start VM with libvirt (Linux)
+vagrant up debian --provider=libvirt
 vagrant ssh debian -c "sudo /vagrant/test-install.sh"
 vagrant destroy debian -f
 ```
@@ -138,9 +140,11 @@ end
 | Linux AMD64 | linux | amd64 |
 | Linux ARM64 | linux | arm64 |
 
-### CI Dependencies (macOS)
+### CI Dependencies (Ubuntu)
 
-- Vagrant (via Homebrew cask)
-- QEMU (via Homebrew)
-- vagrant-qemu plugin
-- Docker (via setup-buildx-action)
+- libvirt-daemon-system
+- libvirt-dev
+- vagrant
+- vagrant-libvirt plugin
+- qemu-kvm
+- Docker (pre-installed)
