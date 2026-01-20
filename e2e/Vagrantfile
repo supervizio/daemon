@@ -14,6 +14,16 @@ def homebrew_prefix
   end
 end
 
+# Detect if running in CI environment
+# CI doesn't support HVF (Hypervisor Framework), must use TCG (software emulation)
+def qemu_accelerator
+  if ENV['CI'] || ENV['GITHUB_ACTIONS']
+    "virt,accel=tcg"
+  else
+    "virt,accel=hvf,highmem=on"
+  end
+end
+
 Vagrant.configure("2") do |config|
   # Shared folders
   config.vm.synced_folder "../setup", "/setup", type: "rsync"
@@ -26,8 +36,10 @@ Vagrant.configure("2") do |config|
     qe.smp = "2"
     # Set correct QEMU directory based on Homebrew location
     qe.qemu_dir = "#{homebrew_prefix}/share/qemu"
-    # Use TCG (software emulation) - HVF not available on GitHub runners
-    qe.machine_type = "virt,accel=tcg"
+    # Use HVF locally (fast), TCG in CI (compatible)
+    qe.machine_type = qemu_accelerator
+    # Increase boot timeout for slower machines
+    qe.ssh_port = 50022
   end
 
   # Debian 12 (Bookworm) - systemd
