@@ -1,11 +1,9 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 # supervizio E2E testing Vagrantfile
-# Runs VMs to test installation on various platforms
+# Supports: libvirt (Linux CI), QEMU (macOS local)
 
-# Detect Homebrew path based on architecture
-# ARM64 (Apple Silicon): /opt/homebrew
-# x86_64 (Intel): /usr/local
+# Detect Homebrew path for macOS
 def homebrew_prefix
   if RUBY_PLATFORM.include?("arm64") || `uname -m`.strip == "arm64"
     "/opt/homebrew"
@@ -20,28 +18,29 @@ Vagrant.configure("2") do |config|
   config.vm.synced_folder "../bin", "/bin-local", type: "rsync"
   config.vm.synced_folder ".", "/vagrant", type: "rsync"
 
-  # QEMU provider settings (for macOS ARM64/x86_64)
+  # =============================================================================
+  # Libvirt provider (Linux CI with KVM - fast)
+  # =============================================================================
+  config.vm.provider "libvirt" do |lv|
+    lv.memory = 2048
+    lv.cpus = 2
+    lv.driver = "kvm"
+  end
+
+  # =============================================================================
+  # QEMU provider (macOS local development)
+  # =============================================================================
   config.vm.provider "qemu" do |qe|
     qe.memory = "2048"
     qe.smp = "2"
-    # Set correct QEMU directory based on Homebrew location
     qe.qemu_dir = "#{homebrew_prefix}/share/qemu"
-    # Detect CI environment - HVF not supported on GitHub runners
-    # Uses multiple detection methods for reliability
-    is_ci = ENV['CI'] == 'true' || ENV['GITHUB_ACTIONS'] == 'true' || ENV['VAGRANT_DISABLE_HVF'] == 'true'
-
-    if is_ci
-      # CI: Use software emulation (slower but compatible)
-      # Force override via extra_qemu_args since machine_type may be ignored
-      puts "[Vagrant] CI detected - forcing TCG software emulation"
-      qe.extra_qemu_args = %w(-machine virt,accel=tcg -cpu max)
-    else
-      # Local: Use hardware acceleration (fast)
-      puts "[Vagrant] Local mode - using HVF hardware acceleration"
-      qe.machine_type = "virt,accel=hvf,highmem=on"
-    end
+    qe.machine_type = "virt,accel=hvf,highmem=on"
     qe.ssh_port = 50022
   end
+
+  # =============================================================================
+  # VM Definitions
+  # =============================================================================
 
   # Debian 12 (Bookworm) - systemd
   config.vm.define "debian", primary: true do |debian|

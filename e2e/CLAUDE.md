@@ -1,22 +1,33 @@
 # E2E Testing - Virtual Machine Tests
 
-End-to-end testing using Vagrant VMs.
+End-to-end testing using native VMs with Vagrant.
 
 ## Structure
 
 ```
 e2e/
-├── Vagrantfile         # Multi-VM configuration
+├── Vagrantfile         # Multi-VM configuration (libvirt + QEMU)
 └── test-install.sh     # Installation test script
 ```
 
-## Requirements
+## CI Testing (Linux + KVM)
+
+GitHub Actions uses `ubuntu-latest` with KVM acceleration:
+
+- **Provider**: libvirt with KVM
+- **Speed**: Fast (hardware virtualization)
+- **Platforms**: amd64 native, arm64 via QEMU
+
+## Local Testing (macOS)
+
+For local development on macOS:
+
+### Requirements
 
 - Vagrant 2.4+
-- QEMU (for macOS/Linux)
-- VirtualBox (alternative)
+- QEMU + vagrant-qemu plugin
 
-### macOS Setup
+### Setup
 
 ```bash
 brew install vagrant qemu
@@ -29,7 +40,7 @@ vagrant plugin install vagrant-qemu
 |----|-----|-------------|-----------|
 | debian | generic/debian12 | systemd | yes |
 | alpine | generic/alpine319 | OpenRC | no |
-| ubuntu | generic/ubuntu2404 | systemd | no |
+| ubuntu | generic/ubuntu2204 | systemd | no |
 | rocky | generic/rocky9 | systemd | no |
 | freebsd | generic/freebsd14 | rc.d | no |
 | openbsd | generic/openbsd75 | rc.d | no |
@@ -37,19 +48,12 @@ vagrant plugin install vagrant-qemu
 
 ## Usage
 
-### From Makefile (Recommended)
+### From Makefile
 
 ```bash
-# Run default E2E test (Debian)
-make test-e2e
-
-# Run specific platform
-make test-e2e-debian
-make test-e2e-alpine
-make test-e2e-freebsd
-
-# Clean up all VMs
-make test-e2e-clean
+make test-e2e          # Run default E2E test (Debian)
+make test-e2e-debian   # Run Debian specifically
+make test-e2e-clean    # Clean up all VMs
 ```
 
 ### Direct Vagrant
@@ -57,20 +61,18 @@ make test-e2e-clean
 ```bash
 cd e2e
 
-# Start and provision Debian
-vagrant up debian
-
-# SSH into VM
-vagrant ssh debian
-
-# Run tests manually
+# macOS (QEMU)
+vagrant up debian --provider=qemu
 vagrant ssh debian -c "sudo /vagrant/test-install.sh"
+vagrant destroy debian -f
 
-# Destroy VM
+# Linux (libvirt)
+vagrant up debian --provider=libvirt
+vagrant ssh debian -c "sudo /vagrant/test-install.sh"
 vagrant destroy debian -f
 ```
 
-## Test Script
+## Test Coverage
 
 `test-install.sh` validates:
 
@@ -81,19 +83,3 @@ vagrant destroy debian -f
 5. Service file installed for platform
 6. `--version` command works
 7. Uninstall removes binary
-
-## CI Integration
-
-For GitHub Actions on macOS runners:
-
-```yaml
-jobs:
-  e2e:
-    runs-on: macos-15  # ARM64
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Vagrant
-        run: brew install vagrant qemu
-      - name: Run E2E
-        run: make test-e2e
-```
