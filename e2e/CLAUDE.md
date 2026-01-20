@@ -2,89 +2,96 @@
 
 End-to-end testing for supervizio across VMs and containers.
 
+## Architecture
+
+**Balanced matrix: AMD64 (KVM native) + ARM64 (QEMU emulation) for ALL platforms**
+
+| Matrix | AMD64 | ARM64 | Total |
+|--------|-------|-------|-------|
+| Linux | 4 distros | 4 distros | 8 |
+| BSD | 3 distros | 3 distros | 6 |
+| Container | 1 | 1 | 2 |
+| **TOTAL** | **8** | **8** | **16** |
+
 ## Structure
 
 ```
 e2e/
-├── Vagrantfile           # Multi-VM configuration (libvirt + QEMU)
+├── Vagrantfile           # Multi-VM configuration (14 VMs)
 ├── test-install.sh       # VM installation test script
 ├── test-container.sh     # Container PID1 test script
 ├── Dockerfile.pid1       # Container with supervizio as PID1
 ├── Dockerfile.scratch    # Minimal scratch image
 ├── config-pid1.yaml      # Config for PID1 container
-└── config-scratch.yaml   # Config for scratch container
+├── config-scratch.yaml   # Config for scratch container
+└── start-nginx.sh        # Nginx wrapper for PID1 tests
 ```
 
-## Test Types
+## VM Matrix
 
-### 1. VM Tests (e2e.yml)
+### Linux VMs (4 distros × 2 archs = 8 VMs)
 
-Tests installation on real virtual machines.
+| Distro | Init System | AMD64 | ARM64 |
+|--------|-------------|-------|-------|
+| Debian 12 | systemd | `debian` | `debian-arm64` |
+| Ubuntu 22.04 | systemd | `ubuntu` | `ubuntu-arm64` |
+| Alpine 3.19 | OpenRC | `alpine` | `alpine-arm64` |
+| Rocky 9 | systemd | `rocky` | `rocky-arm64` |
 
-| Architecture | Method | Speed |
-|--------------|--------|-------|
-| AMD64 | KVM (native) | Fast |
-| ARM64 | QEMU emulation | Slow |
+### BSD VMs (3 distros × 2 archs = 6 VMs)
 
-### 2. Container Tests (e2e-container.yml)
+| Distro | Init System | AMD64 | ARM64 |
+|--------|-------------|-------|-------|
+| FreeBSD 14 | rc.d | `freebsd` | `freebsd-arm64` |
+| OpenBSD 7.5 | rc.d | `openbsd` | `openbsd-arm64` |
+| NetBSD 10 | rc.d | `netbsd` | `netbsd-arm64` |
 
-Tests supervizio as container PID1.
+## Virtualization Methods
+
+| Architecture | Method | Speed | Use Case |
+|--------------|--------|-------|----------|
+| AMD64 | KVM (native) | Fast | CI default |
+| ARM64 | QEMU emulation | Slow (~45min) | Cross-arch testing |
+
+## Container Tests
 
 | Test | Description |
 |------|-------------|
-| PID1 | Validates supervizio runs as PID1 |
-| Services | Verifies nginx/redis management |
+| Scratch | Validates static binary runs in minimal container |
+| PID1 | Verifies supervizio as container init |
+| Services | Tests nginx/redis management |
 | Zombies | Tests zombie process reaping |
 | Signals | Validates signal forwarding |
 | Restart | Tests automatic service restart |
-| Scratch | Minimal image validation |
 
-## CI Workflows
+## CI Workflow
 
-### e2e.yml - VM Testing
-
-- **Runner**: `ubuntu-latest` with KVM
-- **Provider**: libvirt
-- **Matrix**: AMD64 (KVM) + ARM64 (QEMU)
-
-### e2e-container.yml - Container Testing
-
-- **Runner**: `ubuntu-latest`
-- **Tests**: PID1 mode, scratch image
-
-## Available VMs
-
-### Active (CI tested)
-
-| VM | Box | Init | Arch |
-|----|-----|------|------|
-| debian | generic/debian12 | systemd | amd64 |
-| debian-arm64 | generic/debian12 | systemd | arm64 |
-
-### Available (manual)
-
-| VM | Box | Init | Arch |
-|----|-----|------|------|
-| alpine | generic/alpine319 | OpenRC | amd64 |
-| ubuntu | generic/ubuntu2204 | systemd | amd64 |
-| rocky | generic/rocky9 | systemd | amd64 |
-| freebsd | generic/freebsd14 | rc.d | amd64 |
-| openbsd | generic/openbsd75 | rc.d | amd64 |
-| netbsd | generic/netbsd10 | rc.d | amd64 |
-
-### Commented (future)
-
-See `Vagrantfile` for full matrix including:
-- Debian 10, 11
-- Ubuntu 20.04, 24.04
-- Alpine 3.18, 3.20
-- Rocky 8, Alma 9, CentOS Stream 9
-- Fedora 39, 40
-- Arch, openSUSE
-- FreeBSD 12, 13
-- OpenBSD 7.3, 7.4
-- NetBSD 9
-- DragonflyBSD 6
+```
+E2E Tests (16 parallel jobs)
+├── vm-linux (8 jobs)
+│   ├── Linux debian (amd64)
+│   ├── Linux debian (arm64)
+│   ├── Linux ubuntu (amd64)
+│   ├── Linux ubuntu (arm64)
+│   ├── Linux alpine (amd64)
+│   ├── Linux alpine (arm64)
+│   ├── Linux rocky (amd64)
+│   └── Linux rocky (arm64)
+├── vm-bsd (6 jobs)
+│   ├── BSD freebsd (amd64)
+│   ├── BSD freebsd (arm64)
+│   ├── BSD openbsd (amd64)
+│   ├── BSD openbsd (arm64)
+│   ├── BSD netbsd (amd64)
+│   └── BSD netbsd (arm64)
+└── container (2 jobs)
+    ├── Container (amd64)
+    │   ├── scratch test
+    │   └── pid1 test
+    └── Container (arm64)
+        ├── scratch test
+        └── pid1 test
+```
 
 ## Usage
 
@@ -101,12 +108,12 @@ make test-e2e-clean    # Clean up all VMs
 ```bash
 cd e2e
 
-# AMD64 (Linux CI or local)
+# AMD64 (KVM - fast)
 vagrant up debian --provider=libvirt
 vagrant ssh debian -c "sudo /vagrant/test-install.sh"
 vagrant destroy debian -f
 
-# ARM64 (QEMU emulation)
+# ARM64 (QEMU - slow)
 vagrant up debian-arm64 --provider=libvirt
 vagrant ssh debian-arm64 -c "uname -m"  # aarch64
 vagrant destroy debian-arm64 -f
@@ -126,9 +133,7 @@ docker rm -f test-pid1
 
 # Scratch test
 docker build -f e2e/Dockerfile.scratch -t supervizio-scratch .
-docker run -d --name test-scratch supervizio-scratch
-docker exec test-scratch cat /proc/1/comm  # supervizio
-docker rm -f test-scratch
+docker run --rm --entrypoint /supervizio supervizio-scratch --version
 ```
 
 ## Test Coverage
@@ -154,17 +159,22 @@ docker rm -f test-scratch
 7. HTTP health check (nginx)
 8. TCP health check (redis)
 
-## Expanding Coverage
+## Build Requirements
 
-### Enable More VMs
+### Go Cross-Compilation
 
-1. Uncomment desired VM in `e2e/Vagrantfile`
-2. Uncomment corresponding matrix entry in `.github/workflows/e2e.yml`
-3. Test locally first: `vagrant up <vm-name> --provider=libvirt`
+| Platform | GOOS | GOARCH |
+|----------|------|--------|
+| Linux AMD64 | linux | amd64 |
+| Linux ARM64 | linux | arm64 |
+| FreeBSD | freebsd | amd64/arm64 |
+| OpenBSD | openbsd | amd64/arm64 |
+| NetBSD | netbsd | amd64/arm64 |
 
-### Add New OS
+### CI Dependencies
 
-1. Add VM definition in `Vagrantfile`
-2. Add matrix entry in workflow
-3. Update init system detection in `setup/install.sh` if needed
-4. Add service file in `setup/init/` if needed
+- libvirt-daemon-system
+- qemu-kvm (AMD64)
+- qemu-system-arm (ARM64 emulation)
+- qemu-efi-aarch64 (ARM64 UEFI)
+- vagrant + vagrant-libvirt plugin
