@@ -254,13 +254,21 @@ jobs:
 
       - name: Test scratch container
         run: |
+          echo "=== Starting scratch container ==="
           docker run -d --name supervizio-scratch supervizio-scratch
+          echo "=== Waiting 5s for startup ==="
           sleep 5
+          echo "=== Container status ==="
+          docker ps -a --filter name=supervizio-scratch
+          echo "=== Container logs ==="
+          docker logs supervizio-scratch 2>&1 || true
+          echo "=== Checking if running ==="
           if docker ps --format '{{.Names}}' | grep -q "supervizio-scratch"; then
             echo "✓ Scratch container is running"
           else
             echo "ERROR: Scratch container crashed!"
-            docker logs supervizio-scratch 2>&1 || true
+            echo "=== Container inspect ==="
+            docker inspect supervizio-scratch 2>&1 | tail -30 || true
             exit 1
           fi
           timeout 10 docker stop supervizio-scratch
