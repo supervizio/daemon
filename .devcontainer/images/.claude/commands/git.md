@@ -531,41 +531,431 @@ peek_workflow:
 
 ---
 
-### Phase 2 : Parallelize (CI checks)
+### Phase 2 : CI Monitoring avec Backoff Exponentiel
 
 ```yaml
-parallel_ci:
-  mode: "PARALLEL (if CI pending, wait in parallel)"
+ci_monitoring:
+  description: "Suivi intelligent du statut CI avec polling adaptatif"
 
-  checks:
-    - task: "Wait for CI"
-      poll: "every 30s"
-      timeout: "10min"
+  #---------------------------------------------------------------------------
+  # CONFIGURATION
+  #---------------------------------------------------------------------------
+  config:
+    initial_interval: 10s          # Intervalle initial (compatible gh --interval)
+    max_interval: 120s             # Plafonné à 2 minutes
+    backoff_multiplier: 1.5        # 10s → 15s → 22s → 33s → 50s → 75s → 112s → 120s
+    jitter_percent: 20             # +/- 20% aléatoire (évite thundering herd)
+    timeout: 600s                  # 10 minutes timeout total
+    max_poll_attempts: 30          # Limite de sécurité
 
+  #---------------------------------------------------------------------------
+  # STRATÉGIE DE POLLING (MCP-FIRST)
+  #---------------------------------------------------------------------------
+  polling_strategy:
+    github:
+      primary:
+        tool: mcp__github__get_pull_request_status
+        params:
+          pull_number: "{pr_number}"
+        response_fields: ["state", "statuses[]", "check_runs[]"]
+      fallback:
+        command: "gh pr checks {pr_number} --watch --interval 10"
+
+    gitlab:
+      primary:
+        tool: mcp__gitlab__list_pipelines
+        params:
+          project_id: "{project_id}"
+          ref: "{branch}"
+          per_page: 1
+        response_fields: ["status", "id", "web_url"]
+      fallback:
+        command: "glab ci status --branch {branch}"
+
+  #---------------------------------------------------------------------------
+  # MAPPING DES STATUTS
+  #---------------------------------------------------------------------------
+  status_mapping:
+    github:
+      SUCCESS: [success, neutral]
+      PENDING: [pending, queued, in_progress, waiting]
+      FAILURE: [failure, action_required, timed_out, cancelled]
+      ERROR: [error, stale]
+
+    gitlab:
+      SUCCESS: [success, manual]
+      PENDING: [created, waiting_for_resource, preparing, pending, running]
+      FAILURE: [failed]
+      ERROR: [canceled, skipped]
+
+  #---------------------------------------------------------------------------
+  # ALGORITHME DE BACKOFF EXPONENTIEL
+  #---------------------------------------------------------------------------
+  backoff_algorithm:
+    pseudocode: |
+      interval = initial_interval
+      elapsed = 0
+      attempt = 0
+
+      WHILE elapsed < timeout AND attempt < max_poll_attempts:
+        status = poll_ci_status()
+
+        IF status == SUCCESS:
+          RETURN {status: "passed", duration: elapsed}
+        IF status in [FAILURE, ERROR, CANCELED]:
+          RETURN {status: "failed", duration: elapsed, details: get_failure_details()}
+        IF status in [PENDING, RUNNING]:
+          # Appliquer jitter
+          jitter = interval * (random(-jitter_percent, +jitter_percent) / 100)
+          sleep(interval + jitter)
+          elapsed += interval + jitter
+
+          # Backoff exponentiel
+          interval = min(interval * backoff_multiplier, max_interval)
+          attempt++
+
+      RETURN {status: "timeout", duration: elapsed}
+
+  #---------------------------------------------------------------------------
+  # PARALLEL TASKS (pendant le polling)
+  #---------------------------------------------------------------------------
+  parallel_tasks:
     - task: "Check conflicts"
-      action: "Verify no merge conflicts"
+      action: "git fetch && git merge-base --is-ancestor origin/main HEAD"
+      on_conflict: "Rebase automatique si --auto-rebase"
 
     - task: "Sync with main"
-      action: "Rebase if behind"
+      action: "Rebase si behind (max 10 commits)"
+      on_behind: "git rebase origin/main"
+```
+
+**Output Phase 2 :**
+
+```
+═══════════════════════════════════════════════════════════════
+  /git --merge - CI Monitoring (Phase 2)
+═══════════════════════════════════════════════════════════════
+
+  PR/MR    : #42 (feat/add-auth)
+  Platform : GitHub
+  Timeout  : 10 minutes
+
+  Polling CI status...
+    [10:30:15] Poll #1: pending (10s elapsed, next in 10s)
+    [10:30:27] Poll #2: running (22s elapsed, next in 15s)
+    [10:30:45] Poll #3: running (40s elapsed, next in 22s)
+    [10:31:12] Poll #4: running (67s elapsed, next in 33s)
+    [10:31:50] ✓ CI PASSED (95s)
+
+  Checks:
+    ├─ build: passed (1m 23s)
+    ├─ test: passed (2m 45s)
+    └─ lint: passed (45s)
+
+  Proceeding to Phase 3...
+
+═══════════════════════════════════════════════════════════════
 ```
 
 ---
 
-### Phase 3 : Auto-fix Loop
+### Phase 3 : Auto-fix Loop avec Catégories d'Erreurs
 
 ```yaml
 autofix_loop:
-  max_attempts: 3
+  description: "Détection, catégorisation et correction automatique des erreurs CI"
 
-  on_ci_failure:
-    1_analyze: "Identifier l'erreur CI"
-    2_fix: "Appliquer correction automatique"
-    3_commit: "Commit fix"
-    4_push: "Push et attendre CI"
+  #---------------------------------------------------------------------------
+  # CONFIGURATION
+  #---------------------------------------------------------------------------
+  config:
+    max_attempts: 3
+    cooldown_between_attempts: 30s    # Attente avant re-trigger CI
+    autofix_per_attempt_timeout: 120s # 2 min max par tentative de fix
+    require_human_for:
+      - security_scan
+      - timeout
+      - "confidence == LOW after 2 attempts"
 
-  on_max_reached:
-    action: "Poster commentaire détaillé sur PR"
-    status: "ABORT"
+  #---------------------------------------------------------------------------
+  # CATÉGORIES D'ERREURS
+  #---------------------------------------------------------------------------
+  error_categories:
+    #-------------------------------------------------------------------------
+    # LINT ERRORS - Auto-fixable (HIGH confidence)
+    #-------------------------------------------------------------------------
+    lint_error:
+      patterns:
+        - "eslint.*error"
+        - "prettier.*differ"
+        - "golangci-lint.*"
+        - "ruff.*error"
+        - "shellcheck.*SC[0-9]+"
+        - "stylelint.*"
+      severity: LOW
+      auto_fixable: true
+      confidence: HIGH
+      fix_strategy: "run_linter_fix"
+
+    #-------------------------------------------------------------------------
+    # TYPE ERRORS - Partially auto-fixable
+    #-------------------------------------------------------------------------
+    type_error:
+      patterns:
+        - "TS[0-9]+:"                    # TypeScript errors
+        - "type.*incompatible"
+        - "cannot find name"
+        - "go build.*undefined:"         # Go type errors
+        - "mypy.*error:"                 # Python mypy
+      severity: MEDIUM
+      auto_fixable: partial
+      confidence: MEDIUM
+      fix_strategy: "type_fix"
+
+    #-------------------------------------------------------------------------
+    # TEST FAILURES - Conditional auto-fix
+    #-------------------------------------------------------------------------
+    test_failure:
+      patterns:
+        - "FAIL.*test"
+        - "AssertionError"
+        - "expected.*but got"
+        - "Error: expect\\("
+        - "--- FAIL:"                    # Go test failures
+        - "FAILED.*::.*::"               # pytest
+      severity: HIGH
+      auto_fixable: conditional
+      confidence: MEDIUM
+      fix_strategy: "test_analysis"
+
+    #-------------------------------------------------------------------------
+    # BUILD ERRORS - Requires careful analysis
+    #-------------------------------------------------------------------------
+    build_error:
+      patterns:
+        - "error: cannot find module"
+        - "Module not found"
+        - "compilation failed"
+        - "SyntaxError:"
+        - "package.*not found"
+      severity: HIGH
+      auto_fixable: partial
+      confidence: LOW
+      fix_strategy: "build_analysis"
+
+    #-------------------------------------------------------------------------
+    # SECURITY SCAN - NEVER auto-fix
+    #-------------------------------------------------------------------------
+    security_scan:
+      patterns:
+        - "CRITICAL.*vulnerability"
+        - "HIGH.*CVE-"
+        - "security.*violation"
+        - "secret.*detected"
+        - "trivy.*CRITICAL"
+      severity: CRITICAL
+      auto_fixable: false
+      confidence: N/A
+      fix_strategy: "user_intervention_required"
+
+    #-------------------------------------------------------------------------
+    # DEPENDENCY ERRORS - Often auto-fixable
+    #-------------------------------------------------------------------------
+    dependency_error:
+      patterns:
+        - "npm ERR!.*peer dep"
+        - "cannot resolve dependency"
+        - "go: module.*not found"
+        - "pip.*ResolutionImpossible"
+      severity: MEDIUM
+      auto_fixable: true
+      confidence: MEDIUM
+      fix_strategy: "dependency_fix"
+
+    #-------------------------------------------------------------------------
+    # INFRASTRUCTURE ERRORS - Retry only
+    #-------------------------------------------------------------------------
+    infrastructure_error:
+      patterns:
+        - "rate limit"
+        - "connection refused"
+        - "503 Service Unavailable"
+        - "ECONNRESET"
+      severity: LOW
+      auto_fixable: retry
+      confidence: HIGH
+      fix_strategy: "retry_ci"
+
+  #---------------------------------------------------------------------------
+  # ALGORITHME DE LA BOUCLE
+  #---------------------------------------------------------------------------
+  loop_algorithm:
+    pseudocode: |
+      attempt = 0
+      fix_history = []
+
+      WHILE attempt < max_attempts:
+        attempt++
+
+        # Step 1: Récupérer détails de l'échec CI
+        failure = get_ci_failure_details()
+        category = categorize_error(failure)
+
+        # Step 2: Vérifier si auto-fixable
+        IF NOT category.auto_fixable:
+          RETURN abort_with_report(category, failure)
+
+        # Step 3: Détecter fix circulaire
+        IF is_circular_fix(category, fix_history):
+          RETURN abort_with_circular_warning(fix_history)
+
+        # Step 4: Appliquer stratégie de fix
+        fix_result = apply_fix_strategy(category)
+        fix_history.append({category, fix_result})
+
+        IF fix_result.success:
+          # Step 5: Commit et push
+          commit_fix(fix_result)
+          push_to_remote()
+
+          # Step 6: Attendre cooldown puis re-poll CI
+          sleep(cooldown_between_attempts)
+          ci_status = poll_ci_with_backoff()  # Re-use Phase 2
+
+          IF ci_status == SUCCESS:
+            RETURN success_report(attempt, fix_history)
+        ELSE:
+          RETURN abort_with_fix_failure(fix_result)
+
+      # Max attempts reached
+      RETURN abort_max_attempts(fix_history)
+
+  #---------------------------------------------------------------------------
+  # FIX STRATEGIES
+  #---------------------------------------------------------------------------
+  fix_strategies:
+    run_linter_fix:
+      detect_linter:
+        - check: "package.json"
+          command: "npm run lint -- --fix"
+        - check: ".golangci.yml"
+          command: "golangci-lint run --fix"
+        - check: "pyproject.toml [tool.ruff]"
+          command: "ruff check --fix"
+      commit_format: "fix(lint): auto-fix {linter} errors"
+
+    type_fix:
+      workflow:
+        1_extract: "Parser CI log pour erreurs de type spécifiques"
+        2_analyze: "Identifier le fichier et la ligne"
+        3_fix: "Appliquer correction minimale"
+        4_verify: "npm run typecheck OR go build"
+      commit_format: "fix(types): resolve {error_code} in {file}"
+
+    test_analysis:
+      conditions:
+        assertion_mismatch:
+          pattern: "expected.*but got"
+          auto_fix: true
+          strategy: "Update assertion si implementation changed"
+        snapshot_mismatch:
+          pattern: "snapshot.*differ"
+          auto_fix: true
+          strategy: "npm test -- -u"
+        timeout:
+          pattern: "exceeded timeout"
+          auto_fix: false
+      commit_format: "fix(test): update {test_name}"
+
+    dependency_fix:
+      strategies:
+        npm: "npm install --legacy-peer-deps"
+        go: "go mod tidy"
+        pip: "pip install --upgrade"
+      commit_format: "fix(deps): resolve {package} conflict"
+
+    retry_ci:
+      wait: 60s
+      retrigger:
+        github: "gh run rerun --failed"
+        gitlab: "glab ci retry"
+
+    user_intervention_required:
+      action: "Generate detailed failure report"
+      include:
+        - "Error category and severity"
+        - "Relevant CI log snippets (max 50 lines)"
+        - "Affected files"
+        - "Suggested manual steps"
+      block_merge: true
+```
+
+**Output Phase 3 (Auto-fix Success) :**
+
+```
+═══════════════════════════════════════════════════════════════
+  /git --merge - Auto-fix Loop (Phase 3)
+═══════════════════════════════════════════════════════════════
+
+  Attempt 1/3 - lint_error
+  -------------------------
+    Category : lint_error (LOW severity)
+    Confidence: HIGH
+    Auto-fix : YES
+
+    Error: eslint: 3 errors in src/utils/parser.ts
+      ├─ Line 45: no-unused-vars
+      ├─ Line 67: prefer-const
+      └─ Line 89: no-console
+
+    Fix: npm run lint -- --fix
+    Result: ✓ Fixed
+
+    Commit: fix(lint): auto-fix eslint errors in parser.ts
+    Push: origin/feat/add-parser
+
+    Re-polling CI...
+      [10:32:45] ✓ CI PASSED (67s)
+
+═══════════════════════════════════════════════════════════════
+  ✓ Auto-fix Successful (1 attempt)
+═══════════════════════════════════════════════════════════════
+
+  Commits added: 1
+    └─ fix(lint): auto-fix eslint errors in parser.ts
+
+  Proceeding to Phase 4 (Merge)...
+
+═══════════════════════════════════════════════════════════════
+```
+
+**Output Phase 3 (Security Block) :**
+
+```
+═══════════════════════════════════════════════════════════════
+  /git --merge - BLOCKED (Security Issue)
+═══════════════════════════════════════════════════════════════
+
+  ⛔ AUTO-FIX DISABLED for security issues
+
+  Category: security_scan
+  Severity: CRITICAL
+
+  Vulnerability:
+    ┌─────────────────────────────────────────────────────────┐
+    │ CRITICAL CVE-2023-44487                                 │
+    │ Package: golang.org/x/net v0.7.0                        │
+    │ Fixed in: v0.17.0                                       │
+    └─────────────────────────────────────────────────────────┘
+
+  Required Actions:
+    1. go get golang.org/x/net@v0.17.0 && go mod tidy
+    2. trivy fs --severity CRITICAL .
+    3. Re-run /git --merge
+
+  ⚠️  Force merge NOT available for security issues.
+
+═══════════════════════════════════════════════════════════════
 ```
 
 ---
@@ -653,6 +1043,7 @@ merge_workflow:
 |--------|--------|--------|
 | Skip Phase 0.5 (Identity) sans flag | ❌ **INTERDIT** | Identité git requise |
 | Skip Phase 1 (Peek) | ❌ **INTERDIT** | git status avant action |
+| Skip Phase 2 (CI Polling) | ❌ **INTERDIT** | CI validation obligatoire |
 | Merge automatique sans CI | ❌ **INTERDIT** | Qualité code |
 | Push sur main/master | ❌ **INTERDIT** | Branche protégée |
 | Force merge si CI échoue x3 | ❌ **INTERDIT** | Limite tentatives |
@@ -660,10 +1051,32 @@ merge_workflow:
 | Mentions IA dans commits | ❌ **INTERDIT** | Discrétion |
 | Commit sans identité validée | ❌ **INTERDIT** | Traçabilité |
 
+### Auto-fix Safeguards
+
+| Action | Status | Raison |
+|--------|--------|--------|
+| Auto-fix vulnerabilités sécurité | ❌ **INTERDIT** | Review humain requis |
+| Merge avec issues CRITICAL | ❌ **INTERDIT** | Sécurité first |
+| Fix circulaire (même erreur 3x) | ❌ **INTERDIT** | Prévient boucle infinie |
+| Modifier .claude/ via auto-fix | ❌ **INTERDIT** | Config protégée |
+| Modifier .devcontainer/ via auto-fix | ❌ **INTERDIT** | Config protégée |
+| Auto-fix sans commit message | ❌ **INTERDIT** | Traçabilité |
+
+### Timeouts Auto-fix
+
+| Élément | Valeur | Raison |
+|---------|--------|--------|
+| CI Polling total | 600s (10min) | Éviter attente infinie |
+| Par tentative de fix | 120s (2min) | Éviter blocage |
+| Cooldown entre tentatives | 30s | Laisser CI démarrer |
+| Jitter polling | ±20% | Éviter thundering herd |
+
 ### Parallélisation légitime
 
 | Élément | Parallèle? | Raison |
 |---------|------------|--------|
 | Pré-commit checks (lint+test+build) | ✅ Parallèle | Indépendants |
+| CI polling + conflict check | ✅ Parallèle | Indépendants |
 | Opérations git (branch→commit→push→PR) | ❌ Séquentiel | Chaîne de dépendances |
+| Tentatives auto-fix | ❌ Séquentiel | Dépend du résultat CI |
 | CI checks en attente | ❌ Séquentiel | Attendre résultat |

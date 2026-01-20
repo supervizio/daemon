@@ -1,0 +1,115 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+# supervizio E2E testing Vagrantfile
+# Supports: libvirt (Linux CI), QEMU (macOS local)
+
+# Detect Homebrew path for macOS
+def homebrew_prefix
+  if RUBY_PLATFORM.include?("arm64") || `uname -m`.strip == "arm64"
+    "/opt/homebrew"
+  else
+    "/usr/local"
+  end
+end
+
+Vagrant.configure("2") do |config|
+  # Shared folders
+  config.vm.synced_folder "../setup", "/setup", type: "rsync"
+  config.vm.synced_folder "../bin", "/bin-local", type: "rsync"
+  config.vm.synced_folder ".", "/vagrant", type: "rsync"
+
+  # =============================================================================
+  # Libvirt provider (Linux CI with KVM - fast)
+  # =============================================================================
+  config.vm.provider "libvirt" do |lv|
+    lv.memory = 2048
+    lv.cpus = 2
+    lv.driver = "kvm"
+  end
+
+  # =============================================================================
+  # QEMU provider (macOS local development)
+  # =============================================================================
+  config.vm.provider "qemu" do |qe|
+    qe.memory = "2048"
+    qe.smp = "2"
+    qe.qemu_dir = "#{homebrew_prefix}/share/qemu"
+    qe.machine_type = "virt,accel=hvf,highmem=on"
+    qe.ssh_port = 50022
+  end
+
+  # =============================================================================
+  # VM Definitions
+  # =============================================================================
+
+  # Debian 12 (Bookworm) - systemd
+  config.vm.define "debian", primary: true do |debian|
+    debian.vm.box = "generic/debian12"
+    debian.vm.hostname = "e2e-debian"
+
+    debian.vm.provision "shell", inline: <<-SHELL
+      apt-get update -qq
+      apt-get install -y -qq curl
+    SHELL
+  end
+
+  # Alpine 3.19 - OpenRC
+  config.vm.define "alpine", autostart: false do |alpine|
+    alpine.vm.box = "generic/alpine319"
+    alpine.vm.hostname = "e2e-alpine"
+
+    alpine.vm.provision "shell", inline: <<-SHELL
+      apk update
+      apk add curl
+    SHELL
+  end
+
+  # Ubuntu 22.04 - systemd
+  config.vm.define "ubuntu", autostart: false do |ubuntu|
+    ubuntu.vm.box = "generic/ubuntu2204"
+    ubuntu.vm.hostname = "e2e-ubuntu"
+
+    ubuntu.vm.provision "shell", inline: <<-SHELL
+      apt-get update -qq
+      apt-get install -y -qq curl
+    SHELL
+  end
+
+  # Rocky Linux 9 - systemd (RHEL-compatible)
+  config.vm.define "rocky", autostart: false do |rocky|
+    rocky.vm.box = "generic/rocky9"
+    rocky.vm.hostname = "e2e-rocky"
+
+    rocky.vm.provision "shell", inline: <<-SHELL
+      dnf install -y curl
+    SHELL
+  end
+
+  # FreeBSD 14 - rc.d
+  config.vm.define "freebsd", autostart: false do |freebsd|
+    freebsd.vm.box = "generic/freebsd14"
+    freebsd.vm.hostname = "e2e-freebsd"
+
+    freebsd.vm.provision "shell", inline: <<-SHELL
+      pkg install -y curl
+    SHELL
+  end
+
+  # OpenBSD 7.5 - rc.d
+  config.vm.define "openbsd", autostart: false do |openbsd|
+    openbsd.vm.box = "generic/openbsd75"
+    openbsd.vm.hostname = "e2e-openbsd"
+
+    # OpenBSD has curl by default
+  end
+
+  # NetBSD 10 - rc.d
+  config.vm.define "netbsd", autostart: false do |netbsd|
+    netbsd.vm.box = "generic/netbsd10"
+    netbsd.vm.hostname = "e2e-netbsd"
+
+    netbsd.vm.provision "shell", inline: <<-SHELL
+      pkgin -y install curl
+    SHELL
+  end
+end

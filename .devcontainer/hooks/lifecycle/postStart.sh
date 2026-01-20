@@ -170,35 +170,48 @@ init_semantic_search() {
 
     # Pull embedding model if not present (with progress feedback)
     if [ "$model_available" = false ]; then
-        log_info "Pulling $EMBEDDING_MODEL model..."
+        log_info "Pulling $EMBEDDING_MODEL model (this may take a few minutes on first run)..."
         local pull_start=$(date +%s)
-        local pull_timeout=120  # 2 minutes max for model pull
-        local pull_pid
+        local pull_timeout=300  # 5 minutes max for model pull (639MB model)
 
-        # Start pull in background to allow timeout
-        curl -sf "http://${OLLAMA_ENDPOINT}/api/pull" -d "{\"name\":\"$EMBEDDING_MODEL\"}" >/dev/null 2>&1 &
-        pull_pid=$!
+        # Try docker exec first (more reliable than REST API for large models)
+        local ollama_container=""
+        if command -v docker &>/dev/null; then
+            # Find the ollama container (handles different naming conventions)
+            ollama_container=$(docker ps --filter "name=ollama" --format "{{.Names}}" 2>/dev/null | head -1)
+        fi
 
-        # Wait for pull with timeout and progress dots
-        local elapsed=0
-        while kill -0 $pull_pid 2>/dev/null; do
-            sleep 5
-            elapsed=$(($(date +%s) - pull_start))
-            if [ $elapsed -ge $pull_timeout ]; then
-                log_warning "Model pull taking too long, continuing in background..."
-                break
+        if [ -n "$ollama_container" ]; then
+            log_info "Using docker exec to pull model from $ollama_container..."
+            # Pull via docker exec (blocking, reliable)
+            if timeout "${pull_timeout}s" docker exec "$ollama_container" ollama pull "$EMBEDDING_MODEL" 2>&1 | tail -5; then
+                log_success "Model $EMBEDDING_MODEL pulled successfully"
+            else
+                log_warning "Model pull via docker exec failed or timed out"
             fi
-            printf "."  # Progress indicator
-        done
-        echo ""  # Newline after progress dots
+        else
+            # Fallback to REST API with streaming disabled for blocking behavior
+            log_info "Using REST API to pull model..."
+            # Use stream:false for synchronous pull (blocks until complete)
+            local pull_result
+            pull_result=$(timeout "${pull_timeout}s" curl -sf "http://${OLLAMA_ENDPOINT}/api/pull" \
+                -d "{\"name\":\"$EMBEDDING_MODEL\",\"stream\":false}" 2>&1) || true
 
-        # Verify model is now available
-        sleep 2  # Brief pause for Ollama to register model
+            if echo "$pull_result" | grep -q '"status":"success"'; then
+                log_success "Model $EMBEDDING_MODEL pulled successfully"
+            else
+                log_warning "Model pull may have failed: $pull_result"
+            fi
+        fi
+
+        # Final verification
+        sleep 2
         if curl -sf "http://${OLLAMA_ENDPOINT}/api/tags" 2>/dev/null | grep -q "$EMBEDDING_MODEL"; then
             local pull_duration=$(($(date +%s) - pull_start))
             log_success "Model $EMBEDDING_MODEL ready (${pull_duration}s)"
         else
-            log_warning "Model $EMBEDDING_MODEL may still be downloading"
+            log_warning "Model $EMBEDDING_MODEL not available - grepai semantic search may not work"
+            log_info "To manually pull: docker exec <ollama-container> ollama pull $EMBEDDING_MODEL"
         fi
     fi
 

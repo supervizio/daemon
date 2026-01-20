@@ -53,9 +53,10 @@ if [ -d "/home/vscode/.gnupg" ] && [ -n "$(gpg --list-secret-keys --keyid-format
     GPG_KEY=""
     if [ -n "$GIT_EMAIL" ]; then
         # Priority: Find GPG key matching the configured GIT_EMAIL
+        # Note: || true prevents pipefail from failing the entire script when grep finds no match
         GPG_KEY=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null | \
-            grep -B1 "$GIT_EMAIL" | \
-            grep -E "^sec" | head -1 | awk '{print $2}' | cut -d'/' -f2)
+            grep -B1 "$GIT_EMAIL" 2>/dev/null | \
+            grep -E "^sec" 2>/dev/null | head -1 | awk '{print $2}' | cut -d'/' -f2 || true)
     fi
 
     if [ -n "$GPG_KEY" ]; then
@@ -66,7 +67,7 @@ if [ -d "/home/vscode/.gnupg" ] && [ -n "$(gpg --list-secret-keys --keyid-format
         log_success "Git GPG signing configured with key: $GPG_KEY (matching $GIT_EMAIL)"
     else
         # No matching key found - GPG signing will be configured via /git skill
-        log_warn "No GPG key found for email '$GIT_EMAIL' - configure via /git skill"
+        log_warning "No GPG key found for email '$GIT_EMAIL' - configure via /git skill"
     fi
 else
     log_info "No GPG keys available - commit signing disabled"

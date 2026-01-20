@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# PROVIDE: supervizio
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+#
+# Add the following lines to /etc/rc.conf to enable supervizio:
+#
+# supervizio=YES
+#
+
+. /etc/rc.subr
+
+name="supervizio"
+rcvar=$name
+command="/usr/local/bin/supervizio"
+command_args="--config /etc/supervizio/config.yaml"
+pidfile="/var/run/${name}.pid"
+command_background="YES"
+
+load_rc_config $name
+run_rc_command "$1"
