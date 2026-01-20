@@ -79,7 +79,8 @@
       "Read(**/*)",
       "Glob(**/*)",
       "Grep(**/*)",
-      "mcp__grepai__*"
+      "mcp__grepai__*",
+      "mcp__context7__*"
     ],
     "deny": [],
     "additionalDirectories": []
