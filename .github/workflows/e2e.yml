@@ -1,9 +1,12 @@
 # =============================================================================
-# E2E Tests - Native Architecture Testing on macOS 15
+# E2E Tests - Native Architecture Testing on macOS
 # =============================================================================
-# Tests supervizio on native hardware:
-# - AMD64: macOS 15 Large (Intel) with Vagrant QEMU + Docker
-# - ARM64: macOS 15 (Apple Silicon) with Vagrant QEMU + Docker
+# Tests supervizio on native hardware using FREE standard runners:
+# - AMD64: macOS 13 (Intel) - last free Intel macOS runner
+# - ARM64: macOS 15 (Apple Silicon) - free standard runner
+#
+# NOTE: macos-*-large runners are NOT free (require GitHub Team plan)
+# Standard runners are free for public repositories.
 #
 # Each job tests:
 # 1. VM: Debian via Vagrant (installation test)
@@ -29,11 +32,11 @@ env:
 
 jobs:
   # ===========================================================================
-  # AMD64 E2E Tests (macOS 15 Intel)
+  # AMD64 E2E Tests (macOS 13 Intel - FREE standard runner)
   # ===========================================================================
   e2e-amd64:
     name: E2E AMD64 (Debian VM + Container)
-    runs-on: macos-15-large
+    runs-on: macos-13
     timeout-minutes: 30
     steps:
       - name: Checkout code
@@ -125,7 +128,7 @@ jobs:
           docker images || true
 
   # ===========================================================================
-  # ARM64 E2E Tests (macOS 15 Apple Silicon)
+  # ARM64 E2E Tests (macOS 15 Apple Silicon - FREE standard runner)
   # ===========================================================================
   e2e-arm64:
     name: E2E ARM64 (Debian VM + Container)

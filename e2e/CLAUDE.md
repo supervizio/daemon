@@ -4,12 +4,14 @@ End-to-end testing for supervizio using native macOS runners.
 
 ## Architecture
 
-**Native hardware testing on macOS 15 runners**
+**Native hardware testing on FREE standard macOS runners**
 
 | Runner | Architecture | VM | Container |
 |--------|--------------|-----|-----------|
-| macos-15-large | AMD64 (Intel) | Debian | Debian |
+| macos-13 | AMD64 (Intel) | Debian | Debian |
 | macos-15 | ARM64 (Apple Silicon) | Debian | Debian |
+
+**Note**: `macos-*-large` runners are NOT free (require GitHub Team plan).
 
 **Total: 2 jobs** (1 AMD64 + 1 ARM64)
 
@@ -52,10 +54,10 @@ E2E Tests (2 jobs)
 
 ## Runners
 
-| Runner | Hardware | Provider |
-|--------|----------|----------|
-| `macos-15-large` | Intel x86_64 | QEMU + HVF |
-| `macos-15` | Apple Silicon | QEMU + HVF |
+| Runner | Hardware | Provider | Cost |
+|--------|----------|----------|------|
+| `macos-13` | Intel x86_64 | QEMU + HVF | FREE |
+| `macos-15` | Apple Silicon | QEMU + HVF | FREE |
 
 Both use HVF (Hypervisor Framework) for native virtualization performance.
 
