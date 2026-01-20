@@ -275,16 +275,9 @@ jobs:
       - name: Start PID1 container
         run: |
           docker run -d --name supervizio-pid1 supervizio-pid1
-          echo "=== Waiting for services to start ==="
+          echo "Waiting for services to start..."
           sleep 15
-          echo "=== Container status ==="
-          docker ps -a --filter name=supervizio-pid1
-          echo "=== Container logs ==="
-          docker logs supervizio-pid1 2>&1 | tail -100 || true
-          echo "=== Processes in container ==="
-          docker exec supervizio-pid1 ps aux 2>&1 || true
-          echo "=== Checking supervizio version ==="
-          docker exec supervizio-pid1 /usr/local/bin/supervizio --version 2>&1 || true
+          docker ps --filter name=supervizio-pid1 --format "table {{.Names}}\t{{.Status}}"
 
       - name: Run PID1 container tests
         run: |

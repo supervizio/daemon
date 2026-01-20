@@ -54,16 +54,6 @@ echo ""
 echo "Container: ${CONTAINER_NAME}"
 echo ""
 
-echo "=== Debug: Container status ==="
-docker ps -a --filter name="${CONTAINER_NAME}" || true
-echo ""
-echo "=== Debug: Container logs (last 50 lines) ==="
-docker logs "${CONTAINER_NAME}" 2>&1 | tail -50 || true
-echo ""
-echo "=== Debug: Processes in container ==="
-docker exec "${CONTAINER_NAME}" ps aux 2>&1 || true
-echo ""
-
 check_container
 
 # =============================================================================

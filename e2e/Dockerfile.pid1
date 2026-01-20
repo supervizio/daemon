@@ -24,6 +24,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY bin/supervizio /usr/local/bin/supervizio
 RUN chmod +x /usr/local/bin/supervizio
 
+# Copy nginx wrapper script (needed because executor doesn't handle quoted args)
+COPY e2e/start-nginx.sh /usr/local/bin/start-nginx.sh
+RUN chmod +x /usr/local/bin/start-nginx.sh
+
 # Copy test configuration
 COPY e2e/config-pid1.yaml /etc/supervizio/config.yaml
 

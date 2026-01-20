@@ -14,8 +14,10 @@ log:
 
 services:
   # Nginx web server (HTTP health check target)
+  # Using wrapper script because executor's strings.Fields()
+  # doesn't handle quoted arguments in command strings
   - name: nginx
-    command: nginx -g "daemon off;"
+    command: /usr/local/bin/start-nginx.sh
     restart: always
     start_delay: 0s
     stop_timeout: 10s
