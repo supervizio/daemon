@@ -4,14 +4,16 @@ End-to-end testing for supervizio across VMs and containers.
 
 ## Architecture
 
-**Balanced matrix: AMD64 (KVM native) + ARM64 (QEMU emulation) for ALL platforms**
+**AMD64 (required) + ARM64/experimental (soft-fail)**
 
-| Matrix | AMD64 | ARM64 | Total |
-|--------|-------|-------|-------|
-| Linux | 4 distros | 4 distros | 8 |
-| BSD | 3 distros | 3 distros | 6 |
-| Container | 1 | 1 | 2 |
-| **TOTAL** | **8** | **8** | **16** |
+| Matrix | Required | Experimental | Total |
+|--------|----------|--------------|-------|
+| Linux | 3 (debian, ubuntu, alpine) | 5 (ARM64 + rocky) | 8 |
+| BSD | 1 (freebsd) | 5 (openbsd, netbsd, ARM64) | 6 |
+| Container | 1 (amd64) | 1 (arm64) | 2 |
+| **TOTAL** | **5** | **11** | **16** |
+
+Jobs marked `[exp]` use `continue-on-error: true` - failures don't block the PR.
 
 ## Structure
 

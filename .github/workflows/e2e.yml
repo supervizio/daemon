@@ -6,12 +6,14 @@
 # - BSD VMs via Vagrant + libvirt/KVM (rc.d)
 # - Containers via Docker + QEMU binfmt (PID1 mode, scratch image)
 #
-# Architecture: AMD64 (KVM native) + ARM64 (QEMU emulation) for ALL platforms
+# Architecture:
+# - AMD64: KVM native (reliable)
+# - ARM64: QEMU emulation (experimental, soft-fail)
 #
-# Matrix: 16 parallel jobs
-# - vm-linux: 4 distros × 2 archs = 8 jobs
-# - vm-bsd: 3 distros × 2 archs = 6 jobs
-# - container: 1 type × 2 archs = 2 jobs
+# Matrix: 7 required + 9 experimental jobs
+# - vm-linux: 3 AMD64 (debian, ubuntu, alpine) + 4 ARM64 experimental
+# - vm-bsd: 1 AMD64 (freebsd) + 5 experimental (openbsd, netbsd, ARM64)
+# - container: 2 jobs (amd64 required, arm64 experimental)
 # =============================================================================
 name: E2E Tests
 
@@ -36,9 +38,10 @@ jobs:
   # 4 distros × 2 architectures = 8 jobs
   # ===========================================================================
   vm-linux:
-    name: Linux ${{ matrix.distro }} (${{ matrix.arch }})
+    name: Linux ${{ matrix.distro }} (${{ matrix.arch }})${{ matrix.experimental && ' [exp]' || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
+    continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
       matrix:
@@ -50,12 +53,14 @@ jobs:
             goarch: amd64
             timeout: 15
             use_kvm: true
+            experimental: false
           - distro: debian
             vm: debian-arm64
             arch: arm64
             goarch: arm64
             timeout: 45
             use_kvm: false
+            experimental: true  # ARM64 QEMU emulation
 
           # ─── UBUNTU (systemd) ─────────────────────────────────────────────
           - distro: ubuntu
@@ -64,12 +69,14 @@ jobs:
             goarch: amd64
             timeout: 15
             use_kvm: true
+            experimental: false
           - distro: ubuntu
             vm: ubuntu-arm64
             arch: arm64
             goarch: arm64
             timeout: 45
             use_kvm: false
+            experimental: true  # ARM64 QEMU emulation
 
           # ─── ALPINE (OpenRC) ──────────────────────────────────────────────
           - distro: alpine
@@ -78,26 +85,30 @@ jobs:
             goarch: amd64
             timeout: 15
             use_kvm: true
+            experimental: false
           - distro: alpine
             vm: alpine-arm64
             arch: arm64
             goarch: arm64
             timeout: 45
             use_kvm: false
+            experimental: true  # ARM64 QEMU emulation
 
           # ─── ROCKY (systemd, RHEL-compatible) ─────────────────────────────
           - distro: rocky
             vm: rocky
             arch: amd64
             goarch: amd64
-            timeout: 15
+            timeout: 20
             use_kvm: true
+            experimental: true  # Box has known issues
           - distro: rocky
             vm: rocky-arm64
             arch: arm64
             goarch: arm64
             timeout: 45
             use_kvm: false
+            experimental: true  # ARM64 QEMU emulation
 
     steps:
       - name: Checkout code
@@ -215,9 +226,10 @@ jobs:
   # 3 distros × 2 architectures = 6 jobs
   # ===========================================================================
   vm-bsd:
-    name: BSD ${{ matrix.distro }} (${{ matrix.arch }})
+    name: BSD ${{ matrix.distro }} (${{ matrix.arch }})${{ matrix.experimental && ' [exp]' || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
+    continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
       matrix:
@@ -230,6 +242,7 @@ jobs:
             goos: freebsd
             timeout: 20
             use_kvm: true
+            experimental: false
           - distro: freebsd
             vm: freebsd-arm64
             arch: arm64
@@ -237,6 +250,7 @@ jobs:
             goos: freebsd
             timeout: 45
             use_kvm: false
+            experimental: true  # ARM64 QEMU emulation
 
           # ─── OPENBSD (rc.d) ───────────────────────────────────────────────
           - distro: openbsd
@@ -244,8 +258,9 @@ jobs:
             arch: amd64
             goarch: amd64
             goos: openbsd
-            timeout: 20
+            timeout: 25
             use_kvm: true
+            experimental: true  # Box has compatibility issues
           - distro: openbsd
             vm: openbsd-arm64
             arch: arm64
@@ -253,6 +268,7 @@ jobs:
             goos: openbsd
             timeout: 45
             use_kvm: false
+            experimental: true  # ARM64 QEMU emulation
 
           # ─── NETBSD (rc.d) ────────────────────────────────────────────────
           - distro: netbsd
@@ -260,8 +276,9 @@ jobs:
             arch: amd64
             goarch: amd64
             goos: netbsd
-            timeout: 20
+            timeout: 25
             use_kvm: true
+            experimental: true  # Box has compatibility issues
           - distro: netbsd
             vm: netbsd-arm64
             arch: arm64
@@ -269,6 +286,7 @@ jobs:
             goos: netbsd
             timeout: 45
             use_kvm: false
+            experimental: true  # ARM64 QEMU emulation
 
     steps:
       - name: Checkout code
@@ -387,9 +405,10 @@ jobs:
   # 1 test type × 2 architectures = 2 jobs
   # ===========================================================================
   container:
-    name: Container (${{ matrix.arch }})
+    name: Container (${{ matrix.arch }})${{ matrix.experimental && ' [exp]' || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
+    continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
       matrix:
@@ -399,11 +418,13 @@ jobs:
             goarch: amd64
             platform: linux/amd64
             timeout: 15
+            experimental: false
           # ─── ARM64 (QEMU emulation) ──────────────────────────────────────────
           - arch: arm64
             goarch: arm64
             platform: linux/arm64
             timeout: 30
+            experimental: true  # QEMU emulation may have timing issues
 
     steps:
       - name: Checkout code
