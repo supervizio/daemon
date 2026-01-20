@@ -12,7 +12,8 @@
 # - Graceful shutdown
 # =============================================================================
 
-set -e
+# Don't exit on first error - we want to run all tests
+set -o pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -51,6 +52,16 @@ echo "  E2E Container Tests - supervizio as PID1"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 echo "Container: ${CONTAINER_NAME}"
+echo ""
+
+echo "=== Debug: Container status ==="
+docker ps -a --filter name="${CONTAINER_NAME}" || true
+echo ""
+echo "=== Debug: Container logs (last 50 lines) ==="
+docker logs "${CONTAINER_NAME}" 2>&1 | tail -50 || true
+echo ""
+echo "=== Debug: Processes in container ==="
+docker exec "${CONTAINER_NAME}" ps aux 2>&1 || true
 echo ""
 
 check_container
