@@ -127,7 +127,7 @@ fi
 echo ""
 echo "=== Test 7: Uninstallation ==="
 # Auto-answer 'n' to keep config and logs prompts
-echo "n\nn\n" | /setup/uninstall.sh
+printf 'n\nn\n' | /setup/uninstall.sh
 if [ ! -f /usr/local/bin/supervizio ]; then
     pass "Binary removed"
 else
