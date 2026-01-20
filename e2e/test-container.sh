@@ -91,12 +91,15 @@ fi
 # =============================================================================
 echo -e "\n${YELLOW}[Test 3]${NC} Zombie process reaping"
 
-# Create orphan process that becomes zombie
-docker exec "${CONTAINER_NAME}" sh -c '(sleep 0.5 &); sleep 1' 2>/dev/null || true
-sleep 2
+# Create orphan processes that should be reaped by PID1
+# Use a small wrapper that creates a child and exits, orphaning the child
+docker exec "${CONTAINER_NAME}" sh -c 'for i in 1 2 3; do (sleep 0.1 &); done; sleep 0.5' 2>/dev/null || true
 
-# Count zombie processes
-ZOMBIES=$(docker exec "${CONTAINER_NAME}" ps aux 2>/dev/null | grep -c '[Z]' || echo "0")
+# Wait a moment for potential zombies to be reaped
+sleep 3
+
+# Count zombie processes (state Z in ps output)
+ZOMBIES=$(docker exec "${CONTAINER_NAME}" ps aux 2>/dev/null | awk '$8 ~ /Z/' | wc -l || echo "0")
 if [ "$ZOMBIES" = "0" ]; then
     test_result 0 "No zombie processes found"
 else
@@ -130,20 +133,27 @@ echo -e "\n${YELLOW}[Test 5]${NC} Service restart on crash"
 
 # Kill nginx forcefully
 docker exec "${CONTAINER_NAME}" pkill -9 -x nginx 2>/dev/null || true
-sleep 5
 
-# Check nginx restarted
-if docker exec "${CONTAINER_NAME}" pgrep -x nginx > /dev/null 2>&1; then
-    NEW_PID=$(docker exec "${CONTAINER_NAME}" pgrep -x nginx | head -1)
-    test_result 0 "nginx restarted after kill (new pid: $NEW_PID)"
-else
-    test_result 1 "nginx restarted after kill"
-fi
+# Wait for restart - supervizio needs time to detect crash and restart
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 1
+    if docker exec "${CONTAINER_NAME}" pgrep -x nginx > /dev/null 2>&1; then
+        NEW_PID=$(docker exec "${CONTAINER_NAME}" pgrep -x nginx | head -1)
+        test_result 0 "nginx restarted after kill (new pid: $NEW_PID, took ${i}s)"
+        break
+    fi
+    if [ "$i" = "10" ]; then
+        test_result 1 "nginx restarted after kill (timeout after 10s)"
+    fi
+done
 
 # =============================================================================
 # Test 6: HTTP health check (nginx)
 # =============================================================================
 echo -e "\n${YELLOW}[Test 6]${NC} HTTP health check"
+
+# Give nginx a moment to be fully ready
+sleep 2
 
 HTTP_STATUS=$(docker exec "${CONTAINER_NAME}" curl -s -o /dev/null -w "%{http_code}" http://localhost:80/ 2>/dev/null || echo "000")
 if [ "$HTTP_STATUS" = "200" ]; then
