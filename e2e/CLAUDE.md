@@ -11,7 +11,7 @@ AMD64 only (setup scripts are architecture-agnostic).
 | **systemd** | Ubuntu 22.04 | ✅ Vagrant | ✅ |
 | **OpenRC** | Alpine 3.19 | ✅ Vagrant | ✅ |
 | **SysVinit** | Devuan 4 | ✅ Vagrant | ✅ |
-| **runit** | Void Linux | - | ✅ |
+| **runit** | Alpine 3.20 | ✅ Vagrant | ✅ |
 | **BSD rc.d** | FreeBSD 14 | ✅ Vagrant | - |
 | **BSD rc.d** | OpenBSD 7 | ✅ Vagrant | - |
 | **BSD rc.d** | NetBSD 10 | ✅ Vagrant | - |
@@ -29,7 +29,7 @@ e2e/
 ├── Dockerfile.ubuntu     # Ubuntu (systemd)
 ├── Dockerfile.alpine     # Alpine (OpenRC)
 ├── Dockerfile.devuan     # Devuan (SysVinit)
-├── Dockerfile.void       # Void Linux (runit)
+├── Dockerfile.alpine-runit # Alpine (runit)
 └── CLAUDE.md             # This file
 ```
 
@@ -43,7 +43,7 @@ E2E Tests (9 jobs, 2 workflow jobs)
 │   ├── Ubuntu (systemd)
 │   ├── Alpine (OpenRC)
 │   ├── Devuan (SysVinit)
-│   └── Void (runit) - Docker only
+│   └── Alpine-runit (runit)
 │
 └── e2e-bsd (4 matrix jobs - Vagrant)
     ├── FreeBSD (rc.d)
@@ -80,7 +80,7 @@ E2E Tests (9 jobs, 2 workflow jobs)
 | Ubuntu | `ubuntu:24.04` | systemd |
 | Alpine | `alpine:3.20` | OpenRC |
 | Devuan | `devuan/devuan:daedalus` | SysVinit |
-| Void | `ghcr.io/void-linux/void-glibc:latest` | runit |
+| Alpine-runit | `alpine:3.20` + runit | runit |
 
 ## Local Testing
 
@@ -103,7 +103,6 @@ docker run --rm supervizio-debian
 
 ## Platform Notes
 
-- **Void Linux**: No Vagrant box - Docker only
-- **DragonFlyBSD**: Not supported by cross-platform-actions - uses Vagrant
+- **Alpine-runit**: Same Alpine box as OpenRC, but provisioned with runit
 - **BSD**: No Docker support - VM tests only
 - All binaries: `CGO_ENABLED=0` (static)

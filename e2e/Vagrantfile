@@ -141,8 +141,25 @@ Vagrant.configure("2") do |config|
   # ===========================================================================
   # LINUX: runit
   # ===========================================================================
-  # Note: Void Linux has no libvirt Vagrant box available.
-  # runit is tested via Docker container only (see Dockerfile.void)
+
+  # Alpine 3.19 with runit (instead of OpenRC)
+  # Uses same box as alpine but provisions runit init system
+  config.vm.define "alpine-runit", autostart: false do |v|
+    v.vm.box = "generic/alpine319"
+    v.vm.hostname = "e2e-alpine-runit"
+    v.vm.provision "shell", inline: <<-SHELL
+      # Enable community repo for runit
+      sed -i 's/#.*community/community/' /etc/apk/repositories
+      apk update
+      apk add curl runit
+
+      # Create runit service directories
+      mkdir -p /etc/sv /var/service
+
+      # Verify runit is available
+      which runsvdir && echo "runit installed successfully"
+    SHELL
+  end
 
   # ===========================================================================
   # BSD: rc.d (FreeBSD style)

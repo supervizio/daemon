@@ -175,7 +175,7 @@ Testing across all supported init systems (AMD64):
 | Ubuntu 22.04 | systemd | ✅ Vagrant | ✅ |
 | Alpine 3.19 | OpenRC | ✅ Vagrant | ✅ |
 | Devuan 4 | SysVinit | ✅ Vagrant | ✅ |
-| Void Linux | runit | - | ✅ |
+| Alpine 3.20 | runit | ✅ Vagrant | ✅ |
 
 ### BSD
 
