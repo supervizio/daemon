@@ -13,6 +13,10 @@ setup/
     │   └── supervizio.service
     ├── openrc/             # Alpine/Gentoo OpenRC
     │   └── supervizio
+    ├── runit/              # Void Linux/Artix runit
+    │   └── supervizio/
+    │       ├── run         # Service run script
+    │       └── log/run     # Log service script
     ├── freebsd/            # FreeBSD rc.d
     │   └── supervizio
     ├── openbsd/            # OpenBSD rc.d
@@ -29,6 +33,7 @@ setup/
 |----|-------------|------------|
 | Linux (systemd) | systemd | `/etc/supervizio` |
 | Linux (Alpine) | OpenRC | `/etc/supervizio` |
+| Linux (Void) | runit | `/etc/supervizio` |
 | Linux (legacy) | SysVinit | `/etc/supervizio` |
 | FreeBSD | rc.d | `/usr/local/etc/supervizio` |
 | OpenBSD | rc.d | `/etc/supervizio` |
@@ -65,7 +70,8 @@ Uses `uname -m` to detect: amd64, arm64, arm, 386, riscv64
 ### Init System Detection (Linux)
 1. `systemctl` + `/run/systemd/system` → systemd
 2. `rc-service` command → OpenRC
-3. `/etc/init.d` exists → SysVinit
+3. `sv` command + `/etc/sv` exists → runit
+4. `/etc/init.d` exists → SysVinit
 
 ## Service Management
 
@@ -73,6 +79,7 @@ Uses `uname -m` to detect: amd64, arm64, arm, 386, riscv64
 |----------|-------|------|--------|
 | systemd | `systemctl start supervizio` | `systemctl stop supervizio` | `systemctl status supervizio` |
 | OpenRC | `rc-service supervizio start` | `rc-service supervizio stop` | `rc-service supervizio status` |
+| runit | `sv start supervizio` | `sv stop supervizio` | `sv status supervizio` |
 | FreeBSD | `service supervizio start` | `service supervizio stop` | `service supervizio status` |
 | OpenBSD | `rcctl start supervizio` | `rcctl stop supervizio` | `rcctl check supervizio` |
 | macOS | `launchctl load ...` | `launchctl unload ...` | `launchctl list | grep superviz` |

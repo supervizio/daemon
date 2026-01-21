@@ -48,6 +48,8 @@ detect_init_system() {
         echo "systemd"
     elif command -v rc-service >/dev/null 2>&1; then
         echo "openrc"
+    elif command -v sv >/dev/null 2>&1 && [ -d /etc/sv ]; then
+        echo "runit"
     elif [ -d /etc/init.d ]; then
         echo "sysvinit"
     else
@@ -81,6 +83,12 @@ remove_service() {
                     /etc/init.d/supervizio stop 2>/dev/null || true
                     update-rc.d -f supervizio remove 2>/dev/null || true
                     rm -f /etc/init.d/supervizio
+                    ;;
+                runit)
+                    log_info "Stopping and removing runit service"
+                    sv stop supervizio 2>/dev/null || true
+                    rm -f /var/service/supervizio
+                    rm -rf /etc/sv/supervizio
                     ;;
             esac
             ;;

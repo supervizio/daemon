@@ -42,7 +42,7 @@ End-to-end testing for supervizio across all supported platforms and init system
 | NetBSD 10 | rc.d | ❌ (flaky) | N/A |
 | DragonFlyBSD 6 | rc.d | Vagrant | N/A |
 
-**Total: 14 jobs** (5 Linux AMD64 + 5 Linux ARM64 + 4 BSD AMD64)
+**Total: 15 jobs** (5 Linux AMD64 + 5 Linux ARM64 + 4 BSD AMD64 + 1 PID1)
 
 ## Structure
 
@@ -50,19 +50,23 @@ End-to-end testing for supervizio across all supported platforms and init system
 e2e/
 ├── Vagrantfile           # VM configuration (all platforms)
 ├── test-install.sh       # Universal installation test script
+├── test-container.sh     # PID1 container tests
 ├── Dockerfile.debian     # Debian 13 (systemd)
 ├── Dockerfile.ubuntu     # Ubuntu 24.04 (systemd)
 ├── Dockerfile.alpine     # Alpine 3.20 (OpenRC)
 ├── Dockerfile.devuan     # Devuan 5 (SysVinit)
 ├── Dockerfile.void       # Void Linux (runit)
+├── Dockerfile.pid1       # PID1 test container
 ├── config-scratch.yaml   # Minimal test configuration
+├── config-pid1.yaml      # PID1 test configuration
+├── start-nginx.sh        # Nginx wrapper for PID1 tests
 └── CLAUDE.md             # This file
 ```
 
 ## CI Workflow
 
 ```
-E2E Tests (14 jobs)
+E2E Tests (15 jobs)
 │
 ├── Linux AMD64 (5 jobs - Vagrant + Docker)
 │   ├── Debian (systemd) - VM + Container
@@ -78,11 +82,14 @@ E2E Tests (14 jobs)
 │   ├── Devuan (SysVinit) - Skip (no ARM64 Docker image)
 │   └── Void (runit) - Container only
 │
-└── BSD AMD64 (4 jobs - Vagrant only, no containers)
-    ├── FreeBSD (rc.d)
-    ├── OpenBSD (rc.d)
-    ├── NetBSD (rc.d) - Skip (flaky Vagrant box)
-    └── DragonFlyBSD (rc.d)
+├── BSD AMD64 (4 jobs - Vagrant only, no containers)
+│   ├── FreeBSD (rc.d)
+│   ├── OpenBSD (rc.d)
+│   ├── NetBSD (rc.d) - Skip (flaky Vagrant box)
+│   └── DragonFlyBSD (rc.d)
+│
+└── PID1 Tests (1 job - Docker)
+    └── supervizio as container init (debian-based)
 ```
 
 ## Init Systems Tested
@@ -122,6 +129,42 @@ E2E Tests (14 jobs)
 | Alpine | `alpine:3.20` | OpenRC |
 | Devuan | `devuan/devuan:daedalus` | SysVinit |
 | Void | `ghcr.io/void-linux/void-glibc:latest` | runit |
+
+## PID1 Tests (test-container.sh)
+
+Tests supervizio running as container PID1 with managed services:
+
+1. **PID1 verification** - supervizio is process 1
+2. **Managed services** - nginx and redis-server running
+3. **Zombie reaping** - Orphan processes are reaped
+4. **Signal forwarding** - Services survive SIGHUP to PID1
+5. **Service restart** - nginx restarts after being killed
+6. **HTTP health check** - nginx responds HTTP 200
+7. **TCP health check** - redis responds to PING
+
+### Running PID1 Tests Locally
+
+```bash
+# Build binary
+cd src && CGO_ENABLED=0 go build -o ../bin/supervizio ./cmd/daemon
+
+# Build PID1 container
+docker build -f e2e/Dockerfile.pid1 -t supervizio-pid1:test .
+
+# Start container
+docker run -d --name supervizio-pid1 \
+  -p 8080:80 -p 6379:6379 \
+  supervizio-pid1:test --config /etc/supervizio/config.yaml
+
+# Wait for startup
+sleep 15
+
+# Run tests
+CONTAINER_NAME=supervizio-pid1 ./e2e/test-container.sh
+
+# Cleanup
+docker stop supervizio-pid1 && docker rm supervizio-pid1
+```
 
 ## Usage
 

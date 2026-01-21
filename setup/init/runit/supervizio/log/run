@@ -1,0 +1,4 @@
+#!/bin/sh
+# supervizio runit log service
+# Captures stdout/stderr from the main service
+exec svlogd -tt /var/log/supervizio

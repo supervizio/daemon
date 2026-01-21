@@ -16,7 +16,7 @@
 #   - NetBSD 10
 #   - DragonFlyBSD 6.4
 #
-# Total: 14 jobs (5 Linux AMD64 + 5 Linux ARM64 + 4 BSD AMD64)
+# Total: 15 jobs (5 Linux AMD64 + 5 Linux ARM64 + 4 BSD AMD64 + 1 PID1)
 # =============================================================================
 name: E2E Tests
 
@@ -639,3 +639,65 @@ jobs:
           sudo vagrant status || true
           echo "=== libvirt VMs ==="
           sudo virsh list --all || true
+
+  # ===========================================================================
+  # PID1 Container Tests (supervizio as container init)
+  # ===========================================================================
+  e2e-pid1:
+    name: E2E PID1 Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: src/go.sum
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@latest
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build supervizio binary (linux/amd64)
+        working-directory: src
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
+          chmod +x ../bin/supervizio
+
+      - name: Build PID1 test container
+        run: |
+          docker build -f e2e/Dockerfile.pid1 -t supervizio-pid1:test .
+
+      - name: Start PID1 container
+        run: |
+          docker run -d --name supervizio-pid1 \
+            -p 8080:80 -p 6379:6379 \
+            supervizio-pid1:test --config /etc/supervizio/config.yaml
+          sleep 15
+
+      - name: Run PID1 tests
+        run: |
+          chmod +x e2e/test-container.sh
+          CONTAINER_NAME=supervizio-pid1 ./e2e/test-container.sh
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker logs supervizio-pid1 2>&1 || true
+          docker exec supervizio-pid1 ps aux 2>/dev/null || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop supervizio-pid1 2>/dev/null || true
+          docker rm supervizio-pid1 2>/dev/null || true
