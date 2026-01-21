@@ -12,10 +12,10 @@ AMD64 only (setup scripts are architecture-agnostic).
 | **OpenRC** | Alpine 3.19 | ✅ Vagrant | ✅ |
 | **SysVinit** | Devuan 4 | ✅ Vagrant | ✅ |
 | **runit** | Void Linux | - | ✅ |
-| **BSD rc.d** | FreeBSD 14.2 | ✅ cross-platform | - |
-| **BSD rc.d** | OpenBSD 7.6 | ✅ cross-platform | - |
-| **BSD rc.d** | NetBSD 10.0 | ✅ cross-platform | - |
-| **BSD rc.d** | DragonFlyBSD 6.4 | ✅ Vagrant | - |
+| **BSD rc.d** | FreeBSD 14 | ✅ Vagrant | - |
+| **BSD rc.d** | OpenBSD 7 | ✅ Vagrant | - |
+| **BSD rc.d** | NetBSD 10 | ✅ Vagrant | - |
+| **BSD rc.d** | DragonFlyBSD 6 | ✅ Vagrant | - |
 
 **Total: 9 jobs**
 
@@ -45,11 +45,11 @@ E2E Tests (9 jobs, 2 workflow jobs)
 │   ├── Devuan (SysVinit)
 │   └── Void (runit) - Docker only
 │
-└── e2e-bsd (4 matrix jobs)
-    ├── FreeBSD (rc.d) - cross-platform-actions
-    ├── OpenBSD (rc.d) - cross-platform-actions
-    ├── NetBSD (rc.d) - cross-platform-actions
-    └── DragonFlyBSD (rc.d) - Vagrant
+└── e2e-bsd (4 matrix jobs - Vagrant)
+    ├── FreeBSD (rc.d)
+    ├── OpenBSD (rc.d)
+    ├── NetBSD (rc.d)
+    └── DragonFlyBSD (rc.d)
 ```
 
 ## Init Systems

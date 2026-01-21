@@ -12,10 +12,10 @@
 #   - Void Linux (runit) - Docker only
 #
 # BSD (4 jobs) - e2e-bsd:
-#   - FreeBSD 14.2 (rc.d) - cross-platform-actions
-#   - OpenBSD 7.6 (rc.d) - cross-platform-actions
-#   - NetBSD 10.0 (rc.d) - cross-platform-actions
-#   - DragonFlyBSD 6.4 (rc.d) - Vagrant (not in cross-platform-actions)
+#   - FreeBSD 14 (rc.d) - Vagrant
+#   - OpenBSD 7 (rc.d) - Vagrant
+#   - NetBSD 10 (rc.d) - Vagrant
+#   - DragonFlyBSD 6 (rc.d) - Vagrant
 #
 # Total: 9 jobs (2 workflow jobs)
 # =============================================================================
@@ -164,7 +164,7 @@ jobs:
           sudo virsh list --all || true
 
   # ===========================================================================
-  # BSD E2E Tests (cross-platform-actions + Vagrant for DragonFlyBSD)
+  # BSD E2E Tests (Vagrant + libvirt/KVM)
   # ===========================================================================
   e2e-bsd:
     name: E2E ${{ matrix.name }}
@@ -175,21 +175,17 @@ jobs:
       matrix:
         include:
           - name: FreeBSD
-            os: freebsd
-            version: '14.2'
+            vm: freebsd
             goos: freebsd
           - name: OpenBSD
-            os: openbsd
-            version: '7.6'
+            vm: openbsd
             goos: openbsd
           - name: NetBSD
-            os: netbsd
-            version: '10.0'
+            vm: netbsd
             goos: netbsd
           - name: DragonFlyBSD
-            os: dragonfly
+            vm: dragonfly
             goos: dragonfly
-            use_vagrant: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -217,37 +213,7 @@ jobs:
           go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
           chmod +x ../bin/supervizio
 
-      # =========================================================================
-      # cross-platform-actions (FreeBSD, OpenBSD, NetBSD)
-      # =========================================================================
-      - name: Run VM test (cross-platform-actions)
-        if: ${{ matrix.use_vagrant != true }}
-        uses: cross-platform-actions/action@v0.26.0
-        with:
-          operating_system: ${{ matrix.os }}
-          version: ${{ matrix.version }}
-          architecture: x86-64
-          memory: 4G
-          cpu_count: 2
-          shell: sh
-          sync_files: runner-to-vm
-          run: |
-            set -e
-            uname -a
-            sudo mkdir -p /setup /usr/local/bin
-            sudo cp -r setup/* /setup/
-            sudo cp bin/supervizio /usr/local/bin/
-            sudo chmod +x /setup/*.sh /usr/local/bin/supervizio
-            sudo /setup/install.sh
-            /usr/local/bin/supervizio --version || true
-            chmod +x e2e/test-install.sh
-            sudo sh e2e/test-install.sh
-
-      # =========================================================================
-      # Vagrant (DragonFlyBSD - not supported by cross-platform-actions)
-      # =========================================================================
       - name: Setup KVM
-        if: ${{ matrix.use_vagrant == true }}
         run: |
           if [ -e /dev/kvm ]; then
             echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -256,7 +222,6 @@ jobs:
           fi
 
       - name: Install libvirt and Vagrant
-        if: ${{ matrix.use_vagrant == true }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
@@ -270,30 +235,34 @@ jobs:
           vagrant plugin install vagrant-libvirt
 
       - name: Cache Vagrant box
-        if: ${{ matrix.use_vagrant == true }}
         uses: actions/cache@v4
         with:
           path: ~/.vagrant.d/boxes
-          key: vagrant-${{ matrix.os }}-v1
+          key: vagrant-${{ matrix.vm }}-v1
 
-      - name: Run VM test (Vagrant)
-        if: ${{ matrix.use_vagrant == true }}
+      - name: Start VM
+        working-directory: e2e
+        run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+
+      - name: Copy files and run tests
         working-directory: e2e
         run: |
-          sudo -E vagrant up ${{ matrix.os }} --provider=libvirt
-          sudo -E vagrant ssh ${{ matrix.os }} -c "sudo mkdir -p /setup /usr/local/bin"
-          sudo -E vagrant scp ../setup ${{ matrix.os }}:/tmp/setup
-          sudo -E vagrant scp ../bin/supervizio ${{ matrix.os }}:/tmp/supervizio
-          sudo -E vagrant ssh ${{ matrix.os }} -c "sudo cp -r /tmp/setup/* /setup/ && sudo cp /tmp/supervizio /usr/local/bin/ && sudo chmod +x /setup/*.sh /usr/local/bin/supervizio"
-          sudo -E vagrant ssh ${{ matrix.os }} -c "sudo /setup/install.sh"
-          sudo -E vagrant ssh ${{ matrix.os }} -c "/usr/local/bin/supervizio --version"
-          sudo -E vagrant ssh ${{ matrix.os }} -c "sudo sh /vagrant/test-install.sh"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /usr/local/bin"
+          sudo -E vagrant scp ../setup ${{ matrix.vm }}:/tmp/setup
+          sudo -E vagrant scp ../bin/supervizio ${{ matrix.vm }}:/tmp/supervizio
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo cp -r /tmp/setup/* /setup/ && sudo cp /tmp/supervizio /usr/local/bin/ && sudo chmod +x /setup/*.sh /usr/local/bin/supervizio"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo /setup/install.sh"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "/usr/local/bin/supervizio --version"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh /vagrant/test-install.sh"
 
-      - name: Cleanup Vagrant
-        if: ${{ always() && matrix.use_vagrant == true }}
+      - name: Cleanup VM
+        if: always()
         working-directory: e2e
-        run: sudo vagrant destroy ${{ matrix.os }} -f || true
+        run: sudo vagrant destroy ${{ matrix.vm }} -f || true
 
       - name: Collect logs on failure
         if: failure()
-        run: echo "Check logs above"
+        working-directory: e2e
+        run: |
+          sudo vagrant status || true
+          sudo virsh list --all || true

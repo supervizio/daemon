@@ -181,10 +181,10 @@ Testing across all supported init systems (AMD64):
 
 | OS | Init System | VM |
 |----|-------------|:--:|
-| FreeBSD 14.2 | rc.d | ✅ cross-platform |
-| OpenBSD 7.6 | rc.d | ✅ cross-platform |
-| NetBSD 10.0 | rc.d | ✅ cross-platform |
-| DragonFlyBSD 6.4 | rc.d | ✅ Vagrant |
+| FreeBSD 14 | rc.d | ✅ Vagrant |
+| OpenBSD 7 | rc.d | ✅ Vagrant |
+| NetBSD 10 | rc.d | ✅ Vagrant |
+| DragonFlyBSD 6 | rc.d | ✅ Vagrant |
 
 **Total: 9 jobs** covering all init systems (systemd, OpenRC, SysVinit, runit, rc.d)
 
