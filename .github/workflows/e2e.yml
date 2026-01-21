@@ -238,13 +238,12 @@ jobs:
             dockerfile: Dockerfile.alpine
             init: openrc
             skip_vm: true
-          # SysVinit - Devuan doesn't have official ARM64 cloud images
-          # Using Debian container only for Devuan ARM64
+          # SysVinit - Devuan has no ARM64 images (VM or container)
           - name: Devuan
             vm: devuan
-            dockerfile: Dockerfile.devuan
             init: sysvinit
-            skip_vm: true  # No ARM64 cloud image available
+            skip_vm: true
+            skip_container: true  # devuan/devuan:daedalus is AMD64 only
           # runit distribution (container only - no cloud-init compatible image)
           - name: Void
             vm: void
@@ -481,6 +480,7 @@ jobs:
       # Container Test via Docker
       # =========================================================================
       - name: Build ${{ matrix.name }} container (arm64)
+        if: ${{ matrix.skip_container != true }}
         run: |
           docker build \
             -f e2e/${{ matrix.dockerfile }} \
@@ -489,10 +489,15 @@ jobs:
           docker images supervizio-${{ matrix.vm }}:arm64
 
       - name: Test ${{ matrix.name }} container (arm64)
+        if: ${{ matrix.skip_container != true }}
         run: |
           echo "=== Testing supervizio in ${{ matrix.name }} container (arm64) ==="
           docker run --rm supervizio-${{ matrix.vm }}:arm64
           echo "=== Container test passed ==="
+
+      - name: Skip container test notice
+        if: ${{ matrix.skip_container == true }}
+        run: echo "::notice::Skipping container test for ${{ matrix.name }} ARM64 (no ARM64 image available)"
 
       - name: Collect logs on failure
         if: failure()

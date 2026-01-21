@@ -9,7 +9,7 @@ End-to-end testing for supervizio across all supported platforms and init system
 | **systemd** | Debian 12 | ✅ | ✅ | linux | ✅ | ✅ |
 | **systemd** | Ubuntu 22.04 | ✅ | ✅ | linux | ✅ | ✅ |
 | **OpenRC** | Alpine 3.19 | ✅ | ✅ | linux | ✅ | ✅ (AMD64 only) |
-| **SysVinit** | Devuan 4 | ✅ | ✅ | linux | ✅ | ✅ (AMD64 only) |
+| **SysVinit** | Devuan 4 | ✅ | ❌ | linux | ✅ (AMD64 only) | ✅ (AMD64 only) |
 | **runit** | Void Linux | ✅ | ✅ | linux | ✅ | ❌ (no Vagrant box) |
 | **BSD rc.d** | FreeBSD 14 | ✅ | ✅* | freebsd | ❌ | ✅ |
 | **BSD rc.d** | OpenBSD 7 | ✅ | ✅* | openbsd | ❌ | ✅ |
@@ -75,7 +75,7 @@ E2E Tests (14 jobs)
 │   ├── Debian (systemd) - VM + Container
 │   ├── Ubuntu (systemd) - VM + Container
 │   ├── Alpine (OpenRC) - Container only (no cloud-init image)
-│   ├── Devuan (SysVinit) - Container only (no ARM64 cloud image)
+│   ├── Devuan (SysVinit) - Skip (no ARM64 images at all)
 │   └── Void (runit) - Container only (no cloud-init image)
 │
 └── BSD AMD64 (4 jobs - Vagrant only, no containers)
@@ -243,7 +243,7 @@ docker run --rm supervizio-void
 
 - **Vagrant**: Not available for ARM64 Linux (HashiCorp limitation)
 - **Alpine**: No cloud-init compatible ARM64 image - container test only
-- **Devuan**: No official ARM64 cloud image - container test only
+- **Devuan**: No ARM64 images at all (Docker image is AMD64 only) - completely skipped
 - **Void Linux**: No cloud-init compatible ARM64 image - container test only
 - **BSD ARM64**: Go supports cross-compilation, but no ARM64 VM images in CI
 
