@@ -168,7 +168,7 @@ jobs:
   e2e-arm64:
     name: E2E ARM64 (Debian VM + Container)
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 25
+    timeout-minutes: 35  # Extra time for QEMU TCG if KVM unavailable
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -257,14 +257,7 @@ jobs:
           fi
           ls -lh /tmp/debian-12-generic-arm64.qcow2
 
-      - name: Skip VM test notice (no KVM)
-        if: env.KVM_AVAILABLE != 'true'
-        run: |
-          echo "::warning::KVM not available on ARM64 runner - VM tests will be skipped"
-          echo "Container tests will still run"
-
       - name: Create cloud-init configuration
-        if: env.KVM_AVAILABLE == 'true'
         run: |
           mkdir -p /tmp/cloud-init
 
@@ -312,7 +305,6 @@ jobs:
             /tmp/cloud-init/user-data /tmp/cloud-init/meta-data
 
       - name: Start Debian VM with virt-install
-        if: env.KVM_AVAILABLE == 'true'
         run: |
           echo "=== Creating Debian VM (ARM64) ==="
           echo "KVM_AVAILABLE: $KVM_AVAILABLE"
@@ -376,8 +368,15 @@ jobs:
           sudo virt-install "${VIRT_INSTALL_ARGS[@]}"
 
           # Wait for VM to boot and get IP
-          echo "=== Waiting for VM to boot ==="
-          sleep 90
+          # TCG (no KVM) is much slower, wait longer
+          if [ "$KVM_AVAILABLE" = "true" ]; then
+            BOOT_WAIT=90
+          else
+            echo "Note: Using QEMU TCG (software emulation) - boot will be slower"
+            BOOT_WAIT=300
+          fi
+          echo "=== Waiting ${BOOT_WAIT}s for VM to boot ==="
+          sleep $BOOT_WAIT
 
           # Get VM IP (retry a few times)
           for i in {1..10}; do
@@ -400,20 +399,21 @@ jobs:
           echo "VM_IP=$VM_IP" >> $GITHUB_ENV
 
       - name: Run VM installation test
-        if: env.KVM_AVAILABLE == 'true'
         run: |
           echo "=== Running installation tests on ARM64 VM ==="
           echo "VM_IP: $VM_IP"
 
           # Wait for SSH to be ready (cloud-init may still be running)
+          # More retries for TCG mode (slower boot)
           echo "Waiting for SSH to be ready..."
-          for i in {1..30}; do
+          MAX_ATTEMPTS=60
+          for i in $(seq 1 $MAX_ATTEMPTS); do
             if sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-               -o ConnectTimeout=5 test@$VM_IP "echo SSH ready" 2>/dev/null; then
+               -o ConnectTimeout=10 test@$VM_IP "echo SSH ready" 2>/dev/null; then
               echo "SSH connection established on attempt $i"
               break
             fi
-            echo "SSH not ready yet (attempt $i/30)..."
+            echo "SSH not ready yet (attempt $i/$MAX_ATTEMPTS)..."
             sleep 10
           done
 
@@ -437,7 +437,7 @@ jobs:
           echo "=== VM tests passed ==="
 
       - name: Cleanup VM
-        if: always() && env.KVM_AVAILABLE == 'true'
+        if: always()
         run: |
           sudo virsh destroy e2e-debian 2>/dev/null || true
           sudo virsh undefine e2e-debian --remove-all-storage 2>/dev/null || true
