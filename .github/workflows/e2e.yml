@@ -71,6 +71,7 @@ jobs:
             dockerfile: Dockerfile.void
             init: runit
             skip_vm: true
+            reason_vm: "no Vagrant box available"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -175,7 +176,7 @@ jobs:
 
       - name: Skip VM test notice
         if: ${{ matrix.skip_vm == true }}
-        run: echo "::notice::Skipping VM test for ${{ matrix.name }} AMD64 (no Vagrant box available)"
+        run: echo "Skipping VM test for ${{ matrix.name }} AMD64 (${{ matrix.reason_vm }})"
 
       # =========================================================================
       # Container Test via Docker
@@ -223,29 +224,35 @@ jobs:
             dockerfile: Dockerfile.debian
             init: systemd
             skip_vm: true
+            reason_vm: "no cloud image available"
           - name: Ubuntu
             vm: ubuntu
             dockerfile: Dockerfile.ubuntu
             init: systemd
             skip_vm: true
+            reason_vm: "no cloud image available"
           # OpenRC distribution (container only - Alpine ARM64 has no cloud-init image)
           - name: Alpine
             vm: alpine
             dockerfile: Dockerfile.alpine
             init: openrc
             skip_vm: true
+            reason_vm: "no cloud image available"
           # SysVinit - Devuan has no ARM64 images (VM or container)
           - name: Devuan
             vm: devuan
             init: sysvinit
             skip_vm: true
-            skip_container: true  # devuan/devuan:daedalus is AMD64 only
+            reason_vm: "no cloud image available"
+            skip_container: true
+            reason_container: "no ARM64 image available"
           # runit distribution (container only - no cloud-init compatible image)
           - name: Void
             vm: void
             dockerfile: Dockerfile.void
             init: runit
             skip_vm: true
+            reason_vm: "no cloud image available"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -462,9 +469,7 @@ jobs:
 
       - name: Skip VM test notice
         if: ${{ matrix.skip_vm == true }}
-        run: |
-          echo "::notice::Skipping VM test for ${{ matrix.name }} ARM64 (no cloud image available)"
-          echo "Container test will still run"
+        run: echo "Skipping VM test for ${{ matrix.name }} ARM64 (${{ matrix.reason_vm }})"
 
       - name: Cleanup VM
         if: ${{ always() && matrix.skip_vm != true }}
@@ -493,7 +498,7 @@ jobs:
 
       - name: Skip container test notice
         if: ${{ matrix.skip_container == true }}
-        run: echo "::notice::Skipping container test for ${{ matrix.name }} ARM64 (no ARM64 image available)"
+        run: echo "Skipping container test for ${{ matrix.name }} ARM64 (${{ matrix.reason_container }})"
 
       - name: Collect logs on failure
         if: failure()
@@ -525,7 +530,8 @@ jobs:
           - name: NetBSD
             vm: netbsd
             goos: netbsd
-            skip_vm: true  # generic/netbsd10 Vagrant box is flaky
+            skip_vm: true
+            reason_vm: "Vagrant box is flaky"
           - name: DragonFlyBSD
             vm: dragonfly
             goos: dragonfly
@@ -629,7 +635,7 @@ jobs:
 
       - name: Skip VM test notice
         if: ${{ matrix.skip_vm == true }}
-        run: echo "::notice::Skipping VM test for ${{ matrix.name }} AMD64 (Vagrant box is flaky)"
+        run: echo "Skipping VM test for ${{ matrix.name }} AMD64 (${{ matrix.reason_vm }})"
 
       - name: Collect logs on failure
         if: failure()
