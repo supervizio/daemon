@@ -143,7 +143,7 @@ Vagrant.configure("2") do |config|
   # ===========================================================================
 
   # Alpine 3.19 with runit (instead of OpenRC)
-  # Uses same box as alpine but provisions runit init system
+  # Uses same box as alpine but replaces OpenRC with runit
   config.vm.define "alpine-runit", autostart: false do |v|
     v.vm.box = "generic/alpine319"
     v.vm.hostname = "e2e-alpine-runit"
@@ -151,13 +151,17 @@ Vagrant.configure("2") do |config|
       # Enable community repo for runit
       sed -i 's/#.*community/community/' /etc/apk/repositories
       apk update
+
+      # Remove OpenRC and install runit
+      apk del openrc --force-broken-world 2>/dev/null || true
       apk add curl runit
 
       # Create runit service directories
       mkdir -p /etc/sv /var/service
 
-      # Verify runit is available
+      # Verify runit is available and OpenRC is gone
       which runsvdir && echo "runit installed successfully"
+      ! which rc-service && echo "OpenRC removed successfully"
     SHELL
   end
 
