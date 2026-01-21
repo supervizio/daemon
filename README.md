@@ -165,38 +165,28 @@ golangci-lint run
 
 [![E2E Tests](https://github.com/supervizio/daemon/actions/workflows/e2e.yml/badge.svg)](https://github.com/supervizio/daemon/actions/workflows/e2e.yml)
 
-Comprehensive testing across init systems, architectures, and platforms:
+Testing across all supported init systems (AMD64):
 
 ### Linux
 
-| Distribution | Init System | AMD64 VM | AMD64 Docker | ARM64 VM | ARM64 Docker |
-|--------------|-------------|:--------:|:------------:|:--------:|:------------:|
-| Debian 12 | systemd | ✅ Vagrant | ✅ | - | ✅ |
-| Ubuntu 22.04 | systemd | ✅ Vagrant | ✅ | - | ✅ |
-| Alpine 3.19 | OpenRC | ✅ Vagrant | ✅ | - | ✅ |
-| Devuan 4 | SysVinit | ✅ Vagrant | ✅ | - | - |
-| Void Linux | runit | - | ✅ | - | ✅ |
+| Distribution | Init System | VM | Docker |
+|--------------|-------------|:--:|:------:|
+| Debian 12 | systemd | ✅ Vagrant | ✅ |
+| Ubuntu 22.04 | systemd | ✅ Vagrant | ✅ |
+| Alpine 3.19 | OpenRC | ✅ Vagrant | ✅ |
+| Devuan 4 | SysVinit | ✅ Vagrant | ✅ |
+| Void Linux | runit | - | ✅ |
 
 ### BSD
 
-| OS | Init System | AMD64 VM | ARM64 VM |
-|----|-------------|:--------:|:--------:|
-| FreeBSD 14.2 | rc.d | ✅ cross-platform | ✅ cross-platform |
-| OpenBSD 7.6 | rc.d | ✅ cross-platform | ✅ cross-platform |
-| NetBSD 10.0 | rc.d | ✅ cross-platform | ⚠️ Flaky |
-| DragonFlyBSD 6.4 | rc.d | ✅ Vagrant | - |
+| OS | Init System | VM |
+|----|-------------|:--:|
+| FreeBSD 14.2 | rc.d | ✅ cross-platform |
+| OpenBSD 7.6 | rc.d | ✅ cross-platform |
+| NetBSD 10.0 | rc.d | ✅ cross-platform |
+| DragonFlyBSD 6.4 | rc.d | ✅ Vagrant |
 
-### PID1 Container Tests
-
-| Test | Description |
-|------|-------------|
-| PID1 verification | supervizio runs as process 1 |
-| Service management | nginx + redis managed services |
-| Zombie reaping | Orphan processes are reaped |
-| Signal forwarding | SIGHUP forwarded to services |
-| Health checks | HTTP and TCP health validation |
-
-**Legend:** ✅ Tested | ⚠️ Flaky/Skipped | - Not available
+**Total: 9 jobs** covering all init systems (systemd, OpenRC, SysVinit, runit, rc.d)
 
 ## License
 

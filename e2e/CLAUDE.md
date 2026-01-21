@@ -1,106 +1,60 @@
-# E2E Testing - Full Platform Matrix
+# E2E Testing - Platform Matrix
 
 End-to-end testing for supervizio across all supported platforms and init systems.
+AMD64 only (setup scripts are architecture-agnostic).
 
-## Complete Init System Mapping
+## Init System Coverage
 
-| Init System | Distribution | AMD64 | ARM64 | GOOS | Container | VM |
-|-------------|--------------|-------|-------|------|-----------|-----|
-| **systemd** | Debian 12 | ✅ | ✅ | linux | ✅ | ✅ |
-| **systemd** | Ubuntu 22.04 | ✅ | ✅ | linux | ✅ | ✅ |
-| **OpenRC** | Alpine 3.19 | ✅ | ✅ | linux | ✅ | ✅ |
-| **SysVinit** | Devuan 4 | ✅ | ❌ | linux | ✅ (AMD64 only) | ✅ (AMD64 only) |
-| **runit** | Void Linux | ✅ | ✅ | linux | ✅ | ❌ (no cloud image) |
-| **BSD rc.d** | FreeBSD 14.2 | ✅ | ✅ | freebsd | ❌ | ✅ cross-platform |
-| **BSD rc.d** | OpenBSD 7.6 | ✅ | ✅ | openbsd | ❌ | ✅ cross-platform |
-| **BSD rc.d** | NetBSD 10.1 | ✅ | ✅ | netbsd | ❌ | ✅ cross-platform |
-| **BSD rc.d** | DragonFlyBSD 6.4 | ✅ | ❌ | dragonfly | ❌ | ✅ (AMD64 only) |
-| **launchd** | macOS 14 | ✅ | ✅ | darwin | ❌ | ❌ (macOS runner) |
+| Init System | Distribution | VM | Docker |
+|-------------|--------------|:--:|:------:|
+| **systemd** | Debian 12 | ✅ Vagrant | ✅ |
+| **systemd** | Ubuntu 22.04 | ✅ Vagrant | ✅ |
+| **OpenRC** | Alpine 3.19 | ✅ Vagrant | ✅ |
+| **SysVinit** | Devuan 4 | ✅ Vagrant | ✅ |
+| **runit** | Void Linux | - | ✅ |
+| **BSD rc.d** | FreeBSD 14.2 | ✅ cross-platform | - |
+| **BSD rc.d** | OpenBSD 7.6 | ✅ cross-platform | - |
+| **BSD rc.d** | NetBSD 10.0 | ✅ cross-platform | - |
+| **BSD rc.d** | DragonFlyBSD 6.4 | ✅ Vagrant | - |
 
-**Note**: BSD VMs use [cross-platform-actions/action](https://github.com/cross-platform-actions/action) for QEMU-based testing. DragonFlyBSD does not support ARM64 architecture.
-
-## Architecture
-
-**Full coverage of init systems and platforms**
-
-### Linux (AMD64 + ARM64)
-
-| Distribution | Init System | AMD64 VM | ARM64 VM | Container |
-|--------------|-------------|----------|----------|-----------|
-| Debian 12 | systemd | Vagrant | virt-install | Docker |
-| Ubuntu 22.04 | systemd | Vagrant | virt-install | Docker |
-| Alpine 3.19 | OpenRC | Vagrant | virt-install | Docker |
-| Devuan 4 | SysVinit | Vagrant | ❌ (no image) | Docker (AMD64 only) |
-| Void Linux | runit | ❌ (no box) | ❌ (no image) | Docker |
-
-### BSD (AMD64 + ARM64 via cross-platform-actions)
-
-| OS | Init System | AMD64 VM | ARM64 VM | Container |
-|----|-------------|:--------:|:--------:|-----------|
-| FreeBSD 14.2 | rc.d | ✅ | ✅ | N/A |
-| OpenBSD 7.6 | rc.d | ✅ | ✅ | N/A |
-| NetBSD 10.1 | rc.d | ✅ | ✅ | N/A |
-| DragonFlyBSD 6.4 | rc.d | ✅ | ❌ (OS limitation) | N/A |
-
-**Total: 18 jobs** (5 Linux AMD64 + 5 Linux ARM64 + 7 BSD + 1 PID1)
+**Total: 9 jobs**
 
 ## Structure
 
 ```
 e2e/
-├── Vagrantfile           # VM configuration (AMD64 via libvirt)
-├── test-install.sh       # Universal installation test script
-├── test-container.sh     # PID1 container tests
-├── Dockerfile.debian     # Debian 13 (systemd)
-├── Dockerfile.ubuntu     # Ubuntu 24.04 (systemd)
-├── Dockerfile.alpine     # Alpine 3.20 (OpenRC)
-├── Dockerfile.devuan     # Devuan 5 (SysVinit)
+├── Vagrantfile           # VM configuration (libvirt)
+├── test-install.sh       # Universal installation test
+├── Dockerfile.debian     # Debian (systemd)
+├── Dockerfile.ubuntu     # Ubuntu (systemd)
+├── Dockerfile.alpine     # Alpine (OpenRC)
+├── Dockerfile.devuan     # Devuan (SysVinit)
 ├── Dockerfile.void       # Void Linux (runit)
-├── Dockerfile.pid1       # PID1 test container
-├── config-scratch.yaml   # Minimal test configuration
-├── config-pid1.yaml      # PID1 test configuration
-├── start-nginx.sh        # Nginx wrapper for PID1 tests
 └── CLAUDE.md             # This file
 ```
 
 ## CI Workflow
 
 ```
-E2E Tests (18 jobs)
+E2E Tests (9 jobs)
 │
-├── Linux AMD64 (5 jobs - Vagrant + Docker)
-│   ├── Debian (systemd) - VM + Container
-│   ├── Ubuntu (systemd) - VM + Container
-│   ├── Alpine (OpenRC) - VM + Container
-│   ├── Devuan (SysVinit) - VM + Container
-│   └── Void (runit) - Container only (no Vagrant box)
+├── e2e-linux (5 jobs - Vagrant + Docker)
+│   ├── Debian (systemd)
+│   ├── Ubuntu (systemd)
+│   ├── Alpine (OpenRC)
+│   ├── Devuan (SysVinit)
+│   └── Void (runit) - Docker only
 │
-├── Linux ARM64 (5 jobs - virt-install + Docker)
-│   ├── Debian (systemd) - VM + Container
-│   ├── Ubuntu (systemd) - VM + Container
-│   ├── Alpine (OpenRC) - VM + Container
-│   ├── Devuan (SysVinit) - Skip (no ARM64 image)
-│   └── Void (runit) - Container only (no cloud image)
+├── e2e-bsd (3 jobs - cross-platform-actions)
+│   ├── FreeBSD (rc.d)
+│   ├── OpenBSD (rc.d)
+│   └── NetBSD (rc.d)
 │
-├── BSD (7 jobs - cross-platform-actions, no containers)
-│   ├── FreeBSD (rc.d) - AMD64 + ARM64
-│   ├── OpenBSD (rc.d) - AMD64 + ARM64
-│   ├── NetBSD (rc.d) - AMD64 + ARM64
-│   └── DragonFlyBSD (rc.d) - AMD64 only
-│
-└── PID1 Tests (1 job - Docker)
-    └── supervizio as container init (debian-based)
+└── e2e-dragonfly (1 job - Vagrant)
+    └── DragonFlyBSD (rc.d)
 ```
 
-## ARM64 VM Cloud Images
-
-| Distribution | Cloud Image | URL |
-|--------------|-------------|-----|
-| Debian 12 | `debian-12-genericcloud-arm64.qcow2` | cloud.debian.org |
-| Ubuntu 22.04 | `jammy-server-cloudimg-arm64.img` | cloud-images.ubuntu.com |
-| Alpine 3.20 | `generic_alpine-3.20.0-aarch64-uefi-cloudinit-r0.qcow2` | dl-cdn.alpinelinux.org |
-
-## Init Systems Tested
+## Init Systems
 
 | Init System | Service Path | Enable Command |
 |-------------|--------------|----------------|
@@ -108,15 +62,7 @@ E2E Tests (18 jobs)
 | **OpenRC** | `/etc/init.d/` | `rc-update add` |
 | **SysVinit** | `/etc/init.d/` | `update-rc.d` |
 | **runit** | `/etc/sv/` | `ln -s /etc/sv/X /var/service/` |
-| **BSD rc.d** | `/usr/local/etc/rc.d/` (FreeBSD) | `sysrc enable` |
-| **BSD rc.d** | `/etc/rc.d/` (OpenBSD/NetBSD) | `rcctl enable` |
-
-## Runners
-
-| Runner | Hardware | Use Case |
-|--------|----------|----------|
-| `ubuntu-24.04` | AMD64 | Linux + BSD VMs (Vagrant) |
-| `ubuntu-24.04-arm` | ARM64 | Linux ARM64 VMs (virt-install) |
+| **BSD rc.d** | `/usr/local/etc/rc.d/` | `sysrc enable` |
 
 ## VM Tests (test-install.sh)
 
@@ -138,185 +84,28 @@ E2E Tests (18 jobs)
 | Devuan | `devuan/devuan:daedalus` | SysVinit |
 | Void | `ghcr.io/void-linux/void-glibc:latest` | runit |
 
-## PID1 Tests (test-container.sh)
+## Local Testing
 
-Tests supervizio running as container PID1 with managed services:
-
-1. **PID1 verification** - supervizio is process 1
-2. **Managed services** - nginx and redis-server running
-3. **Zombie reaping** - Orphan processes are reaped
-4. **Signal forwarding** - Services survive SIGHUP to PID1
-5. **Service restart** - nginx restarts after being killed
-6. **HTTP health check** - nginx responds HTTP 200
-7. **TCP health check** - redis responds to PING
-
-### Running PID1 Tests Locally
-
-```bash
-# Build binary
-cd src && CGO_ENABLED=0 go build -o ../bin/supervizio ./cmd/daemon
-
-# Build PID1 container
-docker build -f e2e/Dockerfile.pid1 -t supervizio-pid1:test .
-
-# Start container
-docker run -d --name supervizio-pid1 \
-  -p 8080:80 -p 6379:6379 \
-  supervizio-pid1:test --config /etc/supervizio/config.yaml
-
-# Wait for startup
-sleep 15
-
-# Run tests
-CONTAINER_NAME=supervizio-pid1 ./e2e/test-container.sh
-
-# Cleanup
-docker stop supervizio-pid1 && docker rm supervizio-pid1
-```
-
-## Usage
-
-### Linux VM Tests (Vagrant - AMD64)
+### Linux VMs (Vagrant)
 
 ```bash
 cd e2e
-
-# systemd distributions
 vagrant up debian13 --provider=libvirt
 vagrant ssh debian13 -c "sudo /vagrant/test-install.sh"
 vagrant destroy debian13 -f
-
-vagrant up ubuntu --provider=libvirt
-vagrant ssh ubuntu -c "sudo /vagrant/test-install.sh"
-vagrant destroy ubuntu -f
-
-# OpenRC
-vagrant up alpine --provider=libvirt
-vagrant ssh alpine -c "sudo /vagrant/test-install.sh"
-vagrant destroy alpine -f
-
-# SysVinit
-vagrant up devuan --provider=libvirt
-vagrant ssh devuan -c "sudo /vagrant/test-install.sh"
-vagrant destroy devuan -f
-
-# runit (Void Linux) - No Vagrant box available, use Docker instead
-docker build -f Dockerfile.void -t supervizio-void .
-docker run --rm supervizio-void
 ```
 
-### BSD VM Tests (Vagrant - AMD64)
+### Docker Containers
 
 ```bash
-cd e2e
-
-# FreeBSD
-vagrant up freebsd --provider=libvirt
-vagrant ssh freebsd -c "sudo /vagrant/test-install.sh"
-vagrant destroy freebsd -f
-
-# OpenBSD
-vagrant up openbsd --provider=libvirt
-vagrant ssh openbsd -c "sudo /vagrant/test-install.sh"
-vagrant destroy openbsd -f
-
-# NetBSD
-vagrant up netbsd --provider=libvirt
-vagrant ssh netbsd -c "sudo /vagrant/test-install.sh"
-vagrant destroy netbsd -f
-
-# DragonFlyBSD
-vagrant up dragonfly --provider=libvirt
-vagrant ssh dragonfly -c "sudo /vagrant/test-install.sh"
-vagrant destroy dragonfly -f
-```
-
-### Container Tests (Docker)
-
-```bash
-# Build binary first
 cd src && CGO_ENABLED=0 go build -o ../bin/supervizio ./cmd/daemon
-
-# Debian (systemd)
 docker build -f e2e/Dockerfile.debian -t supervizio-debian .
 docker run --rm supervizio-debian
-
-# Ubuntu (systemd)
-docker build -f e2e/Dockerfile.ubuntu -t supervizio-ubuntu .
-docker run --rm supervizio-ubuntu
-
-# Alpine (OpenRC)
-docker build -f e2e/Dockerfile.alpine -t supervizio-alpine .
-docker run --rm supervizio-alpine
-
-# Devuan (SysVinit)
-docker build -f e2e/Dockerfile.devuan -t supervizio-devuan .
-docker run --rm supervizio-devuan
-
-# Void (runit)
-docker build -f e2e/Dockerfile.void -t supervizio-void .
-docker run --rm supervizio-void
 ```
 
-## Build Requirements
+## Platform Notes
 
-### Go Cross-Compilation
-
-| Platform | GOOS | GOARCH |
-|----------|------|--------|
-| Linux AMD64 | linux | amd64 |
-| Linux ARM64 | linux | arm64 |
-| FreeBSD AMD64 | freebsd | amd64 |
-| FreeBSD ARM64 | freebsd | arm64 |
-| OpenBSD AMD64 | openbsd | amd64 |
-| OpenBSD ARM64 | openbsd | arm64 |
-| NetBSD AMD64 | netbsd | amd64 |
-| NetBSD ARM64 | netbsd | arm64 |
-| DragonFlyBSD AMD64 | dragonfly | amd64 |
-| macOS AMD64 | darwin | amd64 |
-| macOS ARM64 | darwin | arm64 |
-
-### CI Dependencies (Ubuntu)
-
-**AMD64 runners:**
-- libvirt-daemon-system
-- libvirt-dev, libvirt-clients
-- vagrant, vagrant-libvirt
-- qemu-kvm
-- Docker (pre-installed)
-
-**ARM64 runners:**
-- libvirt-daemon-system
-- libvirt-clients, virtinst
-- qemu-kvm, qemu-system-arm
-- qemu-efi-aarch64
-- cloud-image-utils, genisoimage
-- sshpass
-- Docker (pre-installed)
-
-## Platform Limitations
-
-### Linux
-
-- **Void Linux**: No cloud-init compatible image - container test only (AMD64 + ARM64)
-- **Devuan ARM64**: No ARM64 cloud image or Docker image - completely skipped
-- **Vagrant ARM64**: Not available for ARM64 Linux (HashiCorp limitation) - virt-install used instead
-
-### BSD
-
-- **DragonFlyBSD ARM64**: Architecture not supported by the OS - AMD64 only
-- **BSD containers**: Not applicable - BSD doesn't support Docker
-
-### Not Tested (out of scope)
-
-- **launchd (macOS)**: Requires macOS runners, tested manually
-- **s6/dinit**: Niche init systems, not in mainstream CI
-
-## Notes
-
-- All binaries must be statically compiled (`CGO_ENABLED=0`)
-- Alpine requires static binary (musl libc incompatible with glibc)
-- BSD systems don't support Docker containers
-- runit uses symlinks for service management (`/var/service/`)
-- Linux ARM64 VMs use UEFI boot with AAVMF/QEMU_EFI firmware
-- BSD VMs use cross-platform-actions with QEMU emulation (supports AMD64 + ARM64)
+- **Void Linux**: No Vagrant box - Docker only
+- **DragonFlyBSD**: Not supported by cross-platform-actions - uses Vagrant
+- **BSD**: No Docker support - VM tests only
+- All binaries: `CGO_ENABLED=0` (static)
