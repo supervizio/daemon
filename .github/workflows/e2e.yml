@@ -161,13 +161,13 @@ jobs:
           docker images || true
 
   # ===========================================================================
-  # ARM64 E2E Tests (Ubuntu ARM64) - Container only
-  # Note: Vagrant not available for ARM64 Linux, so we skip VM tests
+  # ARM64 E2E Tests (Ubuntu ARM64) - VM + Container
+  # Note: Vagrant built from source (no official ARM64 Linux packages)
   # ===========================================================================
   e2e-arm64:
-    name: E2E ARM64 (Container only)
+    name: E2E ARM64 (Debian VM + Container)
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -199,8 +199,109 @@ jobs:
           ls -lh ../bin/supervizio
 
       # =========================================================================
+      # VM Test: Debian via Vagrant (from source) + libvirt/KVM
+      # HashiCorp doesn't provide ARM64 Linux binaries, so we build from source
+      # See: https://github.com/hashicorp/vagrant-installers/issues/288
+      # =========================================================================
+      - name: Setup KVM
+        run: |
+          echo "=== Checking KVM availability ==="
+          if [ -e /dev/kvm ]; then
+            echo "KVM device found, configuring permissions..."
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            ls -la /dev/kvm
+            echo "KVM_AVAILABLE=true" >> $GITHUB_ENV
+          else
+            echo "WARNING: /dev/kvm not found - VM tests will use QEMU TCG (slower)"
+            echo "KVM_AVAILABLE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Install libvirt and dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libvirt-daemon-system \
+            libvirt-dev \
+            libvirt-clients \
+            qemu-kvm \
+            qemu-system-arm \
+            qemu-efi-aarch64 \
+            ebtables \
+            ruby \
+            ruby-dev \
+            ruby-bundler \
+            ruby-libvirt \
+            build-essential \
+            libxml2-dev \
+            libxslt1-dev \
+            zlib1g-dev
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+
+      - name: Cache Vagrant source
+        uses: actions/cache@v4
+        with:
+          path: ~/vagrant-src
+          key: vagrant-src-arm64-v1
+
+      - name: Install Vagrant from source (ARM64)
+        run: |
+          echo "=== Installing Vagrant from source (no ARM64 Linux packages available) ==="
+          if [ ! -d ~/vagrant-src ]; then
+            git clone --depth 1 https://github.com/hashicorp/vagrant.git ~/vagrant-src
+          fi
+          cd ~/vagrant-src
+
+          # Install bundler and dependencies
+          sudo gem install bundler --no-document
+          bundle config set --local path 'vendor/bundle'
+          bundle install --jobs 4 --retry 3
+
+          # Create executable
+          bundle binstubs vagrant --path exec
+          sudo ln -sf ~/vagrant-src/exec/vagrant /usr/local/bin/vagrant
+
+          echo "=== Vagrant version ==="
+          vagrant --version || bundle exec vagrant --version
+
+      - name: Install vagrant-libvirt plugin
+        run: |
+          cd ~/vagrant-src
+          # Install vagrant-libvirt using bundler context
+          CONFIGURE_ARGS="with-libvirt-include=/usr/include/libvirt with-libvirt-lib=/usr/lib" \
+            bundle exec vagrant plugin install vagrant-libvirt
+          bundle exec vagrant plugin list
+
+      - name: Cache Vagrant box
+        uses: actions/cache@v4
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-debian-libvirt-arm64-v1
+
+      - name: Start Debian VM
+        working-directory: e2e
+        run: |
+          echo "=== Starting Debian VM (ARM64 with KVM) ==="
+          cd ~/vagrant-src && bundle exec vagrant --version
+          sudo -E ~/vagrant-src/exec/vagrant up debian --provider=libvirt
+          echo "=== VM started ==="
+
+      - name: Run VM installation test
+        working-directory: e2e
+        run: |
+          echo "=== Running installation tests ==="
+          sudo -E ~/vagrant-src/exec/vagrant ssh debian -c "sudo /vagrant/test-install.sh"
+          echo "=== VM tests passed ==="
+
+      - name: Cleanup VM
+        if: always()
+        working-directory: e2e
+        run: sudo ~/vagrant-src/exec/vagrant destroy debian -f 2>/dev/null || true
+
+      # =========================================================================
       # Container Test: Debian via Docker
-      # Note: VM tests skipped - Vagrant not available for ARM64 Linux
       # =========================================================================
       - name: Build Debian container (arm64)
         run: |
@@ -218,6 +319,11 @@ jobs:
 
       - name: Collect logs on failure
         if: failure()
+        working-directory: e2e
         run: |
+          echo "=== Vagrant Status ==="
+          sudo ~/vagrant-src/exec/vagrant status || true
+          echo "=== libvirt VMs ==="
+          sudo virsh list --all || true
           echo "=== Docker Images ==="
           docker images || true

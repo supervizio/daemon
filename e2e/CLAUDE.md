@@ -9,12 +9,26 @@ End-to-end testing for supervizio using Linux runners with KVM acceleration.
 | Runner | Architecture | Cores | RAM | VM | Container |
 |--------|--------------|-------|-----|-----|-----------|
 | ubuntu-24.04 | AMD64 | 4 | 16GB | Debian | Debian |
-| ubuntu-24.04-arm | ARM64 | 4 | 16GB | - | Debian |
+| ubuntu-24.04-arm | ARM64 | 4 | 16GB | Debian | Debian |
 
 **Total: 2 jobs** (1 AMD64 + 1 ARM64)
 
 - **AMD64**: VM test (Vagrant + KVM) + Container test (Docker)
-- **ARM64**: Container test only (Vagrant not available for ARM64 Linux)
+- **ARM64**: VM test (Vagrant from source + KVM) + Container test (Docker)
+
+### ARM64 Vagrant Note
+
+HashiCorp does not provide official Vagrant binaries for ARM64 Linux.
+See: https://github.com/hashicorp/vagrant-installers/issues/288
+
+We build Vagrant from source on ARM64:
+```bash
+git clone https://github.com/hashicorp/vagrant.git
+cd vagrant && bundle install
+bundle binstubs vagrant --path exec
+```
+
+The `generic/debian12` box supports ARM64 with libvirt provider.
 
 ## Structure
 
@@ -38,13 +52,14 @@ E2E Tests (2 jobs)
 │   ├── Docker build Dockerfile.debian
 │   └── Docker run --version test
 │
-└── E2E ARM64 (Container only)
+└── E2E ARM64 (Debian VM + Container)
     ├── Build linux/arm64 binary
+    ├── Install libvirt + Vagrant (from source)
+    ├── Vagrant up debian (KVM)
+    ├── Run test-install.sh
     ├── Docker build Dockerfile.debian
     └── Docker run --version test
 ```
-
-Note: ARM64 VM tests skipped because Vagrant is not available for ARM64 Linux.
 
 ## Runners
 
