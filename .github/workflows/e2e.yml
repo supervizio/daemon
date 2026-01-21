@@ -6,7 +6,7 @@
 #
 # Linux (5 jobs) - e2e-linux:
 #   - Debian 12 (systemd) - Vagrant + Docker
-#   - Ubuntu 22.04 (systemd) - Vagrant + Docker
+#   - Rocky 9 (systemd) - Vagrant + Docker
 #   - Alpine 3.19 (OpenRC) - Vagrant + Docker
 #   - Devuan 4 (SysVinit) - Vagrant + Docker
 #   - Alpine 3.20 (runit) - Vagrant + Docker
@@ -51,9 +51,9 @@ jobs:
             vm: debian13
             dockerfile: Dockerfile.debian
             init: systemd
-          - name: Ubuntu
-            vm: ubuntu
-            dockerfile: Dockerfile.ubuntu
+          - name: Rocky
+            vm: rocky
+            dockerfile: Dockerfile.rocky
             init: systemd
           - name: Alpine
             vm: alpine

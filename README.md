@@ -169,13 +169,13 @@ Testing across all supported init systems (AMD64):
 
 ### Linux
 
-| Distribution | Init System | VM | Docker |
-|--------------|-------------|:--:|:------:|
-| Debian 12 | systemd | ✅ Vagrant | ✅ |
-| Ubuntu 22.04 | systemd | ✅ Vagrant | ✅ |
-| Alpine 3.19 | OpenRC | ✅ Vagrant | ✅ |
-| Devuan 4 | SysVinit | ✅ Vagrant | ✅ |
-| Alpine 3.20 | runit | ✅ Vagrant | ✅ |
+| Distribution | Init System | Pkg Format | VM | Docker |
+|--------------|-------------|------------|:--:|:------:|
+| Debian 12 | systemd | .deb | ✅ Vagrant | ✅ |
+| Rocky 9 | systemd | .rpm | ✅ Vagrant | ✅ |
+| Alpine 3.19 | OpenRC | .apk | ✅ Vagrant | ✅ |
+| Devuan 4 | SysVinit | .deb | ✅ Vagrant | ✅ |
+| Alpine 3.19 | runit | .apk | ✅ Vagrant | ✅ |
 
 ### BSD
 

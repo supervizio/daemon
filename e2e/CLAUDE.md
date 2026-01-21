@@ -5,17 +5,17 @@ AMD64 only (setup scripts are architecture-agnostic).
 
 ## Init System Coverage
 
-| Init System | Distribution | VM | Docker |
-|-------------|--------------|:--:|:------:|
-| **systemd** | Debian 12 | ✅ Vagrant | ✅ |
-| **systemd** | Ubuntu 22.04 | ✅ Vagrant | ✅ |
-| **OpenRC** | Alpine 3.19 | ✅ Vagrant | ✅ |
-| **SysVinit** | Devuan 4 | ✅ Vagrant | ✅ |
-| **runit** | Alpine 3.20 | ✅ Vagrant | ✅ |
-| **BSD rc.d** | FreeBSD 14 | ✅ Vagrant | - |
-| **BSD rc.d** | OpenBSD 7 | ✅ Vagrant | - |
-| **BSD rc.d** | NetBSD 10 | ✅ Vagrant | - |
-| **BSD rc.d** | DragonFlyBSD 6 | ✅ Vagrant | - |
+| Init System | Distribution | Pkg Format | VM | Docker |
+|-------------|--------------|------------|:--:|:------:|
+| **systemd** | Debian 12 | .deb | ✅ Vagrant | ✅ |
+| **systemd** | Rocky 9 | .rpm | ✅ Vagrant | ✅ |
+| **OpenRC** | Alpine 3.19 | .apk | ✅ Vagrant | ✅ |
+| **SysVinit** | Devuan 4 | .deb | ✅ Vagrant | ✅ |
+| **runit** | Alpine 3.19 | .apk | ✅ Vagrant | ✅ |
+| **BSD rc.d** | FreeBSD 14 | pkg | ✅ Vagrant | - |
+| **BSD rc.d** | OpenBSD 7 | pkg | ✅ Vagrant | - |
+| **BSD rc.d** | NetBSD 10 | pkgin | ✅ Vagrant | - |
+| **BSD rc.d** | DragonFlyBSD 6 | pkg | ✅ Vagrant | - |
 
 **Total: 9 jobs**
 
@@ -25,11 +25,11 @@ AMD64 only (setup scripts are architecture-agnostic).
 e2e/
 ├── Vagrantfile           # VM configuration (libvirt)
 ├── test-install.sh       # Universal installation test
-├── Dockerfile.debian     # Debian (systemd)
-├── Dockerfile.ubuntu     # Ubuntu (systemd)
-├── Dockerfile.alpine     # Alpine (OpenRC)
-├── Dockerfile.devuan     # Devuan (SysVinit)
-├── Dockerfile.alpine-runit # Alpine (runit)
+├── Dockerfile.debian     # Debian (systemd, .deb)
+├── Dockerfile.rocky      # Rocky Linux (systemd, .rpm)
+├── Dockerfile.alpine     # Alpine (OpenRC, .apk)
+├── Dockerfile.devuan     # Devuan (SysVinit, .deb)
+├── Dockerfile.alpine-runit # Alpine (runit, .apk)
 └── CLAUDE.md             # This file
 ```
 
@@ -39,17 +39,17 @@ e2e/
 E2E Tests (9 jobs, 2 workflow jobs)
 │
 ├── e2e-linux (5 matrix jobs - Vagrant + Docker)
-│   ├── Debian (systemd)
-│   ├── Ubuntu (systemd)
-│   ├── Alpine (OpenRC)
-│   ├── Devuan (SysVinit)
-│   └── Alpine-runit (runit)
+│   ├── Debian (systemd, .deb)
+│   ├── Rocky (systemd, .rpm)
+│   ├── Alpine (OpenRC, .apk)
+│   ├── Devuan (SysVinit, .deb)
+│   └── Alpine-runit (runit, .apk)
 │
 └── e2e-bsd (4 matrix jobs - Vagrant)
-    ├── FreeBSD (rc.d)
-    ├── OpenBSD (rc.d)
-    ├── NetBSD (rc.d)
-    └── DragonFlyBSD (rc.d)
+    ├── FreeBSD (rc.d, pkg)
+    ├── OpenBSD (rc.d, pkg)
+    ├── NetBSD (rc.d, pkgin)
+    └── DragonFlyBSD (rc.d, pkg)
 ```
 
 ## Init Systems
@@ -74,13 +74,13 @@ E2E Tests (9 jobs, 2 workflow jobs)
 
 ## Container Tests
 
-| Test | Base Image | Init System |
-|------|------------|-------------|
-| Debian | `debian:trixie-slim` | systemd |
-| Ubuntu | `ubuntu:24.04` | systemd |
-| Alpine | `alpine:3.20` | OpenRC |
-| Devuan | `devuan/devuan:daedalus` | SysVinit |
-| Alpine-runit | `alpine:3.20` + runit | runit |
+| Test | Base Image | Init System | Pkg Format |
+|------|------------|-------------|------------|
+| Debian | `debian:trixie-slim` | systemd | .deb |
+| Rocky | `rockylinux:9-minimal` | systemd | .rpm |
+| Alpine | `alpine:3.20` | OpenRC | .apk |
+| Devuan | `devuan/devuan:daedalus` | SysVinit | .deb |
+| Alpine-runit | `alpine:3.20` + runit | runit | .apk |
 
 ## Local Testing
 

@@ -1,16 +1,17 @@
 # =============================================================================
-# E2E Test Container: Ubuntu 24.04 (noble) - systemd
+# E2E Test Container: Rocky Linux 9 - systemd
 # =============================================================================
-# Validates supervizio binary runs correctly on Ubuntu with systemd.
+# Validates supervizio binary runs correctly on Rocky Linux (RHEL clone)
+# with systemd. Covers dnf/rpm package manager ecosystem.
 # =============================================================================
 
-FROM ubuntu:24.04
+FROM rockylinux:9-minimal
 
 # Install minimal dependencies for testing
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN microdnf install -y \
     curl \
-    procps \
-    && rm -rf /var/lib/apt/lists/* \
+    procps-ng \
+    && microdnf clean all \
     && mkdir -p /var/log/supervizio /etc/supervizio
 
 # Copy supervizio binary (built externally for the target architecture)

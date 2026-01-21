@@ -62,6 +62,7 @@ les fichiers existants au lieu de listes hardcodées.
 | `settings` | `.../images/.claude/settings.json` | Config Claude |
 | `compose` | `.devcontainer/docker-compose.yml` | FORCE update ollama+devcontainer |
 | `grepai` | `.devcontainer/images/grepai.config.yaml` | Config grepai |
+| `user_hooks` | `~/.claude/settings.json` | Sync user hooks with template |
 
 ---
 
@@ -89,6 +90,7 @@ Composants:
   settings    Claude settings.json
   compose     docker-compose.yml (FORCE ollama+devcontainer)
   grepai      grepai config (provider, model)
+  user_hooks  Sync ~/.claude/settings.json hooks
 
 Exemples:
   /update                       Tout mettre à jour
@@ -214,6 +216,16 @@ discover_workflow:
       raw_url: "https://raw.githubusercontent.com/kodflow/devcontainer-template/main/.devcontainer/images/grepai.config.yaml"
       local_path: ".devcontainer/images/grepai.config.yaml"
       note: "Optimized config with qwen3-embedding model"
+
+    user_hooks:
+      strategy: "SYNC (replace hooks, preserve other settings)"
+      source: ".devcontainer/images/.claude/settings.json"
+      target: "~/.claude/settings.json"
+      note: |
+        - Synchronizes hooks from template to user settings
+        - Preserves user customizations (permissions, env, etc.)
+        - Prevents "hook error" from orphaned script references
+        - Creates backup before modification
 ```
 
 **Implémentation Discover :**
@@ -511,6 +523,10 @@ echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.templa
     ✓ settings    (1 file)
     ✓ compose     (FORCED ollama+devcontainer update)
     ✓ grepai      (1 file - qwen3-embedding config)
+    ✓ user_hooks  (synchronized with template)
+
+  Hook validation:
+    ✓ All hook scripts exist
 
   Grepai config:
     provider: ollama
@@ -554,6 +570,9 @@ echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.templa
 │       ├── scripts/*.sh
 │       └── settings.json
 └── .template-version
+
+~/.claude/
+└── settings.json             # User hooks synchronized (Phase 5)
 ```
 
 **Dans l'image Docker (restauré au démarrage) :**
@@ -745,6 +764,82 @@ echo ""
 echo "Updating grepai config..."
 safe_download "$BASE/.devcontainer/images/grepai.config.yaml" ".devcontainer/images/grepai.config.yaml"
 
+# ============================================================================
+# Phase 5: Sync User Settings (hooks only, preserve customizations)
+# ============================================================================
+# User settings (~/.claude/settings.json) may have outdated hooks referencing
+# scripts that no longer exist. This phase synchronizes hooks from template
+# while preserving user customizations (permissions, env, etc.)
+echo ""
+echo "Synchronizing user hooks..."
+
+USER_SETTINGS="$HOME/.claude/settings.json"
+
+if [ -f "$USER_SETTINGS" ]; then
+    # Backup current settings
+    cp "$USER_SETTINGS" "${USER_SETTINGS}.bak"
+
+    # Download template hooks
+    TEMPLATE_SETTINGS=$(curl -sL "$BASE/.devcontainer/images/.claude/settings.json" 2>/dev/null || echo "{}")
+    TEMPLATE_HOOKS=$(echo "$TEMPLATE_SETTINGS" | jq '.hooks // empty' 2>/dev/null || echo "")
+
+    if [ -n "$TEMPLATE_HOOKS" ] && [ "$TEMPLATE_HOOKS" != "null" ]; then
+        # Merge: replace hooks only, keep everything else (permissions, env, etc.)
+        if jq --argjson hooks "$TEMPLATE_HOOKS" '.hooks = $hooks' \
+            "$USER_SETTINGS" > "${USER_SETTINGS}.tmp" 2>/dev/null; then
+
+            # Validate generated JSON
+            if jq empty "${USER_SETTINGS}.tmp" 2>/dev/null; then
+                mv "${USER_SETTINGS}.tmp" "$USER_SETTINGS"
+                echo "✓ User hooks synchronized with template"
+            else
+                echo "✗ Failed to merge hooks (invalid JSON)"
+                rm -f "${USER_SETTINGS}.tmp"
+                mv "${USER_SETTINGS}.bak" "$USER_SETTINGS"
+            fi
+        else
+            echo "✗ Failed to merge hooks (jq error)"
+            rm -f "${USER_SETTINGS}.tmp"
+        fi
+    else
+        echo "⚠ Could not fetch template hooks (network issue?)"
+    fi
+else
+    echo "⚠ No user settings at $USER_SETTINGS (will be created on first Claude run)"
+fi
+
+# ============================================================================
+# Phase 6: Validate Hook Scripts Exist
+# ============================================================================
+# Verify all scripts referenced in hooks actually exist to prevent "hook error"
+echo ""
+echo "Validating hook scripts..."
+
+MISSING_COUNT=0
+if [ -f "$USER_SETTINGS" ]; then
+    # Extract all script paths from hooks configuration
+    HOOK_SCRIPTS=$(jq -r '.hooks | .. | .command? // empty' "$USER_SETTINGS" 2>/dev/null | \
+        grep -oE '/home/vscode/.claude/scripts/[^"[:space:]]+\.sh' | \
+        sort -u || true)
+
+    for script in $HOOK_SCRIPTS; do
+        script_name=$(basename "$script")
+        if [ ! -f "$script" ]; then
+            echo "  ⚠️  Missing: $script_name"
+            MISSING_COUNT=$((MISSING_COUNT + 1))
+        fi
+    done
+
+    if [ "$MISSING_COUNT" -eq 0 ]; then
+        echo "✓ All hook scripts exist"
+    else
+        echo "⚠️  $MISSING_COUNT script(s) missing - some hooks may fail"
+        echo "   Run: /update --component hooks to fix"
+    fi
+else
+    echo "⚠ Skipped (no user settings)"
+fi
+
 # Version
 COMMIT=$(curl -sL "https://api.github.com/repos/kodflow/devcontainer-template/commits/main" | jq -r '.sha[:7]')
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -753,5 +848,8 @@ echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.templa
 echo ""
 echo "═══════════════════════════════════════════════"
 echo "  ✓ Update complete - version: $COMMIT"
+echo ""
+echo "  User hooks: synchronized"
+echo "  Hook scripts: $( [ "$MISSING_COUNT" -eq 0 ] && echo "all present" || echo "$MISSING_COUNT missing" )"
 echo "═══════════════════════════════════════════════"
 ```

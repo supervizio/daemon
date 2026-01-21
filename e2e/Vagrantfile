@@ -6,20 +6,23 @@
 # Full matrix of init systems and platforms:
 #
 # Linux (systemd):
-#   - debian13: Debian 13 (trixie) - primary
-#   - ubuntu: Ubuntu 24.04 (noble)
+#   - debian13: Debian 13 (trixie) - primary (.deb)
+#   - rocky: Rocky Linux 9 - RHEL clone (.rpm)
 #
 # Linux (OpenRC):
-#   - alpine: Alpine 3.20
+#   - alpine: Alpine 3.19 (.apk)
 #
 # Linux (SysVinit):
-#   - devuan: Devuan 5 (daedalus) - Debian without systemd
+#   - devuan: Devuan 5 (daedalus) - Debian without systemd (.deb)
+#
+# Linux (runit):
+#   - alpine-runit: Alpine 3.19 with runit (.apk)
 #
 # BSD (rc.d):
-#   - freebsd: FreeBSD 14
-#   - openbsd: OpenBSD 7.5
-#   - netbsd: NetBSD 10
-#   - dragonfly: DragonFlyBSD 6.4
+#   - freebsd: FreeBSD 14 (pkg)
+#   - openbsd: OpenBSD 7.5 (pkg)
+#   - netbsd: NetBSD 10 (pkgin)
+#   - dragonfly: DragonFlyBSD 6.4 (pkg)
 #
 # Providers:
 #   - libvirt: Linux CI (KVM acceleration)
@@ -109,11 +112,11 @@ Vagrant.configure("2") do |config|
     v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
   end
 
-  # Ubuntu 22.04 (jammy) - 24.04 box not yet available
-  config.vm.define "ubuntu", autostart: false do |v|
-    v.vm.box = "generic/ubuntu2204"
-    v.vm.hostname = "e2e-ubuntu"
-    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
+  # Rocky Linux 9 - RHEL clone for enterprise/server (dnf/rpm)
+  config.vm.define "rocky", autostart: false do |v|
+    v.vm.box = "generic/rocky9"
+    v.vm.hostname = "e2e-rocky"
+    v.vm.provision "shell", inline: "dnf install -y -q curl"
   end
 
   # ===========================================================================
