@@ -257,7 +257,17 @@ jobs:
           fi
           ls -lh /tmp/debian-12-generic-arm64.qcow2
 
+      - name: Check KVM availability for VM tests
+        run: |
+          if [ "$KVM_AVAILABLE" != "true" ]; then
+            echo "::warning::KVM not available - VM tests will be skipped (TCG too slow for CI)"
+            echo "ARM64 container tests will still validate the binary"
+          else
+            echo "KVM available - running full VM tests"
+          fi
+
       - name: Create cloud-init configuration
+        if: env.KVM_AVAILABLE == 'true'
         run: |
           mkdir -p /tmp/cloud-init
 
@@ -305,6 +315,7 @@ jobs:
             /tmp/cloud-init/user-data /tmp/cloud-init/meta-data
 
       - name: Start Debian VM with virt-install
+        if: env.KVM_AVAILABLE == 'true'
         run: |
           echo "=== Creating Debian VM (ARM64) ==="
           echo "KVM_AVAILABLE: $KVM_AVAILABLE"
@@ -408,6 +419,7 @@ jobs:
           echo "VM_IP=$VM_IP" >> $GITHUB_ENV
 
       - name: Run VM installation test
+        if: env.KVM_AVAILABLE == 'true'
         run: |
           echo "=== Running installation tests on ARM64 VM ==="
           echo "VM_IP: $VM_IP"
@@ -450,7 +462,7 @@ jobs:
           echo "=== VM tests passed ==="
 
       - name: Cleanup VM
-        if: always()
+        if: always() && env.KVM_AVAILABLE == 'true'
         run: |
           sudo virsh destroy e2e-debian 2>/dev/null || true
           sudo virsh undefine e2e-debian --remove-all-storage 2>/dev/null || true

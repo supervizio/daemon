@@ -14,25 +14,26 @@ End-to-end testing for supervizio using Linux runners with KVM acceleration.
 **Total: 2 jobs** (1 AMD64 + 1 ARM64)
 
 - **AMD64**: VM test (Vagrant + KVM) + Container test (Docker)
-- **ARM64**: VM test (virt-install + cloud-init + KVM) + Container test (Docker)
+- **ARM64**: Container test (Docker) - VM tests require KVM (not available on GitHub ARM64 runners)
 
-### ARM64 VM Note
+### ARM64 VM Testing
 
-HashiCorp does not provide official Vagrant binaries for ARM64 Linux.
-See: https://github.com/hashicorp/vagrant-installers/issues/288
+**CI Limitation**: GitHub ARM64 runners (`ubuntu-24.04-arm`) do not have KVM available.
+QEMU TCG (software emulation) is too slow for reliable VM testing in CI timeouts.
 
-For ARM64, we use **virt-install + cloud-init** instead of Vagrant:
+**Local ARM64 VM Testing** (with KVM available):
 ```bash
 # Download Debian ARM64 cloud image
 wget https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-arm64.qcow2
 
-# Create VM with virt-install
+# Create VM with virt-install (requires KVM)
 virt-install --name e2e-debian --memory 2048 --vcpus 2 \
   --disk debian.qcow2 --disk cloud-init.iso,device=cdrom \
-  --os-variant debian12 --arch aarch64 --boot uefi --import
+  --os-variant debian12 --virt-type kvm --arch aarch64 --boot uefi --import
 ```
 
-This approach is more reliable than building Vagrant from source.
+**Note**: HashiCorp does not provide Vagrant for ARM64 Linux.
+See: https://github.com/hashicorp/vagrant-installers/issues/288
 
 ## Structure
 
