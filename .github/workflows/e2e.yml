@@ -442,12 +442,14 @@ jobs:
           # Create directory structure on VM (mimic Vagrant mounts)
           echo "Creating directory structure on VM..."
           sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            test@$VM_IP "sudo mkdir -p /setup /bin-local /vagrant"
+            test@$VM_IP "sudo mkdir -p /setup /bin-local /vagrant && mkdir -p /tmp/setup-files"
 
-          # Copy files to VM using scp (to /tmp first, then move with sudo)
-          echo "Copying test files to VM..."
-          sshpass -p "test123" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            setup/install.sh setup/uninstall.sh test@$VM_IP:/tmp/
+          # Copy entire setup/ directory recursively (includes init/ with service files)
+          echo "Copying setup directory to VM..."
+          sshpass -p "test123" scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            setup/* test@$VM_IP:/tmp/setup-files/
+
+          # Copy binary and test script
           sshpass -p "test123" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             bin/supervizio test@$VM_IP:/tmp/
           sshpass -p "test123" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
@@ -456,7 +458,7 @@ jobs:
           # Move files to correct locations (like Vagrant rsync mounts)
           echo "Setting up file structure..."
           sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            test@$VM_IP "sudo mv /tmp/install.sh /tmp/uninstall.sh /setup/ && \
+            test@$VM_IP "sudo cp -r /tmp/setup-files/* /setup/ && \
                          sudo mv /tmp/supervizio /bin-local/ && \
                          sudo chmod +x /setup/*.sh /bin-local/supervizio"
 
