@@ -10,16 +10,16 @@
 #   - Devuan 4 (SysVinit) - AMD64 only (no ARM64 images exist)
 #   - Void Linux (runit) - Docker only (no VM images exist)
 #
-# BSD (AMD64 + ARM64 via cross-platform-actions):
-#   - FreeBSD 14.2 (rc.d) - AMD64 + ARM64
-#   - OpenBSD 7.6 (rc.d) - AMD64 + ARM64
-#   - NetBSD 10.1 (rc.d) - AMD64 + ARM64
-#   - DragonFlyBSD 6.4 (rc.d) - AMD64 only (OS doesn't support ARM64)
+# BSD (AMD64 + ARM64):
+#   - FreeBSD 14.2 (rc.d) - AMD64 + ARM64 (cross-platform-actions)
+#   - OpenBSD 7.6 (rc.d) - AMD64 + ARM64 (cross-platform-actions)
+#   - NetBSD 10.0 (rc.d) - AMD64 + ARM64 (cross-platform-actions)
+#   - DragonFlyBSD 6.4 (rc.d) - AMD64 only via Vagrant (OS doesn't support ARM64)
 #
 # Total: 18 jobs
 #   - 5 Linux AMD64 (Vagrant + Docker)
 #   - 5 Linux ARM64 (Docker only - GHA lacks nested virt)
-#   - 7 BSD (cross-platform-actions: 3x AMD64+ARM64 + 1x AMD64)
+#   - 7 BSD (6 cross-platform-actions + 1 DragonFlyBSD Vagrant)
 #   - 1 PID1 container tests
 # =============================================================================
 name: E2E Tests
@@ -573,13 +573,8 @@ jobs:
             arch: arm64
             goarch: arm64
             goos: netbsd
-          # DragonFlyBSD AMD64 only (ARM64 not supported by OS)
-          - name: DragonFlyBSD
-            os: dragonflybsd
-            version: '6.4'
-            arch: x86-64
-            goarch: amd64
-            goos: dragonfly
+          # DragonFlyBSD: NOT supported by cross-platform-actions
+          # Use separate e2e-dragonflybsd job with Vagrant instead
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -649,6 +644,86 @@ jobs:
         run: |
           echo "=== Test failed for ${{ matrix.name }} ${{ matrix.arch }} ==="
           echo "Check cross-platform-actions logs above"
+
+  # ===========================================================================
+  # DragonFlyBSD (Vagrant - not supported by cross-platform-actions)
+  # ===========================================================================
+  e2e-dragonflybsd:
+    name: E2E x86-64 DragonFlyBSD
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: src/go.sum
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@latest
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build supervizio binary (dragonfly/amd64)
+        working-directory: src
+        env:
+          CGO_ENABLED: 0
+          GOOS: dragonfly
+          GOARCH: amd64
+        run: |
+          go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
+          chmod +x ../bin/supervizio
+          echo "=== Binary info ==="
+          file ../bin/supervizio
+
+      - name: Install Vagrant and libvirt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y vagrant libvirt-daemon-system libvirt-dev qemu-kvm
+          sudo usermod -aG libvirt $USER
+          vagrant plugin install vagrant-libvirt
+
+      - name: Start DragonFlyBSD VM
+        working-directory: e2e
+        run: |
+          sudo vagrant up dragonfly --provider=libvirt
+
+      - name: Copy files to VM
+        working-directory: e2e
+        run: |
+          sudo vagrant ssh dragonfly -c "sudo mkdir -p /setup /usr/local/bin"
+          sudo vagrant scp ../setup dragonfly:/tmp/setup
+          sudo vagrant scp ../bin/supervizio dragonfly:/tmp/supervizio
+          sudo vagrant ssh dragonfly -c "sudo cp -r /tmp/setup/* /setup/ && sudo cp /tmp/supervizio /usr/local/bin/ && sudo chmod +x /setup/*.sh /usr/local/bin/supervizio"
+
+      - name: Run installation tests
+        working-directory: e2e
+        run: |
+          sudo vagrant ssh dragonfly -c "sudo /setup/install.sh"
+          sudo vagrant ssh dragonfly -c "/usr/local/bin/supervizio --version"
+
+      - name: Run E2E test script
+        working-directory: e2e
+        run: |
+          sudo vagrant ssh dragonfly -c "sudo sh /vagrant/test-install.sh"
+
+      - name: Collect logs on failure
+        if: failure()
+        working-directory: e2e
+        run: |
+          sudo vagrant ssh dragonfly -c "uname -a" || true
+          sudo vagrant ssh dragonfly -c "cat /var/log/messages | tail -50" || true
+
+      - name: Cleanup
+        if: always()
+        working-directory: e2e
+        run: |
+          sudo vagrant destroy dragonfly -f || true
 
   # ===========================================================================
   # PID1 Container Tests (supervizio as container init)
