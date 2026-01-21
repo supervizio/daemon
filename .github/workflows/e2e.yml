@@ -261,36 +261,44 @@ jobs:
         run: |
           mkdir -p /tmp/cloud-init
 
-          # Create user-data
-          cat > /tmp/cloud-init/user-data << 'EOF'
+          # Create user-data (YAML - indentation matters!)
+          cat > /tmp/cloud-init/user-data << 'USERDATA'
           #cloud-config
           users:
             - name: test
               sudo: ALL=(ALL) NOPASSWD:ALL
               shell: /bin/bash
-              ssh_authorized_keys:
-                - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7...test-key
               lock_passwd: false
-              passwd: $6$rounds=4096$test$hashhere
           chpasswd:
             expire: false
-            users:
-              - name: test
-                password: test123
-                type: text
+            list:
+              - test:test123
           ssh_pwauth: true
-          package_update: true
+          package_update: false
           packages:
             - curl
+            - openssh-server
           runcmd:
-            - echo "Cloud-init completed"
-          EOF
+            - systemctl enable ssh
+            - systemctl start ssh
+            - echo "Cloud-init completed" > /tmp/cloud-init-done
+          USERDATA
+
+          # Remove leading spaces (heredoc preserves them)
+          sed -i 's/^          //' /tmp/cloud-init/user-data
 
           # Create meta-data
-          cat > /tmp/cloud-init/meta-data << 'EOF'
+          cat > /tmp/cloud-init/meta-data << 'METADATA'
           instance-id: e2e-debian-arm64
           local-hostname: e2e-debian
-          EOF
+          METADATA
+          sed -i 's/^          //' /tmp/cloud-init/meta-data
+
+          # Show config for debugging
+          echo "=== user-data ==="
+          cat /tmp/cloud-init/user-data
+          echo "=== meta-data ==="
+          cat /tmp/cloud-init/meta-data
 
           # Create cloud-init ISO
           genisoimage -output /tmp/cloud-init.iso -volid cidata -joliet -rock \
@@ -386,12 +394,34 @@ jobs:
       - name: Run VM installation test
         run: |
           echo "=== Running installation tests on ARM64 VM ==="
+          echo "VM_IP: $VM_IP"
+
+          # Wait for SSH to be ready (cloud-init may still be running)
+          echo "Waiting for SSH to be ready..."
+          for i in {1..30}; do
+            if sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+               -o ConnectTimeout=5 test@$VM_IP "echo SSH ready" 2>/dev/null; then
+              echo "SSH connection established on attempt $i"
+              break
+            fi
+            echo "SSH not ready yet (attempt $i/30)..."
+            sleep 10
+          done
+
+          # Verify SSH works
+          if ! sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+             test@$VM_IP "uname -a"; then
+            echo "ERROR: SSH connection failed"
+            exit 1
+          fi
 
           # Copy files to VM using scp
+          echo "Copying test files to VM..."
           sshpass -p "test123" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             /var/lib/libvirt/images/e2e-files/* test@$VM_IP:/tmp/
 
           # Run test script
+          echo "Running test-install.sh..."
           sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             test@$VM_IP "sudo chmod +x /tmp/test-install.sh && sudo /tmp/test-install.sh"
 
