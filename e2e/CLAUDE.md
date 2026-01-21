@@ -1,81 +1,107 @@
-# E2E Testing - Linux VM Testing with KVM
+# E2E Testing - Full Platform Matrix
 
-End-to-end testing for supervizio using Linux runners with KVM acceleration.
+End-to-end testing for supervizio across all supported platforms and init systems.
+
+## Complete Init System Mapping
+
+| Init System | Distribution | AMD64 | ARM64 | GOOS | Container | VM |
+|-------------|--------------|-------|-------|------|-----------|-----|
+| **systemd** | Debian 13 | ✅ | ✅ | linux | ✅ | ✅ |
+| **systemd** | Ubuntu 24.04 | ✅ | ✅ | linux | ✅ | ✅ |
+| **OpenRC** | Alpine 3.20 | ✅ | ✅ | linux | ✅ | ✅ |
+| **SysVinit** | Devuan 5 | ✅ | ✅ | linux | ✅ | ❌ (no ARM64 image) |
+| **runit** | Void Linux | ✅ | ✅ | linux | ✅ | ✅ (AMD64 only) |
+| **BSD rc.d** | FreeBSD 14 | ✅ | ✅* | freebsd | ❌ | ✅ |
+| **BSD rc.d** | OpenBSD 7.5 | ✅ | ✅* | openbsd | ❌ | ✅ |
+| **BSD rc.d** | NetBSD 10 | ✅ | ✅* | netbsd | ❌ | ✅ |
+| **BSD rc.d** | DragonFlyBSD 6.4 | ✅ | ❌ | dragonfly | ❌ | ✅ |
+| **launchd** | macOS 14 | ✅ | ✅ | darwin | ❌ | ❌ (macOS runner) |
+
+*BSD ARM64: Go supports cross-compilation, but no CI ARM64 BSD VMs available.
 
 ## Architecture
 
-**Linux runners with KVM for native virtualization performance**
+**Full coverage of init systems and platforms**
 
-| Runner | Architecture | Cores | RAM | VM | Container |
-|--------|--------------|-------|-----|-----|-----------|
-| ubuntu-24.04 | AMD64 | 4 | 16GB | Debian | Debian |
-| ubuntu-24.04-arm | ARM64 | 4 | 16GB | Debian | Debian |
+### Linux (AMD64 + ARM64)
 
-**Total: 2 jobs** (1 AMD64 + 1 ARM64)
+| Distribution | Init System | VM | Container |
+|--------------|-------------|-----|-----------|
+| Debian 13 | systemd | Vagrant/virt-install | Docker |
+| Ubuntu 24.04 | systemd | Vagrant/virt-install | Docker |
+| Alpine 3.20 | OpenRC | Vagrant/virt-install | Docker |
+| Devuan 5 | SysVinit | Vagrant | Docker |
+| Void Linux | runit | Vagrant | Docker |
 
-- **AMD64**: VM test (Vagrant + KVM) + Container test (Docker)
-- **ARM64**: Container test (Docker) - VM tests require KVM (not available on GitHub ARM64 runners)
+### BSD (AMD64 only)
 
-### ARM64 VM Testing
+| OS | Init System | VM | Container |
+|----|-------------|-----|-----------|
+| FreeBSD 14 | rc.d | Vagrant | N/A |
+| OpenBSD 7.5 | rc.d | Vagrant | N/A |
+| NetBSD 10 | rc.d | Vagrant | N/A |
+| DragonFlyBSD 6.4 | rc.d | Vagrant | N/A |
 
-**CI Limitation**: GitHub ARM64 runners (`ubuntu-24.04-arm`) do not have KVM available.
-QEMU TCG (software emulation) is too slow for reliable VM testing in CI timeouts.
-
-**Local ARM64 VM Testing** (with KVM available):
-```bash
-# Download Debian ARM64 cloud image
-wget https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-arm64.qcow2
-
-# Create VM with virt-install (requires KVM)
-virt-install --name e2e-debian --memory 2048 --vcpus 2 \
-  --disk debian.qcow2 --disk cloud-init.iso,device=cdrom \
-  --os-variant debian12 --virt-type kvm --arch aarch64 --boot uefi --import
-```
-
-**Note**: HashiCorp does not provide Vagrant for ARM64 Linux.
-See: https://github.com/hashicorp/vagrant-installers/issues/288
+**Total: 14 jobs** (5 Linux AMD64 + 5 Linux ARM64 + 4 BSD AMD64)
 
 ## Structure
 
 ```
 e2e/
-├── Vagrantfile           # VM configuration (libvirt provider)
-├── test-install.sh       # VM installation test script
-├── Dockerfile.debian     # Debian container for testing
+├── Vagrantfile           # VM configuration (all platforms)
+├── test-install.sh       # Universal installation test script
+├── Dockerfile.debian     # Debian 13 (systemd)
+├── Dockerfile.ubuntu     # Ubuntu 24.04 (systemd)
+├── Dockerfile.alpine     # Alpine 3.20 (OpenRC)
+├── Dockerfile.devuan     # Devuan 5 (SysVinit)
+├── Dockerfile.void       # Void Linux (runit)
+├── config-scratch.yaml   # Minimal test configuration
 └── CLAUDE.md             # This file
 ```
 
 ## CI Workflow
 
 ```
-E2E Tests (2 jobs)
-├── E2E AMD64 (Debian VM + Container)
-│   ├── Build linux/amd64 binary
-│   ├── Install libvirt + Vagrant
-│   ├── Vagrant up debian (KVM)
-│   ├── Run test-install.sh
-│   ├── Docker build Dockerfile.debian
-│   └── Docker run --version test
+E2E Tests (14 jobs)
 │
-└── E2E ARM64 (Debian VM + Container)
-    ├── Build linux/arm64 binary
-    ├── Install libvirt + virt-install
-    ├── Download Debian cloud image (ARM64)
-    ├── Create cloud-init config
-    ├── virt-install debian (KVM)
-    ├── Run test-install.sh via SSH
-    ├── Docker build Dockerfile.debian
-    └── Docker run --version test
+├── Linux AMD64 (5 jobs - Vagrant + Docker)
+│   ├── Debian (systemd)
+│   ├── Ubuntu (systemd)
+│   ├── Alpine (OpenRC)
+│   ├── Devuan (SysVinit)
+│   └── Void (runit)
+│
+├── Linux ARM64 (5 jobs - virt-install + Docker)
+│   ├── Debian (systemd)
+│   ├── Ubuntu (systemd)
+│   ├── Alpine (OpenRC)
+│   ├── Devuan (SysVinit) - Container only, no ARM64 VM image
+│   └── Void (runit) - Container only, no cloud-init images
+│
+└── BSD AMD64 (4 jobs - Vagrant only)
+    ├── FreeBSD (rc.d)
+    ├── OpenBSD (rc.d)
+    ├── NetBSD (rc.d)
+    └── DragonFlyBSD (rc.d)
 ```
+
+## Init Systems Tested
+
+| Init System | Service Path | Enable Command |
+|-------------|--------------|----------------|
+| **systemd** | `/etc/systemd/system/` | `systemctl enable` |
+| **OpenRC** | `/etc/init.d/` | `rc-update add` |
+| **SysVinit** | `/etc/init.d/` | `update-rc.d` |
+| **runit** | `/etc/sv/` | `ln -s /etc/sv/X /var/service/` |
+| **BSD rc.d** | `/usr/local/etc/rc.d/` (FreeBSD) | `sysrc enable` |
+| **BSD rc.d** | `/etc/rc.d/` (OpenBSD/NetBSD) | `rcctl enable` |
 
 ## Runners
 
-| Runner | Hardware | Cores | RAM | Provider |
-|--------|----------|-------|-----|----------|
-| `ubuntu-24.04` | x86_64 | 4 | 16GB | libvirt + KVM |
-| `ubuntu-24.04-arm` | ARM64 | 4 | 16GB | libvirt + KVM |
-
-Both use KVM for native virtualization performance.
+| Runner | Hardware | Use Case |
+|--------|----------|----------|
+| `ubuntu-24.04` | AMD64 | Linux + BSD VMs |
+| `ubuntu-24.04-arm` | ARM64 | Linux ARM64 VMs |
 
 ## VM Tests (test-install.sh)
 
@@ -89,21 +115,70 @@ Both use KVM for native virtualization performance.
 
 ## Container Tests
 
-| Test | Description |
-|------|-------------|
-| Debian | Validates binary runs in standard Debian container |
+| Test | Base Image | Init System |
+|------|------------|-------------|
+| Debian | `debian:trixie-slim` | systemd |
+| Ubuntu | `ubuntu:24.04` | systemd |
+| Alpine | `alpine:3.20` | OpenRC |
+| Devuan | `devuan/devuan:daedalus-slim` | SysVinit |
+| Void | `ghcr.io/void-linux/void-glibc:latest` | runit |
 
 ## Usage
 
-### VM Tests (Vagrant)
+### Linux VM Tests (Vagrant)
 
 ```bash
 cd e2e
 
-# Start VM with libvirt (Linux)
-vagrant up debian --provider=libvirt
-vagrant ssh debian -c "sudo /vagrant/test-install.sh"
-vagrant destroy debian -f
+# systemd distributions
+vagrant up debian13 --provider=libvirt
+vagrant ssh debian13 -c "sudo /vagrant/test-install.sh"
+vagrant destroy debian13 -f
+
+vagrant up ubuntu --provider=libvirt
+vagrant ssh ubuntu -c "sudo /vagrant/test-install.sh"
+vagrant destroy ubuntu -f
+
+# OpenRC
+vagrant up alpine --provider=libvirt
+vagrant ssh alpine -c "sudo /vagrant/test-install.sh"
+vagrant destroy alpine -f
+
+# SysVinit
+vagrant up devuan --provider=libvirt
+vagrant ssh devuan -c "sudo /vagrant/test-install.sh"
+vagrant destroy devuan -f
+
+# runit
+vagrant up void --provider=libvirt
+vagrant ssh void -c "sudo /vagrant/test-install.sh"
+vagrant destroy void -f
+```
+
+### BSD VM Tests (Vagrant)
+
+```bash
+cd e2e
+
+# FreeBSD
+vagrant up freebsd --provider=libvirt
+vagrant ssh freebsd -c "sudo /vagrant/test-install.sh"
+vagrant destroy freebsd -f
+
+# OpenBSD
+vagrant up openbsd --provider=libvirt
+vagrant ssh openbsd -c "sudo /vagrant/test-install.sh"
+vagrant destroy openbsd -f
+
+# NetBSD
+vagrant up netbsd --provider=libvirt
+vagrant ssh netbsd -c "sudo /vagrant/test-install.sh"
+vagrant destroy netbsd -f
+
+# DragonFlyBSD
+vagrant up dragonfly --provider=libvirt
+vagrant ssh dragonfly -c "sudo /vagrant/test-install.sh"
+vagrant destroy dragonfly -f
 ```
 
 ### Container Tests (Docker)
@@ -112,9 +187,25 @@ vagrant destroy debian -f
 # Build binary first
 cd src && CGO_ENABLED=0 go build -o ../bin/supervizio ./cmd/daemon
 
-# Debian container test
+# Debian (systemd)
 docker build -f e2e/Dockerfile.debian -t supervizio-debian .
 docker run --rm supervizio-debian
+
+# Ubuntu (systemd)
+docker build -f e2e/Dockerfile.ubuntu -t supervizio-ubuntu .
+docker run --rm supervizio-ubuntu
+
+# Alpine (OpenRC)
+docker build -f e2e/Dockerfile.alpine -t supervizio-alpine .
+docker run --rm supervizio-alpine
+
+# Devuan (SysVinit)
+docker build -f e2e/Dockerfile.devuan -t supervizio-devuan .
+docker run --rm supervizio-devuan
+
+# Void (runit)
+docker build -f e2e/Dockerfile.void -t supervizio-void .
+docker run --rm supervizio-void
 ```
 
 ## Build Requirements
@@ -125,12 +216,41 @@ docker run --rm supervizio-debian
 |----------|------|--------|
 | Linux AMD64 | linux | amd64 |
 | Linux ARM64 | linux | arm64 |
+| FreeBSD AMD64 | freebsd | amd64 |
+| FreeBSD ARM64 | freebsd | arm64 |
+| OpenBSD AMD64 | openbsd | amd64 |
+| OpenBSD ARM64 | openbsd | arm64 |
+| NetBSD AMD64 | netbsd | amd64 |
+| NetBSD ARM64 | netbsd | arm64 |
+| DragonFlyBSD AMD64 | dragonfly | amd64 |
+| macOS AMD64 | darwin | amd64 |
+| macOS ARM64 | darwin | arm64 |
 
 ### CI Dependencies (Ubuntu)
 
 - libvirt-daemon-system
-- libvirt-dev
-- vagrant
-- vagrant-libvirt plugin
+- libvirt-dev, libvirt-clients
+- vagrant, vagrant-libvirt
 - qemu-kvm
 - Docker (pre-installed)
+
+## Platform Limitations
+
+### ARM64
+
+- **Vagrant**: Not available for ARM64 Linux (HashiCorp limitation)
+- **Devuan**: No official ARM64 cloud image - container test only
+- **Void Linux**: No cloud-init compatible ARM64 images - container test only
+- **BSD ARM64**: Go supports cross-compilation, but no ARM64 VM images in CI
+
+### Not Tested (out of scope)
+
+- **launchd (macOS)**: Requires macOS runners, tested manually
+- **s6/dinit**: Niche init systems, not in mainstream CI
+
+## Notes
+
+- All binaries must be statically compiled (`CGO_ENABLED=0`)
+- Alpine requires static binary (musl libc incompatible with glibc)
+- BSD systems don't support Docker containers
+- runit uses symlinks for service management (`/var/service/`)

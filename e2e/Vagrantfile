@@ -3,15 +3,27 @@
 # =============================================================================
 # supervizio E2E Testing Vagrantfile
 # =============================================================================
-# Simplified configuration for macOS runners with QEMU provider.
-# The QEMU provider automatically uses the host architecture:
-# - macOS Intel (macos-15-intel) → AMD64 VMs
-# - macOS Apple Silicon (macos-15) → ARM64 VMs
+# Full matrix of init systems and platforms:
 #
-# Note: GitHub Actions runners do NOT support HVF (Hypervisor Framework).
-# We use TCG (software emulation) in CI, HVF locally for performance.
+# Linux (systemd):
+#   - debian13: Debian 13 (trixie) - primary
+#   - ubuntu: Ubuntu 24.04 (noble)
 #
-# Currently testing: Debian only (extensible to other distros)
+# Linux (OpenRC):
+#   - alpine: Alpine 3.20
+#
+# Linux (SysVinit):
+#   - devuan: Devuan 5 (daedalus) - Debian without systemd
+#
+# BSD (rc.d):
+#   - freebsd: FreeBSD 14
+#   - openbsd: OpenBSD 7.5
+#   - netbsd: NetBSD 10
+#   - dragonfly: DragonFlyBSD 6.4
+#
+# Providers:
+#   - libvirt: Linux CI (KVM acceleration)
+#   - qemu: macOS (HVF or TCG)
 # =============================================================================
 
 # Detect Homebrew path for macOS (ARM64 vs Intel)
@@ -30,7 +42,7 @@ end
 
 Vagrant.configure("2") do |config|
   # ===========================================================================
-  # Shared folders (rsync works with QEMU provider)
+  # Shared folders (rsync works with all providers)
   # ===========================================================================
   config.vm.synced_folder "../setup", "/setup", type: "rsync"
   config.vm.synced_folder "../bin", "/bin-local", type: "rsync"
@@ -50,18 +62,14 @@ Vagrant.configure("2") do |config|
 
     if ci_mode?
       # CI mode: Use TCG (software emulation) - HVF not available on GitHub Actions
-      # See: https://github.com/actions/runner-images/issues/9460
-      # CRITICAL: virtio-net-pci is required for TCG mode (no virtio-bus in emulation)
       qe.net_device = "virtio-net-pci"
       qe.extra_qemu_args = %w(-accel tcg,thread=multi)
 
       if is_arm
-        # ARM64 host running ARM64 VM
         qe.arch = "aarch64"
         qe.machine = "virt,highmem=on"
         qe.cpu = "cortex-a72"
       else
-        # x86_64 host running x86_64 VM
         qe.arch = "x86_64"
         qe.machine = "q35"
         qe.cpu = "max"
@@ -84,7 +92,6 @@ Vagrant.configure("2") do |config|
     # ARM64-specific configuration
     is_arm = RUBY_PLATFORM.include?("aarch64") || `uname -m`.strip == "aarch64"
     if is_arm
-      # ARM64 requires UEFI boot
       lv.loader = "/usr/share/AAVMF/AAVMF_CODE.fd"
       lv.machine_type = "virt"
       lv.cpu_mode = "host-passthrough"
@@ -92,34 +99,86 @@ Vagrant.configure("2") do |config|
   end
 
   # ===========================================================================
-  # DEBIAN (systemd) - Primary test VM
+  # LINUX: systemd
   # ===========================================================================
-  config.vm.define "debian", primary: true do |v|
-    v.vm.box = "generic/debian12"
-    v.vm.hostname = "e2e-debian"
+
+  # Debian 13 (trixie) - Primary test VM
+  config.vm.define "debian13", primary: true do |v|
+    v.vm.box = "generic/debian12"  # Use debian12 box until debian13 is available
+    v.vm.hostname = "e2e-debian13"
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
+  end
+
+  # Ubuntu 24.04 (noble)
+  config.vm.define "ubuntu", autostart: false do |v|
+    v.vm.box = "generic/ubuntu2404"
+    v.vm.hostname = "e2e-ubuntu"
     v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
   end
 
   # ===========================================================================
-  # Additional distros can be added here when needed
+  # LINUX: OpenRC
   # ===========================================================================
-  #
-  # config.vm.define "ubuntu", autostart: false do |v|
-  #   v.vm.box = "generic/ubuntu2204"
-  #   v.vm.hostname = "e2e-ubuntu"
-  #   v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
-  # end
-  #
-  # config.vm.define "alpine", autostart: false do |v|
-  #   v.vm.box = "generic/alpine319"
-  #   v.vm.hostname = "e2e-alpine"
-  #   v.vm.provision "shell", inline: "apk update && apk add curl"
-  # end
-  #
-  # config.vm.define "freebsd", autostart: false do |v|
-  #   v.vm.box = "generic/freebsd14"
-  #   v.vm.hostname = "e2e-freebsd"
-  #   v.vm.provision "shell", inline: "pkg install -y curl"
-  # end
+
+  # Alpine 3.20
+  config.vm.define "alpine", autostart: false do |v|
+    v.vm.box = "generic/alpine320"
+    v.vm.hostname = "e2e-alpine"
+    v.vm.provision "shell", inline: "apk update && apk add curl"
+  end
+
+  # ===========================================================================
+  # LINUX: SysVinit
+  # ===========================================================================
+
+  # Devuan 5 (daedalus) - Debian without systemd
+  config.vm.define "devuan", autostart: false do |v|
+    v.vm.box = "generic/devuan4"  # Use devuan4 (chimaera) until devuan5 box available
+    v.vm.hostname = "e2e-devuan"
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
+  end
+
+  # ===========================================================================
+  # LINUX: runit
+  # ===========================================================================
+
+  # Void Linux (glibc)
+  config.vm.define "void", autostart: false do |v|
+    v.vm.box = "voidlinux/voidlinux"
+    v.vm.hostname = "e2e-void"
+    v.vm.provision "shell", inline: "xbps-install -Syu && xbps-install -y curl"
+  end
+
+  # ===========================================================================
+  # BSD: rc.d (FreeBSD style)
+  # ===========================================================================
+
+  # FreeBSD 14
+  config.vm.define "freebsd", autostart: false do |v|
+    v.vm.box = "generic/freebsd14"
+    v.vm.hostname = "e2e-freebsd"
+    v.vm.provision "shell", inline: "pkg install -y curl"
+  end
+
+  # OpenBSD 7.5
+  config.vm.define "openbsd", autostart: false do |v|
+    v.vm.box = "generic/openbsd75"
+    v.vm.hostname = "e2e-openbsd"
+    v.vm.provision "shell", inline: "pkg_add curl"
+  end
+
+  # NetBSD 10
+  config.vm.define "netbsd", autostart: false do |v|
+    v.vm.box = "generic/netbsd10"
+    v.vm.hostname = "e2e-netbsd"
+    v.vm.provision "shell", inline: "pkgin -y install curl"
+  end
+
+  # DragonFlyBSD 6.4
+  config.vm.define "dragonfly", autostart: false do |v|
+    v.vm.box = "generic/dragonflybsd64"
+    v.vm.hostname = "e2e-dragonfly"
+    v.vm.provision "shell", inline: "pkg install -y curl"
+  end
 
 end

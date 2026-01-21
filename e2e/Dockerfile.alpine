@@ -1,19 +1,20 @@
 # =============================================================================
-# E2E Test Container: Debian 13 (trixie) - systemd
+# E2E Test Container: Alpine 3.20 - OpenRC
 # =============================================================================
-# Validates supervizio binary runs correctly on Debian with systemd.
+# Validates supervizio binary runs correctly on Alpine with OpenRC init system.
+# Note: Alpine uses musl libc, so binary must be statically compiled.
 # =============================================================================
 
-FROM debian:trixie-slim
+FROM alpine:3.20
 
 # Install minimal dependencies for testing
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
     curl \
     procps \
-    && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/log/supervizio /etc/supervizio
 
 # Copy supervizio binary (built externally for the target architecture)
+# MUST be statically compiled (CGO_ENABLED=0) for Alpine/musl
 COPY bin/supervizio /usr/local/bin/supervizio
 RUN chmod +x /usr/local/bin/supervizio
 

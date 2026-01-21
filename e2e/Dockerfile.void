@@ -1,16 +1,17 @@
 # =============================================================================
-# E2E Test Container: Debian 13 (trixie) - systemd
+# E2E Test Container: Void Linux - runit
 # =============================================================================
-# Validates supervizio binary runs correctly on Debian with systemd.
+# Validates supervizio binary runs correctly on Void Linux with runit init.
+# Void Linux is one of the few mainstream distros using runit as default init.
 # =============================================================================
 
-FROM debian:trixie-slim
+FROM ghcr.io/void-linux/void-glibc:latest
 
 # Install minimal dependencies for testing
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN xbps-install -Syu && xbps-install -y \
     curl \
-    procps \
-    && rm -rf /var/lib/apt/lists/* \
+    procps-ng \
+    && rm -rf /var/cache/xbps/* \
     && mkdir -p /var/log/supervizio /etc/supervizio
 
 # Copy supervizio binary (built externally for the target architecture)

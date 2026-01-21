@@ -1,15 +1,22 @@
 # =============================================================================
-# E2E Tests - Linux VM Testing with KVM
+# E2E Tests - Full Platform Matrix
 # =============================================================================
-# Tests supervizio on Linux VMs with KVM acceleration:
-# - AMD64: ubuntu-latest (KVM available)
-# - ARM64: ubuntu-24.04-arm (native ARM64)
+# Tests supervizio across all supported platforms and init systems:
 #
-# Each job tests:
-# 1. VM: Debian via Vagrant + libvirt/KVM (installation test)
-# 2. Container: Debian via Docker (entrypoint test)
+# Linux (AMD64 + ARM64):
+#   - Debian 13 (systemd)
+#   - Ubuntu 24.04 (systemd)
+#   - Alpine 3.20 (OpenRC)
+#   - Devuan 5 (SysVinit)
+#   - Void Linux (runit)
 #
-# Matrix: 2 jobs (1 AMD64 + 1 ARM64)
+# BSD (AMD64 only):
+#   - FreeBSD 14
+#   - OpenBSD 7.5
+#   - NetBSD 10
+#   - DragonFlyBSD 6.4
+#
+# Total: 14 jobs (5 Linux AMD64 + 5 Linux ARM64 + 4 BSD AMD64)
 # =============================================================================
 name: E2E Tests
 
@@ -29,12 +36,40 @@ env:
 
 jobs:
   # ===========================================================================
-  # AMD64 E2E Tests (Ubuntu with KVM)
+  # Linux AMD64 E2E Tests (Vagrant + Docker)
   # ===========================================================================
-  e2e-amd64:
-    name: E2E AMD64 (Debian VM + Container)
+  e2e-linux-amd64:
+    name: E2E AMD64 ${{ matrix.name }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # systemd distributions
+          - name: Debian
+            vm: debian13
+            dockerfile: Dockerfile.debian
+            init: systemd
+          - name: Ubuntu
+            vm: ubuntu
+            dockerfile: Dockerfile.ubuntu
+            init: systemd
+          # OpenRC distribution
+          - name: Alpine
+            vm: alpine
+            dockerfile: Dockerfile.alpine
+            init: openrc
+          # SysVinit distribution
+          - name: Devuan
+            vm: devuan
+            dockerfile: Dockerfile.devuan
+            init: sysvinit
+          # runit distribution
+          - name: Void
+            vm: void
+            dockerfile: Dockerfile.void
+            init: runit
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -66,7 +101,7 @@ jobs:
           ls -lh ../bin/supervizio
 
       # =========================================================================
-      # VM Test: Debian via Vagrant + libvirt/KVM
+      # VM Test via Vagrant + libvirt/KVM
       # =========================================================================
       - name: Setup KVM
         run: |
@@ -79,7 +114,7 @@ jobs:
             ls -la /dev/kvm
             echo "KVM_AVAILABLE=true" >> $GITHUB_ENV
           else
-            echo "WARNING: /dev/kvm not found - VM tests will use QEMU TCG (slower)"
+            echo "WARNING: /dev/kvm not found"
             echo "KVM_AVAILABLE=false" >> $GITHUB_ENV
           fi
 
@@ -91,7 +126,6 @@ jobs:
             libvirt-dev \
             libvirt-clients \
             qemu-kvm \
-            qemu-system-arm \
             ebtables \
             ruby-dev \
             ruby-libvirt \
@@ -111,42 +145,42 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.vagrant.d/boxes
-          key: vagrant-debian-libvirt-amd64-v1
+          key: vagrant-${{ matrix.vm }}-libvirt-amd64-v1
 
-      - name: Start Debian VM
+      - name: Start ${{ matrix.name }} VM
         working-directory: e2e
         run: |
-          echo "=== Starting Debian VM (AMD64 with KVM) ==="
-          sudo -E vagrant up debian --provider=libvirt
+          echo "=== Starting ${{ matrix.name }} VM (AMD64, ${{ matrix.init }}) ==="
+          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
           echo "=== VM started ==="
 
       - name: Run VM installation test
         working-directory: e2e
         run: |
-          echo "=== Running installation tests ==="
-          sudo -E vagrant ssh debian -c "sudo /vagrant/test-install.sh"
+          echo "=== Running installation tests on ${{ matrix.name }} (${{ matrix.init }}) ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo /vagrant/test-install.sh"
           echo "=== VM tests passed ==="
 
       - name: Cleanup VM
         if: always()
         working-directory: e2e
-        run: sudo vagrant destroy debian -f 2>/dev/null || true
+        run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
 
       # =========================================================================
-      # Container Test: Debian via Docker
+      # Container Test via Docker
       # =========================================================================
-      - name: Build Debian container (amd64)
+      - name: Build ${{ matrix.name }} container (amd64)
         run: |
           docker build \
-            -f e2e/Dockerfile.debian \
-            -t supervizio-debian:amd64 .
+            -f e2e/${{ matrix.dockerfile }} \
+            -t supervizio-${{ matrix.vm }}:amd64 .
           echo "=== Image info ==="
-          docker images supervizio-debian:amd64
+          docker images supervizio-${{ matrix.vm }}:amd64
 
-      - name: Test Debian container (amd64)
+      - name: Test ${{ matrix.name }} container (amd64)
         run: |
-          echo "=== Testing supervizio in Debian container (amd64) ==="
-          docker run --rm supervizio-debian:amd64
+          echo "=== Testing supervizio in ${{ matrix.name }} container (amd64) ==="
+          docker run --rm supervizio-${{ matrix.vm }}:amd64
           echo "=== Container test passed ==="
 
       - name: Collect logs on failure
@@ -161,14 +195,56 @@ jobs:
           docker images || true
 
   # ===========================================================================
-  # ARM64 E2E Tests (Ubuntu ARM64) - VM + Container
-  # Note: Using virt-install + cloud-init (Vagrant not available for ARM64 Linux)
-  # See: https://github.com/hashicorp/vagrant-installers/issues/288
+  # Linux ARM64 E2E Tests (virt-install + Docker)
+  # Note: Vagrant not available for ARM64 Linux
   # ===========================================================================
-  e2e-arm64:
-    name: E2E ARM64 (Debian VM + Container)
+  e2e-linux-arm64:
+    name: E2E ARM64 ${{ matrix.name }}
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 35  # Extra time for QEMU TCG if KVM unavailable
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # systemd distributions
+          - name: Debian
+            vm: debian
+            dockerfile: Dockerfile.debian
+            init: systemd
+            cloud_image_url: https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-arm64.qcow2
+            cloud_image_file: debian-arm64.qcow2
+            os_variant: debian12
+          - name: Ubuntu
+            vm: ubuntu
+            dockerfile: Dockerfile.ubuntu
+            init: systemd
+            cloud_image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-arm64.img
+            cloud_image_file: ubuntu-arm64.qcow2
+            os_variant: ubuntu24.04
+          # OpenRC distribution
+          - name: Alpine
+            vm: alpine
+            dockerfile: Dockerfile.alpine
+            init: openrc
+            cloud_image_url: https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/aarch64/alpine-virt-3.20.3-aarch64.iso
+            cloud_image_file: alpine-arm64.iso
+            os_variant: alpinelinux3.20
+          # SysVinit - Devuan doesn't have official ARM64 cloud images
+          # Using Debian container only for Devuan ARM64
+          - name: Devuan
+            vm: devuan
+            dockerfile: Dockerfile.devuan
+            init: sysvinit
+            skip_vm: true  # No ARM64 cloud image available
+          # runit distribution
+          - name: Void
+            vm: void
+            dockerfile: Dockerfile.void
+            init: runit
+            cloud_image_url: https://repo-default.voidlinux.org/live/current/void-live-aarch64-20250202-base.iso
+            cloud_image_file: void-arm64.iso
+            os_variant: generic
+            skip_vm: true  # Void doesn't have cloud-init compatible images
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -200,9 +276,10 @@ jobs:
           ls -lh ../bin/supervizio
 
       # =========================================================================
-      # VM Test: Debian via virt-install + cloud-init (no Vagrant for ARM64 Linux)
+      # VM Test via virt-install + cloud-init (skip if no ARM64 image)
       # =========================================================================
       - name: Setup KVM
+        if: ${{ matrix.skip_vm != true }}
         run: |
           echo "=== Checking KVM availability ==="
           if [ -e /dev/kvm ]; then
@@ -213,11 +290,12 @@ jobs:
             ls -la /dev/kvm
             echo "KVM_AVAILABLE=true" >> $GITHUB_ENV
           else
-            echo "WARNING: /dev/kvm not found - VM tests will use QEMU TCG (slower)"
+            echo "WARNING: /dev/kvm not found - VM tests will use QEMU TCG"
             echo "KVM_AVAILABLE=false" >> $GITHUB_ENV
           fi
 
       - name: Install libvirt and virt-install
+        if: ${{ matrix.skip_vm != true }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
@@ -232,45 +310,30 @@ jobs:
             sshpass
           sudo systemctl start libvirtd
           sudo usermod -aG libvirt,kvm $USER
-
-          # Start default network (required for VMs)
           sudo virsh net-start default 2>/dev/null || true
           sudo virsh net-autostart default 2>/dev/null || true
 
-          # Check UEFI firmware availability
-          echo "=== UEFI Firmware Check ==="
-          ls -la /usr/share/AAVMF/ 2>/dev/null || echo "AAVMF not found"
-          ls -la /usr/share/qemu-efi-aarch64/ 2>/dev/null || echo "qemu-efi-aarch64 not found"
-
-      - name: Cache Debian cloud image
+      - name: Cache cloud image
+        if: ${{ matrix.skip_vm != true }}
         uses: actions/cache@v4
         with:
-          path: /tmp/debian-12-generic-arm64.qcow2
-          key: debian12-cloud-arm64-v1
+          path: /tmp/${{ matrix.cloud_image_file }}
+          key: ${{ matrix.vm }}-cloud-arm64-v1
 
-      - name: Download Debian ARM64 cloud image
+      - name: Download ${{ matrix.name }} ARM64 cloud image
+        if: ${{ matrix.skip_vm != true }}
         run: |
-          if [ ! -f /tmp/debian-12-generic-arm64.qcow2 ]; then
-            echo "=== Downloading Debian 12 ARM64 cloud image ==="
-            wget -q -O /tmp/debian-12-generic-arm64.qcow2 \
-              https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-arm64.qcow2
+          if [ ! -f /tmp/${{ matrix.cloud_image_file }} ]; then
+            echo "=== Downloading ${{ matrix.name }} ARM64 cloud image ==="
+            wget -q -O /tmp/${{ matrix.cloud_image_file }} \
+              "${{ matrix.cloud_image_url }}"
           fi
-          ls -lh /tmp/debian-12-generic-arm64.qcow2
-
-      - name: Check KVM availability for VM tests
-        run: |
-          if [ "$KVM_AVAILABLE" != "true" ]; then
-            echo "::notice::KVM not available - using QEMU TCG (software emulation)"
-            echo "Boot will be slower but VM tests will still run"
-          else
-            echo "KVM available - using hardware acceleration"
-          fi
+          ls -lh /tmp/${{ matrix.cloud_image_file }}
 
       - name: Create cloud-init configuration
+        if: ${{ matrix.skip_vm != true }}
         run: |
           mkdir -p /tmp/cloud-init
-
-          # Create user-data (YAML - indentation matters!)
           cat > /tmp/cloud-init/user-data << 'USERDATA'
           #cloud-config
           users:
@@ -288,121 +351,72 @@ jobs:
             - curl
             - openssh-server
           runcmd:
-            - systemctl enable ssh
-            - systemctl start ssh
+            - systemctl enable ssh || rc-update add sshd default
+            - systemctl start ssh || rc-service sshd start
             - echo "Cloud-init completed" > /tmp/cloud-init-done
           USERDATA
-
-          # Remove leading spaces (heredoc preserves them)
           sed -i 's/^          //' /tmp/cloud-init/user-data
 
-          # Create meta-data
-          cat > /tmp/cloud-init/meta-data << 'METADATA'
-          instance-id: e2e-debian-arm64
-          local-hostname: e2e-debian
+          cat > /tmp/cloud-init/meta-data << METADATA
+          instance-id: e2e-${{ matrix.vm }}-arm64
+          local-hostname: e2e-${{ matrix.vm }}
           METADATA
           sed -i 's/^          //' /tmp/cloud-init/meta-data
 
-          # Show config for debugging
-          echo "=== user-data ==="
-          cat /tmp/cloud-init/user-data
-          echo "=== meta-data ==="
-          cat /tmp/cloud-init/meta-data
-
-          # Create cloud-init ISO
           genisoimage -output /tmp/cloud-init.iso -volid cidata -joliet -rock \
             /tmp/cloud-init/user-data /tmp/cloud-init/meta-data
 
-      - name: Start Debian VM with virt-install
+      - name: Start ${{ matrix.name }} VM with virt-install
+        if: ${{ matrix.skip_vm != true }}
         run: |
-          echo "=== Creating Debian VM (ARM64) ==="
-          echo "KVM_AVAILABLE: $KVM_AVAILABLE"
+          echo "=== Creating ${{ matrix.name }} VM (ARM64, ${{ matrix.init }}) ==="
 
-          # Create a copy of the base image
-          sudo cp /tmp/debian-12-generic-arm64.qcow2 /var/lib/libvirt/images/e2e-debian.qcow2
-          sudo qemu-img resize /var/lib/libvirt/images/e2e-debian.qcow2 10G
+          sudo cp /tmp/${{ matrix.cloud_image_file }} /var/lib/libvirt/images/e2e-${{ matrix.vm }}.qcow2
+          sudo qemu-img resize /var/lib/libvirt/images/e2e-${{ matrix.vm }}.qcow2 10G 2>/dev/null || true
 
-          # Determine virt-type based on KVM availability
-          if [ "$KVM_AVAILABLE" = "true" ]; then
-            VIRT_TYPE="kvm"
-          else
-            VIRT_TYPE="qemu"
-          fi
-          echo "Using virt-type: $VIRT_TYPE"
+          VIRT_TYPE="qemu"
+          [ "$KVM_AVAILABLE" = "true" ] && VIRT_TYPE="kvm"
 
-          # Find UEFI firmware path
           UEFI_CODE=""
-          if [ -f /usr/share/AAVMF/AAVMF_CODE.fd ]; then
-            UEFI_CODE="/usr/share/AAVMF/AAVMF_CODE.fd"
-          elif [ -f /usr/share/qemu-efi-aarch64/QEMU_EFI.fd ]; then
-            UEFI_CODE="/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
-          fi
-          echo "UEFI firmware: ${UEFI_CODE:-auto}"
+          [ -f /usr/share/AAVMF/AAVMF_CODE.fd ] && UEFI_CODE="/usr/share/AAVMF/AAVMF_CODE.fd"
+          [ -f /usr/share/qemu-efi-aarch64/QEMU_EFI.fd ] && UEFI_CODE="/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
 
-          # Build virt-install command
-          VIRT_INSTALL_ARGS=(
-            --name e2e-debian
-            --memory 2048
-            --vcpus 2
-            --disk /var/lib/libvirt/images/e2e-debian.qcow2,format=qcow2
-            --disk /tmp/cloud-init.iso,device=cdrom
-            --os-variant debian12
-            --virt-type "$VIRT_TYPE"
-            --arch aarch64
-            --machine virt
-            --network network=default
-            --graphics none
-            --console pty,target_type=serial
-            --noautoconsole
-            --import
-            --wait 0
-          )
+          BOOT_OPT="--boot uefi"
+          [ -n "$UEFI_CODE" ] && BOOT_OPT="--boot loader=$UEFI_CODE,loader.readonly=yes,loader.type=pflash"
 
-          # Add UEFI boot option
-          if [ -n "$UEFI_CODE" ]; then
-            VIRT_INSTALL_ARGS+=(--boot loader="$UEFI_CODE",loader.readonly=yes,loader.type=pflash)
-          else
-            VIRT_INSTALL_ARGS+=(--boot uefi)
-          fi
+          sudo virt-install \
+            --name e2e-${{ matrix.vm }} \
+            --memory 2048 \
+            --vcpus 2 \
+            --disk /var/lib/libvirt/images/e2e-${{ matrix.vm }}.qcow2,format=qcow2 \
+            --disk /tmp/cloud-init.iso,device=cdrom \
+            --os-variant ${{ matrix.os_variant }} \
+            --virt-type "$VIRT_TYPE" \
+            --arch aarch64 \
+            --machine virt \
+            --network network=default \
+            --graphics none \
+            --console pty,target_type=serial \
+            --noautoconsole \
+            --import \
+            --wait 0 \
+            $BOOT_OPT
 
-          # Create VM with virt-install
-          echo "=== Running virt-install ==="
-          sudo virt-install "${VIRT_INSTALL_ARGS[@]}"
-
-          # Wait for VM to boot and get IP
-          # TCG (no KVM) is much slower, wait longer
-          if [ "$KVM_AVAILABLE" = "true" ]; then
-            BOOT_WAIT=90
-          else
-            echo "Note: Using QEMU TCG (software emulation) - boot will be slower"
-            BOOT_WAIT=300
-          fi
+          BOOT_WAIT=90
+          [ "$KVM_AVAILABLE" != "true" ] && BOOT_WAIT=300
           echo "=== Waiting ${BOOT_WAIT}s for VM to boot ==="
           sleep $BOOT_WAIT
 
-          # Get VM IP (retry a few times)
           for i in {1..10}; do
-            VM_IP=$(sudo virsh domifaddr e2e-debian 2>/dev/null | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
-            if [ -n "$VM_IP" ]; then
-              break
-            fi
+            VM_IP=$(sudo virsh domifaddr e2e-${{ matrix.vm }} 2>/dev/null | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
+            [ -n "$VM_IP" ] && break
             echo "Waiting for VM IP (attempt $i/10)..."
             sleep 15
           done
 
           if [ -z "$VM_IP" ]; then
             echo "ERROR: Could not get VM IP address"
-            echo "=== VM Status ==="
             sudo virsh list --all
-            echo "=== VM Info ==="
-            sudo virsh dominfo e2e-debian || true
-            echo "=== Network Info ==="
-            sudo virsh net-list --all
-            sudo virsh net-dhcp-leases default || true
-            echo "=== VM Interfaces ==="
-            sudo virsh domifaddr e2e-debian --source agent || true
-            sudo virsh domifaddr e2e-debian --source arp || true
-            sudo virsh domifaddr e2e-debian --source lease || true
             exit 1
           fi
 
@@ -410,13 +424,10 @@ jobs:
           echo "VM_IP=$VM_IP" >> $GITHUB_ENV
 
       - name: Run VM installation test
+        if: ${{ matrix.skip_vm != true }}
         run: |
-          echo "=== Running installation tests on ARM64 VM ==="
-          echo "VM_IP: $VM_IP"
+          echo "=== Running installation tests on ${{ matrix.name }} ARM64 VM ==="
 
-          # Wait for SSH to be ready (cloud-init may still be running)
-          # More retries for TCG mode (slower boot)
-          echo "Waiting for SSH to be ready..."
           MAX_ATTEMPTS=60
           for i in $(seq 1 $MAX_ATTEMPTS); do
             if sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
@@ -428,95 +439,185 @@ jobs:
             sleep 10
           done
 
-          # Verify SSH works
-          if ! sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-             test@$VM_IP "uname -a"; then
-            echo "ERROR: SSH connection failed after all retries"
-            echo "=== Testing network connectivity ==="
-            ping -c 3 $VM_IP || echo "Cannot ping VM"
-            echo "=== Checking SSH port ==="
-            nc -zv $VM_IP 22 2>&1 || echo "SSH port not open"
-            exit 1
-          fi
-
-          # Create directory structure on VM (mimic Vagrant mounts)
-          echo "Creating directory structure on VM..."
           sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             test@$VM_IP "sudo mkdir -p /setup /bin-local /vagrant && mkdir -p /tmp/setup-files"
 
-          # Copy entire setup/ directory recursively (includes init/ with service files)
-          echo "Copying setup directory to VM..."
           sshpass -p "test123" scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             setup/* test@$VM_IP:/tmp/setup-files/
-
-          # Copy binary and test script
           sshpass -p "test123" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             bin/supervizio test@$VM_IP:/tmp/
           sshpass -p "test123" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             e2e/test-install.sh test@$VM_IP:/tmp/
 
-          # Move files to correct locations (like Vagrant rsync mounts)
-          echo "Setting up file structure..."
           sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             test@$VM_IP "sudo cp -r /tmp/setup-files/* /setup/ && \
                          sudo mv /tmp/supervizio /bin-local/ && \
                          sudo chmod +x /setup/*.sh /bin-local/supervizio"
 
-          # Run test script
-          echo "Running test-install.sh..."
           sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             test@$VM_IP "sudo chmod +x /tmp/test-install.sh && sudo /tmp/test-install.sh"
 
           echo "=== VM tests passed ==="
 
-      - name: Cleanup VM
-        if: always()
+      - name: Skip VM test notice
+        if: ${{ matrix.skip_vm == true }}
         run: |
-          sudo virsh destroy e2e-debian 2>/dev/null || true
-          sudo virsh undefine e2e-debian --remove-all-storage 2>/dev/null || true
+          echo "::notice::Skipping VM test for ${{ matrix.name }} ARM64 (no cloud image available)"
+          echo "Container test will still run"
+
+      - name: Cleanup VM
+        if: ${{ always() && matrix.skip_vm != true }}
+        run: |
+          sudo virsh destroy e2e-${{ matrix.vm }} 2>/dev/null || true
+          sudo virsh undefine e2e-${{ matrix.vm }} --remove-all-storage 2>/dev/null || true
 
       # =========================================================================
-      # Container Test: Debian via Docker
+      # Container Test via Docker
       # =========================================================================
-      - name: Build Debian container (arm64)
+      - name: Build ${{ matrix.name }} container (arm64)
         run: |
           docker build \
-            -f e2e/Dockerfile.debian \
-            -t supervizio-debian:arm64 .
+            -f e2e/${{ matrix.dockerfile }} \
+            -t supervizio-${{ matrix.vm }}:arm64 .
           echo "=== Image info ==="
-          docker images supervizio-debian:arm64
+          docker images supervizio-${{ matrix.vm }}:arm64
 
-      - name: Test Debian container (arm64)
+      - name: Test ${{ matrix.name }} container (arm64)
         run: |
-          echo "=== Testing supervizio in Debian container (arm64) ==="
-          docker run --rm supervizio-debian:arm64
+          echo "=== Testing supervizio in ${{ matrix.name }} container (arm64) ==="
+          docker run --rm supervizio-${{ matrix.vm }}:arm64
           echo "=== Container test passed ==="
 
       - name: Collect logs on failure
         if: failure()
         run: |
           echo "=== KVM Status ==="
-          echo "KVM_AVAILABLE: $KVM_AVAILABLE"
           ls -la /dev/kvm 2>/dev/null || echo "/dev/kvm not found"
-
-          echo "=== libvirt Status ==="
-          systemctl status libvirtd --no-pager || true
-
           echo "=== libvirt VMs ==="
           sudo virsh list --all || true
-
-          echo "=== VM Info ==="
-          sudo virsh dominfo e2e-debian 2>/dev/null || echo "VM not found"
-
-          echo "=== Network Info ==="
-          sudo virsh net-list --all || true
-          sudo virsh net-dhcp-leases default 2>/dev/null || true
-
-          echo "=== VM IP Attempts ==="
-          sudo virsh domifaddr e2e-debian 2>/dev/null || true
-
-          echo "=== QEMU Processes ==="
-          ps aux | grep -i qemu || true
-
           echo "=== Docker Images ==="
           docker images || true
+
+  # ===========================================================================
+  # BSD AMD64 E2E Tests (Vagrant only - no Docker on BSD)
+  # ===========================================================================
+  e2e-bsd-amd64:
+    name: E2E AMD64 ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: FreeBSD
+            vm: freebsd
+            goos: freebsd
+          - name: OpenBSD
+            vm: openbsd
+            goos: openbsd
+          - name: NetBSD
+            vm: netbsd
+            goos: netbsd
+          - name: DragonFlyBSD
+            vm: dragonfly
+            goos: dragonfly
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: src/go.sum
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@latest
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build supervizio binary (${{ matrix.goos }}/amd64)
+        working-directory: src
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: amd64
+        run: |
+          go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
+          chmod +x ../bin/supervizio
+          echo "=== Binary info ==="
+          file ../bin/supervizio
+          ls -lh ../bin/supervizio
+
+      # =========================================================================
+      # VM Test via Vagrant + libvirt/KVM
+      # =========================================================================
+      - name: Setup KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            echo "KVM_AVAILABLE=true" >> $GITHUB_ENV
+          else
+            echo "KVM_AVAILABLE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Install libvirt and dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libvirt-daemon-system \
+            libvirt-dev \
+            libvirt-clients \
+            qemu-kvm \
+            ebtables \
+            ruby-dev \
+            ruby-libvirt \
+            build-essential
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+
+      - name: Install Vagrant
+        run: |
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq vagrant
+          vagrant plugin install vagrant-libvirt
+
+      - name: Cache Vagrant box
+        uses: actions/cache@v4
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-${{ matrix.vm }}-libvirt-amd64-v1
+
+      - name: Start ${{ matrix.name }} VM
+        working-directory: e2e
+        run: |
+          echo "=== Starting ${{ matrix.name }} VM (AMD64, rc.d) ==="
+          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+          echo "=== VM started ==="
+
+      - name: Run VM installation test
+        working-directory: e2e
+        run: |
+          echo "=== Running installation tests on ${{ matrix.name }} (rc.d) ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo /vagrant/test-install.sh"
+          echo "=== VM tests passed ==="
+
+      - name: Cleanup VM
+        if: always()
+        working-directory: e2e
+        run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
+
+      - name: Collect logs on failure
+        if: failure()
+        working-directory: e2e
+        run: |
+          echo "=== Vagrant Status ==="
+          sudo vagrant status || true
+          echo "=== libvirt VMs ==="
+          sudo virsh list --all || true

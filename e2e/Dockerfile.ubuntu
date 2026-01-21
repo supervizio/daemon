@@ -1,10 +1,10 @@
 # =============================================================================
-# E2E Test Container: Debian 13 (trixie) - systemd
+# E2E Test Container: Ubuntu 24.04 (noble) - systemd
 # =============================================================================
-# Validates supervizio binary runs correctly on Debian with systemd.
+# Validates supervizio binary runs correctly on Ubuntu with systemd.
 # =============================================================================
 
-FROM debian:trixie-slim
+FROM ubuntu:24.04
 
 # Install minimal dependencies for testing
 RUN apt-get update && apt-get install -y --no-install-recommends \
