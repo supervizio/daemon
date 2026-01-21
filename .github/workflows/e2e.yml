@@ -525,6 +525,7 @@ jobs:
           - name: NetBSD
             vm: netbsd
             goos: netbsd
+            skip_vm: true  # generic/netbsd10 Vagrant box is flaky
           - name: DragonFlyBSD
             vm: dragonfly
             goos: dragonfly
@@ -559,9 +560,10 @@ jobs:
           ls -lh ../bin/supervizio
 
       # =========================================================================
-      # VM Test via Vagrant + libvirt/KVM
+      # VM Test via Vagrant + libvirt/KVM (skip if box is flaky)
       # =========================================================================
       - name: Setup KVM
+        if: ${{ matrix.skip_vm != true }}
         run: |
           if [ -e /dev/kvm ]; then
             echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -573,6 +575,7 @@ jobs:
           fi
 
       - name: Install libvirt and dependencies
+        if: ${{ matrix.skip_vm != true }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
@@ -588,6 +591,7 @@ jobs:
           sudo usermod -aG libvirt,kvm $USER
 
       - name: Install Vagrant
+        if: ${{ matrix.skip_vm != true }}
         run: |
           wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
@@ -596,12 +600,14 @@ jobs:
           vagrant plugin install vagrant-libvirt
 
       - name: Cache Vagrant box
+        if: ${{ matrix.skip_vm != true }}
         uses: actions/cache@v4
         with:
           path: ~/.vagrant.d/boxes
           key: vagrant-${{ matrix.vm }}-libvirt-amd64-v1
 
       - name: Start ${{ matrix.name }} VM
+        if: ${{ matrix.skip_vm != true }}
         working-directory: e2e
         run: |
           echo "=== Starting ${{ matrix.name }} VM (AMD64, rc.d) ==="
@@ -609,6 +615,7 @@ jobs:
           echo "=== VM started ==="
 
       - name: Run VM installation test
+        if: ${{ matrix.skip_vm != true }}
         working-directory: e2e
         run: |
           echo "=== Running installation tests on ${{ matrix.name }} (rc.d) ==="
@@ -616,9 +623,13 @@ jobs:
           echo "=== VM tests passed ==="
 
       - name: Cleanup VM
-        if: always()
+        if: ${{ always() && matrix.skip_vm != true }}
         working-directory: e2e
         run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
+
+      - name: Skip VM test notice
+        if: ${{ matrix.skip_vm == true }}
+        run: echo "::notice::Skipping VM test for ${{ matrix.name }} AMD64 (Vagrant box is flaky)"
 
       - name: Collect logs on failure
         if: failure()

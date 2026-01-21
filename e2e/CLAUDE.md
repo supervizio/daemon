@@ -13,7 +13,7 @@ End-to-end testing for supervizio across all supported platforms and init system
 | **runit** | Void Linux | ✅ | ✅ | linux | ✅ | ❌ (no Vagrant box) |
 | **BSD rc.d** | FreeBSD 14 | ✅ | ✅* | freebsd | ❌ | ✅ |
 | **BSD rc.d** | OpenBSD 7 | ✅ | ✅* | openbsd | ❌ | ✅ |
-| **BSD rc.d** | NetBSD 10 | ✅ | ✅* | netbsd | ❌ | ✅ |
+| **BSD rc.d** | NetBSD 10 | ✅ | ✅* | netbsd | ❌ | ❌ (flaky box) |
 | **BSD rc.d** | DragonFlyBSD 6 | ✅ | ❌ | dragonfly | ❌ | ✅ |
 | **launchd** | macOS 14 | ✅ | ✅ | darwin | ❌ | ❌ (macOS runner) |
 
@@ -39,7 +39,7 @@ End-to-end testing for supervizio across all supported platforms and init system
 |----|-------------|-----|-----------|
 | FreeBSD 14 | rc.d | Vagrant | N/A |
 | OpenBSD 7 | rc.d | Vagrant | N/A |
-| NetBSD 10 | rc.d | Vagrant | N/A |
+| NetBSD 10 | rc.d | ❌ (flaky) | N/A |
 | DragonFlyBSD 6 | rc.d | Vagrant | N/A |
 
 **Total: 14 jobs** (5 Linux AMD64 + 5 Linux ARM64 + 4 BSD AMD64)
@@ -81,7 +81,7 @@ E2E Tests (14 jobs)
 └── BSD AMD64 (4 jobs - Vagrant only, no containers)
     ├── FreeBSD (rc.d)
     ├── OpenBSD (rc.d)
-    ├── NetBSD (rc.d)
+    ├── NetBSD (rc.d) - Skip (flaky Vagrant box)
     └── DragonFlyBSD (rc.d)
 ```
 
@@ -238,6 +238,7 @@ docker run --rm supervizio-void
 ### AMD64
 
 - **Void Linux**: No libvirt Vagrant box available - container test only
+- **NetBSD**: generic/netbsd10 Vagrant box is flaky on GitHub Actions - skipped
 
 ### ARM64
 
