@@ -322,13 +322,6 @@ jobs:
           sudo cp /tmp/debian-12-generic-arm64.qcow2 /var/lib/libvirt/images/e2e-debian.qcow2
           sudo qemu-img resize /var/lib/libvirt/images/e2e-debian.qcow2 10G
 
-          # Copy test files to a location accessible by the VM
-          sudo mkdir -p /var/lib/libvirt/images/e2e-files
-          sudo cp setup/install.sh /var/lib/libvirt/images/e2e-files/
-          sudo cp bin/supervizio /var/lib/libvirt/images/e2e-files/
-          sudo cp e2e/test-install.sh /var/lib/libvirt/images/e2e-files/
-          sudo chmod -R 755 /var/lib/libvirt/images/e2e-files/
-
           # Determine virt-type based on KVM availability
           if [ "$KVM_AVAILABLE" = "true" ]; then
             VIRT_TYPE="kvm"
@@ -446,10 +439,26 @@ jobs:
             exit 1
           fi
 
-          # Copy files to VM using scp
+          # Create directory structure on VM (mimic Vagrant mounts)
+          echo "Creating directory structure on VM..."
+          sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            test@$VM_IP "sudo mkdir -p /setup /bin-local /vagrant"
+
+          # Copy files to VM using scp (to /tmp first, then move with sudo)
           echo "Copying test files to VM..."
           sshpass -p "test123" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            /var/lib/libvirt/images/e2e-files/* test@$VM_IP:/tmp/
+            setup/install.sh setup/uninstall.sh test@$VM_IP:/tmp/
+          sshpass -p "test123" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            bin/supervizio test@$VM_IP:/tmp/
+          sshpass -p "test123" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            e2e/test-install.sh test@$VM_IP:/tmp/
+
+          # Move files to correct locations (like Vagrant rsync mounts)
+          echo "Setting up file structure..."
+          sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            test@$VM_IP "sudo mv /tmp/install.sh /tmp/uninstall.sh /setup/ && \
+                         sudo mv /tmp/supervizio /bin-local/ && \
+                         sudo chmod +x /setup/*.sh /bin-local/supervizio"
 
           # Run test script
           echo "Running test-install.sh..."
