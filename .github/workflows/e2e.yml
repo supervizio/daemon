@@ -273,35 +273,52 @@ jobs:
           go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
           chmod +x ../bin/supervizio
 
+      - name: Setup KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
       - name: Install libvirt and Vagrant
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev qemu-kvm
+          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+
+          # Install Vagrant from HashiCorp
           wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
           sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
-          sudo usermod -aG libvirt $USER
           vagrant plugin install vagrant-libvirt
+
+      - name: Cache Vagrant box
+        uses: actions/cache@v4
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-dragonfly-v1
 
       - name: Start VM
         working-directory: e2e
-        run: sudo vagrant up dragonfly --provider=libvirt
+        run: sudo -E vagrant up dragonfly --provider=libvirt
 
       - name: Copy files and run tests
         working-directory: e2e
         run: |
-          sudo vagrant ssh dragonfly -c "sudo mkdir -p /setup /usr/local/bin"
-          sudo vagrant scp ../setup dragonfly:/tmp/setup
-          sudo vagrant scp ../bin/supervizio dragonfly:/tmp/supervizio
-          sudo vagrant ssh dragonfly -c "sudo cp -r /tmp/setup/* /setup/ && sudo cp /tmp/supervizio /usr/local/bin/ && sudo chmod +x /setup/*.sh /usr/local/bin/supervizio"
-          sudo vagrant ssh dragonfly -c "sudo /setup/install.sh"
-          sudo vagrant ssh dragonfly -c "/usr/local/bin/supervizio --version"
-          sudo vagrant ssh dragonfly -c "sudo sh /vagrant/test-install.sh"
+          sudo -E vagrant ssh dragonfly -c "sudo mkdir -p /setup /usr/local/bin"
+          sudo -E vagrant scp ../setup dragonfly:/tmp/setup
+          sudo -E vagrant scp ../bin/supervizio dragonfly:/tmp/supervizio
+          sudo -E vagrant ssh dragonfly -c "sudo cp -r /tmp/setup/* /setup/ && sudo cp /tmp/supervizio /usr/local/bin/ && sudo chmod +x /setup/*.sh /usr/local/bin/supervizio"
+          sudo -E vagrant ssh dragonfly -c "sudo /setup/install.sh"
+          sudo -E vagrant ssh dragonfly -c "/usr/local/bin/supervizio --version"
+          sudo -E vagrant ssh dragonfly -c "sudo sh /vagrant/test-install.sh"
 
       - name: Collect logs on failure
         if: failure()
         working-directory: e2e
-        run: sudo vagrant ssh dragonfly -c "uname -a" || true
+        run: sudo -E vagrant ssh dragonfly -c "uname -a" || true
 
       - name: Cleanup
         if: always()
