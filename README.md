@@ -161,6 +161,43 @@ golangci-lint run
 | DragonFlyBSD | amd64 |
 | macOS | amd64, arm64 |
 
+## E2E Testing Matrix
+
+[![E2E Tests](https://github.com/supervizio/daemon/actions/workflows/e2e.yml/badge.svg)](https://github.com/supervizio/daemon/actions/workflows/e2e.yml)
+
+Comprehensive testing across init systems, architectures, and platforms:
+
+### Linux
+
+| Distribution | Init System | AMD64 VM | AMD64 Docker | ARM64 VM | ARM64 Docker |
+|--------------|-------------|:--------:|:------------:|:--------:|:------------:|
+| Debian 12 | systemd | ✅ Vagrant | ✅ | ✅ virt-install | ✅ |
+| Ubuntu 22.04 | systemd | ✅ Vagrant | ✅ | ✅ virt-install | ✅ |
+| Alpine 3.19 | OpenRC | ✅ Vagrant | ✅ | ✅ virt-install | ✅ |
+| Devuan 4 | SysVinit | ✅ Vagrant | ✅ | - | - |
+| Void Linux | runit | - | ✅ | - | ✅ |
+
+### BSD
+
+| OS | Init System | AMD64 VM | ARM64 VM |
+|----|-------------|:--------:|:--------:|
+| FreeBSD 14 | rc.d | ✅ Vagrant | - |
+| OpenBSD 7 | rc.d | ✅ Vagrant | - |
+| NetBSD 10 | rc.d | ⚠️ flaky | - |
+| DragonFlyBSD 6 | rc.d | ✅ Vagrant | - |
+
+### PID1 Container Tests
+
+| Test | Description |
+|------|-------------|
+| PID1 verification | supervizio runs as process 1 |
+| Service management | nginx + redis managed services |
+| Zombie reaping | Orphan processes are reaped |
+| Signal forwarding | SIGHUP forwarded to services |
+| Health checks | HTTP and TCP health validation |
+
+**Legend:** ✅ Tested | ⚠️ Flaky/Skipped | - Not available
+
 ## License
 
 MIT
