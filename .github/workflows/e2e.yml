@@ -390,8 +390,17 @@ jobs:
 
           if [ -z "$VM_IP" ]; then
             echo "ERROR: Could not get VM IP address"
+            echo "=== VM Status ==="
             sudo virsh list --all
-            sudo virsh domifaddr e2e-debian || true
+            echo "=== VM Info ==="
+            sudo virsh dominfo e2e-debian || true
+            echo "=== Network Info ==="
+            sudo virsh net-list --all
+            sudo virsh net-dhcp-leases default || true
+            echo "=== VM Interfaces ==="
+            sudo virsh domifaddr e2e-debian --source agent || true
+            sudo virsh domifaddr e2e-debian --source arp || true
+            sudo virsh domifaddr e2e-debian --source lease || true
             exit 1
           fi
 
@@ -420,7 +429,11 @@ jobs:
           # Verify SSH works
           if ! sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
              test@$VM_IP "uname -a"; then
-            echo "ERROR: SSH connection failed"
+            echo "ERROR: SSH connection failed after all retries"
+            echo "=== Testing network connectivity ==="
+            ping -c 3 $VM_IP || echo "Cannot ping VM"
+            echo "=== Checking SSH port ==="
+            nc -zv $VM_IP 22 2>&1 || echo "SSH port not open"
             exit 1
           fi
 
@@ -462,9 +475,28 @@ jobs:
       - name: Collect logs on failure
         if: failure()
         run: |
+          echo "=== KVM Status ==="
+          echo "KVM_AVAILABLE: $KVM_AVAILABLE"
+          ls -la /dev/kvm 2>/dev/null || echo "/dev/kvm not found"
+
+          echo "=== libvirt Status ==="
+          systemctl status libvirtd --no-pager || true
+
           echo "=== libvirt VMs ==="
           sudo virsh list --all || true
-          echo "=== VM console log ==="
-          sudo virsh console e2e-debian --force 2>&1 | head -100 || true
+
+          echo "=== VM Info ==="
+          sudo virsh dominfo e2e-debian 2>/dev/null || echo "VM not found"
+
+          echo "=== Network Info ==="
+          sudo virsh net-list --all || true
+          sudo virsh net-dhcp-leases default 2>/dev/null || true
+
+          echo "=== VM IP Attempts ==="
+          sudo virsh domifaddr e2e-debian 2>/dev/null || true
+
+          echo "=== QEMU Processes ==="
+          ps aux | grep -i qemu || true
+
           echo "=== Docker Images ==="
           docker images || true
