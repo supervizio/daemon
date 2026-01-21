@@ -18,7 +18,7 @@
 #
 # Total: 18 jobs
 #   - 5 Linux AMD64 (Vagrant + Docker)
-#   - 5 Linux ARM64 (virt-install + Docker)
+#   - 5 Linux ARM64 (Docker only - GHA lacks nested virt)
 #   - 7 BSD (cross-platform-actions: 3x AMD64+ARM64 + 1x AMD64)
 #   - 1 PID1 container tests
 # =============================================================================
@@ -222,29 +222,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # systemd distributions (VM via virt-install + cloud-init)
+          # systemd distributions (Docker only - GHA ARM64 runners lack nested virtualization)
           - name: Debian
             vm: debian
             dockerfile: Dockerfile.debian
             init: systemd
-            os_variant: debian12
-            cloud_image_url: "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-arm64.qcow2"
-            cloud_image_file: "debian-12-genericcloud-arm64.qcow2"
+            skip_vm: true
+            reason_vm: "GHA ARM64 runners lack KVM/nested virtualization"
           - name: Ubuntu
             vm: ubuntu
             dockerfile: Dockerfile.ubuntu
             init: systemd
-            os_variant: ubuntu22.04
-            cloud_image_url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-arm64.img"
-            cloud_image_file: "jammy-server-cloudimg-arm64.img"
-          # OpenRC distribution (VM via virt-install + cloud-init)
+            skip_vm: true
+            reason_vm: "GHA ARM64 runners lack KVM/nested virtualization"
+          # OpenRC distribution (Docker only)
           - name: Alpine
             vm: alpine
             dockerfile: Dockerfile.alpine
             init: openrc
-            os_variant: alpinelinux3.19
-            cloud_image_url: "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/cloud/generic_alpine-3.20.0-aarch64-uefi-cloudinit-r0.qcow2"
-            cloud_image_file: "alpine-3.20-arm64.qcow2"
+            skip_vm: true
+            reason_vm: "GHA ARM64 runners lack KVM/nested virtualization"
           # SysVinit - Devuan has no ARM64 images (VM or container)
           - name: Devuan
             vm: devuan
@@ -541,7 +538,7 @@ jobs:
           - name: FreeBSD
             os: freebsd
             version: '14.2'
-            arch: amd64
+            arch: x86-64
             goarch: amd64
             goos: freebsd
           - name: FreeBSD
@@ -554,7 +551,7 @@ jobs:
           - name: OpenBSD
             os: openbsd
             version: '7.6'
-            arch: amd64
+            arch: x86-64
             goarch: amd64
             goos: openbsd
           - name: OpenBSD
@@ -563,16 +560,16 @@ jobs:
             arch: arm64
             goarch: arm64
             goos: openbsd
-          # NetBSD AMD64 + ARM64 (cross-platform-actions is stable, unlike Vagrant)
+          # NetBSD AMD64 + ARM64
           - name: NetBSD
             os: netbsd
-            version: '10.1'
-            arch: amd64
+            version: '10.0'
+            arch: x86-64
             goarch: amd64
             goos: netbsd
           - name: NetBSD
             os: netbsd
-            version: '10.1'
+            version: '10.0'
             arch: arm64
             goarch: arm64
             goos: netbsd
@@ -580,7 +577,7 @@ jobs:
           - name: DragonFlyBSD
             os: dragonflybsd
             version: '6.4'
-            arch: amd64
+            arch: x86-64
             goarch: amd64
             goos: dragonfly
     steps:

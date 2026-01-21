@@ -171,9 +171,9 @@ Comprehensive testing across init systems, architectures, and platforms:
 
 | Distribution | Init System | AMD64 VM | AMD64 Docker | ARM64 VM | ARM64 Docker |
 |--------------|-------------|:--------:|:------------:|:--------:|:------------:|
-| Debian 12 | systemd | ✅ Vagrant | ✅ | ✅ virt-install | ✅ |
-| Ubuntu 22.04 | systemd | ✅ Vagrant | ✅ | ✅ virt-install | ✅ |
-| Alpine 3.19 | OpenRC | ✅ Vagrant | ✅ | ✅ virt-install | ✅ |
+| Debian 12 | systemd | ✅ Vagrant | ✅ | - | ✅ |
+| Ubuntu 22.04 | systemd | ✅ Vagrant | ✅ | - | ✅ |
+| Alpine 3.19 | OpenRC | ✅ Vagrant | ✅ | - | ✅ |
 | Devuan 4 | SysVinit | ✅ Vagrant | ✅ | - | - |
 | Void Linux | runit | - | ✅ | - | ✅ |
 
@@ -183,7 +183,7 @@ Comprehensive testing across init systems, architectures, and platforms:
 |----|-------------|:--------:|:--------:|
 | FreeBSD 14.2 | rc.d | ✅ cross-platform | ✅ cross-platform |
 | OpenBSD 7.6 | rc.d | ✅ cross-platform | ✅ cross-platform |
-| NetBSD 10.1 | rc.d | ✅ cross-platform | ✅ cross-platform |
+| NetBSD 10.0 | rc.d | ✅ cross-platform | ✅ cross-platform |
 | DragonFlyBSD 6.4 | rc.d | ✅ cross-platform | - |
 
 ### PID1 Container Tests
