@@ -224,35 +224,35 @@ jobs:
             dockerfile: Dockerfile.debian
             init: systemd
             skip_vm: true
-            reason_vm: "no cloud image available"
+            reason_vm: "virt-install unreliable on GHA ARM64 runners"
           - name: Ubuntu
             vm: ubuntu
             dockerfile: Dockerfile.ubuntu
             init: systemd
             skip_vm: true
-            reason_vm: "no cloud image available"
-          # OpenRC distribution (container only - Alpine ARM64 has no cloud-init image)
+            reason_vm: "virt-install unreliable on GHA ARM64 runners"
+          # OpenRC distribution (container only - virt-install unreliable on GHA ARM64 runners)
           - name: Alpine
             vm: alpine
             dockerfile: Dockerfile.alpine
             init: openrc
             skip_vm: true
-            reason_vm: "no cloud image available"
+            reason_vm: "virt-install unreliable on GHA ARM64 runners"
           # SysVinit - Devuan has no ARM64 images (VM or container)
           - name: Devuan
             vm: devuan
             init: sysvinit
             skip_vm: true
-            reason_vm: "no cloud image available"
+            reason_vm: "no ARM64 cloud image available"
             skip_container: true
-            reason_container: "no ARM64 image available"
-          # runit distribution (container only - no cloud-init compatible image)
+            reason_container: "no ARM64 Docker image available"
+          # runit distribution (container only - Void has no cloud-init images)
           - name: Void
             vm: void
             dockerfile: Dockerfile.void
             init: runit
             skip_vm: true
-            reason_vm: "no cloud image available"
+            reason_vm: "no cloud-init compatible image"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
