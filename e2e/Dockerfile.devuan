@@ -5,7 +5,7 @@
 # Devuan is Debian without systemd - uses traditional SysVinit.
 # =============================================================================
 
-FROM devuan/devuan:daedalus-slim
+FROM devuan/devuan:daedalus
 
 # Install minimal dependencies for testing
 RUN apt-get update && apt-get install -y --no-install-recommends \

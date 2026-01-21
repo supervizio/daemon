@@ -109,9 +109,9 @@ Vagrant.configure("2") do |config|
     v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
   end
 
-  # Ubuntu 24.04 (noble)
+  # Ubuntu 22.04 (jammy) - 24.04 box not yet available
   config.vm.define "ubuntu", autostart: false do |v|
-    v.vm.box = "generic/ubuntu2404"
+    v.vm.box = "generic/ubuntu2204"
     v.vm.hostname = "e2e-ubuntu"
     v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
   end
@@ -120,9 +120,9 @@ Vagrant.configure("2") do |config|
   # LINUX: OpenRC
   # ===========================================================================
 
-  # Alpine 3.20
+  # Alpine 3.19 - 3.20 box not yet available
   config.vm.define "alpine", autostart: false do |v|
-    v.vm.box = "generic/alpine320"
+    v.vm.box = "generic/alpine319"
     v.vm.hostname = "e2e-alpine"
     v.vm.provision "shell", inline: "apk update && apk add curl"
   end
@@ -141,13 +141,8 @@ Vagrant.configure("2") do |config|
   # ===========================================================================
   # LINUX: runit
   # ===========================================================================
-
-  # Void Linux (glibc)
-  config.vm.define "void", autostart: false do |v|
-    v.vm.box = "voidlinux/voidlinux"
-    v.vm.hostname = "e2e-void"
-    v.vm.provision "shell", inline: "xbps-install -Syu && xbps-install -y curl"
-  end
+  # Note: Void Linux has no libvirt Vagrant box available.
+  # runit is tested via Docker container only (see Dockerfile.void)
 
   # ===========================================================================
   # BSD: rc.d (FreeBSD style)
@@ -160,9 +155,9 @@ Vagrant.configure("2") do |config|
     v.vm.provision "shell", inline: "pkg install -y curl"
   end
 
-  # OpenBSD 7.5
+  # OpenBSD 7.x
   config.vm.define "openbsd", autostart: false do |v|
-    v.vm.box = "generic/openbsd75"
+    v.vm.box = "generic/openbsd7"
     v.vm.hostname = "e2e-openbsd"
     v.vm.provision "shell", inline: "pkg_add curl"
   end

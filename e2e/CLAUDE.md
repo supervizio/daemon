@@ -6,15 +6,15 @@ End-to-end testing for supervizio across all supported platforms and init system
 
 | Init System | Distribution | AMD64 | ARM64 | GOOS | Container | VM |
 |-------------|--------------|-------|-------|------|-----------|-----|
-| **systemd** | Debian 13 | ✅ | ✅ | linux | ✅ | ✅ |
-| **systemd** | Ubuntu 24.04 | ✅ | ✅ | linux | ✅ | ✅ |
-| **OpenRC** | Alpine 3.20 | ✅ | ✅ | linux | ✅ | ✅ |
-| **SysVinit** | Devuan 5 | ✅ | ✅ | linux | ✅ | ❌ (no ARM64 image) |
-| **runit** | Void Linux | ✅ | ✅ | linux | ✅ | ✅ (AMD64 only) |
+| **systemd** | Debian 12 | ✅ | ✅ | linux | ✅ | ✅ |
+| **systemd** | Ubuntu 22.04 | ✅ | ✅ | linux | ✅ | ✅ |
+| **OpenRC** | Alpine 3.19 | ✅ | ✅ | linux | ✅ | ✅ (AMD64 only) |
+| **SysVinit** | Devuan 4 | ✅ | ✅ | linux | ✅ | ✅ (AMD64 only) |
+| **runit** | Void Linux | ✅ | ✅ | linux | ✅ | ❌ (no Vagrant box) |
 | **BSD rc.d** | FreeBSD 14 | ✅ | ✅* | freebsd | ❌ | ✅ |
-| **BSD rc.d** | OpenBSD 7.5 | ✅ | ✅* | openbsd | ❌ | ✅ |
+| **BSD rc.d** | OpenBSD 7 | ✅ | ✅* | openbsd | ❌ | ✅ |
 | **BSD rc.d** | NetBSD 10 | ✅ | ✅* | netbsd | ❌ | ✅ |
-| **BSD rc.d** | DragonFlyBSD 6.4 | ✅ | ❌ | dragonfly | ❌ | ✅ |
+| **BSD rc.d** | DragonFlyBSD 6 | ✅ | ❌ | dragonfly | ❌ | ✅ |
 | **launchd** | macOS 14 | ✅ | ✅ | darwin | ❌ | ❌ (macOS runner) |
 
 *BSD ARM64: Go supports cross-compilation, but no CI ARM64 BSD VMs available.
@@ -27,20 +27,20 @@ End-to-end testing for supervizio across all supported platforms and init system
 
 | Distribution | Init System | VM | Container |
 |--------------|-------------|-----|-----------|
-| Debian 13 | systemd | Vagrant/virt-install | Docker |
-| Ubuntu 24.04 | systemd | Vagrant/virt-install | Docker |
-| Alpine 3.20 | OpenRC | Vagrant/virt-install | Docker |
-| Devuan 5 | SysVinit | Vagrant | Docker |
-| Void Linux | runit | Vagrant | Docker |
+| Debian 12 | systemd | Vagrant/virt-install | Docker |
+| Ubuntu 22.04 | systemd | Vagrant/virt-install | Docker |
+| Alpine 3.19 | OpenRC | Vagrant (AMD64 only) | Docker |
+| Devuan 4 | SysVinit | Vagrant (AMD64 only) | Docker |
+| Void Linux | runit | ❌ (no Vagrant box) | Docker |
 
 ### BSD (AMD64 only)
 
 | OS | Init System | VM | Container |
 |----|-------------|-----|-----------|
 | FreeBSD 14 | rc.d | Vagrant | N/A |
-| OpenBSD 7.5 | rc.d | Vagrant | N/A |
+| OpenBSD 7 | rc.d | Vagrant | N/A |
 | NetBSD 10 | rc.d | Vagrant | N/A |
-| DragonFlyBSD 6.4 | rc.d | Vagrant | N/A |
+| DragonFlyBSD 6 | rc.d | Vagrant | N/A |
 
 **Total: 14 jobs** (5 Linux AMD64 + 5 Linux ARM64 + 4 BSD AMD64)
 
@@ -65,20 +65,20 @@ e2e/
 E2E Tests (14 jobs)
 │
 ├── Linux AMD64 (5 jobs - Vagrant + Docker)
-│   ├── Debian (systemd)
-│   ├── Ubuntu (systemd)
-│   ├── Alpine (OpenRC)
-│   ├── Devuan (SysVinit)
-│   └── Void (runit)
+│   ├── Debian (systemd) - VM + Container
+│   ├── Ubuntu (systemd) - VM + Container
+│   ├── Alpine (OpenRC) - VM + Container
+│   ├── Devuan (SysVinit) - VM + Container
+│   └── Void (runit) - Container only (no Vagrant box)
 │
 ├── Linux ARM64 (5 jobs - virt-install + Docker)
-│   ├── Debian (systemd)
-│   ├── Ubuntu (systemd)
-│   ├── Alpine (OpenRC)
-│   ├── Devuan (SysVinit) - Container only, no ARM64 VM image
-│   └── Void (runit) - Container only, no cloud-init images
+│   ├── Debian (systemd) - VM + Container
+│   ├── Ubuntu (systemd) - VM + Container
+│   ├── Alpine (OpenRC) - Container only (no cloud-init image)
+│   ├── Devuan (SysVinit) - Container only (no ARM64 cloud image)
+│   └── Void (runit) - Container only (no cloud-init image)
 │
-└── BSD AMD64 (4 jobs - Vagrant only)
+└── BSD AMD64 (4 jobs - Vagrant only, no containers)
     ├── FreeBSD (rc.d)
     ├── OpenBSD (rc.d)
     ├── NetBSD (rc.d)
@@ -120,7 +120,7 @@ E2E Tests (14 jobs)
 | Debian | `debian:trixie-slim` | systemd |
 | Ubuntu | `ubuntu:24.04` | systemd |
 | Alpine | `alpine:3.20` | OpenRC |
-| Devuan | `devuan/devuan:daedalus-slim` | SysVinit |
+| Devuan | `devuan/devuan:daedalus` | SysVinit |
 | Void | `ghcr.io/void-linux/void-glibc:latest` | runit |
 
 ## Usage
@@ -149,10 +149,9 @@ vagrant up devuan --provider=libvirt
 vagrant ssh devuan -c "sudo /vagrant/test-install.sh"
 vagrant destroy devuan -f
 
-# runit
-vagrant up void --provider=libvirt
-vagrant ssh void -c "sudo /vagrant/test-install.sh"
-vagrant destroy void -f
+# runit (Void Linux) - No Vagrant box available, use Docker instead
+docker build -f Dockerfile.void -t supervizio-void .
+docker run --rm supervizio-void
 ```
 
 ### BSD VM Tests (Vagrant)
@@ -236,11 +235,16 @@ docker run --rm supervizio-void
 
 ## Platform Limitations
 
+### AMD64
+
+- **Void Linux**: No libvirt Vagrant box available - container test only
+
 ### ARM64
 
 - **Vagrant**: Not available for ARM64 Linux (HashiCorp limitation)
+- **Alpine**: No cloud-init compatible ARM64 image - container test only
 - **Devuan**: No official ARM64 cloud image - container test only
-- **Void Linux**: No cloud-init compatible ARM64 images - container test only
+- **Void Linux**: No cloud-init compatible ARM64 image - container test only
 - **BSD ARM64**: Go supports cross-compilation, but no ARM64 VM images in CI
 
 ### Not Tested (out of scope)

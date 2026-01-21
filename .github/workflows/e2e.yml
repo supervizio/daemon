@@ -65,11 +65,12 @@ jobs:
             vm: devuan
             dockerfile: Dockerfile.devuan
             init: sysvinit
-          # runit distribution
+          # runit distribution (container only - no libvirt Vagrant box available)
           - name: Void
             vm: void
             dockerfile: Dockerfile.void
             init: runit
+            skip_vm: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -101,9 +102,10 @@ jobs:
           ls -lh ../bin/supervizio
 
       # =========================================================================
-      # VM Test via Vagrant + libvirt/KVM
+      # VM Test via Vagrant + libvirt/KVM (skip if no box available)
       # =========================================================================
       - name: Setup KVM
+        if: ${{ matrix.skip_vm != true }}
         run: |
           echo "=== Checking KVM availability ==="
           if [ -e /dev/kvm ]; then
@@ -119,6 +121,7 @@ jobs:
           fi
 
       - name: Install libvirt and dependencies
+        if: ${{ matrix.skip_vm != true }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
@@ -134,6 +137,7 @@ jobs:
           sudo usermod -aG libvirt,kvm $USER
 
       - name: Install Vagrant
+        if: ${{ matrix.skip_vm != true }}
         run: |
           wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
@@ -142,12 +146,14 @@ jobs:
           vagrant plugin install vagrant-libvirt
 
       - name: Cache Vagrant box
+        if: ${{ matrix.skip_vm != true }}
         uses: actions/cache@v4
         with:
           path: ~/.vagrant.d/boxes
           key: vagrant-${{ matrix.vm }}-libvirt-amd64-v1
 
       - name: Start ${{ matrix.name }} VM
+        if: ${{ matrix.skip_vm != true }}
         working-directory: e2e
         run: |
           echo "=== Starting ${{ matrix.name }} VM (AMD64, ${{ matrix.init }}) ==="
@@ -155,6 +161,7 @@ jobs:
           echo "=== VM started ==="
 
       - name: Run VM installation test
+        if: ${{ matrix.skip_vm != true }}
         working-directory: e2e
         run: |
           echo "=== Running installation tests on ${{ matrix.name }} (${{ matrix.init }}) ==="
@@ -162,9 +169,13 @@ jobs:
           echo "=== VM tests passed ==="
 
       - name: Cleanup VM
-        if: always()
+        if: ${{ always() && matrix.skip_vm != true }}
         working-directory: e2e
         run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
+
+      - name: Skip VM test notice
+        if: ${{ matrix.skip_vm == true }}
+        run: echo "::notice::Skipping VM test for ${{ matrix.name }} AMD64 (no Vagrant box available)"
 
       # =========================================================================
       # Container Test via Docker
@@ -221,14 +232,12 @@ jobs:
             cloud_image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-arm64.img
             cloud_image_file: ubuntu-arm64.qcow2
             os_variant: ubuntu24.04
-          # OpenRC distribution
+          # OpenRC distribution (container only - Alpine ARM64 has no cloud-init image)
           - name: Alpine
             vm: alpine
             dockerfile: Dockerfile.alpine
             init: openrc
-            cloud_image_url: https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/aarch64/alpine-virt-3.20.3-aarch64.iso
-            cloud_image_file: alpine-arm64.iso
-            os_variant: alpinelinux3.20
+            skip_vm: true
           # SysVinit - Devuan doesn't have official ARM64 cloud images
           # Using Debian container only for Devuan ARM64
           - name: Devuan
@@ -236,15 +245,12 @@ jobs:
             dockerfile: Dockerfile.devuan
             init: sysvinit
             skip_vm: true  # No ARM64 cloud image available
-          # runit distribution
+          # runit distribution (container only - no cloud-init compatible image)
           - name: Void
             vm: void
             dockerfile: Dockerfile.void
             init: runit
-            cloud_image_url: https://repo-default.voidlinux.org/live/current/void-live-aarch64-20250202-base.iso
-            cloud_image_file: void-arm64.iso
-            os_variant: generic
-            skip_vm: true  # Void doesn't have cloud-init compatible images
+            skip_vm: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -518,11 +524,9 @@ jobs:
           - name: NetBSD
             vm: netbsd
             goos: netbsd
-            experimental: true  # NetBSD boxes can be flaky
           - name: DragonFlyBSD
             vm: dragonfly
             goos: dragonfly
-            experimental: true  # BSD boxes can be flaky
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -598,7 +602,6 @@ jobs:
 
       - name: Start ${{ matrix.name }} VM
         working-directory: e2e
-        continue-on-error: ${{ matrix.experimental == true }}
         run: |
           echo "=== Starting ${{ matrix.name }} VM (AMD64, rc.d) ==="
           sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
@@ -606,7 +609,6 @@ jobs:
 
       - name: Run VM installation test
         working-directory: e2e
-        continue-on-error: ${{ matrix.experimental == true }}
         run: |
           echo "=== Running installation tests on ${{ matrix.name }} (rc.d) ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo /vagrant/test-install.sh"
