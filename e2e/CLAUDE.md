@@ -8,13 +8,13 @@ End-to-end testing for supervizio across all supported platforms and init system
 |-------------|--------------|-------|-------|------|-----------|-----|
 | **systemd** | Debian 12 | ✅ | ✅ | linux | ✅ | ✅ |
 | **systemd** | Ubuntu 22.04 | ✅ | ✅ | linux | ✅ | ✅ |
-| **OpenRC** | Alpine 3.19 | ✅ | ✅ | linux | ✅ | ✅ (AMD64 only) |
+| **OpenRC** | Alpine 3.19 | ✅ | ✅ | linux | ✅ | ✅ |
 | **SysVinit** | Devuan 4 | ✅ | ❌ | linux | ✅ (AMD64 only) | ✅ (AMD64 only) |
 | **runit** | Void Linux | ✅ | ✅ | linux | ✅ | ❌ (no Vagrant box) |
-| **BSD rc.d** | FreeBSD 14 | ✅ | ✅* | freebsd | ❌ | ✅ |
-| **BSD rc.d** | OpenBSD 7 | ✅ | ✅* | openbsd | ❌ | ✅ |
+| **BSD rc.d** | FreeBSD 14 | ✅ | ✅* | freebsd | ❌ | ✅ (AMD64 only) |
+| **BSD rc.d** | OpenBSD 7 | ✅ | ✅* | openbsd | ❌ | ✅ (AMD64 only) |
 | **BSD rc.d** | NetBSD 10 | ✅ | ✅* | netbsd | ❌ | ❌ (flaky box) |
-| **BSD rc.d** | DragonFlyBSD 6 | ✅ | ❌ | dragonfly | ❌ | ✅ |
+| **BSD rc.d** | DragonFlyBSD 6 | ✅ | ❌ | dragonfly | ❌ | ✅ (AMD64 only) |
 | **launchd** | macOS 14 | ✅ | ✅ | darwin | ❌ | ❌ (macOS runner) |
 
 *BSD ARM64: Go supports cross-compilation, but no CI ARM64 BSD VMs available.
@@ -25,13 +25,13 @@ End-to-end testing for supervizio across all supported platforms and init system
 
 ### Linux (AMD64 + ARM64)
 
-| Distribution | Init System | VM | Container |
-|--------------|-------------|-----|-----------|
-| Debian 12 | systemd | Vagrant/virt-install | Docker |
-| Ubuntu 22.04 | systemd | Vagrant/virt-install | Docker |
-| Alpine 3.19 | OpenRC | Vagrant (AMD64 only) | Docker |
-| Devuan 4 | SysVinit | Vagrant (AMD64 only) | Docker |
-| Void Linux | runit | ❌ (no Vagrant box) | Docker |
+| Distribution | Init System | AMD64 VM | ARM64 VM | Container |
+|--------------|-------------|----------|----------|-----------|
+| Debian 12 | systemd | Vagrant | virt-install | Docker |
+| Ubuntu 22.04 | systemd | Vagrant | virt-install | Docker |
+| Alpine 3.19 | OpenRC | Vagrant | virt-install | Docker |
+| Devuan 4 | SysVinit | Vagrant | ❌ (no image) | Docker (AMD64 only) |
+| Void Linux | runit | ❌ (no box) | ❌ (no image) | Docker |
 
 ### BSD (AMD64 only)
 
@@ -48,7 +48,7 @@ End-to-end testing for supervizio across all supported platforms and init system
 
 ```
 e2e/
-├── Vagrantfile           # VM configuration (all platforms)
+├── Vagrantfile           # VM configuration (AMD64 via libvirt)
 ├── test-install.sh       # Universal installation test script
 ├── test-container.sh     # PID1 container tests
 ├── Dockerfile.debian     # Debian 13 (systemd)
@@ -75,12 +75,12 @@ E2E Tests (15 jobs)
 │   ├── Devuan (SysVinit) - VM + Container
 │   └── Void (runit) - Container only (no Vagrant box)
 │
-├── Linux ARM64 (5 jobs - Container only, virt-install unreliable on GHA)
-│   ├── Debian (systemd) - Container only
-│   ├── Ubuntu (systemd) - Container only
-│   ├── Alpine (OpenRC) - Container only
-│   ├── Devuan (SysVinit) - Skip (no ARM64 Docker image)
-│   └── Void (runit) - Container only
+├── Linux ARM64 (5 jobs - virt-install + Docker)
+│   ├── Debian (systemd) - VM + Container
+│   ├── Ubuntu (systemd) - VM + Container
+│   ├── Alpine (OpenRC) - VM + Container
+│   ├── Devuan (SysVinit) - Skip (no ARM64 image)
+│   └── Void (runit) - Container only (no cloud image)
 │
 ├── BSD AMD64 (4 jobs - Vagrant only, no containers)
 │   ├── FreeBSD (rc.d)
@@ -91,6 +91,14 @@ E2E Tests (15 jobs)
 └── PID1 Tests (1 job - Docker)
     └── supervizio as container init (debian-based)
 ```
+
+## ARM64 VM Cloud Images
+
+| Distribution | Cloud Image | URL |
+|--------------|-------------|-----|
+| Debian 12 | `debian-12-genericcloud-arm64.qcow2` | cloud.debian.org |
+| Ubuntu 22.04 | `jammy-server-cloudimg-arm64.img` | cloud-images.ubuntu.com |
+| Alpine 3.20 | `generic_alpine-3.20.0-aarch64-uefi-cloudinit-r0.qcow2` | dl-cdn.alpinelinux.org |
 
 ## Init Systems Tested
 
@@ -107,8 +115,8 @@ E2E Tests (15 jobs)
 
 | Runner | Hardware | Use Case |
 |--------|----------|----------|
-| `ubuntu-24.04` | AMD64 | Linux + BSD VMs |
-| `ubuntu-24.04-arm` | ARM64 | Linux ARM64 VMs |
+| `ubuntu-24.04` | AMD64 | Linux + BSD VMs (Vagrant) |
+| `ubuntu-24.04-arm` | ARM64 | Linux ARM64 VMs (virt-install) |
 
 ## VM Tests (test-install.sh)
 
@@ -168,7 +176,7 @@ docker stop supervizio-pid1 && docker rm supervizio-pid1
 
 ## Usage
 
-### Linux VM Tests (Vagrant)
+### Linux VM Tests (Vagrant - AMD64)
 
 ```bash
 cd e2e
@@ -197,7 +205,7 @@ docker build -f Dockerfile.void -t supervizio-void .
 docker run --rm supervizio-void
 ```
 
-### BSD VM Tests (Vagrant)
+### BSD VM Tests (Vagrant - AMD64)
 
 ```bash
 cd e2e
@@ -270,10 +278,20 @@ docker run --rm supervizio-void
 
 ### CI Dependencies (Ubuntu)
 
+**AMD64 runners:**
 - libvirt-daemon-system
 - libvirt-dev, libvirt-clients
 - vagrant, vagrant-libvirt
 - qemu-kvm
+- Docker (pre-installed)
+
+**ARM64 runners:**
+- libvirt-daemon-system
+- libvirt-clients, virtinst
+- qemu-kvm, qemu-system-arm
+- qemu-efi-aarch64
+- cloud-image-utils, genisoimage
+- sshpass
 - Docker (pre-installed)
 
 ## Platform Limitations
@@ -285,11 +303,11 @@ docker run --rm supervizio-void
 
 ### ARM64
 
-- **All ARM64 VMs disabled**: virt-install is unreliable on GitHub Actions ARM64 runners
 - **Vagrant**: Not available for ARM64 Linux (HashiCorp limitation)
-- **Devuan**: No ARM64 Docker image - completely skipped
+- **virt-install**: Used instead with cloud-init images
+- **Devuan**: No ARM64 cloud image or Docker image - completely skipped
+- **Void**: No cloud-init compatible image - container only
 - **BSD ARM64**: Go supports cross-compilation, but no ARM64 VM images in CI
-- **Container tests work**: All ARM64 container tests pass reliably
 
 ### Not Tested (out of scope)
 
@@ -302,3 +320,4 @@ docker run --rm supervizio-void
 - Alpine requires static binary (musl libc incompatible with glibc)
 - BSD systems don't support Docker containers
 - runit uses symlinks for service management (`/var/service/`)
+- ARM64 VMs use UEFI boot with AAVMF/QEMU_EFI firmware

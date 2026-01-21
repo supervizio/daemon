@@ -218,26 +218,29 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # systemd distributions (container only - virt-install unreliable on GHA ARM64 runners)
+          # systemd distributions (VM via virt-install + cloud-init)
           - name: Debian
             vm: debian
             dockerfile: Dockerfile.debian
             init: systemd
-            skip_vm: true
-            reason_vm: "virt-install unreliable on GHA ARM64 runners"
+            os_variant: debian12
+            cloud_image_url: "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-arm64.qcow2"
+            cloud_image_file: "debian-12-genericcloud-arm64.qcow2"
           - name: Ubuntu
             vm: ubuntu
             dockerfile: Dockerfile.ubuntu
             init: systemd
-            skip_vm: true
-            reason_vm: "virt-install unreliable on GHA ARM64 runners"
-          # OpenRC distribution (container only - virt-install unreliable on GHA ARM64 runners)
+            os_variant: ubuntu22.04
+            cloud_image_url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-arm64.img"
+            cloud_image_file: "jammy-server-cloudimg-arm64.img"
+          # OpenRC distribution (VM via virt-install + cloud-init)
           - name: Alpine
             vm: alpine
             dockerfile: Dockerfile.alpine
             init: openrc
-            skip_vm: true
-            reason_vm: "virt-install unreliable on GHA ARM64 runners"
+            os_variant: alpinelinux3.19
+            cloud_image_url: "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/cloud/generic_alpine-3.20.0-aarch64-uefi-cloudinit-r0.qcow2"
+            cloud_image_file: "alpine-3.20-arm64.qcow2"
           # SysVinit - Devuan has no ARM64 images (VM or container)
           - name: Devuan
             vm: devuan
@@ -342,12 +345,22 @@ jobs:
         if: ${{ matrix.skip_vm != true }}
         run: |
           mkdir -p /tmp/cloud-init
-          cat > /tmp/cloud-init/user-data << 'USERDATA'
+
+          # Determine shell based on init system (Alpine uses ash)
+          if [ "${{ matrix.init }}" = "openrc" ]; then
+            USER_SHELL="/bin/ash"
+            PACKAGES="curl openssh"
+          else
+            USER_SHELL="/bin/bash"
+            PACKAGES="curl openssh-server"
+          fi
+
+          cat > /tmp/cloud-init/user-data << USERDATA
           #cloud-config
           users:
             - name: test
               sudo: ALL=(ALL) NOPASSWD:ALL
-              shell: /bin/bash
+              shell: ${USER_SHELL}
               lock_passwd: false
           chpasswd:
             expire: false
@@ -357,10 +370,9 @@ jobs:
           package_update: false
           packages:
             - curl
-            - openssh-server
           runcmd:
-            - systemctl enable ssh || rc-update add sshd default
-            - systemctl start ssh || rc-service sshd start
+            - systemctl enable ssh || rc-update add sshd default || true
+            - systemctl start ssh || rc-service sshd start || true
             - echo "Cloud-init completed" > /tmp/cloud-init-done
           USERDATA
           sed -i 's/^          //' /tmp/cloud-init/user-data
