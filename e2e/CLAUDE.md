@@ -10,14 +10,14 @@ End-to-end testing for supervizio across all supported platforms and init system
 | **systemd** | Ubuntu 22.04 | ✅ | ✅ | linux | ✅ | ✅ |
 | **OpenRC** | Alpine 3.19 | ✅ | ✅ | linux | ✅ | ✅ |
 | **SysVinit** | Devuan 4 | ✅ | ❌ | linux | ✅ (AMD64 only) | ✅ (AMD64 only) |
-| **runit** | Void Linux | ✅ | ✅ | linux | ✅ | ❌ (no Vagrant box) |
-| **BSD rc.d** | FreeBSD 14 | ✅ | ✅* | freebsd | ❌ | ✅ (AMD64 only) |
-| **BSD rc.d** | OpenBSD 7 | ✅ | ✅* | openbsd | ❌ | ✅ (AMD64 only) |
-| **BSD rc.d** | NetBSD 10 | ✅ | ✅* | netbsd | ❌ | ❌ (flaky box) |
-| **BSD rc.d** | DragonFlyBSD 6 | ✅ | ❌ | dragonfly | ❌ | ✅ (AMD64 only) |
+| **runit** | Void Linux | ✅ | ✅ | linux | ✅ | ❌ (no cloud image) |
+| **BSD rc.d** | FreeBSD 14.2 | ✅ | ✅ | freebsd | ❌ | ✅ cross-platform |
+| **BSD rc.d** | OpenBSD 7.6 | ✅ | ✅ | openbsd | ❌ | ✅ cross-platform |
+| **BSD rc.d** | NetBSD 10.1 | ✅ | ✅ | netbsd | ❌ | ✅ cross-platform |
+| **BSD rc.d** | DragonFlyBSD 6.4 | ✅ | ❌ | dragonfly | ❌ | ✅ (AMD64 only) |
 | **launchd** | macOS 14 | ✅ | ✅ | darwin | ❌ | ❌ (macOS runner) |
 
-*BSD ARM64: Go supports cross-compilation, but no CI ARM64 BSD VMs available.
+**Note**: BSD VMs use [cross-platform-actions/action](https://github.com/cross-platform-actions/action) for QEMU-based testing. DragonFlyBSD does not support ARM64 architecture.
 
 ## Architecture
 
@@ -33,16 +33,16 @@ End-to-end testing for supervizio across all supported platforms and init system
 | Devuan 4 | SysVinit | Vagrant | ❌ (no image) | Docker (AMD64 only) |
 | Void Linux | runit | ❌ (no box) | ❌ (no image) | Docker |
 
-### BSD (AMD64 only)
+### BSD (AMD64 + ARM64 via cross-platform-actions)
 
-| OS | Init System | VM | Container |
-|----|-------------|-----|-----------|
-| FreeBSD 14 | rc.d | Vagrant | N/A |
-| OpenBSD 7 | rc.d | Vagrant | N/A |
-| NetBSD 10 | rc.d | ❌ (flaky) | N/A |
-| DragonFlyBSD 6 | rc.d | Vagrant | N/A |
+| OS | Init System | AMD64 VM | ARM64 VM | Container |
+|----|-------------|:--------:|:--------:|-----------|
+| FreeBSD 14.2 | rc.d | ✅ | ✅ | N/A |
+| OpenBSD 7.6 | rc.d | ✅ | ✅ | N/A |
+| NetBSD 10.1 | rc.d | ✅ | ✅ | N/A |
+| DragonFlyBSD 6.4 | rc.d | ✅ | ❌ (OS limitation) | N/A |
 
-**Total: 15 jobs** (5 Linux AMD64 + 5 Linux ARM64 + 4 BSD AMD64 + 1 PID1)
+**Total: 18 jobs** (5 Linux AMD64 + 5 Linux ARM64 + 7 BSD + 1 PID1)
 
 ## Structure
 
@@ -66,7 +66,7 @@ e2e/
 ## CI Workflow
 
 ```
-E2E Tests (15 jobs)
+E2E Tests (18 jobs)
 │
 ├── Linux AMD64 (5 jobs - Vagrant + Docker)
 │   ├── Debian (systemd) - VM + Container
@@ -82,11 +82,11 @@ E2E Tests (15 jobs)
 │   ├── Devuan (SysVinit) - Skip (no ARM64 image)
 │   └── Void (runit) - Container only (no cloud image)
 │
-├── BSD AMD64 (4 jobs - Vagrant only, no containers)
-│   ├── FreeBSD (rc.d)
-│   ├── OpenBSD (rc.d)
-│   ├── NetBSD (rc.d) - Skip (flaky Vagrant box)
-│   └── DragonFlyBSD (rc.d)
+├── BSD (7 jobs - cross-platform-actions, no containers)
+│   ├── FreeBSD (rc.d) - AMD64 + ARM64
+│   ├── OpenBSD (rc.d) - AMD64 + ARM64
+│   ├── NetBSD (rc.d) - AMD64 + ARM64
+│   └── DragonFlyBSD (rc.d) - AMD64 only
 │
 └── PID1 Tests (1 job - Docker)
     └── supervizio as container init (debian-based)
@@ -296,18 +296,16 @@ docker run --rm supervizio-void
 
 ## Platform Limitations
 
-### AMD64
+### Linux
 
-- **Void Linux**: No libvirt Vagrant box available - container test only
-- **NetBSD**: generic/netbsd10 Vagrant box is flaky on GitHub Actions - skipped
+- **Void Linux**: No cloud-init compatible image - container test only (AMD64 + ARM64)
+- **Devuan ARM64**: No ARM64 cloud image or Docker image - completely skipped
+- **Vagrant ARM64**: Not available for ARM64 Linux (HashiCorp limitation) - virt-install used instead
 
-### ARM64
+### BSD
 
-- **Vagrant**: Not available for ARM64 Linux (HashiCorp limitation)
-- **virt-install**: Used instead with cloud-init images
-- **Devuan**: No ARM64 cloud image or Docker image - completely skipped
-- **Void**: No cloud-init compatible image - container only
-- **BSD ARM64**: Go supports cross-compilation, but no ARM64 VM images in CI
+- **DragonFlyBSD ARM64**: Architecture not supported by the OS - AMD64 only
+- **BSD containers**: Not applicable - BSD doesn't support Docker
 
 ### Not Tested (out of scope)
 
@@ -320,4 +318,5 @@ docker run --rm supervizio-void
 - Alpine requires static binary (musl libc incompatible with glibc)
 - BSD systems don't support Docker containers
 - runit uses symlinks for service management (`/var/service/`)
-- ARM64 VMs use UEFI boot with AAVMF/QEMU_EFI firmware
+- Linux ARM64 VMs use UEFI boot with AAVMF/QEMU_EFI firmware
+- BSD VMs use cross-platform-actions with QEMU emulation (supports AMD64 + ARM64)

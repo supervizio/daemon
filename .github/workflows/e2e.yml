@@ -4,19 +4,23 @@
 # Tests supervizio across all supported platforms and init systems:
 #
 # Linux (AMD64 + ARM64):
-#   - Debian 13 (systemd)
-#   - Ubuntu 24.04 (systemd)
-#   - Alpine 3.20 (OpenRC)
-#   - Devuan 5 (SysVinit)
-#   - Void Linux (runit)
+#   - Debian 12 (systemd) - Vagrant/virt-install + Docker
+#   - Ubuntu 22.04 (systemd) - Vagrant/virt-install + Docker
+#   - Alpine 3.19 (OpenRC) - Vagrant/virt-install + Docker
+#   - Devuan 4 (SysVinit) - AMD64 only (no ARM64 images exist)
+#   - Void Linux (runit) - Docker only (no VM images exist)
 #
-# BSD (AMD64 only):
-#   - FreeBSD 14
-#   - OpenBSD 7.5
-#   - NetBSD 10
-#   - DragonFlyBSD 6.4
+# BSD (AMD64 + ARM64 via cross-platform-actions):
+#   - FreeBSD 14.2 (rc.d) - AMD64 + ARM64
+#   - OpenBSD 7.6 (rc.d) - AMD64 + ARM64
+#   - NetBSD 10.1 (rc.d) - AMD64 + ARM64
+#   - DragonFlyBSD 6.4 (rc.d) - AMD64 only (OS doesn't support ARM64)
 #
-# Total: 15 jobs (5 Linux AMD64 + 5 Linux ARM64 + 4 BSD AMD64 + 1 PID1)
+# Total: 18 jobs
+#   - 5 Linux AMD64 (Vagrant + Docker)
+#   - 5 Linux ARM64 (virt-install + Docker)
+#   - 7 BSD (cross-platform-actions: 3x AMD64+ARM64 + 1x AMD64)
+#   - 1 PID1 container tests
 # =============================================================================
 name: E2E Tests
 
@@ -523,29 +527,61 @@ jobs:
           docker images || true
 
   # ===========================================================================
-  # BSD AMD64 E2E Tests (Vagrant only - no Docker on BSD)
+  # BSD E2E Tests (cross-platform-actions - supports AMD64 + ARM64)
   # ===========================================================================
-  e2e-bsd-amd64:
-    name: E2E AMD64 ${{ matrix.name }}
+  e2e-bsd:
+    name: E2E ${{ matrix.arch }} ${{ matrix.name }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
+          # FreeBSD AMD64 + ARM64
           - name: FreeBSD
-            vm: freebsd
+            os: freebsd
+            version: '14.2'
+            arch: amd64
+            goarch: amd64
             goos: freebsd
+          - name: FreeBSD
+            os: freebsd
+            version: '14.2'
+            arch: arm64
+            goarch: arm64
+            goos: freebsd
+          # OpenBSD AMD64 + ARM64
           - name: OpenBSD
-            vm: openbsd
+            os: openbsd
+            version: '7.6'
+            arch: amd64
+            goarch: amd64
             goos: openbsd
+          - name: OpenBSD
+            os: openbsd
+            version: '7.6'
+            arch: arm64
+            goarch: arm64
+            goos: openbsd
+          # NetBSD AMD64 + ARM64 (cross-platform-actions is stable, unlike Vagrant)
           - name: NetBSD
-            vm: netbsd
+            os: netbsd
+            version: '10.1'
+            arch: amd64
+            goarch: amd64
             goos: netbsd
-            skip_vm: true
-            reason_vm: "Vagrant box is flaky"
+          - name: NetBSD
+            os: netbsd
+            version: '10.1'
+            arch: arm64
+            goarch: arm64
+            goos: netbsd
+          # DragonFlyBSD AMD64 only (ARM64 not supported by OS)
           - name: DragonFlyBSD
-            vm: dragonfly
+            os: dragonflybsd
+            version: '6.4'
+            arch: amd64
+            goarch: amd64
             goos: dragonfly
     steps:
       - name: Checkout code
@@ -564,12 +600,12 @@ jobs:
         working-directory: src
         run: wire ./internal/bootstrap/
 
-      - name: Build supervizio binary (${{ matrix.goos }}/amd64)
+      - name: Build supervizio binary (${{ matrix.goos }}/${{ matrix.goarch }})
         working-directory: src
         env:
           CGO_ENABLED: 0
           GOOS: ${{ matrix.goos }}
-          GOARCH: amd64
+          GOARCH: ${{ matrix.goarch }}
         run: |
           go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
           chmod +x ../bin/supervizio
@@ -578,85 +614,44 @@ jobs:
           ls -lh ../bin/supervizio
 
       # =========================================================================
-      # VM Test via Vagrant + libvirt/KVM (skip if box is flaky)
+      # VM Test via cross-platform-actions (QEMU with KVM acceleration)
       # =========================================================================
-      - name: Setup KVM
-        if: ${{ matrix.skip_vm != true }}
-        run: |
-          if [ -e /dev/kvm ]; then
-            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-            sudo udevadm control --reload-rules
-            sudo udevadm trigger --name-match=kvm
-            echo "KVM_AVAILABLE=true" >> $GITHUB_ENV
-          else
-            echo "KVM_AVAILABLE=false" >> $GITHUB_ENV
-          fi
-
-      - name: Install libvirt and dependencies
-        if: ${{ matrix.skip_vm != true }}
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            libvirt-daemon-system \
-            libvirt-dev \
-            libvirt-clients \
-            qemu-kvm \
-            ebtables \
-            ruby-dev \
-            ruby-libvirt \
-            build-essential
-          sudo systemctl start libvirtd
-          sudo usermod -aG libvirt,kvm $USER
-
-      - name: Install Vagrant
-        if: ${{ matrix.skip_vm != true }}
-        run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq vagrant
-          vagrant plugin install vagrant-libvirt
-
-      - name: Cache Vagrant box
-        if: ${{ matrix.skip_vm != true }}
-        uses: actions/cache@v4
+      - name: Run ${{ matrix.name }} ${{ matrix.arch }} VM test
+        uses: cross-platform-actions/action@v0.26.0
         with:
-          path: ~/.vagrant.d/boxes
-          key: vagrant-${{ matrix.vm }}-libvirt-amd64-v1
+          operating_system: ${{ matrix.os }}
+          version: ${{ matrix.version }}
+          architecture: ${{ matrix.arch }}
+          memory: 4G
+          cpu_count: 2
+          shell: sh
+          sync_files: runner-to-vm
+          run: |
+            set -e
+            echo "=== ${{ matrix.name }} ${{ matrix.arch }} VM started ==="
+            uname -a
 
-      - name: Start ${{ matrix.name }} VM
-        if: ${{ matrix.skip_vm != true }}
-        working-directory: e2e
-        run: |
-          echo "=== Starting ${{ matrix.name }} VM (AMD64, rc.d) ==="
-          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
-          echo "=== VM started ==="
+            echo "=== Installing supervizio ==="
+            sudo mkdir -p /setup /usr/local/bin
+            sudo cp -r setup/* /setup/
+            sudo cp bin/supervizio /usr/local/bin/
+            sudo chmod +x /setup/*.sh /usr/local/bin/supervizio
 
-      - name: Run VM installation test
-        if: ${{ matrix.skip_vm != true }}
-        working-directory: e2e
-        run: |
-          echo "=== Running installation tests on ${{ matrix.name }} (rc.d) ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo /vagrant/test-install.sh"
-          echo "=== VM tests passed ==="
+            echo "=== Running installation tests ==="
+            sudo /setup/install.sh
+            /usr/local/bin/supervizio --version || echo "Version check done"
 
-      - name: Cleanup VM
-        if: ${{ always() && matrix.skip_vm != true }}
-        working-directory: e2e
-        run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
+            echo "=== Running E2E test script ==="
+            chmod +x e2e/test-install.sh
+            sudo sh e2e/test-install.sh
 
-      - name: Skip VM test notice
-        if: ${{ matrix.skip_vm == true }}
-        run: echo "Skipping VM test for ${{ matrix.name }} AMD64 (${{ matrix.reason_vm }})"
+            echo "=== VM tests passed ==="
 
       - name: Collect logs on failure
         if: failure()
-        working-directory: e2e
         run: |
-          echo "=== Vagrant Status ==="
-          sudo vagrant status || true
-          echo "=== libvirt VMs ==="
-          sudo virsh list --all || true
+          echo "=== Test failed for ${{ matrix.name }} ${{ matrix.arch }} ==="
+          echo "Check cross-platform-actions logs above"
 
   # ===========================================================================
   # PID1 Container Tests (supervizio as container init)

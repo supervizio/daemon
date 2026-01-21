@@ -181,10 +181,10 @@ Comprehensive testing across init systems, architectures, and platforms:
 
 | OS | Init System | AMD64 VM | ARM64 VM |
 |----|-------------|:--------:|:--------:|
-| FreeBSD 14 | rc.d | ✅ Vagrant | - |
-| OpenBSD 7 | rc.d | ✅ Vagrant | - |
-| NetBSD 10 | rc.d | ⚠️ flaky | - |
-| DragonFlyBSD 6 | rc.d | ✅ Vagrant | - |
+| FreeBSD 14.2 | rc.d | ✅ cross-platform | ✅ cross-platform |
+| OpenBSD 7.6 | rc.d | ✅ cross-platform | ✅ cross-platform |
+| NetBSD 10.1 | rc.d | ✅ cross-platform | ✅ cross-platform |
+| DragonFlyBSD 6.4 | rc.d | ✅ cross-platform | - |
 
 ### PID1 Container Tests
 
