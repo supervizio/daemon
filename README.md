@@ -183,8 +183,8 @@ Comprehensive testing across init systems, architectures, and platforms:
 |----|-------------|:--------:|:--------:|
 | FreeBSD 14.2 | rc.d | ✅ cross-platform | ✅ cross-platform |
 | OpenBSD 7.6 | rc.d | ✅ cross-platform | ✅ cross-platform |
-| NetBSD 10.0 | rc.d | ✅ cross-platform | ✅ cross-platform |
-| DragonFlyBSD 6.4 | rc.d | ✅ cross-platform | - |
+| NetBSD 10.0 | rc.d | ✅ cross-platform | ⚠️ Flaky |
+| DragonFlyBSD 6.4 | rc.d | ✅ Vagrant | - |
 
 ### PID1 Container Tests
 

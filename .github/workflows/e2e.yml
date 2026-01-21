@@ -13,13 +13,13 @@
 # BSD (AMD64 + ARM64):
 #   - FreeBSD 14.2 (rc.d) - AMD64 + ARM64 (cross-platform-actions)
 #   - OpenBSD 7.6 (rc.d) - AMD64 + ARM64 (cross-platform-actions)
-#   - NetBSD 10.0 (rc.d) - AMD64 + ARM64 (cross-platform-actions)
+#   - NetBSD 10.0 (rc.d) - AMD64 only (ARM64 QEMU flaky)
 #   - DragonFlyBSD 6.4 (rc.d) - AMD64 only via Vagrant (OS doesn't support ARM64)
 #
-# Total: 18 jobs
+# Total: 17 jobs
 #   - 5 Linux AMD64 (Vagrant + Docker)
 #   - 5 Linux ARM64 (Docker only - GHA lacks nested virt)
-#   - 7 BSD (6 cross-platform-actions + 1 DragonFlyBSD Vagrant)
+#   - 6 BSD (5 cross-platform-actions + 1 DragonFlyBSD Vagrant)
 #   - 1 PID1 container tests
 # =============================================================================
 name: E2E Tests
@@ -560,18 +560,12 @@ jobs:
             arch: arm64
             goarch: arm64
             goos: openbsd
-          # NetBSD AMD64 + ARM64
+          # NetBSD AMD64 only (ARM64 QEMU emulation is flaky - SSH failures)
           - name: NetBSD
             os: netbsd
             version: '10.0'
             arch: x86-64
             goarch: amd64
-            goos: netbsd
-          - name: NetBSD
-            os: netbsd
-            version: '10.0'
-            arch: arm64
-            goarch: arm64
             goos: netbsd
           # DragonFlyBSD: NOT supported by cross-platform-actions
           # Use separate e2e-dragonflybsd job with Vagrant instead
