@@ -176,7 +176,7 @@ Vagrant.configure("2") do |config|
 
   # DragonFlyBSD 6.4
   config.vm.define "dragonfly", autostart: false do |v|
-    v.vm.box = "generic/dragonflybsd64"
+    v.vm.box = "generic/dragonflybsd6"  # DragonFlyBSD 6.x
     v.vm.hostname = "e2e-dragonfly"
     v.vm.provision "shell", inline: "pkg install -y curl"
   end

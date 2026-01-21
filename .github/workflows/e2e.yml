@@ -522,6 +522,7 @@ jobs:
           - name: DragonFlyBSD
             vm: dragonfly
             goos: dragonfly
+            experimental: true  # BSD boxes can be flaky
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
