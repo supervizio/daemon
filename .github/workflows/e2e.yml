@@ -162,12 +162,13 @@ jobs:
 
   # ===========================================================================
   # ARM64 E2E Tests (Ubuntu ARM64) - VM + Container
-  # Note: Vagrant built from source (no official ARM64 Linux packages)
+  # Note: Using virt-install + cloud-init (Vagrant not available for ARM64 Linux)
+  # See: https://github.com/hashicorp/vagrant-installers/issues/288
   # ===========================================================================
   e2e-arm64:
     name: E2E ARM64 (Debian VM + Container)
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
+    timeout-minutes: 25
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -199,9 +200,7 @@ jobs:
           ls -lh ../bin/supervizio
 
       # =========================================================================
-      # VM Test: Debian via Vagrant (from source) + libvirt/KVM
-      # HashiCorp doesn't provide ARM64 Linux binaries, so we build from source
-      # See: https://github.com/hashicorp/vagrant-installers/issues/288
+      # VM Test: Debian via virt-install + cloud-init (no Vagrant for ARM64 Linux)
       # =========================================================================
       - name: Setup KVM
         run: |
@@ -218,87 +217,138 @@ jobs:
             echo "KVM_AVAILABLE=false" >> $GITHUB_ENV
           fi
 
-      - name: Install libvirt and dependencies
+      - name: Install libvirt and virt-install
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             libvirt-daemon-system \
-            libvirt-dev \
             libvirt-clients \
+            virtinst \
             qemu-kvm \
             qemu-system-arm \
             qemu-efi-aarch64 \
-            ebtables \
-            ruby \
-            ruby-dev \
-            ruby-bundler \
-            ruby-libvirt \
-            build-essential \
-            libxml2-dev \
-            libxslt1-dev \
-            zlib1g-dev
+            cloud-image-utils \
+            genisoimage \
+            sshpass
           sudo systemctl start libvirtd
           sudo usermod -aG libvirt,kvm $USER
 
-      - name: Cache Vagrant source
+      - name: Cache Debian cloud image
         uses: actions/cache@v4
         with:
-          path: ~/vagrant-src
-          key: vagrant-src-arm64-v1
+          path: /tmp/debian-12-generic-arm64.qcow2
+          key: debian12-cloud-arm64-v1
 
-      - name: Install Vagrant from source (ARM64)
+      - name: Download Debian ARM64 cloud image
         run: |
-          echo "=== Installing Vagrant from source (no ARM64 Linux packages available) ==="
-          if [ ! -d ~/vagrant-src ]; then
-            git clone --depth 1 https://github.com/hashicorp/vagrant.git ~/vagrant-src
+          if [ ! -f /tmp/debian-12-generic-arm64.qcow2 ]; then
+            echo "=== Downloading Debian 12 ARM64 cloud image ==="
+            wget -q -O /tmp/debian-12-generic-arm64.qcow2 \
+              https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-arm64.qcow2
           fi
-          cd ~/vagrant-src
+          ls -lh /tmp/debian-12-generic-arm64.qcow2
 
-          # Install bundler and dependencies
-          sudo gem install bundler --no-document
-          bundle config set --local path 'vendor/bundle'
-          bundle install --jobs 4 --retry 3
-
-          # Create executable
-          bundle binstubs vagrant --path exec
-          sudo ln -sf ~/vagrant-src/exec/vagrant /usr/local/bin/vagrant
-
-          echo "=== Vagrant version ==="
-          vagrant --version || bundle exec vagrant --version
-
-      - name: Install vagrant-libvirt plugin
+      - name: Create cloud-init configuration
         run: |
-          cd ~/vagrant-src
-          # Install vagrant-libvirt using bundler context
-          CONFIGURE_ARGS="with-libvirt-include=/usr/include/libvirt with-libvirt-lib=/usr/lib" \
-            bundle exec vagrant plugin install vagrant-libvirt
-          bundle exec vagrant plugin list
+          mkdir -p /tmp/cloud-init
 
-      - name: Cache Vagrant box
-        uses: actions/cache@v4
-        with:
-          path: ~/.vagrant.d/boxes
-          key: vagrant-debian-libvirt-arm64-v1
+          # Create user-data
+          cat > /tmp/cloud-init/user-data << 'EOF'
+          #cloud-config
+          users:
+            - name: test
+              sudo: ALL=(ALL) NOPASSWD:ALL
+              shell: /bin/bash
+              ssh_authorized_keys:
+                - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7...test-key
+              lock_passwd: false
+              passwd: $6$rounds=4096$test$hashhere
+          chpasswd:
+            expire: false
+            users:
+              - name: test
+                password: test123
+                type: text
+          ssh_pwauth: true
+          package_update: true
+          packages:
+            - curl
+          runcmd:
+            - echo "Cloud-init completed"
+          EOF
 
-      - name: Start Debian VM
-        working-directory: e2e
+          # Create meta-data
+          cat > /tmp/cloud-init/meta-data << 'EOF'
+          instance-id: e2e-debian-arm64
+          local-hostname: e2e-debian
+          EOF
+
+          # Create cloud-init ISO
+          genisoimage -output /tmp/cloud-init.iso -volid cidata -joliet -rock \
+            /tmp/cloud-init/user-data /tmp/cloud-init/meta-data
+
+      - name: Start Debian VM with virt-install
         run: |
-          echo "=== Starting Debian VM (ARM64 with KVM) ==="
-          cd ~/vagrant-src && bundle exec vagrant --version
-          sudo -E ~/vagrant-src/exec/vagrant up debian --provider=libvirt
-          echo "=== VM started ==="
+          echo "=== Creating Debian VM (ARM64) ==="
+
+          # Create a copy of the base image
+          sudo cp /tmp/debian-12-generic-arm64.qcow2 /var/lib/libvirt/images/e2e-debian.qcow2
+          sudo qemu-img resize /var/lib/libvirt/images/e2e-debian.qcow2 10G
+
+          # Copy test files to a location accessible by the VM
+          sudo mkdir -p /var/lib/libvirt/images/e2e-files
+          sudo cp setup/install.sh /var/lib/libvirt/images/e2e-files/
+          sudo cp bin/supervizio /var/lib/libvirt/images/e2e-files/
+          sudo cp e2e/test-install.sh /var/lib/libvirt/images/e2e-files/
+          sudo chmod -R 755 /var/lib/libvirt/images/e2e-files/
+
+          # Create VM with virt-install
+          sudo virt-install \
+            --name e2e-debian \
+            --memory 2048 \
+            --vcpus 2 \
+            --disk /var/lib/libvirt/images/e2e-debian.qcow2,format=qcow2 \
+            --disk /tmp/cloud-init.iso,device=cdrom \
+            --os-variant debian12 \
+            --virt-type kvm \
+            --arch aarch64 \
+            --machine virt \
+            --boot uefi \
+            --network network=default \
+            --graphics none \
+            --console pty,target_type=serial \
+            --noautoconsole \
+            --import \
+            --wait 0
+
+          # Wait for VM to boot and get IP
+          echo "=== Waiting for VM to boot ==="
+          sleep 60
+
+          # Get VM IP
+          VM_IP=$(sudo virsh domifaddr e2e-debian | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
+          echo "VM IP: $VM_IP"
+          echo "VM_IP=$VM_IP" >> $GITHUB_ENV
 
       - name: Run VM installation test
-        working-directory: e2e
         run: |
-          echo "=== Running installation tests ==="
-          sudo -E ~/vagrant-src/exec/vagrant ssh debian -c "sudo /vagrant/test-install.sh"
+          echo "=== Running installation tests on ARM64 VM ==="
+
+          # Copy files to VM using scp
+          sshpass -p "test123" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            /var/lib/libvirt/images/e2e-files/* test@$VM_IP:/tmp/
+
+          # Run test script
+          sshpass -p "test123" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            test@$VM_IP "sudo chmod +x /tmp/test-install.sh && sudo /tmp/test-install.sh"
+
           echo "=== VM tests passed ==="
 
       - name: Cleanup VM
         if: always()
-        working-directory: e2e
-        run: sudo ~/vagrant-src/exec/vagrant destroy debian -f 2>/dev/null || true
+        run: |
+          sudo virsh destroy e2e-debian 2>/dev/null || true
+          sudo virsh undefine e2e-debian --remove-all-storage 2>/dev/null || true
 
       # =========================================================================
       # Container Test: Debian via Docker
@@ -319,11 +369,10 @@ jobs:
 
       - name: Collect logs on failure
         if: failure()
-        working-directory: e2e
         run: |
-          echo "=== Vagrant Status ==="
-          sudo ~/vagrant-src/exec/vagrant status || true
           echo "=== libvirt VMs ==="
           sudo virsh list --all || true
+          echo "=== VM console log ==="
+          sudo virsh console e2e-debian --force 2>&1 | head -100 || true
           echo "=== Docker Images ==="
           docker images || true

@@ -14,21 +14,25 @@ End-to-end testing for supervizio using Linux runners with KVM acceleration.
 **Total: 2 jobs** (1 AMD64 + 1 ARM64)
 
 - **AMD64**: VM test (Vagrant + KVM) + Container test (Docker)
-- **ARM64**: VM test (Vagrant from source + KVM) + Container test (Docker)
+- **ARM64**: VM test (virt-install + cloud-init + KVM) + Container test (Docker)
 
-### ARM64 Vagrant Note
+### ARM64 VM Note
 
 HashiCorp does not provide official Vagrant binaries for ARM64 Linux.
 See: https://github.com/hashicorp/vagrant-installers/issues/288
 
-We build Vagrant from source on ARM64:
+For ARM64, we use **virt-install + cloud-init** instead of Vagrant:
 ```bash
-git clone https://github.com/hashicorp/vagrant.git
-cd vagrant && bundle install
-bundle binstubs vagrant --path exec
+# Download Debian ARM64 cloud image
+wget https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-arm64.qcow2
+
+# Create VM with virt-install
+virt-install --name e2e-debian --memory 2048 --vcpus 2 \
+  --disk debian.qcow2 --disk cloud-init.iso,device=cdrom \
+  --os-variant debian12 --arch aarch64 --boot uefi --import
 ```
 
-The `generic/debian12` box supports ARM64 with libvirt provider.
+This approach is more reliable than building Vagrant from source.
 
 ## Structure
 
@@ -54,9 +58,11 @@ E2E Tests (2 jobs)
 │
 └── E2E ARM64 (Debian VM + Container)
     ├── Build linux/arm64 binary
-    ├── Install libvirt + Vagrant (from source)
-    ├── Vagrant up debian (KVM)
-    ├── Run test-install.sh
+    ├── Install libvirt + virt-install
+    ├── Download Debian cloud image (ARM64)
+    ├── Create cloud-init config
+    ├── virt-install debian (KVM)
+    ├── Run test-install.sh via SSH
     ├── Docker build Dockerfile.debian
     └── Docker run --version test
 ```
