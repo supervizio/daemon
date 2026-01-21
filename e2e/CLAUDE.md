@@ -71,12 +71,12 @@ E2E Tests (14 jobs)
 │   ├── Devuan (SysVinit) - VM + Container
 │   └── Void (runit) - Container only (no Vagrant box)
 │
-├── Linux ARM64 (5 jobs - virt-install + Docker)
-│   ├── Debian (systemd) - VM + Container
-│   ├── Ubuntu (systemd) - VM + Container
-│   ├── Alpine (OpenRC) - Container only (no cloud-init image)
-│   ├── Devuan (SysVinit) - Skip (no ARM64 images at all)
-│   └── Void (runit) - Container only (no cloud-init image)
+├── Linux ARM64 (5 jobs - Container only, virt-install unreliable on GHA)
+│   ├── Debian (systemd) - Container only
+│   ├── Ubuntu (systemd) - Container only
+│   ├── Alpine (OpenRC) - Container only
+│   ├── Devuan (SysVinit) - Skip (no ARM64 Docker image)
+│   └── Void (runit) - Container only
 │
 └── BSD AMD64 (4 jobs - Vagrant only, no containers)
     ├── FreeBSD (rc.d)
@@ -241,11 +241,11 @@ docker run --rm supervizio-void
 
 ### ARM64
 
+- **All ARM64 VMs disabled**: virt-install is unreliable on GitHub Actions ARM64 runners
 - **Vagrant**: Not available for ARM64 Linux (HashiCorp limitation)
-- **Alpine**: No cloud-init compatible ARM64 image - container test only
-- **Devuan**: No ARM64 images at all (Docker image is AMD64 only) - completely skipped
-- **Void Linux**: No cloud-init compatible ARM64 image - container test only
+- **Devuan**: No ARM64 Docker image - completely skipped
 - **BSD ARM64**: Go supports cross-compilation, but no ARM64 VM images in CI
+- **Container tests work**: All ARM64 container tests pass reliably
 
 ### Not Tested (out of scope)
 

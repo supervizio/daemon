@@ -217,21 +217,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # systemd distributions
+          # systemd distributions (container only - virt-install unreliable on GHA ARM64 runners)
           - name: Debian
             vm: debian
             dockerfile: Dockerfile.debian
             init: systemd
-            cloud_image_url: https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-arm64.qcow2
-            cloud_image_file: debian-arm64.qcow2
-            os_variant: debian12
+            skip_vm: true
           - name: Ubuntu
             vm: ubuntu
             dockerfile: Dockerfile.ubuntu
             init: systemd
-            cloud_image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-arm64.img
-            cloud_image_file: ubuntu-arm64.qcow2
-            os_variant: ubuntu24.04
+            skip_vm: true
           # OpenRC distribution (container only - Alpine ARM64 has no cloud-init image)
           - name: Alpine
             vm: alpine
