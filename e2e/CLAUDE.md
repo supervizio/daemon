@@ -36,22 +36,20 @@ e2e/
 ## CI Workflow
 
 ```
-E2E Tests (9 jobs)
+E2E Tests (9 jobs, 2 workflow jobs)
 │
-├── e2e-linux (5 jobs - Vagrant + Docker)
+├── e2e-linux (5 matrix jobs - Vagrant + Docker)
 │   ├── Debian (systemd)
 │   ├── Ubuntu (systemd)
 │   ├── Alpine (OpenRC)
 │   ├── Devuan (SysVinit)
 │   └── Void (runit) - Docker only
 │
-├── e2e-bsd (3 jobs - cross-platform-actions)
-│   ├── FreeBSD (rc.d)
-│   ├── OpenBSD (rc.d)
-│   └── NetBSD (rc.d)
-│
-└── e2e-dragonfly (1 job - Vagrant)
-    └── DragonFlyBSD (rc.d)
+└── e2e-bsd (4 matrix jobs)
+    ├── FreeBSD (rc.d) - cross-platform-actions
+    ├── OpenBSD (rc.d) - cross-platform-actions
+    ├── NetBSD (rc.d) - cross-platform-actions
+    └── DragonFlyBSD (rc.d) - Vagrant
 ```
 
 ## Init Systems

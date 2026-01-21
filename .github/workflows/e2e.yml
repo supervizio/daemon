@@ -4,20 +4,20 @@
 # Tests supervizio across all supported platforms and init systems.
 # AMD64 only (setup scripts are architecture-agnostic).
 #
-# Linux (5 jobs):
+# Linux (5 jobs) - e2e-linux:
 #   - Debian 12 (systemd) - Vagrant + Docker
 #   - Ubuntu 22.04 (systemd) - Vagrant + Docker
 #   - Alpine 3.19 (OpenRC) - Vagrant + Docker
 #   - Devuan 4 (SysVinit) - Vagrant + Docker
 #   - Void Linux (runit) - Docker only
 #
-# BSD (4 jobs):
+# BSD (4 jobs) - e2e-bsd:
 #   - FreeBSD 14.2 (rc.d) - cross-platform-actions
 #   - OpenBSD 7.6 (rc.d) - cross-platform-actions
 #   - NetBSD 10.0 (rc.d) - cross-platform-actions
-#   - DragonFlyBSD 6.4 (rc.d) - Vagrant
+#   - DragonFlyBSD 6.4 (rc.d) - Vagrant (not in cross-platform-actions)
 #
-# Total: 9 jobs
+# Total: 9 jobs (2 workflow jobs)
 # =============================================================================
 name: E2E Tests
 
@@ -164,7 +164,7 @@ jobs:
           sudo virsh list --all || true
 
   # ===========================================================================
-  # BSD E2E Tests (cross-platform-actions)
+  # BSD E2E Tests (cross-platform-actions + Vagrant for DragonFlyBSD)
   # ===========================================================================
   e2e-bsd:
     name: E2E ${{ matrix.name }}
@@ -186,6 +186,10 @@ jobs:
             os: netbsd
             version: '10.0'
             goos: netbsd
+          - name: DragonFlyBSD
+            os: dragonfly
+            goos: dragonfly
+            use_vagrant: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -213,7 +217,11 @@ jobs:
           go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
           chmod +x ../bin/supervizio
 
-      - name: Run VM test
+      # =========================================================================
+      # cross-platform-actions (FreeBSD, OpenBSD, NetBSD)
+      # =========================================================================
+      - name: Run VM test (cross-platform-actions)
+        if: ${{ matrix.use_vagrant != true }}
         uses: cross-platform-actions/action@v0.26.0
         with:
           operating_system: ${{ matrix.os }}
@@ -235,45 +243,11 @@ jobs:
             chmod +x e2e/test-install.sh
             sudo sh e2e/test-install.sh
 
-      - name: Collect logs on failure
-        if: failure()
-        run: echo "Check cross-platform-actions logs above"
-
-  # ===========================================================================
-  # DragonFlyBSD E2E Test (Vagrant - not supported by cross-platform-actions)
-  # ===========================================================================
-  e2e-dragonfly:
-    name: E2E DragonFlyBSD
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: src/go.sum
-
-      - name: Install Wire
-        run: go install github.com/google/wire/cmd/wire@latest
-
-      - name: Generate code
-        working-directory: src
-        run: wire ./internal/bootstrap/
-
-      - name: Build supervizio binary
-        working-directory: src
-        env:
-          CGO_ENABLED: 0
-          GOOS: dragonfly
-          GOARCH: amd64
-        run: |
-          go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
-          chmod +x ../bin/supervizio
-
+      # =========================================================================
+      # Vagrant (DragonFlyBSD - not supported by cross-platform-actions)
+      # =========================================================================
       - name: Setup KVM
+        if: ${{ matrix.use_vagrant == true }}
         run: |
           if [ -e /dev/kvm ]; then
             echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -282,6 +256,7 @@ jobs:
           fi
 
       - name: Install libvirt and Vagrant
+        if: ${{ matrix.use_vagrant == true }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
@@ -295,32 +270,30 @@ jobs:
           vagrant plugin install vagrant-libvirt
 
       - name: Cache Vagrant box
+        if: ${{ matrix.use_vagrant == true }}
         uses: actions/cache@v4
         with:
           path: ~/.vagrant.d/boxes
-          key: vagrant-dragonfly-v1
+          key: vagrant-${{ matrix.os }}-v1
 
-      - name: Start VM
-        working-directory: e2e
-        run: sudo -E vagrant up dragonfly --provider=libvirt
-
-      - name: Copy files and run tests
+      - name: Run VM test (Vagrant)
+        if: ${{ matrix.use_vagrant == true }}
         working-directory: e2e
         run: |
-          sudo -E vagrant ssh dragonfly -c "sudo mkdir -p /setup /usr/local/bin"
-          sudo -E vagrant scp ../setup dragonfly:/tmp/setup
-          sudo -E vagrant scp ../bin/supervizio dragonfly:/tmp/supervizio
-          sudo -E vagrant ssh dragonfly -c "sudo cp -r /tmp/setup/* /setup/ && sudo cp /tmp/supervizio /usr/local/bin/ && sudo chmod +x /setup/*.sh /usr/local/bin/supervizio"
-          sudo -E vagrant ssh dragonfly -c "sudo /setup/install.sh"
-          sudo -E vagrant ssh dragonfly -c "/usr/local/bin/supervizio --version"
-          sudo -E vagrant ssh dragonfly -c "sudo sh /vagrant/test-install.sh"
+          sudo -E vagrant up ${{ matrix.os }} --provider=libvirt
+          sudo -E vagrant ssh ${{ matrix.os }} -c "sudo mkdir -p /setup /usr/local/bin"
+          sudo -E vagrant scp ../setup ${{ matrix.os }}:/tmp/setup
+          sudo -E vagrant scp ../bin/supervizio ${{ matrix.os }}:/tmp/supervizio
+          sudo -E vagrant ssh ${{ matrix.os }} -c "sudo cp -r /tmp/setup/* /setup/ && sudo cp /tmp/supervizio /usr/local/bin/ && sudo chmod +x /setup/*.sh /usr/local/bin/supervizio"
+          sudo -E vagrant ssh ${{ matrix.os }} -c "sudo /setup/install.sh"
+          sudo -E vagrant ssh ${{ matrix.os }} -c "/usr/local/bin/supervizio --version"
+          sudo -E vagrant ssh ${{ matrix.os }} -c "sudo sh /vagrant/test-install.sh"
+
+      - name: Cleanup Vagrant
+        if: ${{ always() && matrix.use_vagrant == true }}
+        working-directory: e2e
+        run: sudo vagrant destroy ${{ matrix.os }} -f || true
 
       - name: Collect logs on failure
         if: failure()
-        working-directory: e2e
-        run: sudo -E vagrant ssh dragonfly -c "uname -a" || true
-
-      - name: Cleanup
-        if: always()
-        working-directory: e2e
-        run: sudo vagrant destroy dragonfly -f || true
+        run: echo "Check logs above"
