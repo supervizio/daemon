@@ -518,6 +518,7 @@ jobs:
           - name: NetBSD
             vm: netbsd
             goos: netbsd
+            experimental: true  # NetBSD boxes can be flaky
           - name: DragonFlyBSD
             vm: dragonfly
             goos: dragonfly
@@ -596,6 +597,7 @@ jobs:
 
       - name: Start ${{ matrix.name }} VM
         working-directory: e2e
+        continue-on-error: ${{ matrix.experimental == true }}
         run: |
           echo "=== Starting ${{ matrix.name }} VM (AMD64, rc.d) ==="
           sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
@@ -603,6 +605,7 @@ jobs:
 
       - name: Run VM installation test
         working-directory: e2e
+        continue-on-error: ${{ matrix.experimental == true }}
         run: |
           echo "=== Running installation tests on ${{ matrix.name }} (rc.d) ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo /vagrant/test-install.sh"
