@@ -47,11 +47,10 @@ end
 
 Vagrant.configure("2") do |config|
   # ===========================================================================
-  # Shared folders (rsync works with all providers)
+  # Shared folders - disabled to avoid rsync issues on some VMs
+  # Files are synced manually using tar-over-ssh in the CI workflow
   # ===========================================================================
-  config.vm.synced_folder "../setup", "/setup", type: "rsync"
-  config.vm.synced_folder "../bin", "/bin-local", type: "rsync"
-  config.vm.synced_folder ".", "/vagrant", type: "rsync"
+  config.vm.synced_folder ".", "/vagrant", disabled: true
 
   # ===========================================================================
   # QEMU Provider (macOS)
