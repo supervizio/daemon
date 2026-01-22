@@ -136,7 +136,10 @@ jobs:
         if: ${{ matrix.skip_vm != true }}
         working-directory: e2e
         run: |
-          # Debug: check if rsync is installed on guest
+          # Get SSH config for this VM
+          sudo -E vagrant ssh-config ${{ matrix.vm }} > /tmp/vagrant-ssh-config
+
+          # Debug: check rsync on guest
           echo "=== Checking rsync on guest ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "which rsync && rsync --version | head -1" || echo "rsync not found"
 
@@ -145,20 +148,21 @@ jobs:
           if sudo -E vagrant rsync ${{ matrix.vm }}; then
             echo "=== Rsync succeeded ==="
           else
-            echo "=== Rsync failed, using fallback tar+ssh method ==="
+            echo "=== Rsync failed, using scp fallback ==="
+
             # Create directories on guest
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
 
-            # Copy setup folder via tar
-            tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C / && sudo mv /setup/* /setup/ 2>/dev/null || true"
+            # Use scp with vagrant SSH config
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../setup/* default:/setup/
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../bin/* default:/bin-local/
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ./* default:/vagrant/
 
-            # Copy bin folder
-            tar -cf - -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /bin-local --strip-components=1"
-
-            # Copy vagrant folder (current e2e dir)
-            tar -cf - . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
+            # Fix permissions
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
 
             # Verify files exist
+            echo "=== Verifying synced files ==="
             sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /bin-local /vagrant" || {
               echo "ERROR: Fallback sync also failed"
               exit 1
@@ -279,7 +283,10 @@ jobs:
       - name: Sync folders
         working-directory: e2e
         run: |
-          # Debug: check if rsync is installed on guest
+          # Get SSH config for this VM
+          sudo -E vagrant ssh-config ${{ matrix.vm }} > /tmp/vagrant-ssh-config
+
+          # Debug: check rsync on guest
           echo "=== Checking rsync on guest ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "which rsync && rsync --version | head -1" || echo "rsync not found"
 
@@ -288,20 +295,21 @@ jobs:
           if sudo -E vagrant rsync ${{ matrix.vm }}; then
             echo "=== Rsync succeeded ==="
           else
-            echo "=== Rsync failed, using fallback tar+ssh method ==="
+            echo "=== Rsync failed, using scp fallback ==="
+
             # Create directories on guest
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
 
-            # Copy setup folder via tar
-            tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C / && sudo mv /setup/* /setup/ 2>/dev/null || true"
+            # Use scp with vagrant SSH config
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../setup/* default:/setup/
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../bin/* default:/bin-local/
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ./* default:/vagrant/
 
-            # Copy bin folder
-            tar -cf - -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /bin-local --strip-components=1"
-
-            # Copy vagrant folder (current e2e dir)
-            tar -cf - . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
+            # Fix permissions
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
 
             # Verify files exist
+            echo "=== Verifying synced files ==="
             sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /bin-local /vagrant" || {
               echo "ERROR: Fallback sync also failed"
               exit 1
