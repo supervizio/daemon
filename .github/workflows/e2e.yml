@@ -136,22 +136,29 @@ jobs:
         if: ${{ matrix.skip_vm != true }}
         working-directory: e2e
         run: |
-          # Create directories on guest
-          echo "=== Creating directories on guest ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
+          # Try vagrant rsync first (works for most VMs with rsync pre-installed)
+          echo "=== Attempting vagrant rsync ==="
+          if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
+            echo "=== Rsync succeeded ==="
+          else
+            echo "=== Rsync failed, using tar-over-ssh fallback ==="
 
-          # Copy files using tar piped through vagrant ssh (works on all systems)
-          echo "=== Copying setup folder ==="
-          tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xf -"
+            # Create directories on guest
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
 
-          echo "=== Copying bin folder ==="
-          tar -cf - -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /bin-local --strip-components=1"
+            # Copy files using tar piped through vagrant ssh
+            echo "Copying setup folder..."
+            tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xf -"
 
-          echo "=== Copying vagrant folder ==="
-          tar -cf - . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
+            echo "Copying bin folder..."
+            tar -cf - -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /bin-local --strip-components=1"
 
-          # Fix permissions
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+            echo "Copying vagrant folder..."
+            tar -cf - . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
+
+            # Fix permissions
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+          fi
 
           # Verify files exist
           echo "=== Verifying synced files ==="
@@ -274,22 +281,29 @@ jobs:
       - name: Sync folders
         working-directory: e2e
         run: |
-          # Create directories on guest
-          echo "=== Creating directories on guest ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
+          # Try vagrant rsync first (works for most VMs with rsync pre-installed)
+          echo "=== Attempting vagrant rsync ==="
+          if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
+            echo "=== Rsync succeeded ==="
+          else
+            echo "=== Rsync failed, using tar-over-ssh fallback ==="
 
-          # Copy files using tar piped through vagrant ssh (works on all systems)
-          echo "=== Copying setup folder ==="
-          tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xf -"
+            # Create directories on guest
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
 
-          echo "=== Copying bin folder ==="
-          tar -cf - -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /bin-local --strip-components=1"
+            # Copy files using tar piped through vagrant ssh
+            echo "Copying setup folder..."
+            tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xf -"
 
-          echo "=== Copying vagrant folder ==="
-          tar -cf - . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
+            echo "Copying bin folder..."
+            tar -cf - -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /bin-local --strip-components=1"
 
-          # Fix permissions
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+            echo "Copying vagrant folder..."
+            tar -cf - . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
+
+            # Fix permissions
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+          fi
 
           # Verify files exist
           echo "=== Verifying synced files ==="
@@ -301,7 +315,7 @@ jobs:
       - name: Run VM tests
         working-directory: e2e
         run: |
-          # Files already synced via tar-over-ssh
+          # Files synced via vagrant rsync or tar-over-ssh fallback
           echo "=== Step 1: Verify synced folders exist ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /bin-local/ /setup/ /vagrant/" || {
             echo "ERROR: Synced folders not found"
