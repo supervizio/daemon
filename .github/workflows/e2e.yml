@@ -138,36 +138,48 @@ jobs:
         run: |
           # Get SSH config for this VM
           sudo -E vagrant ssh-config ${{ matrix.vm }} > /tmp/vagrant-ssh-config
+          echo "=== SSH Config ==="
+          cat /tmp/vagrant-ssh-config
 
           # Debug: check rsync on guest
           echo "=== Checking rsync on guest ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "which rsync && rsync --version | head -1" || echo "rsync not found"
+
+          # Create directories on guest first
+          echo "=== Creating directories on guest ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
 
           # Try vagrant rsync first
           echo "=== Attempting vagrant rsync ==="
           if sudo -E vagrant rsync ${{ matrix.vm }}; then
             echo "=== Rsync succeeded ==="
           else
-            echo "=== Rsync failed, using scp fallback ==="
+            echo "=== Rsync failed, using direct rsync with SSH ==="
 
-            # Create directories on guest
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
+            # Extract SSH details from config
+            SSH_HOST=$(grep -E "^\s+HostName" /tmp/vagrant-ssh-config | awk '{print $2}')
+            SSH_PORT=$(grep -E "^\s+Port" /tmp/vagrant-ssh-config | awk '{print $2}')
+            SSH_USER=$(grep -E "^\s+User" /tmp/vagrant-ssh-config | awk '{print $2}')
+            SSH_KEY=$(grep -E "^\s+IdentityFile" /tmp/vagrant-ssh-config | awk '{print $2}')
 
-            # Use scp with vagrant SSH config (hostname matches VM name)
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../setup/* ${{ matrix.vm }}:/setup/
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../bin/* ${{ matrix.vm }}:/bin-local/
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ./* ${{ matrix.vm }}:/vagrant/
+            echo "SSH_HOST=$SSH_HOST SSH_PORT=$SSH_PORT SSH_USER=$SSH_USER SSH_KEY=$SSH_KEY"
+
+            # Use rsync with extracted SSH details
+            RSYNC_SSH="ssh -p $SSH_PORT -i $SSH_KEY -o StrictHostKeyChecking=no"
+            rsync -avz -e "$RSYNC_SSH" ../setup/ ${SSH_USER}@${SSH_HOST}:/setup/
+            rsync -avz -e "$RSYNC_SSH" ../bin/ ${SSH_USER}@${SSH_HOST}:/bin-local/
+            rsync -avz -e "$RSYNC_SSH" ./ ${SSH_USER}@${SSH_HOST}:/vagrant/
 
             # Fix permissions
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
-
-            # Verify files exist
-            echo "=== Verifying synced files ==="
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /bin-local /vagrant" || {
-              echo "ERROR: Fallback sync also failed"
-              exit 1
-            }
           fi
+
+          # Verify files exist
+          echo "=== Verifying synced files ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /bin-local /vagrant" || {
+            echo "ERROR: Sync failed"
+            exit 1
+          }
 
       - name: Run VM tests
         if: ${{ matrix.skip_vm != true }}
@@ -285,36 +297,48 @@ jobs:
         run: |
           # Get SSH config for this VM
           sudo -E vagrant ssh-config ${{ matrix.vm }} > /tmp/vagrant-ssh-config
+          echo "=== SSH Config ==="
+          cat /tmp/vagrant-ssh-config
 
           # Debug: check rsync on guest
           echo "=== Checking rsync on guest ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "which rsync && rsync --version | head -1" || echo "rsync not found"
+
+          # Create directories on guest first
+          echo "=== Creating directories on guest ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
 
           # Try vagrant rsync first
           echo "=== Attempting vagrant rsync ==="
           if sudo -E vagrant rsync ${{ matrix.vm }}; then
             echo "=== Rsync succeeded ==="
           else
-            echo "=== Rsync failed, using scp fallback ==="
+            echo "=== Rsync failed, using direct rsync with SSH ==="
 
-            # Create directories on guest
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
+            # Extract SSH details from config
+            SSH_HOST=$(grep -E "^\s+HostName" /tmp/vagrant-ssh-config | awk '{print $2}')
+            SSH_PORT=$(grep -E "^\s+Port" /tmp/vagrant-ssh-config | awk '{print $2}')
+            SSH_USER=$(grep -E "^\s+User" /tmp/vagrant-ssh-config | awk '{print $2}')
+            SSH_KEY=$(grep -E "^\s+IdentityFile" /tmp/vagrant-ssh-config | awk '{print $2}')
 
-            # Use scp with vagrant SSH config (hostname matches VM name)
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../setup/* ${{ matrix.vm }}:/setup/
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../bin/* ${{ matrix.vm }}:/bin-local/
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ./* ${{ matrix.vm }}:/vagrant/
+            echo "SSH_HOST=$SSH_HOST SSH_PORT=$SSH_PORT SSH_USER=$SSH_USER SSH_KEY=$SSH_KEY"
+
+            # Use rsync with extracted SSH details
+            RSYNC_SSH="ssh -p $SSH_PORT -i $SSH_KEY -o StrictHostKeyChecking=no"
+            rsync -avz -e "$RSYNC_SSH" ../setup/ ${SSH_USER}@${SSH_HOST}:/setup/
+            rsync -avz -e "$RSYNC_SSH" ../bin/ ${SSH_USER}@${SSH_HOST}:/bin-local/
+            rsync -avz -e "$RSYNC_SSH" ./ ${SSH_USER}@${SSH_HOST}:/vagrant/
 
             # Fix permissions
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
-
-            # Verify files exist
-            echo "=== Verifying synced files ==="
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /bin-local /vagrant" || {
-              echo "ERROR: Fallback sync also failed"
-              exit 1
-            }
           fi
+
+          # Verify files exist
+          echo "=== Verifying synced files ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /bin-local /vagrant" || {
+            echo "ERROR: Sync failed"
+            exit 1
+          }
 
       - name: Run VM tests
         working-directory: e2e
