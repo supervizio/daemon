@@ -8,23 +8,16 @@ Platform-agnostic installation for supervizio.
 setup/
 ├── install.sh              # Universal install script
 ├── uninstall.sh            # Universal uninstall script
+├── scripts/                # Package manager lifecycle scripts
+│   └── (see scripts/CLAUDE.md)
 └── init/                   # Init system service files
-    ├── systemd/            # Linux systemd
-    │   └── supervizio.service
-    ├── openrc/             # Alpine/Gentoo OpenRC
-    │   └── supervizio
-    ├── runit/              # Void Linux/Artix runit
-    │   └── supervizio/
-    │       ├── run         # Service run script
-    │       └── log/run     # Log service script
-    ├── freebsd/            # FreeBSD rc.d
-    │   └── supervizio
-    ├── openbsd/            # OpenBSD rc.d
-    │   └── supervizio
-    ├── netbsd/             # NetBSD rc.d
-    │   └── supervizio
-    └── launchd/            # macOS launchd
-        └── io.superviz.daemon.plist
+    ├── systemd/supervizio.service
+    ├── openrc/supervizio
+    ├── runit/supervizio/{run,log/run}
+    ├── freebsd/supervizio
+    ├── openbsd/supervizio
+    ├── netbsd/supervizio
+    └── launchd/io.superviz.daemon.plist
 ```
 
 ## Supported Platforms
