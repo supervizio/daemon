@@ -138,24 +138,41 @@ jobs:
         run: |
           # Wait for VM to be fully ready (some VMs need time after provisioning)
           # Rocky Linux 9 in particular needs extra time after dnf operations
+          # Get VM IP early for port checking
+          echo "=== Getting VM SSH config ==="
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+          echo "VM IP: $VM_IP"
+
           echo "=== Waiting for VM to be SSH-ready ==="
-          for i in $(seq 1 24); do
-            if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
-              echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
-              break
+          for i in $(seq 1 36); do
+            # First check if port 22 is open using timeout + bash tcp check
+            if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              echo "Port 22 is open on $VM_IP"
+              # Now try actual SSH connection
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+                echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
+                break
+              else
+                echo "Port open but SSH command failed (attempt $i/36)"
+              fi
+            else
+              echo "Port 22 not yet open (attempt $i/36)"
             fi
-            if [ "$i" = "24" ]; then
-              echo "ERROR: VM not SSH-accessible after 120 seconds"
+
+            if [ "$i" = "36" ]; then
+              echo "ERROR: VM not SSH-accessible after 180 seconds"
               echo "=== VM status ==="
               sudo -E vagrant status ${{ matrix.vm }} || true
-              echo "=== Attempting to get VM IP ==="
-              sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 || true
+              echo "=== SSH config ==="
+              cat /tmp/ssh-config-${{ matrix.vm }} || true
               echo "=== Checking libvirt domain ==="
               sudo virsh list --all || true
               sudo virsh domifaddr e2e_${{ matrix.vm }} 2>/dev/null || true
+              echo "=== Trying verbose SSH ==="
+              sudo -E vagrant ssh ${{ matrix.vm }} -c "echo test" -- -vvv 2>&1 | tail -50 || true
               exit 1
             fi
-            echo "Waiting for VM... (attempt $i/24)"
             sleep 5
           done
 
@@ -322,24 +339,41 @@ jobs:
         working-directory: e2e
         run: |
           # Wait for VM to be fully ready (BSD VMs may need extra time)
+          # Get VM IP early for port checking
+          echo "=== Getting VM SSH config ==="
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+          echo "VM IP: $VM_IP"
+
           echo "=== Waiting for VM to be SSH-ready ==="
-          for i in $(seq 1 24); do
-            if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
-              echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
-              break
+          for i in $(seq 1 36); do
+            # First check if port 22 is open using timeout + bash tcp check
+            if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              echo "Port 22 is open on $VM_IP"
+              # Now try actual SSH connection
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+                echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
+                break
+              else
+                echo "Port open but SSH command failed (attempt $i/36)"
+              fi
+            else
+              echo "Port 22 not yet open (attempt $i/36)"
             fi
-            if [ "$i" = "24" ]; then
-              echo "ERROR: VM not SSH-accessible after 120 seconds"
+
+            if [ "$i" = "36" ]; then
+              echo "ERROR: VM not SSH-accessible after 180 seconds"
               echo "=== VM status ==="
               sudo -E vagrant status ${{ matrix.vm }} || true
-              echo "=== Attempting to get VM IP ==="
-              sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 || true
+              echo "=== SSH config ==="
+              cat /tmp/ssh-config-${{ matrix.vm }} || true
               echo "=== Checking libvirt domain ==="
               sudo virsh list --all || true
               sudo virsh domifaddr e2e_${{ matrix.vm }} 2>/dev/null || true
+              echo "=== Trying verbose SSH ==="
+              sudo -E vagrant ssh ${{ matrix.vm }} -c "echo test" -- -vvv 2>&1 | tail -50 || true
               exit 1
             fi
-            echo "Waiting for VM... (attempt $i/24)"
             sleep 5
           done
 
