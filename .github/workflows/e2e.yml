@@ -135,7 +135,15 @@ jobs:
       - name: Sync folders
         if: ${{ matrix.skip_vm != true }}
         working-directory: e2e
-        run: sudo -E vagrant rsync ${{ matrix.vm }}
+        run: |
+          # Debug: check if rsync is installed on guest
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "which rsync || echo 'rsync not found'"
+          # Run rsync with verbose output
+          sudo -E vagrant rsync ${{ matrix.vm }} || {
+            echo "=== Rsync failed, checking guest state ==="
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /bin-local /vagrant 2>&1 || echo 'Directories not found'"
+            exit 1
+          }
 
       - name: Run VM tests
         if: ${{ matrix.skip_vm != true }}
@@ -250,7 +258,15 @@ jobs:
 
       - name: Sync folders
         working-directory: e2e
-        run: sudo -E vagrant rsync ${{ matrix.vm }}
+        run: |
+          # Debug: check if rsync is installed on guest
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "which rsync || echo 'rsync not found'"
+          # Run rsync with verbose output
+          sudo -E vagrant rsync ${{ matrix.vm }} || {
+            echo "=== Rsync failed, checking guest state ==="
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /bin-local /vagrant 2>&1 || echo 'Directories not found'"
+            exit 1
+          }
 
       - name: Run VM tests
         working-directory: e2e
