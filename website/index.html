@@ -3,69 +3,122 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>supervizio Package Repository</title>
+  <title>supervizio - Process Supervisor</title>
+  <meta name="description" content="PID1-capable process supervisor for containers and Unix systems">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>supervizio</h1>
-      <p class="tagline">PID1-capable process supervisor for containers and Unix systems</p>
-      <p class="version">Current version: <strong>{{VERSION}}</strong></p>
-    </header>
+  <nav>
+    <div class="nav-inner">
+      <a href="./" class="logo">supervizio</a>
+      <div class="links">
+        <a href="install.html">Install</a>
+        <a href="config.html">Config</a>
+        <a href="{{GITHUB_URL}}" target="_blank">GitHub</a>
+      </div>
+    </div>
+  </nav>
 
-    <main>
-      <section>
-        <h2>Debian / Ubuntu / Devuan</h2>
-        <pre><code># Add GPG key
+  <header class="hero">
+    <h1>supervizio</h1>
+    <p class="tagline">PID1-capable process supervisor for containers and Unix systems</p>
+    <span class="version">Version <strong>{{VERSION}}</strong></span>
+    <div class="btn-group">
+      <a href="install.html" class="btn btn-primary">Get Started</a>
+      <a href="{{GITHUB_URL}}" class="btn btn-secondary" target="_blank">View on GitHub</a>
+    </div>
+  </header>
+
+  <main class="container container-wide">
+    <div class="features">
+      <div class="feature">
+        <h3>Multi-Service Management</h3>
+        <p>Start, stop, and monitor multiple processes with dependency ordering and graceful shutdown.</p>
+      </div>
+      <div class="feature">
+        <h3>Health Checks</h3>
+        <p>HTTP, TCP, and command-based health checks with configurable intervals and retries.</p>
+      </div>
+      <div class="feature">
+        <h3>Restart Policies</h3>
+        <p>Flexible policies: always, on-failure, never, unless-stopped. With exponential backoff.</p>
+      </div>
+      <div class="feature">
+        <h3>Log Rotation</h3>
+        <p>Automatic rotation by size, age, and count. Optional gzip compression.</p>
+      </div>
+      <div class="feature">
+        <h3>PID 1 Mode</h3>
+        <p>Proper init behavior: zombie reaping, signal forwarding, clean shutdown.</p>
+      </div>
+      <div class="feature">
+        <h3>Multi-Platform</h3>
+        <p>Linux, FreeBSD, OpenBSD, NetBSD, DragonFlyBSD, and macOS support.</p>
+      </div>
+    </div>
+
+    <section>
+      <h2>Quick Start</h2>
+      <pre><code># Install (Debian/Ubuntu)
 curl -fsSL {{BASE_URL}}/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/supervizio.gpg
-
-# Add repository
-echo "deb [signed-by=/etc/apt/keyrings/supervizio.gpg] {{BASE_URL}}/apt stable main" | sudo tee /etc/apt/sources.list.d/supervizio.list
-
-# Install
+echo "deb [signed-by=/etc/apt/keyrings/supervizio.gpg] {{BASE_URL}}/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/supervizio.list
 sudo apt update && sudo apt install supervizio</code></pre>
-      </section>
 
-      <section>
-        <h2>Rocky Linux / RHEL / Fedora</h2>
-        <pre><code># Add GPG key
-sudo rpm --import {{BASE_URL}}/gpg.key
+      <pre><code># Create config
+cat > /etc/supervizio/config.yaml &lt;&lt;EOF
+version: "1"
+services:
+  - name: myapp
+    command: /usr/bin/myapp
+    restart:
+      policy: always
+EOF
 
-# Add repository
-sudo curl -fsSL {{BASE_URL}}/rpm/supervizio.repo -o /etc/yum.repos.d/supervizio.repo
+# Run
+supervizio --config /etc/supervizio/config.yaml</code></pre>
+      <p class="text-center mt-4">
+        <a href="install.html" class="btn btn-secondary">Full Installation Guide</a>
+        <a href="config.html" class="btn btn-secondary">Configuration Reference</a>
+      </p>
+    </section>
 
-# Install
-sudo dnf install supervizio</code></pre>
-      </section>
+    <section>
+      <h2>Supported Platforms</h2>
+      <div class="platforms">
+        <div class="platform">
+          <h4>Linux</h4>
+          <p>amd64, arm64, arm, 386, riscv64</p>
+        </div>
+        <div class="platform">
+          <h4>FreeBSD</h4>
+          <p>amd64, arm64, arm, 386</p>
+        </div>
+        <div class="platform">
+          <h4>OpenBSD</h4>
+          <p>amd64, arm64, arm, 386</p>
+        </div>
+        <div class="platform">
+          <h4>NetBSD</h4>
+          <p>amd64, arm64, arm, 386</p>
+        </div>
+        <div class="platform">
+          <h4>DragonFlyBSD</h4>
+          <p>amd64</p>
+        </div>
+        <div class="platform">
+          <h4>macOS</h4>
+          <p>amd64, arm64</p>
+        </div>
+      </div>
+    </section>
+  </main>
 
-      <section>
-        <h2>Alpine Linux</h2>
-        <pre><code># Add signing key
-sudo wget -O /etc/apk/keys/supervizio.rsa.pub {{BASE_URL}}/apk/supervizio.rsa.pub
-
-# Add repository
-echo "{{BASE_URL}}/apk/v3.21/main" | sudo tee -a /etc/apk/repositories
-
-# Install
-sudo apk add supervizio</code></pre>
-      </section>
-
-      <section>
-        <h2>Direct Download</h2>
-        <p>Download packages directly from <a href="{{GITHUB_URL}}/releases">GitHub Releases</a>.</p>
-      </section>
-
-      <section>
-        <h2>GPG Key</h2>
-        <p>Download: <a href="gpg.key">gpg.key</a></p>
-        <pre><code>Key fingerprint: {{GPG_FINGERPRINT}}</code></pre>
-      </section>
-    </main>
-
-    <footer>
-      <p><a href="{{GITHUB_URL}}">GitHub</a> · <a href="{{GITHUB_URL}}/blob/main/docs/INSTALL.md">Documentation</a></p>
-    </footer>
-  </div>
+  <footer>
+    <a href="{{GITHUB_URL}}">GitHub</a>
+    <a href="{{GITHUB_URL}}/releases">Releases</a>
+    <a href="gpg.key">GPG Key</a>
+    <p style="margin-top: 16px;">MIT License</p>
+  </footer>
 </body>
 </html>

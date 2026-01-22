@@ -1,213 +1,52 @@
-# superviz.io
+# supervizio
 
 [![CI](https://github.com/supervizio/daemon/actions/workflows/ci.yml/badge.svg)](https://github.com/supervizio/daemon/actions/workflows/ci.yml)
 [![Release](https://github.com/supervizio/daemon/actions/workflows/release.yml/badge.svg)](https://github.com/supervizio/daemon/releases)
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/c66eb99290744de6ac6a6e082f83daaf)](https://app.codacy.com/gh/supervizio/daemon/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
-[![Codacy Coverage](https://app.codacy.com/project/badge/Coverage/c66eb99290744de6ac6a6e082f83daaf)](https://app.codacy.com/gh/supervizio/daemon/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_coverage)
-[![Go Version](https://img.shields.io/badge/Go-1.25-blue.svg)](https://go.dev/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Codacy Grade](https://app.codacy.com/project/badge/Grade/c66eb99290744de6ac6a6e082f83daaf)](https://app.codacy.com/gh/supervizio/daemon/dashboard)
+[![Go 1.25](https://img.shields.io/badge/Go-1.25-00ADD8.svg)](https://go.dev/)
+[![License MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-PID1-capable process supervisor for containers and Linux/BSD systems. Manages multiple services with health checks, restart policies, and log rotation.
+PID1-capable process supervisor for containers and Unix systems.
 
-## Features
-
-- **Multi-service management**: Start, stop, and monitor multiple processes
-- **Health checks**: HTTP, TCP, and shell command with configurable retries
-- **Restart policies**: `always`, `on-failure`, `never`, `unless-stopped`
-- **Exponential backoff**: Increasing delays between restart attempts
-- **Log rotation**: By size, age, and file count with compression
-- **PID 1 support**: Zombie process reaping, signal handling
-- **Multi-platform**: Linux, BSD (FreeBSD, OpenBSD, NetBSD), macOS
-
-## Installation
-
-See [docs/INSTALL.md](docs/INSTALL.md) for full installation guide.
-
-### Package Repository (Linux)
+## Install
 
 ```bash
-# Debian/Ubuntu/Devuan
+# Debian/Ubuntu
 curl -fsSL https://supervizio.github.io/daemon/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/supervizio.gpg
 echo "deb [signed-by=/etc/apt/keyrings/supervizio.gpg] https://supervizio.github.io/daemon/apt stable main" | sudo tee /etc/apt/sources.list.d/supervizio.list
 sudo apt update && sudo apt install supervizio
 
-# Rocky/RHEL/Fedora
-sudo rpm --import https://supervizio.github.io/daemon/gpg.key
-sudo curl -fsSL https://supervizio.github.io/daemon/rpm/supervizio.repo -o /etc/yum.repos.d/supervizio.repo
-sudo dnf install supervizio
-
-# Alpine
-wget -O /etc/apk/keys/supervizio.rsa.pub https://supervizio.github.io/daemon/apk/supervizio.rsa.pub
-echo "https://supervizio.github.io/daemon/apk/v3.21/main" >> /etc/apk/repositories
-apk add supervizio
+# Or download binary
+curl -fsSL https://github.com/supervizio/daemon/releases/latest/download/supervizio-linux-amd64 -o supervizio
+chmod +x supervizio && sudo mv supervizio /usr/local/bin/
 ```
 
-### Pre-built binaries
+**[Full documentation](https://supervizio.github.io/daemon)** — Installation for all platforms, configuration, and usage.
 
-Download from [GitHub releases](https://github.com/supervizio/daemon/releases).
+## Features
 
-### From source
+- Multi-service management with dependency ordering
+- Health checks (HTTP, TCP, command)
+- Restart policies with exponential backoff
+- Log rotation with compression
+- PID 1 mode (zombie reaping, signal forwarding)
+- Linux, BSD, macOS support
 
-```bash
-git clone https://github.com/supervizio/daemon.git
-cd daemon/src
-go build -o supervizio ./cmd/daemon
-```
-
-## Usage
-
-```bash
-# With configuration file
-supervizio --config /etc/supervizio/config.yaml
-
-# Show version
-supervizio --version
-```
-
-## Configuration
+## Quick Start
 
 ```yaml
+# /etc/supervizio/config.yaml
 version: "1"
-
-logging:
-  base_dir: /var/log/supervizio
-  defaults:
-    timestamp_format: iso8601
-    rotation:
-      max_size: 100MB
-      max_age: 7d
-      max_files: 10
-      compress: true
-
 services:
-  - name: webapp
-    command: /usr/bin/node
-    args:
-      - /app/server.js
-    user: www-data
-    environment:
-      NODE_ENV: production
+  - name: myapp
+    command: /usr/bin/myapp
     restart:
       policy: always
-      max_retries: 5
-      delay: 5s
-      delay_max: 5m
-    health_checks:
-      - type: http
-        endpoint: http://localhost:3000/health
-        interval: 30s
-        timeout: 5s
-        retries: 3
-    logging:
-      stdout:
-        file: webapp.out.log
-      stderr:
-        file: webapp.err.log
 ```
-
-See [examples/config.yaml](examples/config.yaml) for a complete configuration.
-
-## Signals
-
-| Signal | Action |
-|--------|--------|
-| `SIGTERM` / `SIGINT` | Graceful shutdown of all services |
-| `SIGHUP` | Configuration reload |
-| `SIGCHLD` | Zombie process reaping (PID 1) |
-
-## Architecture
-
-Built with **Hexagonal Architecture** (Ports & Adapters):
-
-```
-src/
-├── cmd/daemon/                    # Entry point
-└── internal/
-    ├── application/               # Use cases & orchestration
-    │   ├── supervisor/            # Service orchestration
-    │   ├── process/               # Process lifecycle management
-    │   ├── health/                # Health monitoring
-    │   └── config/                # Configuration ports
-    ├── domain/                    # Core business logic
-    │   ├── service/               # Service configuration entities
-    │   ├── process/               # Process entities & ports
-    │   ├── health/                # Health entities
-    │   └── shared/                # Shared value objects
-    └── infrastructure/            # External adapters
-        ├── config/yaml/           # YAML configuration loader
-        ├── health/                # HTTP, TCP, command checkers
-        ├── process/               # Unix process executor
-        ├── kernel/                # OS abstraction (signals, reaper)
-        └── logging/               # File writers, rotation, capture
-```
-
-See [docs/architecture.md](docs/architecture.md) for detailed architecture documentation.
-
-## Development
-
-### Prerequisites
-
-- Go 1.25+
-- golangci-lint
-
-### Build
 
 ```bash
-cd src
-go build ./...
+supervizio --config /etc/supervizio/config.yaml
 ```
-
-### Tests
-
-```bash
-cd src
-go test -race -cover ./...
-```
-
-### Lint
-
-```bash
-cd src
-golangci-lint run
-```
-
-## Supported Platforms
-
-| OS | Architectures |
-|----|---------------|
-| Linux | amd64, arm64, 386, armv7 |
-| FreeBSD | amd64, arm64 |
-| OpenBSD | amd64, arm64 |
-| NetBSD | amd64, arm64 |
-| DragonFlyBSD | amd64 |
-| macOS | amd64, arm64 |
-
-## E2E Testing Matrix
-
-[![E2E Tests](https://github.com/supervizio/daemon/actions/workflows/e2e.yml/badge.svg)](https://github.com/supervizio/daemon/actions/workflows/e2e.yml)
-
-Testing across all supported init systems (AMD64):
-
-### Linux
-
-| Distribution | Init System | Pkg Format | VM | Docker |
-|--------------|-------------|------------|:--:|:------:|
-| Debian 13 | systemd | .deb | ✅ Vagrant | ✅ |
-| Rocky 10 | systemd | .rpm | ✅ Vagrant | ✅ |
-| Alpine 3.21 | OpenRC | .apk | ✅ Vagrant | ✅ |
-| Devuan 6 | SysVinit | .deb | ✅ Vagrant | ✅ |
-| Alpine 3.21 | runit | .apk | ✅ Vagrant | ✅ |
-
-### BSD
-
-| OS | Init System | VM |
-|----|-------------|:--:|
-| FreeBSD 14 | rc.d | ✅ Vagrant |
-| OpenBSD 7 | rc.d | ✅ Vagrant |
-| NetBSD 10 | rc.d | ✅ Vagrant |
-| DragonFlyBSD 6 | rc.d | ✅ Vagrant |
-
-**Total: 9 jobs** covering all init systems (systemd, OpenRC, SysVinit, runit, rc.d)
 
 ## License
 

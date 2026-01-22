@@ -27,7 +27,7 @@ PID1-capable process supervisor in Go for containers and Unix systems.
 │       │   │   └── ports/        # Kernel interfaces
 │       │   ├── logging/          # Log management (writers, capture)
 │       │   └── process/          # Process executor
-├── examples/                     # Example configurations
+├── website/                      # Documentation website
 ├── .github/workflows/            # CI/CD (lint, test, release)
 └── .devcontainer/                # Development environment
 ```
@@ -70,7 +70,6 @@ ktn-linter lint ./...         # KTN convention linting
 | Directory | See |
 |-----------|-----|
 | Source code | `src/CLAUDE.md` |
-| Examples | `examples/CLAUDE.md` |
 | CI/CD | `.github/CLAUDE.md` |
 | DevContainer | `.devcontainer/CLAUDE.md` |
 

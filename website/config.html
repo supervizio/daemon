@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuration - supervizio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <div class="nav-inner">
+      <a href="./" class="logo">supervizio</a>
+      <div class="links">
+        <a href="install.html">Install</a>
+        <a href="config.html" class="active">Config</a>
+        <a href="{{GITHUB_URL}}" target="_blank">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <h1 style="margin-bottom: 8px;">Configuration</h1>
+    <p style="margin-bottom: 48px;">YAML configuration reference for supervizio.</p>
+
+    <section>
+      <h2>Basic Example</h2>
+      <pre><code>version: "1"
+
+services:
+  - name: webapp
+    command: /usr/bin/node
+    args:
+      - /app/server.js
+    restart:
+      policy: always</code></pre>
+    </section>
+
+    <section>
+      <h2>Full Example</h2>
+      <pre><code>version: "1"
+
+logging:
+  base_dir: /var/log/supervizio
+  defaults:
+    timestamp_format: iso8601
+    rotation:
+      max_size: 100MB
+      max_age: 7d
+      max_files: 10
+      compress: true
+
+services:
+  - name: webapp
+    command: /usr/bin/node
+    args:
+      - /app/server.js
+    working_dir: /app
+    user: www-data
+    group: www-data
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    restart:
+      policy: always
+      max_retries: 5
+      delay: 5s
+      delay_max: 5m
+    health_checks:
+      - type: http
+        endpoint: http://localhost:3000/health
+        interval: 30s
+        timeout: 5s
+        retries: 3
+    logging:
+      stdout:
+        file: webapp.out.log
+      stderr:
+        file: webapp.err.log
+
+  - name: worker
+    command: /usr/bin/python3
+    args:
+      - /app/worker.py
+    depends_on:
+      - webapp
+    restart:
+      policy: on-failure
+      max_retries: 3</code></pre>
+    </section>
+
+    <section>
+      <h2>Service Options</h2>
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>name</code></td><td>string</td><td>Unique service identifier (required)</td></tr>
+          <tr><td><code>command</code></td><td>string</td><td>Executable path (required)</td></tr>
+          <tr><td><code>args</code></td><td>[]string</td><td>Command arguments</td></tr>
+          <tr><td><code>working_dir</code></td><td>string</td><td>Working directory</td></tr>
+          <tr><td><code>user</code></td><td>string</td><td>Run as user</td></tr>
+          <tr><td><code>group</code></td><td>string</td><td>Run as group</td></tr>
+          <tr><td><code>environment</code></td><td>map</td><td>Environment variables</td></tr>
+          <tr><td><code>depends_on</code></td><td>[]string</td><td>Service dependencies</td></tr>
+          <tr><td><code>restart</code></td><td>object</td><td>Restart policy</td></tr>
+          <tr><td><code>health_checks</code></td><td>[]object</td><td>Health check definitions</td></tr>
+          <tr><td><code>logging</code></td><td>object</td><td>Log file configuration</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Restart Policies</h2>
+      <table>
+        <thead>
+          <tr><th>Policy</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>always</code></td><td>Always restart, regardless of exit code</td></tr>
+          <tr><td><code>on-failure</code></td><td>Restart only on non-zero exit code</td></tr>
+          <tr><td><code>never</code></td><td>Never restart</td></tr>
+          <tr><td><code>unless-stopped</code></td><td>Restart unless manually stopped</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Restart Options</h3>
+      <pre><code>restart:
+  policy: always      # Restart policy
+  max_retries: 5      # Max restart attempts (0 = unlimited)
+  delay: 5s           # Initial delay between restarts
+  delay_max: 5m       # Maximum delay (exponential backoff)</code></pre>
+    </section>
+
+    <section>
+      <h2>Health Checks</h2>
+
+      <h3>HTTP Check</h3>
+      <pre><code>health_checks:
+  - type: http
+    endpoint: http://localhost:3000/health
+    method: GET              # GET, POST, HEAD
+    expected_status: 200     # Expected HTTP status
+    interval: 30s            # Check interval
+    timeout: 5s              # Request timeout
+    retries: 3               # Failures before unhealthy</code></pre>
+
+      <h3>TCP Check</h3>
+      <pre><code>health_checks:
+  - type: tcp
+    endpoint: localhost:5432
+    interval: 30s
+    timeout: 5s
+    retries: 3</code></pre>
+
+      <h3>Command Check</h3>
+      <pre><code>health_checks:
+  - type: command
+    command: /usr/bin/pg_isready
+    args:
+      - -h
+      - localhost
+    interval: 30s
+    timeout: 10s
+    retries: 3</code></pre>
+    </section>
+
+    <section>
+      <h2>Logging</h2>
+      <pre><code>logging:
+  base_dir: /var/log/supervizio
+  defaults:
+    timestamp_format: iso8601  # iso8601, rfc3339, unix
+    rotation:
+      max_size: 100MB          # Rotate when file exceeds size
+      max_age: 7d              # Delete files older than
+      max_files: 10            # Keep at most N files
+      compress: true           # Gzip rotated files</code></pre>
+
+      <h3>Per-Service Logging</h3>
+      <pre><code>services:
+  - name: myapp
+    logging:
+      stdout:
+        file: myapp.out.log    # Relative to base_dir
+      stderr:
+        file: myapp.err.log
+        rotation:
+          max_size: 50MB       # Override defaults</code></pre>
+    </section>
+
+    <section>
+      <h2>Signals</h2>
+      <table>
+        <thead>
+          <tr><th>Signal</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>SIGTERM</code></td><td>Graceful shutdown of all services</td></tr>
+          <tr><td><code>SIGINT</code></td><td>Graceful shutdown of all services</td></tr>
+          <tr><td><code>SIGHUP</code></td><td>Reload configuration</td></tr>
+          <tr><td><code>SIGCHLD</code></td><td>Reap zombie processes (PID 1 mode)</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>CLI Options</h2>
+      <pre><code>supervizio --config /etc/supervizio/config.yaml
+supervizio --version
+supervizio --help</code></pre>
+    </section>
+  </main>
+
+  <footer>
+    <a href="{{GITHUB_URL}}">GitHub</a>
+    <a href="{{GITHUB_URL}}/releases">Releases</a>
+    <a href="gpg.key">GPG Key</a>
+  </footer>
+</body>
+</html>
