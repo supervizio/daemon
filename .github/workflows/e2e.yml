@@ -51,9 +51,9 @@ jobs:
             vm: debian13
             dockerfile: Dockerfile.debian
             init: systemd
-          - name: Rocky
-            vm: rocky
-            dockerfile: Dockerfile.rocky
+          - name: Fedora
+            vm: fedora
+            dockerfile: Dockerfile.fedora
             init: systemd
           - name: Alpine
             vm: alpine
