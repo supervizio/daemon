@@ -6,27 +6,15 @@ PID1-capable process supervisor in Go for containers and Unix systems.
 
 ```
 /workspace
-├── src/                          # Go source code
+├── src/                          # Go source code (module: github.com/kodflow/daemon)
 │   ├── cmd/daemon/               # CLI entry point
-│   └── internal/                 # Internal packages (hexagonal)
-│       ├── application/          # Application layer
-│       │   ├── config/           # Config port interface
-│       │   ├── health/           # Health monitoring
-│       │   ├── process/          # Process management
-│       │   └── supervisor/       # Service orchestration
-│       ├── domain/               # Domain layer
-│       │   ├── health/           # Health entities
-│       │   ├── process/          # Process entities
-│       │   ├── service/          # Service configuration
-│       │   └── shared/           # Shared value objects
-│       ├── infrastructure/       # Infrastructure layer
-│       │   ├── config/yaml/      # YAML config loader
-│       │   ├── health/           # Health check adapters
-│       │   ├── kernel/           # OS abstraction (signals, reaper)
-│       │   │   ├── adapters/     # Platform adapters
-│       │   │   └── ports/        # Kernel interfaces
-│       │   ├── logging/          # Log management (writers, capture)
-│       │   └── process/          # Process executor
+│   └── internal/                 # Internal packages (hexagonal architecture)
+│       ├── bootstrap/            # Wire DI, app lifecycle, signals
+│       ├── application/          # Use cases: supervisor, lifecycle, health, metrics
+│       ├── domain/               # Entities, value objects, port interfaces
+│       └── infrastructure/       # Adapters: process, persistence, observability, resources, transport
+├── e2e/                          # E2E tests (Vagrant VMs + Docker containers)
+├── setup/                        # Installation scripts (Linux, BSD, macOS)
 ├── website/                      # Documentation website
 ├── .github/workflows/            # CI/CD (lint, test, release)
 └── .devcontainer/                # Development environment
@@ -70,6 +58,8 @@ ktn-linter lint ./...         # KTN convention linting
 | Directory | See |
 |-----------|-----|
 | Source code | `src/CLAUDE.md` |
+| E2E tests | `e2e/CLAUDE.md` |
+| Installation | `setup/CLAUDE.md` |
 | CI/CD | `.github/CLAUDE.md` |
 | DevContainer | `.devcontainer/CLAUDE.md` |
 

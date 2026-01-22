@@ -22,10 +22,10 @@ Implémenter les interfaces (ports) du domaine avec des technologies concrètes 
 
 ```
 infrastructure/
-├── process/           # Processus OS (exec, signals, reaper, credentials)
-├── resources/         # Ressources système (cgroups, metrics)
-├── persistence/       # Stockage (boltdb, yaml config)
-├── observability/     # Monitoring (logs, healthcheck)
+├── process/           # Processus OS (control, credentials, executor, reaper, signals)
+├── resources/         # Ressources système (cgroup, metrics/)
+├── persistence/       # Stockage (config/yaml, storage/boltdb)
+├── observability/     # Monitoring (healthcheck, logging)
 └── transport/         # Communication (grpc)
 ```
 

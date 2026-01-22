@@ -83,56 +83,129 @@ fi
 # ============================================================================
 # Ollama + grepai Initialization (for semantic code search MCP)
 # ============================================================================
-# Ollama runs as a sidecar container (see docker-compose.yml)
-# Accessible via OLLAMA_HOST env var (default: ollama:11434)
+# Ollama runs on HOST machine for GPU acceleration (Metal/CUDA)
+# Installed automatically via initialize.sh during devcontainer build
+# Accessible from container via host.docker.internal:11434
+#
 # Model: qwen3-embedding:0.6b (fast, high-quality, 32K context, code-aware)
 GREPAI_BIN="/usr/local/bin/grepai"
 GREPAI_CONFIG_TPL="/etc/grepai/config.yaml"
-OLLAMA_ENDPOINT="${OLLAMA_HOST:-ollama:11434}"
 EMBEDDING_MODEL="qwen3-embedding:0.6b"
+OLLAMA_HOST_ENDPOINT="host.docker.internal:11434"
+
+# Detect Ollama on host machine
+detect_ollama_endpoint() {
+    local endpoint=""
+    local source=""
+
+    # Check for explicit override via env var
+    if [ -n "${OLLAMA_HOST:-}" ]; then
+        endpoint="$OLLAMA_HOST"
+        source="OLLAMA_HOST env var"
+        if curl -sf --connect-timeout 3 "http://${endpoint}/api/tags" >/dev/null 2>&1; then
+            echo "$endpoint|$source"
+            return 0
+        else
+            log_warning "OLLAMA_HOST=$endpoint not responding"
+        fi
+    fi
+
+    # Check host Ollama (installed via initialize.sh)
+    endpoint="$OLLAMA_HOST_ENDPOINT"
+    if curl -sf --connect-timeout 3 "http://${endpoint}/api/tags" >/dev/null 2>&1; then
+        source="host (GPU-accelerated)"
+        echo "$endpoint|$source"
+        return 0
+    fi
+
+    # No Ollama available
+    echo ""
+    return 1
+}
+
+# Check if model is available on endpoint
+check_model_available() {
+    local endpoint="$1"
+    local model="$2"
+    curl -sf "http://${endpoint}/api/tags" 2>/dev/null | grep -q "$model"
+}
+
+# Provide installation instructions for host Ollama
+show_ollama_instructions() {
+    log_warning "==============================================================================="
+    log_warning "  Ollama not running - Semantic search (grepai) will be disabled"
+    log_warning "==============================================================================="
+    log_info ""
+    log_info "Ollama should be installed automatically via initialize.sh"
+    log_info "If not running, start it manually on your host machine:"
+    log_info ""
+    log_info "  macOS:"
+    log_info "    brew services start ollama"
+    log_info "    # or: ollama serve"
+    log_info ""
+    log_info "  Linux:"
+    log_info "    sudo systemctl start ollama"
+    log_info "    # or: ollama serve"
+    log_info ""
+    log_info "  Then restart the DevContainer or run: /init"
+    log_info ""
+    log_warning "==============================================================================="
+}
 
 init_semantic_search() {
     local grepai_dir="/workspace/.grepai"
     local grepai_config="${grepai_dir}/config.yaml"
-    local ollama_ready=false
+    local detected_result=""
+    local ollama_endpoint=""
+    local ollama_source=""
 
     # =========================================================================
-    # STEP 1: Initialize grepai config FIRST (before checking Ollama)
-    # This ensures config exists even if Ollama is not available
+    # STEP 1: Detect Ollama on host (installed via initialize.sh)
+    # =========================================================================
+    log_info "Checking Ollama on host ($OLLAMA_HOST_ENDPOINT)..."
+    detected_result=$(detect_ollama_endpoint)
+
+    if [ -n "$detected_result" ]; then
+        ollama_endpoint=$(echo "$detected_result" | cut -d'|' -f1)
+        ollama_source=$(echo "$detected_result" | cut -d'|' -f2)
+        log_success "Ollama connected: $ollama_endpoint ($ollama_source)"
+    else
+        # No Ollama available - show instructions but still initialize config
+        show_ollama_instructions
+
+        # Initialize grepai config anyway (will work when Ollama becomes available)
+        if [ -x "$GREPAI_BIN" ] && [ -f "$GREPAI_CONFIG_TPL" ]; then
+            mkdir -p "$grepai_dir"
+            cp "$GREPAI_CONFIG_TPL" "$grepai_config" 2>/dev/null || true
+            # Set endpoint to host for when Ollama starts
+            sed -i -E "s|(endpoint: http://)[^[:space:]]+|\1${OLLAMA_HOST_ENDPOINT}|" "$grepai_config" 2>/dev/null || true
+            log_info "grepai config initialized (waiting for Ollama)"
+        fi
+        return 0
+    fi
+
+    # =========================================================================
+    # STEP 2: Initialize grepai config with detected endpoint
     # =========================================================================
     if [ -x "$GREPAI_BIN" ]; then
-        # Always create/update .grepai config from template
         log_info "Initializing grepai configuration..."
         mkdir -p "$grepai_dir"
 
         if [ -f "$GREPAI_CONFIG_TPL" ]; then
             if cp "$GREPAI_CONFIG_TPL" "$grepai_config"; then
                 log_success "grepai config initialized from template"
-                # Log provider and model for visibility
-                local cfg_provider cfg_model cfg_endpoint
-                cfg_provider=$(grep -E "^[[:space:]]+provider:" "$grepai_config" | head -1 | awk '{print $2}' || echo "unknown")
-                cfg_model=$(grep -E "^[[:space:]]+model:" "$grepai_config" | head -1 | awk '{print $2}' || echo "unknown")
-                cfg_endpoint=$(grep -E "^[[:space:]]+endpoint:" "$grepai_config" | head -1 | awk '{print $2}' || echo "unknown")
-                log_info "grepai config: provider=$cfg_provider model=$cfg_model endpoint=$cfg_endpoint"
             else
                 log_warning "Failed to copy grepai config template"
             fi
         else
-            # Fallback to grepai init if template not found
             log_warning "Config template not found at $GREPAI_CONFIG_TPL, using grepai init..."
-            if (cd /workspace && "$GREPAI_BIN" init --provider ollama --backend gob --yes 2>/dev/null); then
-                log_success "grepai initialized via CLI"
-            else
-                log_warning "grepai init failed"
-            fi
+            (cd /workspace && "$GREPAI_BIN" init --provider ollama --backend gob --yes 2>/dev/null) || true
         fi
 
-        # Ensure Ollama endpoint is correct in config
+        # Update endpoint in config to detected Ollama
         if [ -f "$grepai_config" ]; then
-            if ! grep -q "endpoint: http://${OLLAMA_ENDPOINT}" "$grepai_config"; then
-                log_info "Updating grepai endpoint to $OLLAMA_ENDPOINT..."
-                sed -i -E "s|(endpoint: http://)[^[:space:]]+|\1${OLLAMA_ENDPOINT}|" "$grepai_config"
-            fi
+            sed -i -E "s|(endpoint: http://)[^[:space:]]+|\1${ollama_endpoint}|" "$grepai_config"
+            log_info "grepai endpoint set to: http://$ollama_endpoint"
         fi
     else
         log_warning "grepai binary not found at $GREPAI_BIN"
@@ -140,95 +213,31 @@ init_semantic_search() {
     fi
 
     # =========================================================================
-    # STEP 2: Wait for Ollama sidecar (optional - grepai config already exists)
+    # STEP 3: Check embedding model (pulled during initialize.sh)
     # =========================================================================
-    log_info "Waiting for Ollama sidecar at $OLLAMA_ENDPOINT..."
-    local retries=15
-    while [ $retries -gt 0 ]; do
-        if curl -sf "http://${OLLAMA_ENDPOINT}/api/tags" >/dev/null 2>&1; then
-            log_success "Ollama sidecar is ready"
-            ollama_ready=true
-            break
-        fi
-        retries=$((retries - 1))
-        sleep 2
-    done
-
-    if [ "$ollama_ready" = false ]; then
-        log_warning "Ollama sidecar not responding at $OLLAMA_ENDPOINT"
-        log_warning "grepai config exists but semantic search will not work until Ollama is available"
-        log_info "To start Ollama manually: docker compose up -d ollama"
-        return 0
+    if check_model_available "$ollama_endpoint" "$EMBEDDING_MODEL"; then
+        log_success "Model $EMBEDDING_MODEL available"
+    else
+        log_warning "Model $EMBEDDING_MODEL not found on host"
+        log_info "Pull the model on your host machine:"
+        log_info "  ollama pull $EMBEDDING_MODEL"
+        # Continue anyway - grepai will work once model is pulled
     fi
 
-    # Check if embedding model is already available
-    local model_available=false
-    if curl -sf "http://${OLLAMA_ENDPOINT}/api/tags" 2>/dev/null | grep -q "$EMBEDDING_MODEL"; then
-        model_available=true
-        log_success "Model $EMBEDDING_MODEL already available"
-    fi
-
-    # Pull embedding model if not present (with progress feedback)
-    if [ "$model_available" = false ]; then
-        log_info "Pulling $EMBEDDING_MODEL model (this may take a few minutes on first run)..."
-        local pull_start=$(date +%s)
-        local pull_timeout=300  # 5 minutes max for model pull (639MB model)
-
-        # Try docker exec first (more reliable than REST API for large models)
-        local ollama_container=""
-        if command -v docker &>/dev/null; then
-            # Find the ollama container (handles different naming conventions)
-            ollama_container=$(docker ps --filter "name=ollama" --format "{{.Names}}" 2>/dev/null | head -1)
-        fi
-
-        if [ -n "$ollama_container" ]; then
-            log_info "Using docker exec to pull model from $ollama_container..."
-            # Pull via docker exec (blocking, reliable)
-            if timeout "${pull_timeout}s" docker exec "$ollama_container" ollama pull "$EMBEDDING_MODEL" 2>&1 | tail -5; then
-                log_success "Model $EMBEDDING_MODEL pulled successfully"
-            else
-                log_warning "Model pull via docker exec failed or timed out"
-            fi
-        else
-            # Fallback to REST API with streaming disabled for blocking behavior
-            log_info "Using REST API to pull model..."
-            # Use stream:false for synchronous pull (blocks until complete)
-            local pull_result
-            pull_result=$(timeout "${pull_timeout}s" curl -sf "http://${OLLAMA_ENDPOINT}/api/pull" \
-                -d "{\"name\":\"$EMBEDDING_MODEL\",\"stream\":false}" 2>&1) || true
-
-            if echo "$pull_result" | grep -q '"status":"success"'; then
-                log_success "Model $EMBEDDING_MODEL pulled successfully"
-            else
-                log_warning "Model pull may have failed: $pull_result"
-            fi
-        fi
-
-        # Final verification
-        sleep 2
-        if curl -sf "http://${OLLAMA_ENDPOINT}/api/tags" 2>/dev/null | grep -q "$EMBEDDING_MODEL"; then
-            local pull_duration=$(($(date +%s) - pull_start))
-            log_success "Model $EMBEDDING_MODEL ready (${pull_duration}s)"
-        else
-            log_warning "Model $EMBEDDING_MODEL not available - grepai semantic search may not work"
-            log_info "To manually pull: docker exec <ollama-container> ollama pull $EMBEDDING_MODEL"
-        fi
-    fi
-
-    # Show currently loaded models for debugging
+    # Show available models for debugging
     local loaded_models
-    loaded_models=$(curl -sf "http://${OLLAMA_ENDPOINT}/api/tags" 2>/dev/null | grep -o '"name":"[^"]*"' | sed 's/"name":"//g;s/"//g' | tr '\n' ' ' || echo "none")
+    loaded_models=$(curl -sf "http://${ollama_endpoint}/api/tags" 2>/dev/null | grep -o '"name":"[^"]*"' | sed 's/"name":"//g;s/"//g' | tr '\n' ' ' || echo "none")
     log_info "Available Ollama models: ${loaded_models:-none}"
 
     # =========================================================================
-    # STEP 3: Start grepai watch daemon (config already initialized in STEP 1)
+    # STEP 4: Start grepai watch daemon
     # =========================================================================
     local grepai_pid
     grepai_pid=$(pgrep -f "$GREPAI_BIN watch" 2>/dev/null || true)
 
     if [ -z "$grepai_pid" ]; then
         log_info "Starting grepai watch daemon for real-time indexing..."
-        (cd /workspace && nohup "$GREPAI_BIN" watch >/dev/null 2>&1 &)
+        (cd /workspace && nohup "$GREPAI_BIN" watch >/tmp/grepai.log 2>&1 &)
         sleep 2
         grepai_pid=$(pgrep -f "$GREPAI_BIN watch" 2>/dev/null || true)
         if [ -n "$grepai_pid" ]; then
@@ -241,11 +250,10 @@ init_semantic_search() {
     fi
 
     # Check initial indexing status
-    sleep 3  # Give grepai time to start indexing
+    sleep 3
     local index_status
     index_status=$(cd /workspace && "$GREPAI_BIN" status 2>/dev/null || echo "")
     if [ -n "$index_status" ]; then
-        # Extract key metrics from status
         local indexed_files
         indexed_files=$(echo "$index_status" | grep -oE 'Indexed: [0-9]+' | grep -oE '[0-9]+' || echo "0")
         local pending_files
@@ -254,7 +262,6 @@ init_semantic_search() {
         if [ "$indexed_files" != "0" ] || [ "$pending_files" != "0" ]; then
             log_info "grepai index: $indexed_files files indexed, $pending_files pending"
         else
-            # Try alternative parsing
             local file_count
             file_count=$(echo "$index_status" | grep -oE '[0-9]+ files?' | head -1 || echo "")
             if [ -n "$file_count" ]; then

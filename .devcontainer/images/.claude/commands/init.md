@@ -252,14 +252,18 @@ parallel_checks:
       type: "Explore"
       prompt: |
         Initialize and check grepai semantic search:
-        1. Check Ollama: curl -sf http://ollama:11434/api/tags
+        1. Check Host Ollama (GPU-accelerated): curl -sf http://host.docker.internal:11434/api/tags
         2. Check .grepai/config.yaml exists
-        3. If missing: grepai init --provider ollama --backend gob --yes
-        4. Fix endpoint: sed -i 's/localhost:11434/ollama:11434/g' .grepai/config.yaml
-        5. Check daemon: pgrep -f "grepai watch"
-        6. If not running: nohup grepai watch >/dev/null 2>&1 &
-        7. Check index: mcp__grepai__grepai_index_status
-        Return: {ollama, config, daemon, index_files, status}
+        3. Verify endpoint in config is host.docker.internal:11434
+        4. Check daemon: pgrep -f "grepai watch"
+        5. If not running: nohup grepai watch >/tmp/grepai.log 2>&1 &
+        6. Check index: mcp__grepai__grepai_index_status
+        Return: {ollama_host, gpu_accelerated, config, daemon, index_files, status}
+
+        If Ollama unavailable, provide HOST setup instructions:
+        - macOS: brew install ollama && ollama serve && ollama pull qwen3-embedding:0.6b
+        - Linux: curl -fsSL https://ollama.ai/install.sh | sh
+        Note: Ollama runs on HOST for GPU acceleration (Metal/CUDA)
 ```
 
 **IMPORTANT** : Lancer les 5 agents dans UN SEUL message.
@@ -336,7 +340,7 @@ synthesize_workflow:
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| Ollama | ✓ READY | ollama:11434 |
+| Ollama | ✓ READY | host.docker.internal:11434 (GPU) |
 | Config | ✓ EXISTS | .grepai/config.yaml |
 | Daemon | ✓ RUNNING | grepai watch (PID 1234) |
 | Index | ✓ INDEXED | 296 files, 1.2MB |

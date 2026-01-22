@@ -6,15 +6,15 @@ Go source code for the process supervisor using hexagonal architecture.
 
 ```
 src/
-├── cmd/daemon/               # CLI entry point
+├── cmd/daemon/               # CLI entry point (→ bootstrap.Run())
 ├── internal/                 # Private internal packages
-│   ├── application/          # Application layer (use cases + bootstrap ports)
+│   ├── bootstrap/            # Wire DI, app lifecycle, signals
+│   ├── application/          # Application layer (use cases)
 │   ├── domain/               # Domain layer (entities, ports)
-│   └── infrastructure/       # Infrastructure layer (all adapters)
+│   └── infrastructure/       # Infrastructure layer (adapters)
+├── api/proto/                # gRPC protobuf definitions
 ├── go.mod                    # Module github.com/kodflow/daemon
-├── go.sum                    # Dependency checksums
-├── .golangci.yml             # golangci-lint configuration
-└── .ktn-linter.yaml          # ktn-linter configuration
+└── go.sum                    # Dependency checksums
 ```
 
 ## Go Module
@@ -57,8 +57,8 @@ ktn-linter lint ./...         # KTN convention linting
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    Infrastructure Layer                      │
-│  (YAML loader, health checkers, process executor, kernel)   │
-│  kernel: OS abstraction (signals, credentials, reaper)      │
+│  persistence (yaml, boltdb), process (exec, signals, reaper)│
+│  observability (healthcheck, logging), resources (metrics)  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -86,3 +86,4 @@ Checker.Check()                # Infrastructure: HTTP/TCP/cmd
 |-----------|-------------|-----|
 | `cmd/` | Entry point | `cmd/CLAUDE.md` |
 | `internal/` | Core logic | `internal/CLAUDE.md` |
+| `api/proto/` | gRPC definitions | `api/proto/v1/daemon/CLAUDE.md` |

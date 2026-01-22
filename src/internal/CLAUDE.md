@@ -6,86 +6,61 @@ Private internal packages following hexagonal architecture.
 
 ```
 internal/
-├── bootstrap/            # Wire dependency injection
-│   ├── app.go            # App struct, Run(), signals
-│   ├── providers.go      # Custom providers
-│   ├── wire.go           # Injector (wireinject)
-│   └── wire_gen.go       # Generated code
+├── bootstrap/            # Wire DI, app lifecycle, CLI flags, signals
 ├── application/          # Application layer (use cases)
-│   ├── config/           # Configuration port interface
-│   ├── healthcheck/      # Health monitoring with ProbeMonitor
-│   ├── process/          # Process lifecycle management
+│   ├── config/           # Config loader port interface
+│   ├── health/           # ProbeMonitor, health orchestration
+│   ├── lifecycle/        # Per-service process lifecycle management
+│   ├── metrics/          # Process metrics tracking
 │   └── supervisor/       # Service orchestration
 ├── domain/               # Domain layer (entities, ports)
-│   ├── health/           # Health status, aggregation
+│   ├── config/           # Configuration value objects
+│   ├── health/           # Health status, aggregation, Prober port
+│   ├── lifecycle/        # Event types, DaemonState, Reaper port
 │   ├── listener/         # Network listener entities
-│   ├── probe/            # Prober port, Target, Result, Config
-│   ├── process/          # Process entities and ports
-│   ├── service/          # Service configuration entities
-│   └── shared/           # Shared value objects (Duration, Size)
+│   ├── metrics/          # System and process metrics types
+│   ├── process/          # Process entities, Executor port
+│   ├── shared/           # Duration, Size, Clock value objects
+│   └── storage/          # MetricsStore port interface
 └── infrastructure/       # Infrastructure layer (adapters)
-    ├── config/yaml/      # YAML configuration loader
-    ├── kernel/           # OS abstraction layer
-    │   ├── adapters/     # Platform-specific implementations
-    │   └── ports/        # Kernel interfaces
-    ├── logging/          # Log management (writers, capture, rotation)
-    ├── probe/            # Protocol probers (TCP, UDP, HTTP, gRPC, Exec, ICMP)
-    └── process/          # Process executor adapter
+    ├── observability/    # healthcheck (probers), logging
+    ├── persistence/      # config/yaml, storage/boltdb
+    ├── process/          # control, credentials, executor, reaper, signals
+    ├── resources/        # cgroup, metrics (linux/darwin/bsd)
+    └── transport/        # grpc server
 ```
 
 ## Layer Responsibilities
 
 | Layer | Package | Role |
 |-------|---------|------|
+| Bootstrap | `bootstrap` | Wire DI, App.Run(), signal handling |
 | Application | `supervisor` | Service lifecycle orchestration |
-| Application | `process` | Process manager with restart logic |
-| Application | `healthcheck` | ProbeMonitor - health orchestration |
-| Application | `config` | Configuration port interface |
-| Domain | `service` | Service configuration entities |
-| Domain | `process` | Process entities, states, events |
-| Domain | `health` | Health status, AggregatedHealth |
-| Domain | `listener` | Listener entity, state machine |
-| Domain | `probe` | Prober port, Target, Result |
-| Domain | `shared` | Duration, Size value objects |
-| Infrastructure | `config/yaml` | YAML file parsing |
-| Infrastructure | `kernel` | OS abstraction (signals, reaper) |
-| Infrastructure | `logging` | Writers, capture, rotation |
-| Infrastructure | `probe` | TCP, UDP, HTTP, gRPC, Exec, ICMP probers |
-| Infrastructure | `process` | Unix process executor |
+| Application | `lifecycle` | Per-service process manager, restart logic |
+| Application | `health` | ProbeMonitor - health check coordination |
+| Application | `metrics` | Process metrics tracking |
+| Application | `config` | Configuration loader port |
+| Domain | `config` | ServiceConfig, RestartConfig, ProbeConfig |
+| Domain | `process` | Spec, State, Executor port, ExitResult |
+| Domain | `health` | Status, Result, Prober port, AggregatedHealth |
+| Domain | `lifecycle` | Event, DaemonState, Reaper port |
+| Domain | `shared` | Duration, Size, Clock value objects |
+| Infrastructure | `observability/healthcheck` | TCP, HTTP, gRPC, ICMP, Exec probers |
+| Infrastructure | `persistence/config/yaml` | YAML configuration loader |
+| Infrastructure | `process/executor` | Unix process execution |
+| Infrastructure | `resources/metrics` | Platform-specific metrics (Linux/Darwin/BSD) |
 
 ## Dependency Rules
 
-```
-application ──→ domain ←── infrastructure
-     │              │           │
-     │              │           ├── config/yaml
-     │              │           ├── kernel
-     │              │           ├── logging
-     │              │           ├── probe
-     │              │           └── process
-     │              │
-     └──────────────┘
-```
-
-**Rules:**
 - Application depends on Domain (never reverse)
 - Infrastructure implements Domain ports
-- Application ports (config.Loader) = bootstrap/orchestration concerns
-- Domain ports (Executor, Prober) = business needs
 - No circular dependencies
 
 ## Testing Strategy
 
 - `*_external_test.go`: Black-box tests (package_test)
 - `*_internal_test.go`: White-box tests (same package)
-- All public functions must have external tests
 - Race detection required (`go test -race`)
-
-## Security Model
-
-Command execution is centralized in `infrastructure/process.TrustedCommand()`.
-Commands come from validated YAML configurations, not user input.
-See `infrastructure/CLAUDE.md` for details.
 
 ## Related Directories
 

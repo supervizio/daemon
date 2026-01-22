@@ -34,7 +34,7 @@ les fichiers existants au lieu de listes hardcodées.
 - **Agents** - Définitions d'agents (specialists, executors)
 - **Lifecycle** - Hooks de cycle de vie (postStart)
 - **Config** - p10k, settings.json
-- **Compose** - docker-compose.yml (FORCE ollama+devcontainer, preserve custom)
+- **Compose** - docker-compose.yml (update devcontainer, preserve custom)
 - **Grepai** - Configuration grepai optimisée
 
 **Source** : `github.com/kodflow/devcontainer-template`
@@ -60,9 +60,8 @@ les fichiers existants au lieu de listes hardcodées.
 | `lifecycle` | `.devcontainer/hooks/lifecycle/` | Hooks de cycle de vie |
 | `p10k` | `.devcontainer/images/.p10k.zsh` | Config Powerlevel10k |
 | `settings` | `.../images/.claude/settings.json` | Config Claude |
-| `compose` | `.devcontainer/docker-compose.yml` | FORCE update ollama+devcontainer |
+| `compose` | `.devcontainer/docker-compose.yml` | Update devcontainer service |
 | `grepai` | `.devcontainer/images/grepai.config.yaml` | Config grepai |
-| `user_hooks` | `~/.claude/settings.json` | Sync user hooks with template |
 
 ---
 
@@ -88,9 +87,8 @@ Composants:
   lifecycle   Lifecycle hooks (postStart)
   p10k        Powerlevel10k config
   settings    Claude settings.json
-  compose     docker-compose.yml (FORCE ollama+devcontainer)
+  compose     docker-compose.yml (devcontainer service)
   grepai      grepai config (provider, model)
-  user_hooks  Sync ~/.claude/settings.json hooks
 
 Exemples:
   /update                       Tout mettre à jour
@@ -205,27 +203,18 @@ discover_workflow:
       note: |
         - Si fichier absent → télécharger complet
         - Si fichier existe:
-          1. Extraire services custom (pas ollama ni devcontainer)
+          1. Extraire services custom (pas devcontainer)
           2. Remplacer entièrement par le template (préserve ordre/commentaires)
           3. Merger les services custom extraits
-        - Ordre préservé: ollama → devcontainer → custom
+        - Ordre: devcontainer → custom
         - Backup créé avant modification, restauré si échec
         - Utilise mikefarah/yq (Go version) pour le merge
+        - Note: Ollama runs on HOST (installed via initialize.sh)
 
     grepai:
       raw_url: "https://raw.githubusercontent.com/kodflow/devcontainer-template/main/.devcontainer/images/grepai.config.yaml"
       local_path: ".devcontainer/images/grepai.config.yaml"
       note: "Optimized config with qwen3-embedding model"
-
-    user_hooks:
-      strategy: "SYNC (replace hooks, preserve other settings)"
-      source: ".devcontainer/images/.claude/settings.json"
-      target: "~/.claude/settings.json"
-      note: |
-        - Synchronizes hooks from template to user settings
-        - Preserves user customizations (permissions, env, etc.)
-        - Prevents "hook error" from orphaned script references
-        - Creates backup before modification
 ```
 
 **Implémentation Discover :**
@@ -404,9 +393,10 @@ safe_download \
     "$BASE/.devcontainer/images/.claude/settings.json" \
     ".devcontainer/images/.claude/settings.json"
 
-# docker-compose.yml (FORCE update ollama + devcontainer, PRESERVE custom services)
+# docker-compose.yml (update devcontainer service, PRESERVE custom services)
 # Note: Uses mikefarah/yq (Go version) - simpler syntax with -i for in-place
-# Strategy: Start fresh from template (preserves order), merge back custom services
+# Strategy: Start fresh from template, merge back custom services
+# Note: Ollama runs on HOST (installed via initialize.sh), not in container
 update_compose_services() {
     local compose_file=".devcontainer/docker-compose.yml"
     local temp_template=$(mktemp --suffix=.yaml)
@@ -430,10 +420,10 @@ update_compose_services() {
     # Backup original
     cp "$compose_file" "$backup_file"
 
-    # Extract custom services (anything that's NOT ollama or devcontainer)
-    yq '.services | to_entries | map(select(.key != "ollama" and .key != "devcontainer")) | from_entries' "$compose_file" > "$temp_custom"
+    # Extract custom services (anything that's NOT devcontainer)
+    yq '.services | to_entries | map(select(.key != "devcontainer")) | from_entries' "$compose_file" > "$temp_custom"
 
-    # Start fresh from template (preserves order: ollama first, then devcontainer)
+    # Start fresh from template (devcontainer service)
     cp "$temp_template" "$compose_file"
 
     # Merge back custom services if any exist
@@ -457,7 +447,7 @@ update_compose_services() {
     if yq '.services.devcontainer' "$compose_file" > /dev/null 2>&1; then
         rm -f "$backup_file"
         echo "  ✓ docker-compose.yml updated"
-        echo "    - REPLACED: from template (preserves order)"
+        echo "    - REPLACED: devcontainer from template"
         echo "    - PRESERVED: custom services (if any)"
         return 0
     else
@@ -475,8 +465,8 @@ if [ ! -f ".devcontainer/docker-compose.yml" ]; then
         ".devcontainer/docker-compose.yml"
     echo "  ✓ docker-compose.yml created from template"
 else
-    # File exists - FORCE update ollama + devcontainer services
-    echo "  Forcing update of ollama + devcontainer services..."
+    # File exists - update devcontainer service
+    echo "  Updating devcontainer service..."
     update_compose_services
 fi
 
@@ -516,22 +506,20 @@ echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.templa
 
   Updated components:
     ✓ hooks       (10 scripts)
-    ✓ commands    (9 commands)
+    ✓ commands    (10 commands)
     ✓ agents      (35 agents)
     ✓ lifecycle   (6 hooks)
     ✓ p10k        (1 file)
     ✓ settings    (1 file)
-    ✓ compose     (FORCED ollama+devcontainer update)
+    ✓ compose     (devcontainer service updated)
     ✓ grepai      (1 file - qwen3-embedding config)
-    ✓ user_hooks  (synchronized with template)
-
-  Hook validation:
-    ✓ All hook scripts exist
+    ✓ user-hooks  (synchronized with template)
+    ✓ validation  (all scripts exist)
 
   Grepai config:
     provider: ollama
     model: qwen3-embedding:0.6b
-    endpoint: ollama:11434
+    endpoint: host.docker.internal:11434 (GPU-accelerated)
 
   Cleanup:
     ✓ .coderabbit.yaml removed (if existed)
@@ -539,6 +527,156 @@ echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.templa
   Note: Restart terminal to apply p10k changes.
 
 ═══════════════════════════════════════════════
+```
+
+---
+
+## Phase 5 : Hook Synchronization
+
+**But :** Synchroniser les hooks de `~/.claude/settings.json` avec le template.
+
+**Problème résolu :** Les utilisateurs avec un ancien `settings.json` peuvent avoir
+des références à des scripts obsolètes (bash-validate.sh, phase-validate.sh, etc.)
+car `postStart.sh` ne copie `settings.json` que s'il n'existe pas.
+
+```yaml
+hook_sync_workflow:
+  1_backup:
+    action: "Backup user settings.json"
+    command: "cp ~/.claude/settings.json ~/.claude/settings.json.backup"
+
+  2_merge_hooks:
+    action: "Remplacer la section hooks avec le template"
+    strategy: "REPLACE (pas merge) - le template est la source de vérité"
+    tool: jq
+    preserves:
+      - permissions
+      - model
+      - env
+      - statusLine
+      - disabledMcpjsonServers
+
+  3_restore_on_failure:
+    action: "Restaurer le backup si le merge échoue"
+```
+
+**Implémentation :**
+
+```bash
+sync_user_hooks() {
+    local user_settings="$HOME/.claude/settings.json"
+    local template_settings=".devcontainer/images/.claude/settings.json"
+
+    if [ ! -f "$user_settings" ]; then
+        echo "  ⚠ No user settings.json, skipping hook sync"
+        return 0
+    fi
+
+    if [ ! -f "$template_settings" ]; then
+        echo "  ✗ Template settings.json not found"
+        return 1
+    fi
+
+    echo "  Synchronizing user hooks with template..."
+
+    # Backup
+    cp "$user_settings" "${user_settings}.backup"
+
+    # Replace hooks section only (preserve all other settings)
+    if jq --slurpfile tpl "$template_settings" '.hooks = $tpl[0].hooks' \
+       "$user_settings" > "${user_settings}.tmp"; then
+
+        # Validate JSON
+        if jq empty "${user_settings}.tmp" 2>/dev/null; then
+            mv "${user_settings}.tmp" "$user_settings"
+            rm -f "${user_settings}.backup"
+            echo "  ✓ User hooks synchronized with template"
+            return 0
+        else
+            mv "${user_settings}.backup" "$user_settings"
+            rm -f "${user_settings}.tmp"
+            echo "  ✗ Hook merge produced invalid JSON, restored backup"
+            return 1
+        fi
+    else
+        mv "${user_settings}.backup" "$user_settings"
+        echo "  ✗ Hook merge failed, restored backup"
+        return 1
+    fi
+}
+```
+
+---
+
+## Phase 6 : Script Validation
+
+**But :** Valider que tous les scripts référencés dans les hooks existent.
+
+```yaml
+validate_workflow:
+  1_extract:
+    action: "Extraire tous les chemins de scripts depuis les hooks"
+    tool: jq
+    pattern: ".hooks | .. | .command? // empty"
+
+  2_verify:
+    action: "Vérifier que chaque script existe"
+    for_each: script_path
+    check: "[ -f $script_path ]"
+
+  3_report:
+    on_missing: "Lister les scripts manquants avec suggestion de fix"
+    on_success: "Tous les scripts validés"
+```
+
+**Implémentation :**
+
+```bash
+validate_hook_scripts() {
+    local settings_file="$HOME/.claude/settings.json"
+    local scripts_dir="$HOME/.claude/scripts"
+    local missing_count=0
+
+    if [ ! -f "$settings_file" ]; then
+        echo "  ⚠ No settings.json to validate"
+        return 0
+    fi
+
+    # Extract all script paths from hooks
+    local scripts
+    scripts=$(jq -r '.hooks | .. | .command? // empty' "$settings_file" 2>/dev/null \
+        | grep -oE '/home/vscode/.claude/scripts/[^ "]+' \
+        | sed 's/ .*//' \
+        | sort -u)
+
+    if [ -z "$scripts" ]; then
+        echo "  ⚠ No hook scripts found in settings.json"
+        return 0
+    fi
+
+    echo "  Validating hook scripts..."
+
+    for script in $scripts; do
+        local script_name=$(basename "$script")
+
+        if [ -f "$script" ]; then
+            echo "    ✓ $script_name"
+        else
+            echo "    ✗ $script_name (MISSING)"
+            missing_count=$((missing_count + 1))
+        fi
+    done
+
+    if [ $missing_count -gt 0 ]; then
+        echo ""
+        echo "  ⚠ $missing_count missing script(s) detected!"
+        echo "  → Run: /update --component hooks"
+        return 1
+    fi
+
+    echo "  ✓ All hook scripts validated"
+    return 0
+}
 ```
 
 ---
@@ -551,6 +689,9 @@ echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.templa
 | Écrire sans validation | ❌ **INTERDIT** | Risque de corruption |
 | Skip vérification HTTP | ❌ **INTERDIT** | Fichiers 404 possibles |
 | Source non-officielle | ❌ **INTERDIT** | Sécurité |
+| Hook sync sans backup | ❌ **INTERDIT** | Toujours backup first |
+| Supprimer user settings | ❌ **INTERDIT** | Seulement merge hooks |
+| Skip script validation | ❌ **INTERDIT** | Détection erreurs obligatoire |
 
 ---
 
@@ -559,7 +700,7 @@ echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.templa
 **Mis à jour par /update :**
 ```
 .devcontainer/
-├── docker-compose.yml        # FORCE update ollama+devcontainer
+├── docker-compose.yml        # Update devcontainer service
 ├── hooks/lifecycle/*.sh
 ├── images/
 │   ├── .p10k.zsh
@@ -570,9 +711,6 @@ echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.templa
 │       ├── scripts/*.sh
 │       └── settings.json
 └── .template-version
-
-~/.claude/
-└── settings.json             # User hooks synchronized (Phase 5)
 ```
 
 **Dans l'image Docker (restauré au démarrage) :**
@@ -635,6 +773,85 @@ safe_download() {
     return 0
 }
 
+# Hook synchronization function (Phase 5)
+sync_user_hooks() {
+    local user_settings="$HOME/.claude/settings.json"
+    local template_settings=".devcontainer/images/.claude/settings.json"
+
+    if [ ! -f "$user_settings" ]; then
+        echo "  ⚠ No user settings.json, skipping hook sync"
+        return 0
+    fi
+
+    if [ ! -f "$template_settings" ]; then
+        echo "  ✗ Template settings.json not found"
+        return 1
+    fi
+
+    echo "  Synchronizing user hooks with template..."
+    cp "$user_settings" "${user_settings}.backup"
+
+    if jq --slurpfile tpl "$template_settings" '.hooks = $tpl[0].hooks' \
+       "$user_settings" > "${user_settings}.tmp"; then
+        if jq empty "${user_settings}.tmp" 2>/dev/null; then
+            mv "${user_settings}.tmp" "$user_settings"
+            rm -f "${user_settings}.backup"
+            echo "  ✓ User hooks synchronized"
+            return 0
+        else
+            mv "${user_settings}.backup" "$user_settings"
+            rm -f "${user_settings}.tmp"
+            echo "  ✗ Invalid JSON, restored backup"
+            return 1
+        fi
+    else
+        mv "${user_settings}.backup" "$user_settings"
+        echo "  ✗ Hook merge failed, restored backup"
+        return 1
+    fi
+}
+
+# Script validation function (Phase 6)
+validate_hook_scripts() {
+    local settings_file="$HOME/.claude/settings.json"
+    local missing_count=0
+
+    if [ ! -f "$settings_file" ]; then
+        echo "  ⚠ No settings.json to validate"
+        return 0
+    fi
+
+    local scripts
+    scripts=$(jq -r '.hooks | .. | .command? // empty' "$settings_file" 2>/dev/null \
+        | grep -oE '/home/vscode/.claude/scripts/[^ "]+' \
+        | sed 's/ .*//' | sort -u)
+
+    if [ -z "$scripts" ]; then
+        echo "  ⚠ No hook scripts found"
+        return 0
+    fi
+
+    echo "  Validating hook scripts..."
+    for script in $scripts; do
+        local script_name=$(basename "$script")
+        if [ -f "$script" ]; then
+            echo "    ✓ $script_name"
+        else
+            echo "    ✗ $script_name (MISSING)"
+            missing_count=$((missing_count + 1))
+        fi
+    done
+
+    if [ $missing_count -gt 0 ]; then
+        echo "  ⚠ $missing_count missing script(s)!"
+        echo "  → Run: /update --component hooks"
+        return 1
+    fi
+
+    echo "  ✓ All scripts validated"
+    return 0
+}
+
 echo "═══════════════════════════════════════════════"
 echo "  /update - DevContainer Environment Update"
 echo "═══════════════════════════════════════════════"
@@ -685,8 +902,9 @@ echo "Updating config files..."
 safe_download "$BASE/.devcontainer/images/.p10k.zsh" ".devcontainer/images/.p10k.zsh"
 safe_download "$BASE/.devcontainer/images/.claude/settings.json" ".devcontainer/images/.claude/settings.json"
 
-# Docker compose (FORCE update ollama + devcontainer, PRESERVE custom services)
+# Docker compose (update devcontainer service, PRESERVE custom services)
 # Note: Uses mikefarah/yq (Go version) - simpler syntax with -i for in-place
+# Ollama runs on HOST (installed via initialize.sh), not in container
 echo ""
 echo "Updating docker-compose.yml..."
 
@@ -713,13 +931,13 @@ update_compose_services() {
     # Backup original
     cp "$compose_file" "$backup_file"
 
-    # Extract custom services (anything that's NOT ollama or devcontainer)
-    yq '.services | to_entries | map(select(.key != "ollama" and .key != "devcontainer")) | from_entries' "$compose_file" > "$temp_custom"
+    # Extract custom services (anything that's NOT devcontainer)
+    yq '.services | to_entries | map(select(.key != "devcontainer")) | from_entries' "$compose_file" > "$temp_custom"
 
     # Extract custom volumes (anything that's NOT in template)
     local template_volumes=$(yq '.volumes | keys | .[]' "$temp_template" 2>/dev/null | tr '\n' '|')
 
-    # Start fresh from template (preserves order: ollama first, then devcontainer)
+    # Start fresh from template (devcontainer service)
     cp "$temp_template" "$compose_file"
 
     # Merge back custom services if any exist
@@ -742,7 +960,7 @@ update_compose_services() {
     # Verify YAML is valid and has expected content
     if yq '.services.devcontainer' "$compose_file" > /dev/null 2>&1; then
         rm -f "$backup_file"
-        echo "  ✓ ollama + devcontainer services updated"
+        echo "  ✓ devcontainer service updated"
         return 0
     else
         mv "$backup_file" "$compose_file"
@@ -755,7 +973,7 @@ if [ ! -f ".devcontainer/docker-compose.yml" ]; then
     echo "  No docker-compose.yml found, downloading template..."
     safe_download "$BASE/.devcontainer/docker-compose.yml" ".devcontainer/docker-compose.yml"
 else
-    echo "  Forcing update of core services..."
+    echo "  Updating devcontainer service..."
     update_compose_services
 fi
 
@@ -764,81 +982,15 @@ echo ""
 echo "Updating grepai config..."
 safe_download "$BASE/.devcontainer/images/grepai.config.yaml" ".devcontainer/images/grepai.config.yaml"
 
-# ============================================================================
-# Phase 5: Sync User Settings (hooks only, preserve customizations)
-# ============================================================================
-# User settings (~/.claude/settings.json) may have outdated hooks referencing
-# scripts that no longer exist. This phase synchronizes hooks from template
-# while preserving user customizations (permissions, env, etc.)
+# Phase 5: Synchronize user hooks
 echo ""
-echo "Synchronizing user hooks..."
+echo "Phase 5: Synchronizing user hooks..."
+sync_user_hooks
 
-USER_SETTINGS="$HOME/.claude/settings.json"
-
-if [ -f "$USER_SETTINGS" ]; then
-    # Backup current settings
-    cp "$USER_SETTINGS" "${USER_SETTINGS}.bak"
-
-    # Download template hooks
-    TEMPLATE_SETTINGS=$(curl -sL "$BASE/.devcontainer/images/.claude/settings.json" 2>/dev/null || echo "{}")
-    TEMPLATE_HOOKS=$(echo "$TEMPLATE_SETTINGS" | jq '.hooks // empty' 2>/dev/null || echo "")
-
-    if [ -n "$TEMPLATE_HOOKS" ] && [ "$TEMPLATE_HOOKS" != "null" ]; then
-        # Merge: replace hooks only, keep everything else (permissions, env, etc.)
-        if jq --argjson hooks "$TEMPLATE_HOOKS" '.hooks = $hooks' \
-            "$USER_SETTINGS" > "${USER_SETTINGS}.tmp" 2>/dev/null; then
-
-            # Validate generated JSON
-            if jq empty "${USER_SETTINGS}.tmp" 2>/dev/null; then
-                mv "${USER_SETTINGS}.tmp" "$USER_SETTINGS"
-                echo "✓ User hooks synchronized with template"
-            else
-                echo "✗ Failed to merge hooks (invalid JSON)"
-                rm -f "${USER_SETTINGS}.tmp"
-                mv "${USER_SETTINGS}.bak" "$USER_SETTINGS"
-            fi
-        else
-            echo "✗ Failed to merge hooks (jq error)"
-            rm -f "${USER_SETTINGS}.tmp"
-        fi
-    else
-        echo "⚠ Could not fetch template hooks (network issue?)"
-    fi
-else
-    echo "⚠ No user settings at $USER_SETTINGS (will be created on first Claude run)"
-fi
-
-# ============================================================================
-# Phase 6: Validate Hook Scripts Exist
-# ============================================================================
-# Verify all scripts referenced in hooks actually exist to prevent "hook error"
+# Phase 6: Validate hook scripts
 echo ""
-echo "Validating hook scripts..."
-
-MISSING_COUNT=0
-if [ -f "$USER_SETTINGS" ]; then
-    # Extract all script paths from hooks configuration
-    HOOK_SCRIPTS=$(jq -r '.hooks | .. | .command? // empty' "$USER_SETTINGS" 2>/dev/null | \
-        grep -oE '/home/vscode/.claude/scripts/[^"[:space:]]+\.sh' | \
-        sort -u || true)
-
-    for script in $HOOK_SCRIPTS; do
-        script_name=$(basename "$script")
-        if [ ! -f "$script" ]; then
-            echo "  ⚠️  Missing: $script_name"
-            MISSING_COUNT=$((MISSING_COUNT + 1))
-        fi
-    done
-
-    if [ "$MISSING_COUNT" -eq 0 ]; then
-        echo "✓ All hook scripts exist"
-    else
-        echo "⚠️  $MISSING_COUNT script(s) missing - some hooks may fail"
-        echo "   Run: /update --component hooks to fix"
-    fi
-else
-    echo "⚠ Skipped (no user settings)"
-fi
+echo "Phase 6: Validating hook scripts..."
+validate_hook_scripts
 
 # Version
 COMMIT=$(curl -sL "https://api.github.com/repos/kodflow/devcontainer-template/commits/main" | jq -r '.sha[:7]')
@@ -848,8 +1000,5 @@ echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.templa
 echo ""
 echo "═══════════════════════════════════════════════"
 echo "  ✓ Update complete - version: $COMMIT"
-echo ""
-echo "  User hooks: synchronized"
-echo "  Hook scripts: $( [ "$MISSING_COUNT" -eq 0 ] && echo "all present" || echo "$MISSING_COUNT missing" )"
 echo "═══════════════════════════════════════════════"
 ```

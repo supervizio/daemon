@@ -1,26 +1,8 @@
 services:
-  # ========== OLLAMA (LLM Runtime) ==========
-  # For grepai semantic code search embeddings
-  # NOTE: No container_name to avoid conflicts between projects
-  ollama:
-    image: ollama/ollama:latest
-    volumes:
-      - ollama-data:/root/.ollama
-    networks:
-      - default
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: unless-stopped
-
   # ========== DEVCONTAINER ==========
   devcontainer:
-    depends_on:
-      ollama:
-        condition: service_healthy
+    # Ollama runs on HOST for GPU acceleration (installed via initialize.sh)
+    # Accessible via host.docker.internal:11434
 
     # Build from Dockerfile (uses GHCR base image)
     build:
@@ -59,6 +41,11 @@ services:
     # Network configuration
     networks:
       - default
+
+    # Host resolution for accessing host Ollama (GPU-accelerated)
+    # Needed on Linux; Mac/Windows Docker Desktop provides this automatically
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     # Keep container running
     command: /bin/sh -c "while sleep 1000; do :; done"
@@ -130,8 +117,8 @@ services:
       - CARBON_PATH=/home/vscode/.cache/carbon
       - BAZEL_USER_ROOT=/home/vscode/.cache/bazel
 
-      # Ollama (LLM runtime for grepai) - connects to sidecar
-      - OLLAMA_HOST=ollama:11434
+      # Ollama runs on HOST (installed via initialize.sh)
+      # Accessible at host.docker.internal:11434
 
       # Cloud CLIs (AWS / Google Cloud / Azure)
       - AWS_CONFIG_FILE=/home/vscode/.config/aws/config
@@ -166,7 +153,6 @@ volumes:
   claude-config:
   op-config:
   op-cache:
-  ollama-data:
 
 networks:
   default:
