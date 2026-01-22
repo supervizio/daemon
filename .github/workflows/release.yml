@@ -193,11 +193,72 @@ jobs:
           retention-days: 1
 
   # =============================================================================
+  # Generate Linux Packages (.deb, .rpm, .apk)
+  # =============================================================================
+  packages:
+    name: Package ${{ matrix.format }} (${{ matrix.arch }})
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        format: [deb, rpm, apk]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download Linux binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: supervizio-linux-${{ matrix.arch }}
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+      - name: Build package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          # Strip 'v' prefix from version for package version
+          PKG_VERSION="${VERSION#v}"
+
+          # Export for nfpm config
+          export VERSION="$PKG_VERSION"
+          export GOARCH="${{ matrix.arch }}"
+
+          # Generate package
+          nfpm package \
+            --config nfpm.yaml \
+            --packager ${{ matrix.format }} \
+            --target ./
+
+          # List generated package
+          ls -la *.${matrix.format}* 2>/dev/null || ls -la *.${{ matrix.format }}* 2>/dev/null || echo "Package files:"
+          ls -la
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: supervizio-${{ matrix.arch }}.${{ matrix.format }}
+          path: |
+            *.deb
+            *.rpm
+            *.apk
+          retention-days: 1
+
+  # =============================================================================
   # Create Release
   # =============================================================================
   release:
     name: Release
-    needs: [version, build]
+    needs: [version, build, packages]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -245,7 +306,15 @@ jobs:
           | NetBSD | ✅ | ✅ | ✅ | ✅ | - |
           | DragonFlyBSD | ✅ | - | - | - | - |
 
-          ### Install
+          ### Linux Packages
+
+          | Format | Distributions | Install Command |
+          |--------|---------------|-----------------|
+          | `.deb` | Debian, Devuan | `sudo dpkg -i supervizio_*.deb` |
+          | `.rpm` | Rocky, RHEL, Fedora | `sudo rpm -i supervizio-*.rpm` |
+          | `.apk` | Alpine | `sudo apk add --allow-untrusted supervizio-*.apk` |
+
+          ### Binary Install (all platforms)
 
           ```bash
           OS=$(uname -s | tr '[:upper:]' '[:lower:]')

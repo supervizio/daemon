@@ -171,11 +171,11 @@ Testing across all supported init systems (AMD64):
 
 | Distribution | Init System | Pkg Format | VM | Docker |
 |--------------|-------------|------------|:--:|:------:|
-| Debian 12 | systemd | .deb | ✅ Vagrant | ✅ |
-| Rocky 9 | systemd | .rpm | ✅ Vagrant | ✅ |
-| Alpine 3.19 | OpenRC | .apk | ✅ Vagrant | ✅ |
-| Devuan 4 | SysVinit | .deb | ✅ Vagrant | ✅ |
-| Alpine 3.19 | runit | .apk | ✅ Vagrant | ✅ |
+| Debian 13 | systemd | .deb | ✅ Vagrant | ✅ |
+| Rocky 10 | systemd | .rpm | ✅ Vagrant | ✅ |
+| Alpine 3.21 | OpenRC | .apk | ✅ Vagrant | ✅ |
+| Devuan 6 | SysVinit | .deb | ✅ Vagrant | ✅ |
+| Alpine 3.21 | runit | .apk | ✅ Vagrant | ✅ |
 
 ### BSD
 

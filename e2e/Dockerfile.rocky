@@ -1,11 +1,11 @@
 # =============================================================================
-# E2E Test Container: Rocky Linux 9 - systemd
+# E2E Test Container: Rocky Linux 10 - systemd
 # =============================================================================
 # Validates supervizio binary runs correctly on Rocky Linux (RHEL clone)
 # with systemd. Covers dnf/rpm package manager ecosystem.
 # =============================================================================
 
-FROM rockylinux:9-minimal
+FROM rockylinux:10-minimal
 
 # Install minimal dependencies for testing
 RUN microdnf install -y \

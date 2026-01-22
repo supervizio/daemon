@@ -1,11 +1,12 @@
 # =============================================================================
-# E2E Test Container: Devuan 5 (daedalus) - SysVinit
+# E2E Test Container: Devuan 6 (excalibur) - SysVinit
 # =============================================================================
 # Validates supervizio binary runs correctly on Devuan with SysVinit.
 # Devuan is Debian without systemd - uses traditional SysVinit.
+# dyne/devuan is official (Dyne.org = Devuan Foundation)
 # =============================================================================
 
-FROM devuan/devuan:daedalus
+FROM dyne/devuan:excalibur
 
 # Install minimal dependencies for testing
 RUN apt-get update && apt-get install -y --no-install-recommends \

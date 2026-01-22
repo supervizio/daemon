@@ -7,22 +7,24 @@
 #
 # Linux (systemd):
 #   - debian13: Debian 13 (trixie) - primary (.deb)
-#   - rocky: Rocky Linux 9 - RHEL clone (.rpm)
+#   - rocky: Rocky Linux 10 - RHEL clone (.rpm)
 #
 # Linux (OpenRC):
-#   - alpine: Alpine 3.19 (.apk)
+#   - alpine: Alpine 3.21 (.apk)
 #
 # Linux (SysVinit):
-#   - devuan: Devuan 5 (daedalus) - Debian without systemd (.deb)
+#   - devuan: Devuan 6 (excalibur) - Debian without systemd (.deb)
 #
 # Linux (runit):
-#   - alpine-runit: Alpine 3.19 with runit (.apk)
+#   - alpine-runit: Alpine 3.21 with runit (.apk)
 #
 # BSD (rc.d):
-#   - freebsd: FreeBSD 14 (pkg)
-#   - openbsd: OpenBSD 7.5 (pkg)
+#   - freebsd: FreeBSD 15 (pkg)
+#   - openbsd: OpenBSD 7.8 (pkg)
 #   - netbsd: NetBSD 10 (pkgin)
 #   - dragonfly: DragonFlyBSD 6.4 (pkg)
+#
+# Note: Vagrant boxes may lag behind latest versions. Using latest available.
 #
 # Providers:
 #   - libvirt: Linux CI (KVM acceleration)

@@ -7,11 +7,11 @@ AMD64 only (setup scripts are architecture-agnostic).
 
 | Init System | Distribution | Pkg Format | VM | Docker |
 |-------------|--------------|------------|:--:|:------:|
-| **systemd** | Debian 12 | .deb | ✅ Vagrant | ✅ |
-| **systemd** | Rocky 9 | .rpm | ✅ Vagrant | ✅ |
-| **OpenRC** | Alpine 3.19 | .apk | ✅ Vagrant | ✅ |
-| **SysVinit** | Devuan 4 | .deb | ✅ Vagrant | ✅ |
-| **runit** | Alpine 3.19 | .apk | ✅ Vagrant | ✅ |
+| **systemd** | Debian 13 | .deb | ✅ Vagrant | ✅ |
+| **systemd** | Rocky 10 | .rpm | ✅ Vagrant | ✅ |
+| **OpenRC** | Alpine 3.21 | .apk | ✅ Vagrant | ✅ |
+| **SysVinit** | Devuan 6 | .deb | ✅ Vagrant | ✅ |
+| **runit** | Alpine 3.21 | .apk | ✅ Vagrant | ✅ |
 | **BSD rc.d** | FreeBSD 14 | pkg | ✅ Vagrant | - |
 | **BSD rc.d** | OpenBSD 7 | pkg | ✅ Vagrant | - |
 | **BSD rc.d** | NetBSD 10 | pkgin | ✅ Vagrant | - |
@@ -77,10 +77,10 @@ E2E Tests (9 jobs, 2 workflow jobs)
 | Test | Base Image | Init System | Pkg Format |
 |------|------------|-------------|------------|
 | Debian | `debian:trixie-slim` | systemd | .deb |
-| Rocky | `rockylinux:9-minimal` | systemd | .rpm |
-| Alpine | `alpine:3.20` | OpenRC | .apk |
-| Devuan | `devuan/devuan:daedalus` | SysVinit | .deb |
-| Alpine-runit | `alpine:3.20` + runit | runit | .apk |
+| Rocky | `rockylinux:10-minimal` | systemd | .rpm |
+| Alpine | `alpine:3.21` | OpenRC | .apk |
+| Devuan | `dyne/devuan:excalibur` | SysVinit | .deb |
+| Alpine-runit | `alpine:3.21` + runit | runit | .apk |
 
 ## Local Testing
 
