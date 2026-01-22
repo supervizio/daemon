@@ -111,14 +111,14 @@ Vagrant.configure("2") do |config|
   config.vm.define "debian13", primary: true do |v|
     v.vm.box = "generic/debian12"  # Use debian12 box until debian13 is available
     v.vm.hostname = "e2e-debian13"
-    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl rsync"
   end
 
   # Rocky Linux 9 - RHEL clone for enterprise/server (dnf/rpm)
   config.vm.define "rocky", autostart: false do |v|
     v.vm.box = "generic/rocky9"
     v.vm.hostname = "e2e-rocky"
-    v.vm.provision "shell", inline: "dnf install -y -q curl"
+    v.vm.provision "shell", inline: "dnf install -y -q curl rsync"
   end
 
   # ===========================================================================
@@ -129,7 +129,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "alpine", autostart: false do |v|
     v.vm.box = "generic/alpine319"
     v.vm.hostname = "e2e-alpine"
-    v.vm.provision "shell", inline: "apk update && apk add curl"
+    v.vm.provision "shell", inline: "apk update && apk add curl rsync"
   end
 
   # ===========================================================================
@@ -140,7 +140,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "devuan", autostart: false do |v|
     v.vm.box = "generic/devuan4"  # Use devuan4 (chimaera) until devuan5 box available
     v.vm.hostname = "e2e-devuan"
-    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl"
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl rsync"
   end
 
   # ===========================================================================
@@ -159,7 +159,7 @@ Vagrant.configure("2") do |config|
 
       # Remove OpenRC and install runit
       apk del openrc --force-broken-world 2>/dev/null || true
-      apk add curl runit
+      apk add curl rsync runit
 
       # Create runit service directories
       mkdir -p /etc/sv /var/service
@@ -183,28 +183,28 @@ Vagrant.configure("2") do |config|
   config.vm.define "freebsd", autostart: false do |v|
     v.vm.box = "generic/freebsd14"
     v.vm.hostname = "e2e-freebsd"
-    v.vm.provision "shell", inline: "pkg install -y curl"
+    v.vm.provision "shell", inline: "pkg install -y curl rsync"
   end
 
   # OpenBSD 7.x
   config.vm.define "openbsd", autostart: false do |v|
     v.vm.box = "generic/openbsd7"
     v.vm.hostname = "e2e-openbsd"
-    v.vm.provision "shell", inline: "pkg_add curl"
+    v.vm.provision "shell", inline: "pkg_add curl rsync--"
   end
 
   # NetBSD 9 (netbsd10 box not yet available on Vagrant Cloud)
   config.vm.define "netbsd", autostart: false do |v|
     v.vm.box = "generic/netbsd9"
     v.vm.hostname = "e2e-netbsd"
-    v.vm.provision "shell", inline: "pkgin -y install curl"
+    v.vm.provision "shell", inline: "pkgin -y install curl rsync"
   end
 
   # DragonFlyBSD 6.4
   config.vm.define "dragonfly", autostart: false do |v|
     v.vm.box = "generic/dragonflybsd6"  # DragonFlyBSD 6.x
     v.vm.hostname = "e2e-dragonfly"
-    v.vm.provision "shell", inline: "pkg install -y curl"
+    v.vm.provision "shell", inline: "pkg install -y curl rsync"
   end
 
 end
