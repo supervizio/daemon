@@ -7,7 +7,7 @@ End-to-end testing across all supported platforms and init systems (AMD64 only).
 | Init System | Distribution | Pkg | VM | Docker |
 |-------------|--------------|-----|:--:|:------:|
 | systemd | Debian 13 | .deb | ✅ | ✅ |
-| systemd | Fedora 40 | .rpm | ✅ | ✅ |
+| systemd | Fedora 38 | .rpm | ✅ | ✅ |
 | OpenRC | Alpine 3.21 | .apk | ✅ | ✅ |
 | SysVinit | Devuan 6 | .deb | ✅ | ✅ |
 | runit | Alpine 3.21 | .apk | ✅ | ✅ |
