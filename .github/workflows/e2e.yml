@@ -136,9 +136,21 @@ jobs:
         if: ${{ matrix.skip_vm != true }}
         working-directory: e2e
         run: |
-          # Wait a moment for VM to be fully ready
-          echo "=== Waiting for VM to stabilize ==="
-          sleep 5
+          # Wait for VM to be fully ready (some VMs need time after provisioning)
+          echo "=== Waiting for VM to be SSH-ready ==="
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+              echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
+              break
+            fi
+            if [ "$i" = "12" ]; then
+              echo "ERROR: VM not SSH-accessible after 60 seconds"
+              sudo -E vagrant status ${{ matrix.vm }} || true
+              exit 1
+            fi
+            echo "Waiting for VM... (attempt $i/12)"
+            sleep 5
+          done
 
           # Try vagrant rsync first (works for most VMs with rsync pre-installed)
           echo "=== Attempting vagrant rsync ==="
@@ -147,7 +159,7 @@ jobs:
           else
             echo "=== Rsync failed (exit code: $?), using tar-over-ssh fallback ==="
 
-            # Verify SSH connectivity
+            # Verify SSH connectivity (should work since we checked above)
             echo "=== Verifying SSH connectivity ==="
             sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'SSH works'; uname -a; which tar" || {
               echo "ERROR: SSH connectivity failed"
@@ -302,9 +314,21 @@ jobs:
       - name: Sync folders
         working-directory: e2e
         run: |
-          # Wait a moment for VM to be fully ready
-          echo "=== Waiting for VM to stabilize ==="
-          sleep 5
+          # Wait for VM to be fully ready (some VMs need time after provisioning)
+          echo "=== Waiting for VM to be SSH-ready ==="
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+              echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
+              break
+            fi
+            if [ "$i" = "12" ]; then
+              echo "ERROR: VM not SSH-accessible after 60 seconds"
+              sudo -E vagrant status ${{ matrix.vm }} || true
+              exit 1
+            fi
+            echo "Waiting for VM... (attempt $i/12)"
+            sleep 5
+          done
 
           # Try vagrant rsync first (works for most VMs with rsync pre-installed)
           echo "=== Attempting vagrant rsync ==="
@@ -313,7 +337,7 @@ jobs:
           else
             echo "=== Rsync failed (exit code: $?), using tar-over-ssh fallback ==="
 
-            # Verify SSH connectivity
+            # Verify SSH connectivity (should work since we checked above)
             echo "=== Verifying SSH connectivity ==="
             sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'SSH works'; uname -a; which tar" || {
               echo "ERROR: SSH connectivity failed"
