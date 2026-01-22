@@ -290,11 +290,319 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # Create Release
+  # E2E Tests - Linux (Vagrant + Docker)
+  # =============================================================================
+  # Validates release binaries work across Linux distributions and init systems.
+  # Must pass before release is published.
+  # =============================================================================
+  e2e-linux:
+    name: E2E ${{ matrix.name }}
+    needs: [version, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian
+            vm: debian13
+            dockerfile: Dockerfile.debian
+            init: systemd
+          - name: Fedora
+            vm: fedora
+            dockerfile: Dockerfile.fedora
+            init: systemd
+          - name: Alpine
+            vm: alpine
+            dockerfile: Dockerfile.alpine
+            init: openrc
+          - name: Devuan
+            vm: devuan
+            dockerfile: Dockerfile.devuan
+            init: sysvinit
+          - name: Alpine-runit
+            vm: alpine-runit
+            dockerfile: Dockerfile.alpine-runit
+            init: runit
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Download Linux binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: supervizio-linux-amd64
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          mv bin/supervizio-linux-amd64 bin/supervizio
+          chmod +x bin/supervizio
+          ls -la bin/
+
+      # =========================================================================
+      # VM Test via Vagrant + libvirt/KVM
+      # =========================================================================
+      - name: Setup KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
+      - name: Install libvirt and Vagrant
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+
+          # Install Vagrant from HashiCorp
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
+          vagrant plugin install vagrant-libvirt
+
+      - name: Cache Vagrant box
+        uses: actions/cache@v4
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-${{ matrix.vm }}-v1
+
+      - name: Start VM
+        working-directory: e2e
+        run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+
+      - name: Sync folders
+        working-directory: e2e
+        run: |
+          echo "=== Getting VM SSH config ==="
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+          echo "VM IP: $VM_IP"
+
+          echo "=== Waiting for VM to be SSH-ready ==="
+          for i in $(seq 1 36); do
+            if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              echo "Port 22 is open on $VM_IP"
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+                echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
+                break
+              else
+                echo "Port open but SSH command failed (attempt $i/36)"
+              fi
+            else
+              echo "Port 22 not yet open (attempt $i/36)"
+            fi
+
+            if [ "$i" = "36" ]; then
+              echo "ERROR: VM not SSH-accessible after 180 seconds"
+              sudo -E vagrant status ${{ matrix.vm }} || true
+              cat /tmp/ssh-config-${{ matrix.vm }} || true
+              sudo virsh list --all || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+          echo "=== Attempting vagrant rsync ==="
+          if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
+            echo "=== Rsync succeeded ==="
+          else
+            echo "=== Rsync failed, using tar-over-ssh fallback ==="
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
+            tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
+            tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
+            tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+          fi
+
+          echo "=== Verifying synced files ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /bin-local /vagrant"
+
+      - name: Run VM tests
+        working-directory: e2e
+        run: sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo /vagrant/test-install.sh"
+
+      - name: Cleanup VM
+        if: always()
+        working-directory: e2e
+        run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
+
+      # =========================================================================
+      # Container Test via Docker
+      # =========================================================================
+      - name: Build container
+        run: docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-${{ matrix.vm }}:test .
+
+      - name: Test container
+        run: docker run --rm supervizio-${{ matrix.vm }}:test
+
+      - name: Collect logs on failure
+        if: failure()
+        working-directory: e2e
+        run: |
+          sudo vagrant status || true
+          sudo virsh list --all || true
+
+  # =============================================================================
+  # E2E Tests - BSD (Vagrant + libvirt/KVM)
+  # =============================================================================
+  # Validates release binaries work across BSD variants.
+  # Must pass before release is published.
+  # =============================================================================
+  e2e-bsd:
+    name: E2E ${{ matrix.name }}
+    needs: [version, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: FreeBSD
+            vm: freebsd
+            goos: freebsd
+          - name: OpenBSD
+            vm: openbsd
+            goos: openbsd
+          - name: NetBSD
+            vm: netbsd
+            goos: netbsd
+          - name: DragonFlyBSD
+            vm: dragonfly
+            goos: dragonfly
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Download BSD binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: supervizio-${{ matrix.goos }}-amd64
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          mv bin/supervizio-${{ matrix.goos }}-amd64 bin/supervizio
+          chmod +x bin/supervizio
+          ls -la bin/
+
+      - name: Setup KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
+      - name: Install libvirt and Vagrant
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
+          vagrant plugin install vagrant-libvirt
+
+      - name: Cache Vagrant box
+        uses: actions/cache@v4
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-${{ matrix.vm }}-v1
+
+      - name: Start VM
+        working-directory: e2e
+        run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+
+      - name: Sync folders
+        working-directory: e2e
+        run: |
+          echo "=== Getting VM SSH config ==="
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+          echo "VM IP: $VM_IP"
+
+          echo "=== Waiting for VM to be SSH-ready ==="
+          for i in $(seq 1 36); do
+            if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              echo "Port 22 is open on $VM_IP"
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+                echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
+                break
+              fi
+            else
+              echo "Port 22 not yet open (attempt $i/36)"
+            fi
+
+            if [ "$i" = "36" ]; then
+              echo "ERROR: VM not SSH-accessible after 180 seconds"
+              sudo -E vagrant status ${{ matrix.vm }} || true
+              cat /tmp/ssh-config-${{ matrix.vm }} || true
+              sudo virsh list --all || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+          echo "=== Attempting vagrant rsync ==="
+          if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
+            echo "=== Rsync succeeded ==="
+          else
+            echo "=== Rsync failed, using tar-over-ssh fallback ==="
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
+            tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
+            tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
+            tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+          fi
+
+          echo "=== Verifying synced files ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /bin-local /vagrant"
+
+      - name: Run VM tests
+        working-directory: e2e
+        run: |
+          echo "=== Step 1: Verify synced folders ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /bin-local/ /setup/ /vagrant/"
+
+          echo "=== Step 2: Check binary format ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "file /bin-local/supervizio || true; ls -la /bin-local/supervizio"
+
+          echo "=== Step 3: Copy binary to /usr/local/bin ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /usr/local/bin && sudo cp /bin-local/supervizio /usr/local/bin/ && sudo chmod +x /usr/local/bin/supervizio"
+
+          echo "=== Step 4: Run install script ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chmod +x /setup/*.sh && sudo /setup/install.sh"
+
+          echo "=== Step 5: Check version ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "/usr/local/bin/supervizio --version" || true
+
+          echo "=== Step 6: Run test script ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh -x /vagrant/test-install.sh"
+
+      - name: Cleanup VM
+        if: always()
+        working-directory: e2e
+        run: sudo vagrant destroy ${{ matrix.vm }} -f || true
+
+      - name: Collect logs on failure
+        if: failure()
+        working-directory: e2e
+        run: |
+          sudo vagrant status || true
+          sudo virsh list --all || true
+
+  # =============================================================================
+  # Create Release (only after E2E tests pass)
   # =============================================================================
   release:
     name: Release
-    needs: [version, build, packages]
+    needs: [version, build, packages, e2e-linux, e2e-bsd]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -342,6 +650,16 @@ jobs:
           | NetBSD | ✅ | ✅ | ✅ | ✅ | - |
           | DragonFlyBSD | ✅ | - | - | - | - |
 
+          ### E2E Tested
+
+          | Init System | Distribution | Status |
+          |-------------|--------------|:------:|
+          | systemd | Debian, Fedora | ✅ |
+          | OpenRC | Alpine | ✅ |
+          | SysVinit | Devuan | ✅ |
+          | runit | Alpine | ✅ |
+          | BSD rc.d | FreeBSD, OpenBSD, NetBSD, DragonFlyBSD | ✅ |
+
           ### Linux Packages
 
           | Format | Distributions | Install Command |
@@ -383,3 +701,54 @@ jobs:
           prerelease: ${{ contains(needs.version.outputs.version, '-') }}
           files: release/*
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  # =============================================================================
+  # Cleanup on E2E Failure
+  # =============================================================================
+  # If E2E tests fail and a tag was created, delete it to prevent
+  # incomplete releases.
+  # =============================================================================
+  cleanup-on-failure:
+    name: Cleanup Failed Release
+    needs: [version, e2e-linux, e2e-bsd]
+    if: failure() && needs.version.outputs.is_new_tag == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete tag if E2E failed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          echo "E2E tests failed. Checking if tag $VERSION exists..."
+
+          # Check if tag exists remotely
+          if git ls-remote --tags origin | grep -q "refs/tags/$VERSION"; then
+            echo "Tag $VERSION exists. Deleting..."
+            git push origin --delete "$VERSION" || echo "Tag deletion failed (may not exist yet)"
+          else
+            echo "Tag $VERSION does not exist remotely. Nothing to delete."
+          fi
+
+      - name: Delete release if exists
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          echo "Checking if release $VERSION exists..."
+
+          # Get release ID if it exists
+          RELEASE_ID=$(gh release view "$VERSION" --json id --jq '.id' 2>/dev/null || echo "")
+
+          if [ -n "$RELEASE_ID" ]; then
+            echo "Release $VERSION exists. Deleting..."
+            gh release delete "$VERSION" --yes || echo "Release deletion failed"
+          else
+            echo "Release $VERSION does not exist. Nothing to delete."
+          fi
