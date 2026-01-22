@@ -405,7 +405,8 @@ jobs:
           sudo -E vagrant ssh ${{ matrix.vm }} -c "file /bin-local/supervizio || true; ls -la /bin-local/supervizio"
 
           echo "=== Step 3: Copy binary to /usr/local/bin ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo cp /bin-local/supervizio /usr/local/bin/ && sudo chmod +x /usr/local/bin/supervizio" || {
+          # Create /usr/local/bin if it doesn't exist (NetBSD uses /usr/pkg/bin by default)
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /usr/local/bin && sudo cp /bin-local/supervizio /usr/local/bin/ && sudo chmod +x /usr/local/bin/supervizio" || {
             echo "ERROR: Failed to copy binary"
             exit 1
           }
