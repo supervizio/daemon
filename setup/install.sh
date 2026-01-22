@@ -72,6 +72,12 @@ detect_init_system() {
         return
     fi
 
+    # Check for runit (Void Linux, Artix)
+    if command -v sv >/dev/null 2>&1 && [ -d /etc/sv ]; then
+        echo "runit"
+        return
+    fi
+
     # Check for SysVinit
     if [ -d /etc/init.d ] && [ ! -d /run/systemd/system ]; then
         echo "sysvinit"
@@ -209,6 +215,20 @@ install_init() {
                     update-rc.d supervizio defaults 2>/dev/null || true
                     log_info "Service enabled. Start with: /etc/init.d/supervizio start"
                     ;;
+                runit)
+                    log_info "Installing runit service"
+                    mkdir -p /etc/sv/supervizio/log
+                    cp "$SCRIPT_DIR/init/runit/supervizio/run" /etc/sv/supervizio/
+                    chmod +x /etc/sv/supervizio/run
+                    if [ -f "$SCRIPT_DIR/init/runit/supervizio/log/run" ]; then
+                        cp "$SCRIPT_DIR/init/runit/supervizio/log/run" /etc/sv/supervizio/log/
+                        chmod +x /etc/sv/supervizio/log/run
+                        mkdir -p /var/log/supervizio
+                    fi
+                    # Enable service by creating symlink
+                    ln -sf /etc/sv/supervizio /var/service/
+                    log_info "Service enabled. Start with: sv start supervizio"
+                    ;;
                 *)
                     log_warn "Unknown init system, skipping service installation"
                     ;;
@@ -232,7 +252,11 @@ install_init() {
             log_info "Installing NetBSD rc.d service"
             cp "$SCRIPT_DIR/init/netbsd/supervizio" /etc/rc.d/
             chmod +x /etc/rc.d/supervizio
-            echo "supervizio=YES" >> /etc/rc.conf
+            # Ensure rc.conf exists and add enable line if not present
+            touch /etc/rc.conf
+            if ! grep -q "^supervizio=" /etc/rc.conf; then
+                echo "supervizio=YES" >> /etc/rc.conf
+            fi
             log_info "Service enabled. Start with: /etc/rc.d/supervizio start"
             ;;
         darwin)

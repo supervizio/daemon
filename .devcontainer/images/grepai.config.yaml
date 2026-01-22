@@ -1,13 +1,16 @@
 # GrepAI Configuration - Optimized for DevContainer (12 languages)
 # Model: qwen3-embedding:0.6b (fast, high-quality, code-aware)
 # Hybrid search enabled for mixed semantic + identifier queries
+#
+# Endpoint is auto-detected by postStart.sh (host GPU-accelerated)
+# Override: set OLLAMA_HOST env var in .devcontainer/.env
 
 version: 1
 
 embedder:
     provider: ollama
     model: qwen3-embedding:0.6b
-    endpoint: http://ollama:11434
+    endpoint: http://localhost:11434  # Auto-replaced by postStart.sh
     dimensions: 1024  # Reduced from 4096 max for efficiency
 
 store:
@@ -185,6 +188,9 @@ ignore:
 
     # GrepAI
     - .grepai
+
+    # Claude Code (logs change constantly, causing infinite re-indexing)
+    - .claude
 
     # IDE / Editors
     - .idea

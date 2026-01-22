@@ -1,152 +1,58 @@
 # Domain Config Package
 
-Domain value objects for service configuration (renamed from service/).
-
-This package defines the configuration model for services managed by the supervisor,
-including service definitions, restart policies, listener configurations, logging
-settings, and health check configurations.
+Configuration value objects for services managed by the supervisor.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `config.go` | `Config` - root configuration structure |
+| `config.go` | `Config` - root configuration |
 | `serviceconfig.go` | `ServiceConfig` - service definition |
 | `listener.go` | `ListenerConfig` - network listener with probe |
 | `probeconfig.go` | `ProbeConfig` - health probe configuration |
-| `restart.go` | `RestartConfig`, `RestartPolicy` - restart behavior |
-| `loggingconfig.go` | `LoggingConfig` - global logging defaults |
-| `logdefaults.go` | `LogDefaults` - default logging settings |
-| `logstreamconfig.go` | `LogStreamConfig` - per-stream log settings |
-| `servicelogging.go` | `ServiceLogging` - per-service logging |
-| `rotationconfig.go` | `RotationConfig` - log rotation settings |
-| `healthcheck.go` | `HealthCheckConfig` - legacy health checks (deprecated) |
-| `validate.go` | Configuration validation functions |
+| `restart.go` | `RestartConfig`, `RestartPolicy` |
+| `loggingconfig.go` | `LoggingConfig` - global logging |
+| `logstreamconfig.go` | `LogStreamConfig` - per-stream settings |
+| `rotationconfig.go` | `RotationConfig` - log rotation |
+| `validate.go` | Configuration validation |
 
 ## Key Types
 
-### Config (Root Configuration)
+### Config (Root)
+- `Version`, `Logging`, `Services[]`, `ConfigPath`
 
-```go
-type Config struct {
-    Version    string
-    Logging    LoggingConfig
-    Services   []ServiceConfig
-    ConfigPath string
-}
-```
+### ServiceConfig
+- `Name`, `Command`, `Args`, `User`, `Group`, `WorkingDirectory`
+- `Environment`, `Restart`, `Listeners[]`, `Logging`, `DependsOn`, `Oneshot`
 
-### ServiceConfig (Service Definition)
+### ListenerConfig
+- `Name`, `Port`, `Protocol` (tcp/udp), `Address`, `Probe`
+- Builder: `WithProbe()`, `WithTCPProbe()`, `WithHTTPProbe(path)`, `WithGRPCProbe(svc)`
 
-```go
-type ServiceConfig struct {
-    Name             string
-    Command          string
-    Args             []string
-    User             string
-    Group            string
-    WorkingDirectory string
-    Environment      map[string]string
-    Restart          RestartConfig
-    HealthChecks     []HealthCheckConfig  // deprecated
-    Listeners        []ListenerConfig
-    Logging          ServiceLogging
-    DependsOn        []string
-    Oneshot          bool
-}
-```
+### ProbeConfig
+- `Type` (tcp, http, grpc, exec), `Path`, `Service`, `Command`, `Args`
+- `Interval`, `Timeout`, `SuccessThreshold`, `FailureThreshold`
 
-### ListenerConfig (Network Listener)
-
-```go
-type ListenerConfig struct {
-    Name     string
-    Port     int
-    Protocol string       // "tcp", "udp"
-    Address  string       // optional bind address
-    Probe    *ProbeConfig // optional probe config
-}
-```
-
-### ProbeConfig (Health Probe)
-
-```go
-type ProbeConfig struct {
-    Type             string  // "tcp", "http", "grpc", "exec"
-    Path             string  // HTTP path
-    Service          string  // gRPC service name
-    Command          string  // exec command
-    Args             []string
-    Interval         shared.Duration
-    Timeout          shared.Duration
-    SuccessThreshold int
-    FailureThreshold int
-}
-```
-
-### RestartConfig (Restart Behavior)
-
-```go
-type RestartConfig struct {
-    Policy     RestartPolicy
-    MaxRetries int
-    Delay      shared.Duration
-    DelayMax   shared.Duration  // for exponential backoff
-}
-```
+### RestartConfig
+- `Policy`, `MaxRetries`, `Delay`, `DelayMax` (for exponential backoff)
 
 ### RestartPolicy (Enum)
+- `RestartAlways`, `RestartOnFailure`, `RestartNever`, `RestartUnless`
 
-```go
-const (
-    RestartAlways    RestartPolicy = "always"
-    RestartOnFailure RestartPolicy = "on-failure"
-    RestartNever     RestartPolicy = "never"
-    RestartUnless    RestartPolicy = "unless-stopped"
-)
-```
-
-### LoggingConfig (Global Logging)
-
-```go
-type LoggingConfig struct {
-    Defaults LogDefaults
-    BaseDir  string
-}
-```
-
-### RotationConfig (Log Rotation)
-
-```go
-type RotationConfig struct {
-    MaxSize  string  // "100MB", "1GB"
-    MaxFiles int
-}
-```
+### RotationConfig
+- `MaxSize` ("100MB", "1GB"), `MaxFiles`
 
 ## Factory Functions
 
-- `NewConfig(services)` - Create config with services
-- `DefaultConfig()` - Create config with defaults
-- `NewServiceConfig(name, command)` - Create service config
-- `NewListenerConfig(name, port)` - Create TCP listener
-- `NewRestartConfig(policy)` - Create restart config
-- `DefaultRestartConfig()` - Default restart on failure
-- `DefaultLoggingConfig()` - Default logging settings
-- `DefaultProbeConfig(probeType)` - Default probe config
-- `DefaultRotationConfig()` - Default rotation settings
-
-## Builder Methods
-
-### ListenerConfig
-- `WithProbe(probe)` - Add probe configuration
-- `WithTCPProbe()` - Add TCP connection probe
-- `WithHTTPProbe(path)` - Add HTTP endpoint probe
-- `WithGRPCProbe(service)` - Add gRPC health probe
+- `NewConfig(services)`, `DefaultConfig()`
+- `NewServiceConfig(name, command)`
+- `NewListenerConfig(name, port)`
+- `NewRestartConfig(policy)`, `DefaultRestartConfig()`
+- `DefaultLoggingConfig()`, `DefaultProbeConfig(type)`
 
 ## Dependencies
 
-- Depends on: `domain/shared` (for Duration)
+- Depends on: `domain/shared` (Duration)
 - Used by: `application/supervisor`, `infrastructure/persistence/config/yaml`
 
 ## Related Packages
@@ -154,5 +60,5 @@ type RotationConfig struct {
 | Package | Relation |
 |---------|----------|
 | `domain/shared` | Duration value object |
-| `infrastructure/persistence/config/yaml` | YAML config loader implements parsing |
-| `application/supervisor` | Uses Config to orchestrate services |
+| `infrastructure/persistence/config/yaml` | Parses YAML to Config |
+| `application/supervisor` | Uses Config for orchestration |

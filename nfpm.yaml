@@ -1,0 +1,86 @@
+# =============================================================================
+# nfpm configuration for Linux package generation
+# =============================================================================
+# Generates: .deb (Debian/Devuan), .rpm (Rocky/RHEL), .apk (Alpine)
+# Docs: https://nfpm.goreleaser.com/configuration/
+# =============================================================================
+
+name: supervizio
+arch: ${GOARCH}
+platform: linux
+version: ${VERSION}
+maintainer: supervizio <noreply@superviz.io>
+description: |
+  PID1-capable process supervisor for containers and Unix systems.
+  Manages multiple services with health checks, restart policies, and log rotation.
+vendor: supervizio
+homepage: https://github.com/supervizio/daemon
+license: MIT
+
+contents:
+  # Main binary
+  - src: ./supervizio-linux-${GOARCH}
+    dst: /usr/local/bin/supervizio
+    file_info:
+      mode: 0755
+
+  # Example configuration
+  - src: ./examples/config.yaml
+    dst: /etc/supervizio/config.example.yaml
+    type: config|noreplace
+    file_info:
+      mode: 0644
+
+  # License
+  - src: ./LICENSE
+    dst: /usr/share/doc/supervizio/LICENSE
+    file_info:
+      mode: 0644
+
+  # Directories
+  - dst: /etc/supervizio
+    type: dir
+    file_info:
+      mode: 0755
+
+  - dst: /var/log/supervizio
+    type: dir
+    file_info:
+      mode: 0755
+
+  # Systemd service file (deb/rpm only)
+  - src: ./setup/init/systemd/supervizio.service
+    dst: /usr/lib/systemd/system/supervizio.service
+    file_info:
+      mode: 0644
+    packager: deb
+
+  - src: ./setup/init/systemd/supervizio.service
+    dst: /usr/lib/systemd/system/supervizio.service
+    file_info:
+      mode: 0644
+    packager: rpm
+
+  # OpenRC init script (apk only)
+  - src: ./setup/init/openrc/supervizio
+    dst: /etc/init.d/supervizio
+    file_info:
+      mode: 0755
+    packager: apk
+
+# Package-specific overrides
+overrides:
+  deb:
+    scripts:
+      postinstall: ./setup/scripts/postinstall-deb.sh
+      preremove: ./setup/scripts/preremove-deb.sh
+
+  rpm:
+    scripts:
+      postinstall: ./setup/scripts/postinstall-rpm.sh
+      preremove: ./setup/scripts/preremove-rpm.sh
+
+  apk:
+    scripts:
+      postinstall: ./setup/scripts/postinstall-apk.sh
+      preremove: ./setup/scripts/preremove-apk.sh

@@ -77,6 +77,12 @@ case "$OS" in
             else
                 fail "OpenRC service not found"
             fi
+        elif command -v sv >/dev/null 2>&1 && [ -d /etc/sv ]; then
+            if [ -d /etc/sv/supervizio ] && [ -L /var/service/supervizio ]; then
+                pass "runit service installed"
+            else
+                fail "runit service not found"
+            fi
         elif [ -f /etc/init.d/supervizio ]; then
             pass "SysVinit service installed"
         else

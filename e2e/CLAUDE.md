@@ -1,85 +1,68 @@
-# E2E Testing - Virtual Machine Tests
+# E2E Testing - Platform Matrix
 
-End-to-end testing using native VMs with Vagrant.
+End-to-end testing across all supported platforms and init systems (AMD64 only).
+
+## Coverage (9 jobs)
+
+| Init System | Distribution | Pkg | VM | Docker |
+|-------------|--------------|-----|:--:|:------:|
+| systemd | Debian 13 | .deb | ✅ | ✅ |
+| systemd | Fedora 38 | .rpm | ✅ | ✅ |
+| OpenRC | Alpine 3.21 | .apk | ✅ | ✅ |
+| SysVinit | Devuan 6 | .deb | ✅ | ✅ |
+| runit | Alpine 3.21 | .apk | ✅ | ✅ |
+| BSD rc.d | FreeBSD 14 | pkg | ✅ | - |
+| BSD rc.d | OpenBSD 7 | pkg | ✅ | - |
+| BSD rc.d | NetBSD 9 | pkgin | ✅ | - |
+| BSD rc.d | DragonFlyBSD 6 | pkg | ✅ | - |
 
 ## Structure
 
 ```
 e2e/
-├── Vagrantfile         # Multi-VM configuration (libvirt + QEMU)
-└── test-install.sh     # Installation test script
+├── Vagrantfile           # VM config (libvirt)
+├── test-install.sh       # Universal test script
+├── Dockerfile.debian     # systemd, .deb
+├── Dockerfile.fedora     # systemd, .rpm
+├── Dockerfile.alpine     # OpenRC, .apk
+├── Dockerfile.devuan     # SysVinit, .deb
+└── Dockerfile.alpine-runit # runit, .apk
 ```
 
-## CI Testing (Linux + KVM)
+## Init System Paths
 
-GitHub Actions uses `ubuntu-latest` with KVM acceleration:
+| Init | Service Path | Enable Command |
+|------|--------------|----------------|
+| systemd | `/etc/systemd/system/` | `systemctl enable` |
+| OpenRC | `/etc/init.d/` | `rc-update add` |
+| SysVinit | `/etc/init.d/` | `update-rc.d` |
+| runit | `/etc/sv/` | `ln -s /etc/sv/X /var/service/` |
+| BSD rc.d | `/usr/local/etc/rc.d/` | `sysrc enable` |
 
-- **Provider**: libvirt with KVM
-- **Speed**: Fast (hardware virtualization)
-- **Platforms**: amd64 native, arm64 via QEMU
+## Test Script (test-install.sh)
 
-## Local Testing (macOS)
+1. Install script completes
+2. Binary at `/usr/local/bin/supervizio`
+3. Config directory and file exist
+4. Service file installed
+5. `--version` works
+6. Uninstall removes binary
 
-For local development on macOS:
-
-### Requirements
-
-- Vagrant 2.4+
-- QEMU + vagrant-qemu plugin
-
-### Setup
+## Local Testing
 
 ```bash
-brew install vagrant qemu
-vagrant plugin install vagrant-qemu
+# Vagrant VM
+cd e2e && vagrant up debian13 --provider=libvirt
+vagrant ssh debian13 -c "sudo /vagrant/test-install.sh"
+
+# Docker
+cd src && CGO_ENABLED=0 go build -o ../bin/supervizio ./cmd/daemon
+docker build -f e2e/Dockerfile.debian -t supervizio-debian .
+docker run --rm supervizio-debian
 ```
 
-## Available VMs
+## Notes
 
-| VM | Box | Init System | autostart |
-|----|-----|-------------|-----------|
-| debian | generic/debian12 | systemd | yes |
-| alpine | generic/alpine319 | OpenRC | no |
-| ubuntu | generic/ubuntu2204 | systemd | no |
-| rocky | generic/rocky9 | systemd | no |
-| freebsd | generic/freebsd14 | rc.d | no |
-| openbsd | generic/openbsd75 | rc.d | no |
-| netbsd | generic/netbsd10 | rc.d | no |
-
-## Usage
-
-### From Makefile
-
-```bash
-make test-e2e          # Run default E2E test (Debian)
-make test-e2e-debian   # Run Debian specifically
-make test-e2e-clean    # Clean up all VMs
-```
-
-### Direct Vagrant
-
-```bash
-cd e2e
-
-# macOS (QEMU)
-vagrant up debian --provider=qemu
-vagrant ssh debian -c "sudo /vagrant/test-install.sh"
-vagrant destroy debian -f
-
-# Linux (libvirt)
-vagrant up debian --provider=libvirt
-vagrant ssh debian -c "sudo /vagrant/test-install.sh"
-vagrant destroy debian -f
-```
-
-## Test Coverage
-
-`test-install.sh` validates:
-
-1. Install script completes successfully
-2. Binary exists at `/usr/local/bin/supervizio`
-3. Config directory exists
-4. Config file `config.yaml` exists
-5. Service file installed for platform
-6. `--version` command works
-7. Uninstall removes binary
+- BSD: VM tests only (no Docker support)
+- Alpine-runit: Same box as OpenRC, provisioned with runit
+- All binaries: `CGO_ENABLED=0` (static)

@@ -1,0 +1,31 @@
+# =============================================================================
+# E2E Test Container: Minimal scratch image
+# =============================================================================
+# This Dockerfile creates a minimal container from scratch with ONLY:
+# - The static supervizio binary
+# - A minimal configuration file
+# - Empty /tmp directory for logs
+#
+# Validates that supervizio is truly self-contained with no external
+# dependencies (no libc, no shell, no utilities).
+# =============================================================================
+
+# Builder stage to create empty directories
+FROM busybox:musl AS builder
+RUN mkdir -p /empty/tmp
+
+# Final scratch image
+FROM scratch
+
+# Copy empty /tmp directory structure
+COPY --from=builder /empty/tmp /tmp
+
+# Copy static binary (must be built with CGO_ENABLED=0)
+COPY bin/supervizio /supervizio
+
+# Copy minimal configuration
+COPY e2e/config-scratch.yaml /config.yaml
+
+# supervizio as PID1
+ENTRYPOINT ["/supervizio"]
+CMD ["--config", "/config.yaml"]

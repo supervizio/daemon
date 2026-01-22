@@ -1,0 +1,31 @@
+# =============================================================================
+# E2E Test Container: Alpine 3.21 - runit
+# =============================================================================
+# Validates supervizio binary runs correctly on Alpine with runit init system.
+# Uses Alpine base (no OpenRC) + runit package from community repo.
+# =============================================================================
+
+FROM alpine:3.21
+
+# Enable community repo and install runit (without OpenRC)
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.21/community" >> /etc/apk/repositories \
+    && apk add --no-cache \
+        curl \
+        procps \
+        runit \
+    && mkdir -p /var/log/supervizio /etc/supervizio /etc/sv /var/service
+
+# Verify runit is installed
+RUN which runsvdir && which sv && echo "runit installed successfully"
+
+# Copy supervizio binary (built externally for the target architecture)
+# MUST be statically compiled (CGO_ENABLED=0) for Alpine/musl
+COPY bin/supervizio /usr/local/bin/supervizio
+RUN chmod +x /usr/local/bin/supervizio
+
+# Copy minimal test configuration
+COPY e2e/config-scratch.yaml /etc/supervizio/config.yaml
+
+# supervizio as entrypoint
+ENTRYPOINT ["/usr/local/bin/supervizio"]
+CMD ["--version"]

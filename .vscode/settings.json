@@ -1,0 +1,6 @@
+{
+  "files.exclude": {
+    ".grepai": true,
+    ".claude": true
+  }
+}

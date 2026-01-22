@@ -5,80 +5,42 @@
 ```
 /workspace
 ├── src/                    # ALL source code (mandatory)
-│   ├── components/
-│   ├── services/
-│   └── ...
-├── tests/                  # Unit tests (optional, not for Go)
+├── tests/                  # Unit tests (Go: alongside code in /src)
 ├── docs/                   # Documentation
 └── CLAUDE.md
 ```
 
-**Rules:**
-- ALL code MUST be in `/src` regardless of language
-- Tests in `/tests` (except Go: tests alongside code in `/src`)
-- Never put code at project root
+**Rules:** ALL code MUST be in `/src` regardless of language.
 
 ## Language Rules
 
-**STRICT**: Follow rules in `.devcontainer/features/languages/<lang>/RULES.md`
+**STRICT**: Follow `.devcontainer/features/languages/<lang>/RULES.md`
 
-Each RULES.md contains:
-1. **Line 1**: Required version (NEVER downgrade)
-2. Code style and conventions
-3. Project structure requirements
-4. Testing standards
+- Line 1: Required version (NEVER downgrade)
+- Code style and conventions
+- Testing standards
 
-## Workflow (MANDATORY)
+## Workflow
 
-### 1. Context Generation
-```
-/build --context
-```
-Generates CLAUDE.md in all subdirectories + fetches latest language versions.
-
-### 2. Feature Development
-```
-/feature <description>
-```
-Creates `feat/<description>` branch, **mandatory planning mode**, CI check, PR creation (no auto-merge).
-
-### 3. Bug Fixes
-```
-/fix <description>
-```
-Creates `fix/<description>` branch, **mandatory planning mode**, CI check, PR creation (no auto-merge).
-
-**Flow:**
-```
-/build --context → /feature "..." ou /fix "..."
-```
+| Command | Action |
+|---------|--------|
+| `/build --context` | Generate CLAUDE.md in subdirs + fetch versions |
+| `/feature <desc>` | Create `feat/<desc>` branch, plan mode, CI, PR |
+| `/fix <desc>` | Create `fix/<desc>` branch, plan mode, CI, PR |
 
 ## Branch Conventions
 
-| Type | Branch | Commit prefix |
-|------|--------|---------------|
+| Type | Branch | Commit |
+|------|--------|--------|
 | Feature | `feat/<desc>` | `feat(scope): message` |
 | Bugfix | `fix/<desc>` | `fix(scope): message` |
 
-## Code Quality
+## SAFEGUARDS (ABSOLUTE)
 
-- Latest stable version ONLY (see RULES.md)
-- No deprecated APIs
-- No legacy patterns
-- Security-first approach
-- Full test coverage
-
-## SAFEGUARDS (ABSOLUTE - NO BYPASS)
-
-**NEVER without EXPLICIT user approval:**
-- Delete files in `.claude/` directory
-- Delete files in `.devcontainer/` directory
-- Modify `.claude/commands/*.md` destructively (removing features/logic)
+**NEVER without explicit user approval:**
+- Delete files in `.claude/` or `.devcontainer/`
+- Modify `.claude/commands/*.md` destructively
 - Remove hooks from `.devcontainer/hooks/`
-
-**When simplifying/refactoring:**
-- Move content to separate files, NEVER delete logic
-- Ask before removing any feature, even if it seems redundant
 
 ## Hooks (Auto-applied)
 
@@ -86,41 +48,26 @@ Creates `fix/<description>` branch, **mandatory planning mode**, CI check, PR cr
 |------|--------|
 | `pre-validate.sh` | Protect sensitive files |
 | `post-edit.sh` | Format + Imports + Lint |
-| `security.sh` | Secret detection |
-| `test.sh` | Run related tests |
 
 ## Context Hierarchy
 
 ```
-/CLAUDE.md              → Overview (committed)
-/src/CLAUDE.md          → src details (gitignored)
-/src/api/CLAUDE.md      → API details (gitignored)
+/CLAUDE.md        → Overview
+/src/CLAUDE.md    → Details
 ```
 
-**Principle:** More details deeper in tree, <60 lines each.
+**Principle:** More details deeper, <80 lines each.
 
-## MCP-FIRST RULE (MANDATORY)
+## MCP-FIRST RULE
 
-**ALWAYS use MCP tools BEFORE falling back to CLI binaries.**
+**ALWAYS use MCP tools BEFORE CLI binaries.**
 
-| Action | MCP Tool (Priority) | CLI Fallback |
-|--------|---------------------|--------------|
-| GitHub PRs | `mcp__github__*` | `gh pr *` |
-| GitHub Issues | `mcp__github__*` | `gh issue *` |
-| Codacy Analysis | `mcp__codacy__*` | `codacy-cli` |
-| IDE Diagnostics | `mcp__ide__*` | N/A |
+| Action | MCP Tool | CLI Fallback |
+|--------|----------|--------------|
+| GitHub | `mcp__github__*` | `gh` |
+| Codacy | `mcp__codacy__*` | `codacy-cli` |
 
 **Rules:**
-
 1. Check `.mcp.json` for available MCP servers
-2. Use `mcp__<server>__<action>` tools first
-3. Only fallback to CLI if MCP fails or is unavailable
-4. NEVER ask user for tokens if MCP is already configured
-5. Log MCP failures before trying fallback
-
-**Why:**
-
-- MCP = pre-authenticated (tokens in .mcp.json)
-- CLI = requires separate auth setup
-- MCP = structured JSON responses
-- CLI = text parsing required
+2. Use `mcp__<server>__<action>` first
+3. Only fallback if MCP fails

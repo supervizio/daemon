@@ -2,112 +2,55 @@
 
 Domain types for daemon lifecycle management, event publishing, and zombie reaping.
 
-This package is a fusion of event, state, and reaper concerns, providing a cohesive
-API for managing daemon lifecycle across process supervision, mesh networking, and
-Kubernetes orchestration contexts.
-
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `event.go` | `Event`, `Type` - lifecycle event types and structures |
-| `publisher.go` | `Publisher` port interface for event publishing |
-| `daemon.go` | `DaemonState`, `SystemState` - daemon state snapshots |
-| `host.go` | `HostInfo` - host system information |
-| `reaper.go` | `Reaper` port interface for zombie process cleanup |
+| `event.go` | Event, Type enum - lifecycle event types |
+| `publisher.go` | Publisher port interface |
+| `daemon.go` | DaemonState, SystemState snapshots |
+| `host.go` | HostInfo - system information |
+| `reaper.go` | Reaper port interface (zombie cleanup) |
+
+## Event Types (Type enum)
+
+| Category | Events |
+|----------|--------|
+| Process | Started, Stopped, Failed, Restarted, Healthy, Unhealthy |
+| Mesh | NodeUp, NodeDown, LeaderChanged, TopologyChanged |
+| Kubernetes | PodCreated, PodDeleted, PodReady, PodFailed |
+| System | HighCPU, HighMemory, DiskFull |
+| Daemon | Started, Stopping, ConfigReloaded |
 
 ## Key Types
 
-### Event Types (Type enum)
+| Type | Fields |
+|------|--------|
+| `Event` | ID, Type, Timestamp, ServiceName, NodeID, PodName, Message, Data |
+| `DaemonState` | Timestamp, Host, Processes, System, Mesh?, Kubernetes? |
+| `HostInfo` | Hostname, OS, Arch, KernelVersion, DaemonPID, DaemonVersion, StartTime |
 
-Event categories:
-- **Process**: `TypeProcessStarted`, `TypeProcessStopped`, `TypeProcessFailed`, `TypeProcessRestarted`, `TypeProcessHealthy`, `TypeProcessUnhealthy`
-- **Mesh**: `TypeMeshNodeUp`, `TypeMeshNodeDown`, `TypeMeshLeaderChanged`, `TypeMeshTopologyChanged`
-- **Kubernetes**: `TypeK8sPodCreated`, `TypeK8sPodDeleted`, `TypeK8sPodReady`, `TypeK8sPodFailed`
-- **System**: `TypeSystemHighCPU`, `TypeSystemHighMemory`, `TypeSystemDiskFull`
-- **Daemon**: `TypeDaemonStarted`, `TypeDaemonStopping`, `TypeDaemonConfigReloaded`
+## Port Interfaces
 
-### Event (Value Object)
-
-```go
-type Event struct {
-    ID          string
-    Type        Type
-    Timestamp   time.Time
-    ServiceName string
-    NodeID      string
-    PodName     string
-    Message     string
-    Data        map[string]any
-}
-```
-
-### Publisher (Port Interface)
-
-```go
-type Publisher interface {
-    Publish(event Event)
-    Subscribe() <-chan Event
-    Unsubscribe(ch <-chan Event)
-}
-```
-
-### DaemonState (Value Object)
-
-```go
-type DaemonState struct {
-    Timestamp   time.Time
-    Host        HostInfo
-    Processes   []metrics.ProcessMetrics
-    System      SystemState
-    Mesh        *MeshTopology       // optional
-    Kubernetes  *KubernetesState    // optional
-}
-```
-
-### HostInfo (Value Object)
-
-```go
-type HostInfo struct {
-    Hostname      string
-    OS            string
-    Arch          string
-    KernelVersion string
-    DaemonPID     int
-    DaemonVersion string
-    StartTime     time.Time
-}
-```
-
-### Reaper (Port Interface)
-
-```go
-type Reaper interface {
-    Start()
-    Stop()
-    ReapOnce() int
-    IsPID1() bool
-}
-```
-
-The Reaper interface handles zombie process cleanup for PID1 scenarios in containers.
-When running as PID1, orphaned child processes become zombies if not reaped.
+| Interface | Methods | Purpose |
+|-----------|---------|---------|
+| `Publisher` | Publish, Subscribe, Unsubscribe | Event distribution |
+| `Reaper` | Start, Stop, ReapOnce, IsPID1 | Zombie process cleanup |
 
 ## Filter Functions
 
-- `FilterByType(types ...Type)` - Filter events by specific types
-- `FilterByCategory(category string)` - Filter events by category
-- `FilterByServiceName(serviceName string)` - Filter events by service name
+- `FilterByType(types ...Type)` - Filter by event types
+- `FilterByCategory(category string)` - Filter by category
+- `FilterByServiceName(name string)` - Filter by service
 
 ## Dependencies
 
-- Depends on: `domain/metrics` (for ProcessMetrics in DaemonState)
+- Depends on: `domain/metrics` (ProcessMetrics in DaemonState)
 - Used by: `application/supervisor`, `infrastructure/process/reaper`
 
 ## Related Packages
 
 | Package | Relation |
 |---------|----------|
-| `domain/metrics` | ProcessMetrics used in DaemonState |
-| `domain/process` | Process events complement lifecycle events |
+| `domain/metrics` | ProcessMetrics in DaemonState |
 | `infrastructure/process/reaper` | Implements Reaper port |

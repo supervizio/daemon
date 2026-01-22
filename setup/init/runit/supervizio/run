@@ -1,0 +1,5 @@
+#!/bin/sh
+# supervizio runit service
+# runit requires services to run in foreground (no daemonization)
+exec 2>&1
+exec chpst -u root /usr/local/bin/supervizio --config /etc/supervizio/config.yaml

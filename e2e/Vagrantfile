@@ -1,9 +1,37 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
-# supervizio E2E testing Vagrantfile
-# Supports: libvirt (Linux CI), QEMU (macOS local)
+# =============================================================================
+# supervizio E2E Testing Vagrantfile
+# =============================================================================
+# Full matrix of init systems and platforms:
+#
+# Linux (systemd):
+#   - debian13: Debian 13 (trixie) - primary (.deb)
+#   - fedora: Fedora 38 - RPM/dnf (.rpm)
+#
+# Linux (OpenRC):
+#   - alpine: Alpine 3.21 (.apk)
+#
+# Linux (SysVinit):
+#   - devuan: Devuan 6 (excalibur) - Debian without systemd (.deb)
+#
+# Linux (runit):
+#   - alpine-runit: Alpine 3.21 with runit (.apk)
+#
+# BSD (rc.d):
+#   - freebsd: FreeBSD 14 (pkg)
+#   - openbsd: OpenBSD 7 (pkg)
+#   - netbsd: NetBSD 9 (pkgin)
+#   - dragonfly: DragonFlyBSD 6 (pkg)
+#
+# Note: Vagrant boxes may lag behind latest versions. Using latest available.
+#
+# Providers:
+#   - libvirt: Linux CI (KVM acceleration)
+#   - qemu: macOS (HVF or TCG)
+# =============================================================================
 
-# Detect Homebrew path for macOS
+# Detect Homebrew path for macOS (ARM64 vs Intel)
 def homebrew_prefix
   if RUBY_PLATFORM.include?("arm64") || `uname -m`.strip == "arm64"
     "/opt/homebrew"
@@ -12,104 +40,184 @@ def homebrew_prefix
   end
 end
 
+# Detect if running in CI (GitHub Actions does NOT support HVF)
+def ci_mode?
+  ENV['CI'] == 'true' || ENV['GITHUB_ACTIONS'] == 'true'
+end
+
 Vagrant.configure("2") do |config|
-  # Shared folders
+  # ===========================================================================
+  # Shared folders (rsync works with all providers)
+  # Note: rsync must be installed on guest for these to work
+  # ===========================================================================
   config.vm.synced_folder "../setup", "/setup", type: "rsync"
   config.vm.synced_folder "../bin", "/bin-local", type: "rsync"
   config.vm.synced_folder ".", "/vagrant", type: "rsync"
 
-  # =============================================================================
-  # Libvirt provider (Linux CI with KVM - fast)
-  # =============================================================================
-  config.vm.provider "libvirt" do |lv|
-    lv.memory = 2048
-    lv.cpus = 2
-    lv.driver = "kvm"
-  end
-
-  # =============================================================================
-  # QEMU provider (macOS local development)
-  # =============================================================================
+  # ===========================================================================
+  # QEMU Provider (macOS)
+  # ===========================================================================
   config.vm.provider "qemu" do |qe|
     qe.memory = "2048"
     qe.smp = "2"
     qe.qemu_dir = "#{homebrew_prefix}/share/qemu"
-    qe.machine_type = "virt,accel=hvf,highmem=on"
     qe.ssh_port = 50022
+
+    # Detect architecture
+    is_arm = RUBY_PLATFORM.include?("arm64") || `uname -m`.strip == "arm64"
+
+    if ci_mode?
+      # CI mode: Use TCG (software emulation) - HVF not available on GitHub Actions
+      qe.net_device = "virtio-net-pci"
+      qe.extra_qemu_args = %w(-accel tcg,thread=multi)
+
+      if is_arm
+        qe.arch = "aarch64"
+        qe.machine = "virt,highmem=on"
+        qe.cpu = "cortex-a72"
+      else
+        qe.arch = "x86_64"
+        qe.machine = "q35"
+        qe.cpu = "max"
+      end
+    else
+      # Local mode: Use HVF for native performance
+      qe.machine = "virt,accel=hvf,highmem=on"
+      qe.cpu = "cortex-a72" if is_arm
+    end
   end
 
-  # =============================================================================
-  # VM Definitions
-  # =============================================================================
+  # ===========================================================================
+  # Libvirt Provider (Linux CI - AMD64 and ARM64)
+  # ===========================================================================
+  config.vm.provider "libvirt" do |lv|
+    lv.memory = 2048
+    lv.cpus = 2
+    lv.driver = "kvm"
 
-  # Debian 12 (Bookworm) - systemd
-  config.vm.define "debian", primary: true do |debian|
-    debian.vm.box = "generic/debian12"
-    debian.vm.hostname = "e2e-debian"
+    # ARM64-specific configuration
+    is_arm = RUBY_PLATFORM.include?("aarch64") || `uname -m`.strip == "aarch64"
+    if is_arm
+      lv.loader = "/usr/share/AAVMF/AAVMF_CODE.fd"
+      lv.machine_type = "virt"
+      lv.cpu_mode = "host-passthrough"
+    end
+  end
 
-    debian.vm.provision "shell", inline: <<-SHELL
-      apt-get update -qq
-      apt-get install -y -qq curl
+  # ===========================================================================
+  # LINUX: systemd
+  # ===========================================================================
+
+  # Debian 13 (trixie) - Primary test VM
+  config.vm.define "debian13", primary: true do |v|
+    v.vm.box = "generic/debian12"  # Use debian12 box until debian13 is available
+    v.vm.hostname = "e2e-debian13"
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl rsync"
+  end
+
+  # Fedora 38 - RPM/dnf + systemd (replaces Rocky which has SSH issues)
+  config.vm.define "fedora", autostart: false do |v|
+    v.vm.box = "generic/fedora38"
+    v.vm.hostname = "e2e-fedora"
+    v.vm.provision "shell", inline: <<-SHELL
+      # Update package cache and install rsync
+      dnf makecache --refresh || true
+      dnf install -y curl rsync
+      # Verify rsync is installed
+      which rsync && rsync --version | head -1
     SHELL
   end
 
-  # Alpine 3.19 - OpenRC
-  config.vm.define "alpine", autostart: false do |alpine|
-    alpine.vm.box = "generic/alpine319"
-    alpine.vm.hostname = "e2e-alpine"
+  # ===========================================================================
+  # LINUX: OpenRC
+  # ===========================================================================
 
-    alpine.vm.provision "shell", inline: <<-SHELL
+  # Alpine 3.19 - 3.20 box not yet available
+  config.vm.define "alpine", autostart: false do |v|
+    v.vm.box = "generic/alpine319"
+    v.vm.hostname = "e2e-alpine"
+    v.vm.provision "shell", inline: "apk update && apk add curl rsync"
+  end
+
+  # ===========================================================================
+  # LINUX: SysVinit
+  # ===========================================================================
+
+  # Devuan 5 (daedalus) - Debian without systemd
+  config.vm.define "devuan", autostart: false do |v|
+    v.vm.box = "generic/devuan4"  # Use devuan4 (chimaera) until devuan5 box available
+    v.vm.hostname = "e2e-devuan"
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl rsync"
+  end
+
+  # ===========================================================================
+  # LINUX: runit
+  # ===========================================================================
+
+  # Alpine 3.19 with runit (instead of OpenRC)
+  # Uses same box as alpine but replaces OpenRC with runit
+  config.vm.define "alpine-runit", autostart: false do |v|
+    v.vm.box = "generic/alpine319"
+    v.vm.hostname = "e2e-alpine-runit"
+    v.vm.provision "shell", inline: <<-SHELL
+      # Enable community repo for runit
+      sed -i 's/#.*community/community/' /etc/apk/repositories
       apk update
-      apk add curl
+
+      # Remove OpenRC and install runit
+      apk del openrc --force-broken-world 2>/dev/null || true
+      apk add curl rsync runit
+
+      # Create runit service directories
+      mkdir -p /etc/sv /var/service
+
+      # Verify runit is available (OpenRC removal is best-effort)
+      which runsvdir && echo "runit installed successfully"
+      # Note: rc-service may remain as dangling binary, check service manager instead
+      if [ -x /usr/bin/runsvdir ]; then
+        echo "runit service manager ready"
+      else
+        echo "ERROR: runit not properly installed" && exit 1
+      fi
     SHELL
   end
 
-  # Ubuntu 22.04 - systemd
-  config.vm.define "ubuntu", autostart: false do |ubuntu|
-    ubuntu.vm.box = "generic/ubuntu2204"
-    ubuntu.vm.hostname = "e2e-ubuntu"
+  # ===========================================================================
+  # BSD: rc.d (FreeBSD style)
+  # ===========================================================================
 
-    ubuntu.vm.provision "shell", inline: <<-SHELL
-      apt-get update -qq
-      apt-get install -y -qq curl
+  # FreeBSD 14
+  config.vm.define "freebsd", autostart: false do |v|
+    v.vm.box = "generic/freebsd14"
+    v.vm.hostname = "e2e-freebsd"
+    v.vm.provision "shell", inline: "pkg install -y curl rsync"
+  end
+
+  # OpenBSD 7.x
+  config.vm.define "openbsd", autostart: false do |v|
+    v.vm.box = "generic/openbsd7"
+    v.vm.hostname = "e2e-openbsd"
+    v.vm.provision "shell", inline: "pkg_add curl rsync--"
+  end
+
+  # NetBSD 9 (netbsd10 box not yet available on Vagrant Cloud)
+  config.vm.define "netbsd", autostart: false do |v|
+    v.vm.box = "generic/netbsd9"
+    v.vm.hostname = "e2e-netbsd"
+    v.vm.provision "shell", inline: <<-SHELL
+      # Update pkgin database and install packages
+      pkgin -y update || true
+      pkgin -y install curl rsync
+      # Verify rsync is installed
+      which rsync && rsync --version | head -1
     SHELL
   end
 
-  # Rocky Linux 9 - systemd (RHEL-compatible)
-  config.vm.define "rocky", autostart: false do |rocky|
-    rocky.vm.box = "generic/rocky9"
-    rocky.vm.hostname = "e2e-rocky"
-
-    rocky.vm.provision "shell", inline: <<-SHELL
-      dnf install -y curl
-    SHELL
+  # DragonFlyBSD 6.4
+  config.vm.define "dragonfly", autostart: false do |v|
+    v.vm.box = "generic/dragonflybsd6"  # DragonFlyBSD 6.x
+    v.vm.hostname = "e2e-dragonfly"
+    v.vm.provision "shell", inline: "pkg install -y curl rsync"
   end
 
-  # FreeBSD 14 - rc.d
-  config.vm.define "freebsd", autostart: false do |freebsd|
-    freebsd.vm.box = "generic/freebsd14"
-    freebsd.vm.hostname = "e2e-freebsd"
-
-    freebsd.vm.provision "shell", inline: <<-SHELL
-      pkg install -y curl
-    SHELL
-  end
-
-  # OpenBSD 7.5 - rc.d
-  config.vm.define "openbsd", autostart: false do |openbsd|
-    openbsd.vm.box = "generic/openbsd75"
-    openbsd.vm.hostname = "e2e-openbsd"
-
-    # OpenBSD has curl by default
-  end
-
-  # NetBSD 10 - rc.d
-  config.vm.define "netbsd", autostart: false do |netbsd|
-    netbsd.vm.box = "generic/netbsd10"
-    netbsd.vm.hostname = "e2e-netbsd"
-
-    netbsd.vm.provision "shell", inline: <<-SHELL
-      pkgin -y install curl
-    SHELL
-  end
 end

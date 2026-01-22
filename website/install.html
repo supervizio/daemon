@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Install - supervizio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <div class="nav-inner">
+      <a href="./" class="logo">supervizio</a>
+      <div class="links">
+        <a href="install.html" class="active">Install</a>
+        <a href="config.html">Config</a>
+        <a href="{{GITHUB_URL}}" target="_blank">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <h1 style="margin-bottom: 8px;">Installation</h1>
+    <p style="margin-bottom: 48px;">Choose your platform and installation method.</p>
+
+    <section>
+      <h2>Package Repository</h2>
+      <p>Recommended for Linux systems. Packages are GPG-signed.</p>
+
+      <h3>Debian / Ubuntu / Devuan</h3>
+      <pre><code># Add GPG key
+curl -fsSL {{BASE_URL}}/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/supervizio.gpg
+
+# Add repository
+echo "deb [signed-by=/etc/apt/keyrings/supervizio.gpg] {{BASE_URL}}/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/supervizio.list
+
+# Install
+sudo apt update && sudo apt install supervizio</code></pre>
+
+      <h3>Rocky Linux / RHEL / Fedora</h3>
+      <pre><code># Add GPG key
+sudo rpm --import {{BASE_URL}}/gpg.key
+
+# Add repository
+sudo curl -fsSL {{BASE_URL}}/rpm/supervizio.repo -o /etc/yum.repos.d/supervizio.repo
+
+# Install
+sudo dnf install supervizio</code></pre>
+
+      <h3>Alpine Linux</h3>
+      <pre><code># Add signing key
+sudo wget -O /etc/apk/keys/supervizio.rsa.pub {{BASE_URL}}/apk/supervizio.rsa.pub
+
+# Add repository
+echo "{{BASE_URL}}/apk/v3.21/main" | sudo tee -a /etc/apk/repositories
+
+# Install
+sudo apk add supervizio</code></pre>
+    </section>
+
+    <section>
+      <h2>Binary Download</h2>
+      <p>For all platforms including BSD and macOS.</p>
+
+      <h3>Automatic (Linux/macOS/BSD)</h3>
+      <pre><code># Detect platform and download
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/;s/armv7l/arm/;s/i686/386/')
+
+curl -fsSL "{{GITHUB_URL}}/releases/latest/download/supervizio-${OS}-${ARCH}" -o supervizio
+chmod +x supervizio
+sudo mv supervizio /usr/local/bin/</code></pre>
+
+      <h3>Manual Download</h3>
+      <p>Download the appropriate binary from <a href="{{GITHUB_URL}}/releases">GitHub Releases</a>:</p>
+      <table>
+        <thead>
+          <tr><th>Platform</th><th>Architecture</th><th>File</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Linux</td><td>x86_64</td><td><code>supervizio-linux-amd64</code></td></tr>
+          <tr><td>Linux</td><td>ARM64</td><td><code>supervizio-linux-arm64</code></td></tr>
+          <tr><td>macOS</td><td>x86_64</td><td><code>supervizio-darwin-amd64</code></td></tr>
+          <tr><td>macOS</td><td>Apple Silicon</td><td><code>supervizio-darwin-arm64</code></td></tr>
+          <tr><td>FreeBSD</td><td>x86_64</td><td><code>supervizio-freebsd-amd64</code></td></tr>
+          <tr><td>OpenBSD</td><td>x86_64</td><td><code>supervizio-openbsd-amd64</code></td></tr>
+          <tr><td>NetBSD</td><td>x86_64</td><td><code>supervizio-netbsd-amd64</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Package Files</h2>
+      <p>Download individual packages from releases:</p>
+      <pre><code># Debian/Ubuntu (.deb)
+sudo dpkg -i supervizio_*.deb
+
+# Rocky/RHEL (.rpm)
+sudo rpm -i supervizio-*.rpm
+
+# Alpine (.apk)
+sudo apk add --allow-untrusted supervizio-*.apk</code></pre>
+    </section>
+
+    <section>
+      <h2>From Source</h2>
+      <p>Requires Go 1.25+</p>
+      <pre><code>git clone {{GITHUB_URL}}.git
+cd daemon/src
+go build -o supervizio ./cmd/daemon
+sudo mv supervizio /usr/local/bin/</code></pre>
+    </section>
+
+    <section>
+      <h2>Post-Install</h2>
+
+      <h3>Enable Service (systemd)</h3>
+      <pre><code>sudo systemctl enable --now supervizio</code></pre>
+
+      <h3>Enable Service (OpenRC)</h3>
+      <pre><code>sudo rc-update add supervizio default
+sudo rc-service supervizio start</code></pre>
+
+      <h3>Enable Service (BSD rc.d)</h3>
+      <pre><code>sudo sysrc supervizio_enable=YES
+sudo service supervizio start</code></pre>
+
+      <h3>Verify Installation</h3>
+      <pre><code>supervizio --version</code></pre>
+    </section>
+
+    <section>
+      <h2>GPG Key</h2>
+      <p>Packages are signed with GPG. Public key: <a href="gpg.key">gpg.key</a></p>
+      <pre><code>Fingerprint: {{GPG_FINGERPRINT}}</code></pre>
+    </section>
+  </main>
+
+  <footer>
+    <a href="{{GITHUB_URL}}">GitHub</a>
+    <a href="{{GITHUB_URL}}/releases">Releases</a>
+    <a href="gpg.key">GPG Key</a>
+  </footer>
+</body>
+</html>

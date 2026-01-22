@@ -12,27 +12,15 @@ bootstrap/
 └── wire_gen.go      # Generated code (DO NOT EDIT)
 ```
 
-## Files
-
-| File | Purpose |
-|------|---------|
-| `app.go` | Entry point (`Run()`), App struct, signal handling |
-| `providers.go` | Custom providers for complex dependencies |
-| `wire.go` | Wire injector declaration (ignored at build) |
-| `wire_gen.go` | Auto-generated initialization code |
-
 ## Key Types
 
 ### App
-
 ```go
 type App struct {
     Supervisor *appsupervisor.Supervisor
     Cleanup    func()
 }
 ```
-
-Root object holding all wired dependencies.
 
 ### Providers
 
@@ -42,44 +30,19 @@ Root object holding all wired dependencies.
 | `LoadConfig` | Loads config from path via Loader |
 | `NewApp` | Creates final App struct |
 
-## Dependency Graph
+## Interface Bindings
 
-```
-configPath (string)
-    │
-    ▼
-infraconfig.NewLoader() ──────► appconfig.Loader
-    │                                │
-    ▼                                ▼
-LoadConfig() ◄───────────────── service.Config
-                                     │
-kernel.New() ──────────────────────► │
-    │                                │
-    ├─► infraprocess.NewUnixExecutorWithKernel()
-    │       │
-    │       ▼
-    │   domain.Executor
-    │       │
-    └─► ProvideReaper() ─────────────│
-            │                        │
-            ▼                        ▼
-        ZombieReaper            Supervisor
-                                     │
-                                     ▼
-                                   App
-```
+| Interface | Implementation |
+|-----------|----------------|
+| `appconfig.Loader` | `*infraconfig.Loader` |
+| `domain.Executor` | `*infraprocess.UnixExecutor` |
+| `domainkernel.ZombieReaper` | `*reaper.UnixZombieReaper` (or nil) |
 
 ## Commands
 
 ```bash
-# Generate wire_gen.go
-wire ./internal/bootstrap/
-
-# Or via go generate (if //go:generate directive added)
-go generate ./internal/bootstrap/...
-
-# Build (uses wire_gen.go, ignores wire.go)
-go build ./cmd/daemon
+wire ./internal/bootstrap/           # Generate wire_gen.go
+go build ./cmd/daemon                # Build (uses wire_gen.go)
 ```
 
 ## Wire Build Tags
@@ -89,25 +52,10 @@ go build ./cmd/daemon
 | `wire.go` | `//go:build wireinject` | Only by Wire tool |
 | `wire_gen.go` | `//go:build !wireinject` | Normal builds |
 
-## Interface Bindings
-
-| Interface | Implementation |
-|-----------|----------------|
-| `appconfig.Loader` | `*infraconfig.Loader` |
-| `domain.Executor` | `*infraprocess.UnixExecutor` |
-| `domainkernel.ZombieReaper` | `*reaper.UnixZombieReaper` (or nil) |
-
 ## Usage
 
 ```go
 // cmd/daemon/main.go
-package main
-
-import (
-    "os"
-    "github.com/kodflow/daemon/internal/bootstrap"
-)
-
 func main() {
     os.Exit(bootstrap.Run())
 }
@@ -117,11 +65,10 @@ func main() {
 
 - `github.com/google/wire` - Compile-time DI
 
-## Related
+## Related Packages
 
-| Directory | Relation |
-|-----------|----------|
-| `../application/supervisor/` | Supervisor dependency |
-| `../infrastructure/kernel/` | Kernel, executor, reaper |
-| `../infrastructure/persistence/config/yaml/` | Config loader |
-| `../../cmd/daemon/` | Entry point using bootstrap |
+| Package | Relation |
+|---------|----------|
+| `application/supervisor` | Supervisor dependency |
+| `infrastructure/process/executor` | Process executor |
+| `infrastructure/persistence/config/yaml` | Config loader |

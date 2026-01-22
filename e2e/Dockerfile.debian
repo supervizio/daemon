@@ -1,0 +1,25 @@
+# =============================================================================
+# E2E Test Container: Debian 13 (trixie) - systemd
+# =============================================================================
+# Validates supervizio binary runs correctly on Debian with systemd.
+# =============================================================================
+
+FROM debian:trixie-slim
+
+# Install minimal dependencies for testing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    procps \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /var/log/supervizio /etc/supervizio
+
+# Copy supervizio binary (built externally for the target architecture)
+COPY bin/supervizio /usr/local/bin/supervizio
+RUN chmod +x /usr/local/bin/supervizio
+
+# Copy minimal test configuration
+COPY e2e/config-scratch.yaml /etc/supervizio/config.yaml
+
+# supervizio as entrypoint
+ENTRYPOINT ["/usr/local/bin/supervizio"]
+CMD ["--version"]

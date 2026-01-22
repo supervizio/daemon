@@ -1,0 +1,232 @@
+# =============================================================================
+# Deploy Package Repository to GitHub Pages
+# =============================================================================
+# Creates signed APT (deb), YUM (rpm), and APK repositories from release packages.
+# Triggered after a release is published.
+#
+# Required Secrets:
+#   GPG_SIGNING_KEY  - ASCII-armored GPG secret key (gpg --export-secret-keys --armor)
+#   GPG_PASSPHRASE   - Passphrase for the GPG key (optional if unencrypted)
+# =============================================================================
+name: Deploy Repository
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to deploy (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy-repo:
+    name: Deploy Package Repository
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          echo "Using release tag: ${TAG}"
+
+      - name: Download release packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p packages
+          cd packages
+
+          # Download all .deb, .rpm, .apk files from the release
+          gh release download "${{ steps.tag.outputs.tag }}" \
+            --pattern "*.deb" \
+            --pattern "*.rpm" \
+            --pattern "*.apk" \
+            --clobber || echo "Some packages may not exist yet"
+
+          echo "Downloaded packages:"
+          ls -la
+
+      - name: Import GPG key
+        env:
+          GPG_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_PASS: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_KEY" | gpg --batch --import
+          if [ -n "$GPG_PASS" ]; then
+            echo "allow-preset-passphrase" >> ~/.gnupg/gpg-agent.conf
+            gpg-connect-agent reloadagent /bye
+          fi
+
+      - name: Get GPG key info
+        id: gpg
+        run: |
+          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
+          echo "key_id=${KEY_ID}" >> $GITHUB_OUTPUT
+          echo "GPG Key ID: ${KEY_ID}"
+
+          # Export public key
+          mkdir -p repo
+          gpg --armor --export "${KEY_ID}" > repo/gpg.key
+          echo "Public key exported to repo/gpg.key"
+
+      # =========================================================================
+      # APT Repository (Debian/Devuan)
+      # =========================================================================
+      - name: Install reprepro
+        run: sudo apt-get update && sudo apt-get install -y reprepro
+
+      - name: Create APT repository
+        run: |
+          mkdir -p repo/apt/conf
+
+          # Create distributions config
+          cat > repo/apt/conf/distributions << 'EOF'
+          Origin: supervizio
+          Label: supervizio
+          Codename: stable
+          Architectures: amd64 arm64
+          Components: main
+          Description: supervizio - PID1-capable process supervisor
+          SignWith: ${{ steps.gpg.outputs.key_id }}
+          EOF
+
+          # Add packages to repository
+          cd repo/apt
+          for deb in ../../packages/*.deb; do
+            [ -f "$deb" ] && reprepro includedeb stable "$deb"
+          done
+
+          echo "APT repository created:"
+          find . -type f | head -20
+
+      # =========================================================================
+      # YUM/DNF Repository (Rocky/RHEL/Fedora)
+      # =========================================================================
+      - name: Install createrepo
+        run: sudo apt-get install -y createrepo-c
+
+      - name: Create YUM repository
+        run: |
+          mkdir -p repo/rpm/packages
+
+          # Copy RPM packages
+          cp packages/*.rpm repo/rpm/packages/ 2>/dev/null || echo "No RPM packages found"
+
+          # Sign each RPM
+          for rpm in repo/rpm/packages/*.rpm; do
+            [ -f "$rpm" ] && rpm --addsign "$rpm" 2>/dev/null || true
+          done
+
+          # Create repository metadata
+          cd repo/rpm
+          createrepo_c .
+
+          # Sign repository metadata
+          gpg --detach-sign --armor repodata/repomd.xml
+
+          # Create repo file for users
+          cat > supervizio.repo << 'EOF'
+          [supervizio]
+          name=supervizio - PID1-capable process supervisor
+          baseurl=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/rpm
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/gpg.key
+          EOF
+
+          echo "YUM repository created:"
+          ls -la
+
+      # =========================================================================
+      # APK Repository (Alpine)
+      # =========================================================================
+      - name: Create APK repository
+        run: |
+          mkdir -p repo/apk/v3.21/main/x86_64
+          mkdir -p repo/apk/v3.21/main/aarch64
+
+          # Copy APK packages (separate by architecture)
+          for apk in packages/*amd64*.apk packages/*x86_64*.apk; do
+            [ -f "$apk" ] && cp "$apk" repo/apk/v3.21/main/x86_64/
+          done
+          for apk in packages/*arm64*.apk packages/*aarch64*.apk; do
+            [ -f "$apk" ] && cp "$apk" repo/apk/v3.21/main/aarch64/
+          done
+
+          # Generate RSA key for APK signing (Alpine uses RSA, not GPG)
+          openssl genrsa -out /tmp/supervizio.rsa 4096
+          openssl rsa -in /tmp/supervizio.rsa -pubout -out repo/apk/supervizio.rsa.pub
+
+          # Create index files
+          cd repo/apk/v3.21/main/x86_64
+          if ls *.apk 1>/dev/null 2>&1; then
+            apk index -o APKINDEX.tar.gz *.apk 2>/dev/null || tar -czf APKINDEX.tar.gz *.apk
+          fi
+
+          cd ../aarch64
+          if ls *.apk 1>/dev/null 2>&1; then
+            apk index -o APKINDEX.tar.gz *.apk 2>/dev/null || tar -czf APKINDEX.tar.gz *.apk
+          fi
+
+          echo "APK repository created:"
+          find ../../.. -name "*.apk" -o -name "APKINDEX*" | head -20
+
+      # =========================================================================
+      # Website
+      # =========================================================================
+      - name: Build website
+        run: |
+          cp -r website/* repo/
+
+          # Variables
+          VERSION="${{ steps.tag.outputs.version }}"
+          BASE_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          GITHUB_URL="https://github.com/${{ github.repository }}"
+          GPG_FP=$(gpg --fingerprint ${{ steps.gpg.outputs.key_id }} | grep -A1 "fingerprint" | tail -1 | xargs)
+
+          # Replace placeholders in all HTML files
+          for f in repo/*.html; do
+            sed -i "s|{{VERSION}}|${VERSION}|g" "$f"
+            sed -i "s|{{BASE_URL}}|${BASE_URL}|g" "$f"
+            sed -i "s|{{GITHUB_URL}}|${GITHUB_URL}|g" "$f"
+            sed -i "s|{{GPG_FINGERPRINT}}|${GPG_FP}|g" "$f"
+          done
+
+      # =========================================================================
+      # Deploy to GitHub Pages
+      # =========================================================================
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: repo
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,26 @@
+# =============================================================================
+# E2E Test Container: Alpine 3.21 - OpenRC
+# =============================================================================
+# Validates supervizio binary runs correctly on Alpine with OpenRC init system.
+# Note: Alpine uses musl libc, so binary must be statically compiled.
+# =============================================================================
+
+FROM alpine:3.21
+
+# Install minimal dependencies for testing
+RUN apk add --no-cache \
+    curl \
+    procps \
+    && mkdir -p /var/log/supervizio /etc/supervizio
+
+# Copy supervizio binary (built externally for the target architecture)
+# MUST be statically compiled (CGO_ENABLED=0) for Alpine/musl
+COPY bin/supervizio /usr/local/bin/supervizio
+RUN chmod +x /usr/local/bin/supervizio
+
+# Copy minimal test configuration
+COPY e2e/config-scratch.yaml /etc/supervizio/config.yaml
+
+# supervizio as entrypoint
+ENTRYPOINT ["/usr/local/bin/supervizio"]
+CMD ["--version"]
