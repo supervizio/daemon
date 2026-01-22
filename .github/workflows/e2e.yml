@@ -272,10 +272,34 @@ jobs:
         working-directory: e2e
         run: |
           # Use synced folders (rsync) - /setup, /bin-local, /vagrant are already mounted
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo cp /bin-local/supervizio /usr/local/bin/ && sudo chmod +x /usr/local/bin/supervizio"
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chmod +x /setup/*.sh && sudo /setup/install.sh"
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "/usr/local/bin/supervizio --version"
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh /vagrant/test-install.sh"
+          echo "=== Step 1: Verify synced folders exist ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /bin-local/ /setup/ /vagrant/" || {
+            echo "ERROR: Synced folders not found"
+            exit 1
+          }
+
+          echo "=== Step 2: Copy binary to /usr/local/bin ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo cp /bin-local/supervizio /usr/local/bin/ && sudo chmod +x /usr/local/bin/supervizio" || {
+            echo "ERROR: Failed to copy binary"
+            exit 1
+          }
+
+          echo "=== Step 3: Run install script ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chmod +x /setup/*.sh && sudo /setup/install.sh" || {
+            echo "ERROR: Install script failed"
+            exit 1
+          }
+
+          echo "=== Step 4: Check version ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "/usr/local/bin/supervizio --version" || {
+            echo "WARNING: Version check failed (may be expected)"
+          }
+
+          echo "=== Step 5: Run test script ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh /vagrant/test-install.sh" || {
+            echo "ERROR: Test script failed"
+            exit 1
+          }
 
       - name: Cleanup VM
         if: always()

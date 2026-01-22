@@ -118,7 +118,13 @@ Vagrant.configure("2") do |config|
   config.vm.define "rocky", autostart: false do |v|
     v.vm.box = "generic/rocky9"
     v.vm.hostname = "e2e-rocky"
-    v.vm.provision "shell", inline: "dnf install -y -q curl rsync"
+    v.vm.provision "shell", inline: <<-SHELL
+      # Update package cache and install rsync (verbose for debugging)
+      dnf makecache --refresh || true
+      dnf install -y curl rsync
+      # Verify rsync is installed
+      which rsync && rsync --version | head -1
+    SHELL
   end
 
   # ===========================================================================
@@ -197,7 +203,13 @@ Vagrant.configure("2") do |config|
   config.vm.define "netbsd", autostart: false do |v|
     v.vm.box = "generic/netbsd9"
     v.vm.hostname = "e2e-netbsd"
-    v.vm.provision "shell", inline: "pkgin -y install curl rsync"
+    v.vm.provision "shell", inline: <<-SHELL
+      # Update pkgin database and install packages
+      pkgin -y update || true
+      pkgin -y install curl rsync
+      # Verify rsync is installed
+      which rsync && rsync --version | head -1
+    SHELL
   end
 
   # DragonFlyBSD 6.4
