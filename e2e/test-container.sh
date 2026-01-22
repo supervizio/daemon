@@ -76,14 +76,14 @@ echo -e "\n${YELLOW}[Test 2]${NC} Managed services running"
 if docker exec "${CONTAINER_NAME}" pgrep -x nginx > /dev/null 2>&1; then
     test_result 0 "nginx is running"
 else
-    test_result 1 "nginx is running"
+    test_result 1 "nginx is NOT running"
 fi
 
 # Check redis
 if docker exec "${CONTAINER_NAME}" pgrep -x redis-server > /dev/null 2>&1; then
     test_result 0 "redis-server is running"
 else
-    test_result 1 "redis-server is running"
+    test_result 1 "redis-server is NOT running"
 fi
 
 # =============================================================================
@@ -172,11 +172,11 @@ REDIS_PONG=$(docker exec "${CONTAINER_NAME}" sh -c 'echo "PING" | nc -q1 localho
 if echo "$REDIS_PONG" | grep -q "PONG"; then
     test_result 0 "redis responds to PING"
 else
-    # Fallback: just check if port is listening
+    # Check if port is at least open for diagnostic info
     if docker exec "${CONTAINER_NAME}" sh -c 'cat < /dev/tcp/localhost/6379' 2>/dev/null; then
-        test_result 0 "redis port 6379 is open"
+        test_result 1 "redis port 6379 is open but does not respond to PING (got: $REDIS_PONG)"
     else
-        test_result 1 "redis responds (got: $REDIS_PONG)"
+        test_result 1 "redis port 6379 is NOT open"
     fi
 fi
 
