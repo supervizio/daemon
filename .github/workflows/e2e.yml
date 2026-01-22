@@ -136,37 +136,46 @@ jobs:
         if: ${{ matrix.skip_vm != true }}
         working-directory: e2e
         run: |
+          # Wait a moment for VM to be fully ready
+          echo "=== Waiting for VM to stabilize ==="
+          sleep 5
+
           # Try vagrant rsync first (works for most VMs with rsync pre-installed)
           echo "=== Attempting vagrant rsync ==="
           if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
             echo "=== Rsync succeeded ==="
           else
-            echo "=== Rsync failed, using scp fallback ==="
+            echo "=== Rsync failed (exit code: $?), using tar-over-ssh fallback ==="
 
-            # Get SSH config
-            sudo -E vagrant ssh-config ${{ matrix.vm }} > /tmp/ssh-config
-
-            # Extract SSH details
-            SSH_HOST=$(grep -m1 "HostName" /tmp/ssh-config | awk '{print $2}')
-            SSH_PORT=$(grep -m1 "Port" /tmp/ssh-config | awk '{print $2}')
-            SSH_USER=$(grep -m1 "User" /tmp/ssh-config | awk '{print $2}')
-            SSH_KEY=$(grep -m1 "IdentityFile" /tmp/ssh-config | awk '{print $2}')
-
-            echo "SSH config: $SSH_USER@$SSH_HOST:$SSH_PORT key=$SSH_KEY"
+            # Verify SSH connectivity
+            echo "=== Verifying SSH connectivity ==="
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'SSH works'; uname -a; which tar" || {
+              echo "ERROR: SSH connectivity failed"
+              exit 1
+            }
 
             # Create directories on guest
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
+            echo "=== Creating directories ==="
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant && ls -la /setup /bin-local /vagrant"
 
-            # Create tar archive and copy via scp
-            echo "=== Creating and copying tar archive ==="
-            tar -czf /tmp/e2e-files.tar.gz -C .. setup bin e2e
+            # Copy files using tar piped through vagrant ssh (same approach as BSD)
+            echo "=== Copying setup folder ==="
+            tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv" || {
+              echo "ERROR: Failed to copy setup folder"
+              exit 1
+            }
 
-            scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                -i "$SSH_KEY" -P "$SSH_PORT" \
-                /tmp/e2e-files.tar.gz "$SSH_USER@$SSH_HOST:/tmp/"
+            echo "=== Copying bin folder ==="
+            tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1" || {
+              echo "ERROR: Failed to copy bin folder"
+              exit 1
+            }
 
-            # Extract on guest
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "cd /tmp && sudo tar -xzf e2e-files.tar.gz && sudo mv setup /setup_tmp && sudo mv /setup_tmp/* /setup/ && sudo rmdir /setup_tmp && sudo mv bin/* /bin-local/ && sudo mv e2e/* /vagrant/ && rm -rf bin e2e e2e-files.tar.gz"
+            echo "=== Copying vagrant folder ==="
+            tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant" || {
+              echo "ERROR: Failed to copy vagrant folder"
+              exit 1
+            }
 
             # Fix permissions
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
@@ -293,6 +302,10 @@ jobs:
       - name: Sync folders
         working-directory: e2e
         run: |
+          # Wait a moment for VM to be fully ready
+          echo "=== Waiting for VM to stabilize ==="
+          sleep 5
+
           # Try vagrant rsync first (works for most VMs with rsync pre-installed)
           echo "=== Attempting vagrant rsync ==="
           if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
