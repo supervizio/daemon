@@ -19,10 +19,10 @@
 #   - alpine-runit: Alpine 3.21 with runit (.apk)
 #
 # BSD (rc.d):
-#   - freebsd: FreeBSD 15 (pkg)
-#   - openbsd: OpenBSD 7.8 (pkg)
-#   - netbsd: NetBSD 10 (pkgin)
-#   - dragonfly: DragonFlyBSD 6.4 (pkg)
+#   - freebsd: FreeBSD 14 (pkg)
+#   - openbsd: OpenBSD 7 (pkg)
+#   - netbsd: NetBSD 9 (pkgin)
+#   - dragonfly: DragonFlyBSD 6 (pkg)
 #
 # Note: Vagrant boxes may lag behind latest versions. Using latest available.
 #
@@ -193,9 +193,9 @@ Vagrant.configure("2") do |config|
     v.vm.provision "shell", inline: "pkg_add curl"
   end
 
-  # NetBSD 10
+  # NetBSD 9 (netbsd10 box not yet available on Vagrant Cloud)
   config.vm.define "netbsd", autostart: false do |v|
-    v.vm.box = "generic/netbsd10"
+    v.vm.box = "generic/netbsd9"
     v.vm.hostname = "e2e-netbsd"
     v.vm.provision "shell", inline: "pkgin -y install curl"
   end

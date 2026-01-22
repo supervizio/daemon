@@ -13,7 +13,7 @@ End-to-end testing across all supported platforms and init systems (AMD64 only).
 | runit | Alpine 3.21 | .apk | ✅ | ✅ |
 | BSD rc.d | FreeBSD 14 | pkg | ✅ | - |
 | BSD rc.d | OpenBSD 7 | pkg | ✅ | - |
-| BSD rc.d | NetBSD 10 | pkgin | ✅ | - |
+| BSD rc.d | NetBSD 9 | pkgin | ✅ | - |
 | BSD rc.d | DragonFlyBSD 6 | pkg | ✅ | - |
 
 ## Structure
