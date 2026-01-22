@@ -132,6 +132,11 @@ jobs:
         working-directory: e2e
         run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
 
+      - name: Sync folders
+        if: ${{ matrix.skip_vm != true }}
+        working-directory: e2e
+        run: sudo -E vagrant rsync ${{ matrix.vm }}
+
       - name: Run VM tests
         if: ${{ matrix.skip_vm != true }}
         working-directory: e2e
@@ -242,6 +247,10 @@ jobs:
       - name: Start VM
         working-directory: e2e
         run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+
+      - name: Sync folders
+        working-directory: e2e
+        run: sudo -E vagrant rsync ${{ matrix.vm }}
 
       - name: Run VM tests
         working-directory: e2e
