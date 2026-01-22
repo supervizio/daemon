@@ -252,7 +252,11 @@ install_init() {
             log_info "Installing NetBSD rc.d service"
             cp "$SCRIPT_DIR/init/netbsd/supervizio" /etc/rc.d/
             chmod +x /etc/rc.d/supervizio
-            echo "supervizio=YES" >> /etc/rc.conf
+            # Ensure rc.conf exists and add enable line if not present
+            touch /etc/rc.conf
+            if ! grep -q "^supervizio=" /etc/rc.conf; then
+                echo "supervizio=YES" >> /etc/rc.conf
+            fi
             log_info "Service enabled. Start with: /etc/rc.d/supervizio start"
             ;;
         darwin)
