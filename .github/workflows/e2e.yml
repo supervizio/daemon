@@ -14,7 +14,7 @@
 # BSD (4 jobs) - e2e-bsd:
 #   - FreeBSD 14 (rc.d) - Vagrant
 #   - OpenBSD 7 (rc.d) - Vagrant
-#   - NetBSD 10 (rc.d) - Vagrant
+#   - NetBSD 9 (rc.d) - Vagrant
 #   - DragonFlyBSD 6 (rc.d) - Vagrant
 #
 # Total: 9 jobs (2 workflow jobs)
@@ -243,14 +243,12 @@ jobs:
         working-directory: e2e
         run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
 
-      - name: Copy files and run tests
+      - name: Run VM tests
         working-directory: e2e
         run: |
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /usr/local/bin"
-          sudo -E vagrant scp ../setup ${{ matrix.vm }}:/tmp/setup
-          sudo -E vagrant scp ../bin/supervizio ${{ matrix.vm }}:/tmp/supervizio
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo cp -r /tmp/setup/* /setup/ && sudo cp /tmp/supervizio /usr/local/bin/ && sudo chmod +x /setup/*.sh /usr/local/bin/supervizio"
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo /setup/install.sh"
+          # Use synced folders (rsync) - /setup, /bin-local, /vagrant are already mounted
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo cp /bin-local/supervizio /usr/local/bin/ && sudo chmod +x /usr/local/bin/supervizio"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chmod +x /setup/*.sh && sudo /setup/install.sh"
           sudo -E vagrant ssh ${{ matrix.vm }} -c "/usr/local/bin/supervizio --version"
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh /vagrant/test-install.sh"
 
