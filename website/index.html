@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>supervizio Package Repository</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>supervizio</h1>
+      <p class="tagline">PID1-capable process supervisor for containers and Unix systems</p>
+      <p class="version">Current version: <strong>{{VERSION}}</strong></p>
+    </header>
+
+    <main>
+      <section>
+        <h2>Debian / Ubuntu / Devuan</h2>
+        <pre><code># Add GPG key
+curl -fsSL {{BASE_URL}}/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/supervizio.gpg
+
+# Add repository
+echo "deb [signed-by=/etc/apt/keyrings/supervizio.gpg] {{BASE_URL}}/apt stable main" | sudo tee /etc/apt/sources.list.d/supervizio.list
+
+# Install
+sudo apt update && sudo apt install supervizio</code></pre>
+      </section>
+
+      <section>
+        <h2>Rocky Linux / RHEL / Fedora</h2>
+        <pre><code># Add GPG key
+sudo rpm --import {{BASE_URL}}/gpg.key
+
+# Add repository
+sudo curl -fsSL {{BASE_URL}}/rpm/supervizio.repo -o /etc/yum.repos.d/supervizio.repo
+
+# Install
+sudo dnf install supervizio</code></pre>
+      </section>
+
+      <section>
+        <h2>Alpine Linux</h2>
+        <pre><code># Add signing key
+sudo wget -O /etc/apk/keys/supervizio.rsa.pub {{BASE_URL}}/apk/supervizio.rsa.pub
+
+# Add repository
+echo "{{BASE_URL}}/apk/v3.21/main" | sudo tee -a /etc/apk/repositories
+
+# Install
+sudo apk add supervizio</code></pre>
+      </section>
+
+      <section>
+        <h2>Direct Download</h2>
+        <p>Download packages directly from <a href="{{GITHUB_URL}}/releases">GitHub Releases</a>.</p>
+      </section>
+
+      <section>
+        <h2>GPG Key</h2>
+        <p>Download: <a href="gpg.key">gpg.key</a></p>
+        <pre><code>Key fingerprint: {{GPG_FINGERPRINT}}</code></pre>
+      </section>
+    </main>
+
+    <footer>
+      <p><a href="{{GITHUB_URL}}">GitHub</a> · <a href="{{GITHUB_URL}}/blob/main/docs/INSTALL.md">Documentation</a></p>
+    </footer>
+  </div>
+</body>
+</html>

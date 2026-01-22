@@ -196,73 +196,23 @@ jobs:
           find ../../.. -name "*.apk" -o -name "APKINDEX*" | head -20
 
       # =========================================================================
-      # Installation Instructions
+      # Website
       # =========================================================================
-      - name: Generate index.html
+      - name: Build website
         run: |
+          cp -r website/* repo/
+
+          # Variables
           VERSION="${{ steps.tag.outputs.version }}"
-          cat > repo/index.html << EOF
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>supervizio Package Repository</title>
-            <style>
-              body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
-              pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }
-              h2 { border-bottom: 1px solid #ddd; padding-bottom: 10px; }
-              code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
-            </style>
-          </head>
-          <body>
-            <h1>supervizio Package Repository</h1>
-            <p>PID1-capable process supervisor for containers and Unix systems.</p>
-            <p><strong>Current version:</strong> ${VERSION}</p>
+          BASE_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          GITHUB_URL="https://github.com/${{ github.repository }}"
+          GPG_FP=$(gpg --fingerprint ${{ steps.gpg.outputs.key_id }} | grep -A1 "fingerprint" | tail -1 | xargs)
 
-            <h2>Debian / Ubuntu / Devuan</h2>
-            <pre>
-          # Add GPG key
-          curl -fsSL https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/supervizio.gpg
-
-          # Add repository
-          echo "deb [signed-by=/etc/apt/keyrings/supervizio.gpg] https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/apt stable main" | sudo tee /etc/apt/sources.list.d/supervizio.list
-
-          # Install
-          sudo apt update && sudo apt install supervizio
-            </pre>
-
-            <h2>Rocky Linux / RHEL / Fedora</h2>
-            <pre>
-          # Add GPG key
-          sudo rpm --import https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/gpg.key
-
-          # Add repository
-          sudo curl -fsSL https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/rpm/supervizio.repo -o /etc/yum.repos.d/supervizio.repo
-
-          # Install
-          sudo dnf install supervizio
-            </pre>
-
-            <h2>Alpine Linux</h2>
-            <pre>
-          # Add signing key
-          sudo wget -O /etc/apk/keys/supervizio.rsa.pub https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/apk/supervizio.rsa.pub
-
-          # Add repository
-          echo "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/apk/v3.21/main" | sudo tee -a /etc/apk/repositories
-
-          # Install
-          sudo apk add supervizio
-            </pre>
-
-            <h2>Direct Download</h2>
-            <p>Download packages directly from <a href="https://github.com/${{ github.repository }}/releases">GitHub Releases</a>.</p>
-
-            <h2>GPG Key</h2>
-            <p>Download: <a href="gpg.key">gpg.key</a></p>
-            <pre>Key fingerprint: $(gpg --fingerprint ${{ steps.gpg.outputs.key_id }} | grep -A1 "Key fingerprint" | tail -1 | tr -d ' ')</pre>
-          </body>
-          </html>
-          EOF
+          # Replace placeholders
+          sed -i "s|{{VERSION}}|${VERSION}|g" repo/index.html
+          sed -i "s|{{BASE_URL}}|${BASE_URL}|g" repo/index.html
+          sed -i "s|{{GITHUB_URL}}|${GITHUB_URL}|g" repo/index.html
+          sed -i "s|{{GPG_FINGERPRINT}}|${GPG_FP}|g" repo/index.html
 
       # =========================================================================
       # Deploy to GitHub Pages
