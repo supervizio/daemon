@@ -1,11 +1,11 @@
 # =============================================================================
-# E2E Test Container: Fedora 41 - systemd
+# E2E Test Container: Fedora 40 - systemd
 # =============================================================================
 # Validates supervizio binary runs correctly on Fedora (upstream RHEL)
 # with systemd. Covers dnf/rpm package manager ecosystem.
 # =============================================================================
 
-FROM fedora:41
+FROM fedora:40
 
 # Install minimal dependencies for testing
 RUN dnf install -y --setopt=install_weak_deps=False \

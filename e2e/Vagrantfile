@@ -115,9 +115,9 @@ Vagrant.configure("2") do |config|
     v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl rsync"
   end
 
-  # Fedora 41 - RPM/dnf + systemd (replaces Rocky which has SSH issues)
+  # Fedora 40 - RPM/dnf + systemd (replaces Rocky which has SSH issues)
   config.vm.define "fedora", autostart: false do |v|
-    v.vm.box = "generic/fedora41"
+    v.vm.box = "generic/fedora40"
     v.vm.hostname = "e2e-fedora"
     v.vm.provision "shell", inline: <<-SHELL
       # Update package cache and install rsync
