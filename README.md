@@ -21,6 +21,27 @@ PID1-capable process supervisor for containers and Linux/BSD systems. Manages mu
 
 ## Installation
 
+See [docs/INSTALL.md](docs/INSTALL.md) for full installation guide.
+
+### Package Repository (Linux)
+
+```bash
+# Debian/Ubuntu/Devuan
+curl -fsSL https://supervizio.github.io/daemon/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/supervizio.gpg
+echo "deb [signed-by=/etc/apt/keyrings/supervizio.gpg] https://supervizio.github.io/daemon/apt stable main" | sudo tee /etc/apt/sources.list.d/supervizio.list
+sudo apt update && sudo apt install supervizio
+
+# Rocky/RHEL/Fedora
+sudo rpm --import https://supervizio.github.io/daemon/gpg.key
+sudo curl -fsSL https://supervizio.github.io/daemon/rpm/supervizio.repo -o /etc/yum.repos.d/supervizio.repo
+sudo dnf install supervizio
+
+# Alpine
+wget -O /etc/apk/keys/supervizio.rsa.pub https://supervizio.github.io/daemon/apk/supervizio.rsa.pub
+echo "https://supervizio.github.io/daemon/apk/v3.21/main" >> /etc/apk/repositories
+apk add supervizio
+```
+
 ### Pre-built binaries
 
 Download from [GitHub releases](https://github.com/supervizio/daemon/releases).

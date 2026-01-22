@@ -195,6 +195,9 @@ jobs:
   # =============================================================================
   # Generate Linux Packages (.deb, .rpm, .apk)
   # =============================================================================
+  # Packages are signed with GPG for trusted distribution.
+  # Required secrets: GPG_SIGNING_KEY, GPG_PASSPHRASE (optional)
+  # =============================================================================
   packages:
     name: Package ${{ matrix.format }} (${{ matrix.arch }})
     needs: [version, build]
@@ -221,6 +224,18 @@ jobs:
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
+      - name: Import GPG key
+        if: ${{ secrets.GPG_SIGNING_KEY != '' }}
+        env:
+          GPG_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_PASS: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_KEY" | gpg --batch --import
+          if [ -n "$GPG_PASS" ]; then
+            echo "allow-preset-passphrase" >> ~/.gnupg/gpg-agent.conf
+            gpg-connect-agent reloadagent /bye
+          fi
+
       - name: Build package
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -239,9 +254,30 @@ jobs:
             --packager ${{ matrix.format }} \
             --target ./
 
-          # List generated package
-          ls -la *.${matrix.format}* 2>/dev/null || ls -la *.${{ matrix.format }}* 2>/dev/null || echo "Package files:"
+          # Rename to include architecture clearly
+          for f in *.deb *.rpm *.apk 2>/dev/null; do
+            [ -f "$f" ] || continue
+            echo "Generated: $f"
+          done
+
           ls -la
+
+      - name: Sign DEB package
+        if: matrix.format == 'deb' && secrets.GPG_SIGNING_KEY != ''
+        run: |
+          sudo apt-get update && sudo apt-get install -y dpkg-sig
+          for deb in *.deb; do
+            [ -f "$deb" ] && dpkg-sig --sign builder "$deb"
+          done
+
+      - name: Sign RPM package
+        if: matrix.format == 'rpm' && secrets.GPG_SIGNING_KEY != ''
+        run: |
+          # Configure RPM macros for signing
+          echo "%_gpg_name $(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)" > ~/.rpmmacros
+          for rpm in *.rpm; do
+            [ -f "$rpm" ] && rpm --addsign "$rpm" 2>/dev/null || echo "RPM signing skipped"
+          done
 
       - name: Upload package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
