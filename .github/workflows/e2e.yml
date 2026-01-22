@@ -153,10 +153,10 @@ jobs:
             # Create directories on guest
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
 
-            # Use scp with vagrant SSH config
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../setup/* default:/setup/
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../bin/* default:/bin-local/
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ./* default:/vagrant/
+            # Use scp with vagrant SSH config (hostname matches VM name)
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../setup/* ${{ matrix.vm }}:/setup/
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../bin/* ${{ matrix.vm }}:/bin-local/
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ./* ${{ matrix.vm }}:/vagrant/
 
             # Fix permissions
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
@@ -300,10 +300,10 @@ jobs:
             # Create directories on guest
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
 
-            # Use scp with vagrant SSH config
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../setup/* default:/setup/
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../bin/* default:/bin-local/
-            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ./* default:/vagrant/
+            # Use scp with vagrant SSH config (hostname matches VM name)
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../setup/* ${{ matrix.vm }}:/setup/
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ../bin/* ${{ matrix.vm }}:/bin-local/
+            scp -F /tmp/vagrant-ssh-config -o StrictHostKeyChecking=no -r ./* ${{ matrix.vm }}:/vagrant/
 
             # Fix permissions
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
