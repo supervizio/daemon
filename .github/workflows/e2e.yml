@@ -137,18 +137,25 @@ jobs:
         working-directory: e2e
         run: |
           # Wait for VM to be fully ready (some VMs need time after provisioning)
+          # Rocky Linux 9 in particular needs extra time after dnf operations
           echo "=== Waiting for VM to be SSH-ready ==="
-          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+          for i in $(seq 1 24); do
             if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
               echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
               break
             fi
-            if [ "$i" = "12" ]; then
-              echo "ERROR: VM not SSH-accessible after 60 seconds"
+            if [ "$i" = "24" ]; then
+              echo "ERROR: VM not SSH-accessible after 120 seconds"
+              echo "=== VM status ==="
               sudo -E vagrant status ${{ matrix.vm }} || true
+              echo "=== Attempting to get VM IP ==="
+              sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 || true
+              echo "=== Checking libvirt domain ==="
+              sudo virsh list --all || true
+              sudo virsh domifaddr e2e_${{ matrix.vm }} 2>/dev/null || true
               exit 1
             fi
-            echo "Waiting for VM... (attempt $i/12)"
+            echo "Waiting for VM... (attempt $i/24)"
             sleep 5
           done
 
@@ -314,19 +321,25 @@ jobs:
       - name: Sync folders
         working-directory: e2e
         run: |
-          # Wait for VM to be fully ready (some VMs need time after provisioning)
+          # Wait for VM to be fully ready (BSD VMs may need extra time)
           echo "=== Waiting for VM to be SSH-ready ==="
-          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+          for i in $(seq 1 24); do
             if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
               echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
               break
             fi
-            if [ "$i" = "12" ]; then
-              echo "ERROR: VM not SSH-accessible after 60 seconds"
+            if [ "$i" = "24" ]; then
+              echo "ERROR: VM not SSH-accessible after 120 seconds"
+              echo "=== VM status ==="
               sudo -E vagrant status ${{ matrix.vm }} || true
+              echo "=== Attempting to get VM IP ==="
+              sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 || true
+              echo "=== Checking libvirt domain ==="
+              sudo virsh list --all || true
+              sudo virsh domifaddr e2e_${{ matrix.vm }} 2>/dev/null || true
               exit 1
             fi
-            echo "Waiting for VM... (attempt $i/12)"
+            echo "Waiting for VM... (attempt $i/24)"
             sleep 5
           done
 
@@ -388,26 +401,36 @@ jobs:
             exit 1
           }
 
-          echo "=== Step 2: Copy binary to /usr/local/bin ==="
+          echo "=== Step 2: Check binary format ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "file /bin-local/supervizio || true; ls -la /bin-local/supervizio"
+
+          echo "=== Step 3: Copy binary to /usr/local/bin ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo cp /bin-local/supervizio /usr/local/bin/ && sudo chmod +x /usr/local/bin/supervizio" || {
             echo "ERROR: Failed to copy binary"
             exit 1
           }
 
-          echo "=== Step 3: Run install script ==="
+          echo "=== Step 4: Run install script ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chmod +x /setup/*.sh && sudo /setup/install.sh" || {
             echo "ERROR: Install script failed"
+            # Show diagnostic info
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /usr/local/bin/supervizio /etc/rc.d/ 2>/dev/null || true"
             exit 1
           }
 
-          echo "=== Step 4: Check version ==="
+          echo "=== Step 5: Check version ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "/usr/local/bin/supervizio --version" || {
             echo "WARNING: Version check failed (may be expected)"
           }
 
-          echo "=== Step 5: Run test script ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh /vagrant/test-install.sh" || {
+          echo "=== Step 6: Verify installation state before test ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /usr/local/bin/supervizio /etc/rc.d/supervizio 2>/dev/null || ls -la /usr/local/etc/rc.d/supervizio 2>/dev/null || true"
+
+          echo "=== Step 7: Run test script ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh -x /vagrant/test-install.sh" || {
             echo "ERROR: Test script failed"
+            # Show diagnostic info
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /usr/local/bin/ /etc/rc.d/ /usr/local/etc/rc.d/ 2>/dev/null || true"
             exit 1
           }
 
