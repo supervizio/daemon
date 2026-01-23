@@ -56,4 +56,4 @@ cd e2e/behavioral && go test -v -race ./...
 
 ## CI
 
-Job `e2e-behavioral` in `.github/workflows/e2e.yml`.
+Job `e2e-behavioral` in `.github/workflows/ci.yml`.

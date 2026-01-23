@@ -14,9 +14,10 @@ RUN dnf install -y --setopt=install_weak_deps=False \
     && dnf clean all \
     && mkdir -p /var/log/supervizio /etc/supervizio
 
-# Copy supervizio binary (built externally for the target architecture)
-COPY bin/supervizio /usr/local/bin/supervizio
-RUN chmod +x /usr/local/bin/supervizio
+# Copy and install supervizio package
+COPY bin/*.rpm /tmp/
+RUN rpm -i /tmp/*.rpm && rm -f /tmp/*.rpm \
+    && test -x /usr/local/bin/supervizio
 
 # Copy minimal test configuration
 COPY e2e/config-scratch.yaml /etc/supervizio/config.yaml

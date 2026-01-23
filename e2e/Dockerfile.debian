@@ -13,9 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/log/supervizio /etc/supervizio
 
-# Copy supervizio binary (built externally for the target architecture)
-COPY bin/supervizio /usr/local/bin/supervizio
-RUN chmod +x /usr/local/bin/supervizio
+# Copy and install supervizio package
+COPY bin/*.deb /tmp/
+RUN dpkg -i /tmp/*.deb && rm -f /tmp/*.deb \
+    && test -x /usr/local/bin/supervizio
 
 # Copy minimal test configuration
 COPY e2e/config-scratch.yaml /etc/supervizio/config.yaml
