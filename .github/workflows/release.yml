@@ -225,11 +225,14 @@ jobs:
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
       - name: Import GPG key
-        if: ${{ secrets.GPG_SIGNING_KEY != '' }}
         env:
           GPG_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_PASS: ${{ secrets.GPG_PASSPHRASE }}
         run: |
+          if [ -z "$GPG_KEY" ]; then
+            echo "GPG_SIGNING_KEY not set, skipping GPG import"
+            exit 0
+          fi
           echo "$GPG_KEY" | gpg --batch --import
           if [ -n "$GPG_PASS" ]; then
             echo "allow-preset-passphrase" >> ~/.gnupg/gpg-agent.conf
@@ -263,16 +266,28 @@ jobs:
           ls -la
 
       - name: Sign DEB package
-        if: matrix.format == 'deb' && secrets.GPG_SIGNING_KEY != ''
+        if: matrix.format == 'deb'
+        env:
+          GPG_KEY: ${{ secrets.GPG_SIGNING_KEY }}
         run: |
+          if [ -z "$GPG_KEY" ]; then
+            echo "GPG_SIGNING_KEY not set, skipping DEB signing"
+            exit 0
+          fi
           sudo apt-get update && sudo apt-get install -y dpkg-sig
           for deb in *.deb; do
             [ -f "$deb" ] && dpkg-sig --sign builder "$deb"
           done
 
       - name: Sign RPM package
-        if: matrix.format == 'rpm' && secrets.GPG_SIGNING_KEY != ''
+        if: matrix.format == 'rpm'
+        env:
+          GPG_KEY: ${{ secrets.GPG_SIGNING_KEY }}
         run: |
+          if [ -z "$GPG_KEY" ]; then
+            echo "GPG_SIGNING_KEY not set, skipping RPM signing"
+            exit 0
+          fi
           # Configure RPM macros for signing
           echo "%_gpg_name $(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)" > ~/.rpmmacros
           for rpm in *.rpm; do

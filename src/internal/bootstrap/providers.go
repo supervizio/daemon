@@ -69,6 +69,7 @@ func LoadConfig(loader appconfig.Loader, configPath string) (*domainconfig.Confi
 
 // NewApp creates the App struct from the supervisor.
 // This is the final provider in the dependency graph.
+//
 // Deprecated: Use NewAppWithHealth instead.
 //
 // Params:
