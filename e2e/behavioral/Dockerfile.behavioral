@@ -1,0 +1,25 @@
+# Dockerfile for E2E behavioral testing
+# Builds an Alpine image with supervizio and crasher binaries
+
+FROM alpine:3.21
+
+# Install basic tools for debugging and process inspection
+RUN apk add --no-cache procps curl
+
+# Create required directories
+RUN mkdir -p /var/log/supervizio /etc/daemon /run/supervizio
+
+# Copy pre-built binaries (built by CI or locally)
+COPY bin/supervizio /usr/local/bin/supervizio
+COPY bin/crasher /usr/local/bin/crasher
+RUN chmod +x /usr/local/bin/supervizio /usr/local/bin/crasher
+
+# Default config (can be overridden with volume mount)
+COPY e2e/behavioral/testdata/restart-always.yaml /etc/daemon/config.yaml
+
+# Expose common test ports
+EXPOSE 8080 9090
+
+# supervizio as PID1
+ENTRYPOINT ["/usr/local/bin/supervizio"]
+CMD ["--config", "/etc/daemon/config.yaml"]

@@ -4,6 +4,7 @@ package supervisor
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -12,9 +13,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kodflow/daemon/internal/domain/config"
-	domain "github.com/kodflow/daemon/internal/domain/process"
+	apphealth "github.com/kodflow/daemon/internal/application/health"
 	applifecycle "github.com/kodflow/daemon/internal/application/lifecycle"
+	"github.com/kodflow/daemon/internal/domain/config"
+	domainhealth "github.com/kodflow/daemon/internal/domain/health"
+	"github.com/kodflow/daemon/internal/domain/listener"
+	domain "github.com/kodflow/daemon/internal/domain/process"
 )
 
 // mockLoader implements appconfig.Loader for testing.
@@ -1435,6 +1439,793 @@ func Test_Supervisor_updateServices_defensive_error_handling(t *testing.T) {
 
 			// Verify error handler was called.
 			assert.True(t, handlerCalled)
+		})
+	}
+}
+
+// Test_Supervisor_initializeStart tests the initializeStart method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_initializeStart(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// initialState is the supervisor state before calling.
+		initialState State
+		// expectError indicates if an error is expected.
+		expectError bool
+	}{
+		{
+			name:         "from_stopped",
+			initialState: StateStopped,
+			expectError:  false,
+		},
+		{
+			name:         "already_starting",
+			initialState: StateStarting,
+			expectError:  true,
+		},
+		{
+			name:         "already_running",
+			initialState: StateRunning,
+			expectError:  true,
+		},
+		{
+			name:         "stopping",
+			initialState: StateStopping,
+			expectError:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{
+				state: tt.initialState,
+			}
+
+			err := sup.initializeStart(context.Background())
+
+			// Check if error expectation matches.
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.ErrorIs(t, err, ErrAlreadyRunning)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, StateStarting, sup.state)
+				assert.NotNil(t, sup.ctx)
+				assert.NotNil(t, sup.cancel)
+			}
+		})
+	}
+}
+
+// Test_Supervisor_startReaper tests the startReaper method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_startReaper(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// hasReaper indicates if reaper is configured.
+		hasReaper bool
+		// expectStarted indicates if reaper Start should be called.
+		expectStarted bool
+	}{
+		{
+			name:          "with_reaper",
+			hasReaper:     true,
+			expectStarted: true,
+		},
+		{
+			name:          "without_reaper",
+			hasReaper:     false,
+			expectStarted: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{}
+
+			// Create and set reaper if configured.
+			var reaper *mockReaper
+			if tt.hasReaper {
+				reaper = &mockReaper{}
+				sup.reaper = reaper
+			}
+
+			sup.startReaper()
+
+			// Check if reaper Start was called.
+			if tt.hasReaper {
+				assert.Equal(t, tt.expectStarted, reaper.startCalled)
+			}
+		})
+	}
+}
+
+// Test_Supervisor_startAllServices tests the startAllServices method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_startAllServices(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// managerCount is the number of managers.
+		managerCount int
+		// failAt is the manager index that should fail (-1 for no failure).
+		failAt int
+		// expectError indicates if an error is expected.
+		expectError bool
+	}{
+		{
+			name:         "all_start_successfully",
+			managerCount: 3,
+			failAt:       -1,
+			expectError:  false,
+		},
+		{
+			name:         "no_managers",
+			managerCount: 0,
+			failAt:       -1,
+			expectError:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor := &mockExecutor{}
+			managers := make(map[string]*applifecycle.Manager)
+
+			// Create managers.
+			for i := range tt.managerCount {
+				cfg := &config.ServiceConfig{
+					Name:    "test" + string(rune('0'+i)),
+					Command: "sleep",
+					Args:    []string{"1"},
+				}
+				managers[cfg.Name] = applifecycle.NewManager(cfg, executor)
+			}
+
+			sup := &Supervisor{
+				managers: managers,
+				state:    StateStarting,
+			}
+
+			err := sup.startAllServices()
+
+			// Check error expectation.
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			// Cleanup.
+			for _, mgr := range managers {
+				_ = mgr.Stop()
+			}
+		})
+	}
+}
+
+// testCreator implements health.Creator for testing.
+type testCreator struct{}
+
+// Create returns nil for testing.
+func (c *testCreator) Create(_ string, _ time.Duration) (domainhealth.Prober, error) {
+	return nil, nil
+}
+
+// Test_supervisor_proberFactoryAssignment tests internal prober factory assignment.
+//
+// Params:
+//   - t: the testing context.
+func Test_supervisor_proberFactoryAssignment(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// setFactory indicates whether to set a factory.
+		setFactory bool
+	}{
+		{
+			name:       "set_factory",
+			setFactory: true,
+		},
+		{
+			name:       "set_nil",
+			setFactory: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{}
+
+			// Set factory based on test case.
+			if tt.setFactory {
+				sup.SetProberFactory(&testCreator{})
+				assert.NotNil(t, sup.proberFactory)
+			} else {
+				sup.SetProberFactory(nil)
+				assert.Nil(t, sup.proberFactory)
+			}
+		})
+	}
+}
+
+// Test_Supervisor_hasConfiguredProbes tests the hasConfiguredProbes method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_hasConfiguredProbes(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// listeners is the listener configuration.
+		listeners []config.ListenerConfig
+		// expected is the expected result.
+		expected bool
+	}{
+		{
+			name:      "no_listeners",
+			listeners: nil,
+			expected:  false,
+		},
+		{
+			name: "listener_without_probe",
+			listeners: []config.ListenerConfig{
+				{Name: "http", Port: 8080},
+			},
+			expected: false,
+		},
+		{
+			name: "listener_with_probe",
+			listeners: []config.ListenerConfig{
+				{
+					Name: "http",
+					Port: 8080,
+					Probe: &config.ProbeConfig{
+						Type: "tcp",
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{}
+			svc := &config.ServiceConfig{
+				Listeners: tt.listeners,
+			}
+
+			result := sup.hasConfiguredProbes(svc)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Test_Supervisor_createDomainListener tests the createDomainListener method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_createDomainListener(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// config is the listener configuration.
+		config *config.ListenerConfig
+		// expectedProtocol is the expected protocol.
+		expectedProtocol string
+		// expectedAddress is the expected address.
+		expectedAddress string
+	}{
+		{
+			name: "with_defaults",
+			config: &config.ListenerConfig{
+				Name: "web",
+				Port: 8080,
+			},
+			expectedProtocol: "tcp",
+			expectedAddress:  "localhost",
+		},
+		{
+			name: "with_custom_values",
+			config: &config.ListenerConfig{
+				Name:     "grpc",
+				Port:     9090,
+				Protocol: "tcp4",
+				Address:  "0.0.0.0",
+			},
+			expectedProtocol: "tcp4",
+			expectedAddress:  "0.0.0.0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{}
+
+			l := sup.createDomainListener(tt.config)
+
+			assert.Equal(t, tt.config.Name, l.Name)
+			assert.Equal(t, tt.expectedProtocol, l.Protocol)
+			assert.Equal(t, tt.expectedAddress, l.Address)
+			assert.Equal(t, tt.config.Port, l.Port)
+		})
+	}
+}
+
+// Test_Supervisor_createProbeBinding tests the createProbeBinding method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_createProbeBinding(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// config is the listener configuration.
+		config *config.ListenerConfig
+		// expectedType is the expected probe type.
+		expectedType string
+	}{
+		{
+			name: "tcp_probe",
+			config: &config.ListenerConfig{
+				Name: "web",
+				Port: 8080,
+				Probe: &config.ProbeConfig{
+					Type: "tcp",
+				},
+			},
+			expectedType: "tcp",
+		},
+		{
+			name: "http_probe",
+			config: &config.ListenerConfig{
+				Name: "api",
+				Port: 8080,
+				Probe: &config.ProbeConfig{
+					Type: "http",
+					Path: "/health",
+				},
+			},
+			expectedType: "http",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{}
+
+			binding := sup.createProbeBinding(tt.config)
+
+			assert.Equal(t, tt.config.Name, binding.ListenerName)
+			assert.Equal(t, tt.expectedType, string(binding.Type))
+		})
+	}
+}
+
+// Test_supervisor_healthFailureRestartRouting tests internal restart routing on health failure.
+//
+// Params:
+//   - t: the testing context.
+func Test_supervisor_healthFailureRestartRouting(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// serviceName is the service to restart.
+		serviceName string
+		// hasManager indicates if manager exists.
+		hasManager bool
+		// expectError indicates if error is expected.
+		expectError bool
+	}{
+		{
+			name:        "service_not_found",
+			serviceName: "nonexistent",
+			hasManager:  false,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{
+				managers: make(map[string]*applifecycle.Manager),
+			}
+
+			err := sup.RestartOnHealthFailure(tt.serviceName, "test reason")
+
+			// Check error expectation.
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// Test_Supervisor_startMonitoringGoroutines tests the startMonitoringGoroutines method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_startMonitoringGoroutines(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// managerCount is the number of managers.
+		managerCount int
+	}{
+		{
+			name:         "no_managers",
+			managerCount: 0,
+		},
+		{
+			name:         "one_manager",
+			managerCount: 1,
+		},
+		{
+			name:         "multiple_managers",
+			managerCount: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			executor := &mockExecutor{}
+			managers := make(map[string]*applifecycle.Manager)
+
+			// Create managers.
+			for i := range tt.managerCount {
+				cfg := &config.ServiceConfig{
+					Name:    fmt.Sprintf("test%d", i),
+					Command: "sleep",
+					Args:    []string{"1"},
+				}
+				managers[cfg.Name] = applifecycle.NewManager(cfg, executor)
+			}
+
+			sup := &Supervisor{
+				managers: managers,
+				ctx:      ctx,
+			}
+
+			// Call startMonitoringGoroutines.
+			sup.startMonitoringGoroutines()
+
+			// Wait group should have added entries.
+			// Cancel context to allow goroutines to exit.
+			cancel()
+
+			// Verify goroutines were started by checking wait group completes.
+			done := make(chan struct{})
+			go func() {
+				sup.wg.Wait()
+				close(done)
+			}()
+
+			select {
+			case <-done:
+				// Success.
+			case <-time.After(2 * time.Second):
+				t.Error("goroutines did not complete")
+			}
+		})
+	}
+}
+
+// Test_Supervisor_startHealthMonitors tests the startHealthMonitors method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_startHealthMonitors(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// hasFactory indicates whether prober factory is set.
+		hasFactory bool
+		// services is the service configurations.
+		services []config.ServiceConfig
+		// expectedMonitors is the expected number of health monitors.
+		expectedMonitors int
+	}{
+		{
+			name:             "no_factory",
+			hasFactory:       false,
+			services:         []config.ServiceConfig{{Name: "test"}},
+			expectedMonitors: 0,
+		},
+		{
+			name:       "no_services",
+			hasFactory: true,
+			services:   nil,
+		},
+		{
+			name:       "service_without_probes",
+			hasFactory: true,
+			services: []config.ServiceConfig{
+				{Name: "test", Listeners: nil},
+			},
+			expectedMonitors: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{
+				config: &config.Config{
+					Services: tt.services,
+				},
+				healthMonitors: make(map[string]*apphealth.ProbeMonitor),
+				ctx:            t.Context(),
+			}
+
+			// Set factory if needed.
+			if tt.hasFactory {
+				sup.proberFactory = &testCreator{}
+			}
+
+			// Call startHealthMonitors.
+			sup.startHealthMonitors()
+
+			// Verify expected number of monitors.
+			assert.Len(t, sup.healthMonitors, tt.expectedMonitors)
+		})
+	}
+}
+
+// Test_Supervisor_createHealthMonitor tests the createHealthMonitor method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_createHealthMonitor(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// hasFactory indicates whether prober factory is set.
+		hasFactory bool
+		// service is the service configuration.
+		service *config.ServiceConfig
+		// expectNil indicates if nil monitor is expected.
+		expectNil bool
+	}{
+		{
+			name:       "no_factory",
+			hasFactory: false,
+			service: &config.ServiceConfig{
+				Name: "test",
+				Listeners: []config.ListenerConfig{
+					{Name: "http", Port: 8080, Probe: &config.ProbeConfig{Type: "tcp"}},
+				},
+			},
+			expectNil: true,
+		},
+		{
+			name:       "no_probes",
+			hasFactory: true,
+			service: &config.ServiceConfig{
+				Name:      "test",
+				Listeners: []config.ListenerConfig{{Name: "http", Port: 8080}},
+			},
+			expectNil: true,
+		},
+		{
+			name:       "with_probes_and_factory",
+			hasFactory: true,
+			service: &config.ServiceConfig{
+				Name: "test",
+				Listeners: []config.ListenerConfig{
+					{Name: "http", Port: 8080, Probe: &config.ProbeConfig{Type: "tcp"}},
+				},
+			},
+			expectNil: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{}
+
+			// Set factory if needed.
+			if tt.hasFactory {
+				sup.proberFactory = &testCreator{}
+			}
+
+			// Call createHealthMonitor.
+			monitor := sup.createHealthMonitor(tt.service)
+
+			// Verify result.
+			if tt.expectNil {
+				assert.Nil(t, monitor)
+			} else {
+				assert.NotNil(t, monitor)
+			}
+		})
+	}
+}
+
+// Test_Supervisor_createProbeMonitorConfig tests the createProbeMonitorConfig method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_createProbeMonitorConfig(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// serviceName is the service name for configuration.
+		serviceName string
+	}{
+		{
+			name:        "simple_service",
+			serviceName: "myservice",
+		},
+		{
+			name:        "empty_name",
+			serviceName: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{
+				proberFactory: &testCreator{},
+				managers:      make(map[string]*applifecycle.Manager),
+			}
+
+			// Call createProbeMonitorConfig.
+			cfg := sup.createProbeMonitorConfig(tt.serviceName)
+
+			// Verify config has callbacks.
+			assert.NotNil(t, cfg.Factory)
+			assert.NotNil(t, cfg.OnStateChange)
+			assert.NotNil(t, cfg.OnUnhealthy)
+		})
+	}
+}
+
+// mockAddListenerWithBindinger is a mock for AddListenerWithBindinger interface.
+type mockAddListenerWithBindinger struct {
+	// addedCount tracks the number of listeners added.
+	addedCount int
+	// returnError indicates whether to return an error.
+	returnError bool
+}
+
+// AddListenerWithBinding implements AddListenerWithBindinger.
+func (m *mockAddListenerWithBindinger) AddListenerWithBinding(_ *listener.Listener, _ *apphealth.ProbeBinding) error {
+	m.addedCount++
+	// Return error if configured.
+	if m.returnError {
+		return fmt.Errorf("mock error")
+	}
+	return nil
+}
+
+// Test_Supervisor_addListenersWithProbes tests the addListenersWithProbes method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_addListenersWithProbes(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// service is the service configuration.
+		service *config.ServiceConfig
+	}{
+		{
+			name: "no_listeners",
+			service: &config.ServiceConfig{
+				Name:      "test",
+				Listeners: nil,
+			},
+		},
+		{
+			name: "listener_without_probe",
+			service: &config.ServiceConfig{
+				Name: "test",
+				Listeners: []config.ListenerConfig{
+					{Name: "http", Port: 8080},
+				},
+			},
+		},
+		{
+			name: "listener_with_probe",
+			service: &config.ServiceConfig{
+				Name: "test",
+				Listeners: []config.ListenerConfig{
+					{Name: "http", Port: 8080, Probe: &config.ProbeConfig{Type: "tcp"}},
+				},
+			},
+		},
+		{
+			name: "multiple_listeners_mixed",
+			service: &config.ServiceConfig{
+				Name: "test",
+				Listeners: []config.ListenerConfig{
+					{Name: "http1", Port: 8080, Probe: &config.ProbeConfig{Type: "tcp"}},
+					{Name: "http2", Port: 8081},
+					{Name: "http3", Port: 8082, Probe: &config.ProbeConfig{Type: "http"}},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{
+				proberFactory: &testCreator{},
+			}
+
+			// Create a real ProbeMonitor.
+			cfg := apphealth.ProbeMonitorConfig{
+				Factory: &testCreator{},
+			}
+			monitor := apphealth.NewProbeMonitor(cfg)
+
+			// Call addListenersWithProbes - should not panic.
+			sup.addListenersWithProbes(monitor, tt.service)
+		})
+	}
+}
+
+// Test_Supervisor_addSingleListenerWithProbe tests the addSingleListenerWithProbe method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Supervisor_addSingleListenerWithProbe(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// listener is the listener configuration.
+		listener *config.ListenerConfig
+		// returnError indicates if mock should return error.
+		returnError bool
+	}{
+		{
+			name: "success",
+			listener: &config.ListenerConfig{
+				Name:    "http",
+				Port:    8080,
+				Address: "localhost",
+				Probe:   &config.ProbeConfig{Type: "tcp"},
+			},
+			returnError: false,
+		},
+		{
+			name: "error_handling",
+			listener: &config.ListenerConfig{
+				Name:  "http",
+				Port:  8080,
+				Probe: &config.ProbeConfig{Type: "tcp"},
+			},
+			returnError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sup := &Supervisor{
+				proberFactory: &testCreator{},
+			}
+			mockMonitor := &mockAddListenerWithBindinger{
+				returnError: tt.returnError,
+			}
+
+			// Call addSingleListenerWithProbe - should not panic.
+			sup.addSingleListenerWithProbe(mockMonitor, tt.listener, "testservice")
+
+			// Verify listener was added.
+			assert.Equal(t, 1, mockMonitor.addedCount)
 		})
 	}
 }

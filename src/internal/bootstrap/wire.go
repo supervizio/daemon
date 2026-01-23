@@ -5,8 +5,10 @@ package bootstrap
 import (
 	"github.com/google/wire"
 	appconfig "github.com/kodflow/daemon/internal/application/config"
+	apphealth "github.com/kodflow/daemon/internal/application/health"
 	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
 	domainprocess "github.com/kodflow/daemon/internal/domain/process"
+	infrahealthcheck "github.com/kodflow/daemon/internal/infrastructure/observability/healthcheck"
 	infraconfig "github.com/kodflow/daemon/internal/infrastructure/persistence/config/yaml"
 	"github.com/kodflow/daemon/internal/infrastructure/process/control"
 	"github.com/kodflow/daemon/internal/infrastructure/process/credentials"
@@ -45,6 +47,10 @@ func InitializeApp(configPath string) (*App, error) {
 		executor.NewWithDeps,
 		wire.Bind(new(domainprocess.Executor), new(*executor.Executor)),
 
+		// Infrastructure: Health prober factory.
+		ProvideProberFactory,
+		wire.Bind(new(apphealth.Creator), new(*infrahealthcheck.Factory)),
+
 		// Providers: Custom provider functions.
 		ProvideReaper,
 		LoadConfig,
@@ -52,8 +58,8 @@ func InitializeApp(configPath string) (*App, error) {
 		// Application: Supervisor orchestrates all services.
 		appsupervisor.NewSupervisor,
 
-		// Bootstrap: Final App struct.
-		NewApp,
+		// Bootstrap: Final App struct with health monitoring.
+		NewAppWithHealth,
 	)
 	return nil, nil
 }

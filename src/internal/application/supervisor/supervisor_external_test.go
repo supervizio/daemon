@@ -14,6 +14,7 @@ import (
 
 	"github.com/kodflow/daemon/internal/application/supervisor"
 	"github.com/kodflow/daemon/internal/domain/config"
+	domainhealth "github.com/kodflow/daemon/internal/domain/health"
 	domain "github.com/kodflow/daemon/internal/domain/process"
 )
 
@@ -98,6 +99,23 @@ func (m *mockExecutor) Stop(_ int, _ time.Duration) error {
 func (m *mockExecutor) Signal(_ int, _ os.Signal) error {
 	// Return the configured signal error.
 	return m.signalErr
+}
+
+// mockProberCreator implements health.Creator for testing.
+type mockProberCreator struct{}
+
+// Create returns nil prober for testing.
+//
+// Params:
+//   - probeType: the probe type.
+//   - timeout: the probe timeout.
+//
+// Returns:
+//   - Prober: nil for testing.
+//   - error: nil for testing.
+func (m *mockProberCreator) Create(_ string, _ time.Duration) (domainhealth.Prober, error) {
+	// Return nil for testing.
+	return nil, nil
 }
 
 // createValidConfig creates a valid test configuration.
@@ -1036,6 +1054,98 @@ func TestSupervisor_SetErrorHandler(t *testing.T) {
 
 			// Verify supervisor is still operational.
 			assert.Equal(t, supervisor.StateStopped, sup.State())
+		})
+	}
+}
+
+// TestSupervisor_SetProberFactory tests the SetProberFactory method on the Supervisor type.
+// This test validates setting a prober factory for health monitoring.
+//
+// Params:
+//   - t: the testing context.
+func TestSupervisor_SetProberFactory(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// setFactory indicates whether to set a non-nil factory.
+		setFactory bool
+	}{
+		{
+			name:       "set_valid_factory",
+			setFactory: true,
+		},
+		{
+			name:       "set_nil_factory",
+			setFactory: false,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createValidConfig()
+			loader := &mockLoader{cfg: cfg}
+			executor := &mockExecutor{}
+
+			sup, err := supervisor.NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			// Set prober factory - should not panic.
+			if tt.setFactory {
+				sup.SetProberFactory(&mockProberCreator{})
+			} else {
+				sup.SetProberFactory(nil)
+			}
+
+			// Verify supervisor is still operational.
+			assert.Equal(t, supervisor.StateStopped, sup.State())
+		})
+	}
+}
+
+// TestSupervisor_RestartOnHealthFailure tests the RestartOnHealthFailure method.
+// This test validates restart triggering on health probe failure.
+//
+// Params:
+//   - t: the testing context.
+func TestSupervisor_RestartOnHealthFailure(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// serviceName is the service to restart.
+		serviceName string
+		// expectError indicates if error is expected.
+		expectError bool
+	}{
+		{
+			name:        "service_not_found",
+			serviceName: "nonexistent-service",
+			expectError: true,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createValidConfig()
+			loader := &mockLoader{cfg: cfg}
+			executor := &mockExecutor{}
+
+			sup, err := supervisor.NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			// Call RestartOnHealthFailure.
+			err = sup.RestartOnHealthFailure(tt.serviceName, "test failure reason")
+
+			// Verify error expectation.
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), supervisor.ErrServiceNotFound.Error())
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

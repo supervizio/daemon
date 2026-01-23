@@ -1,0 +1,22 @@
+# Test config: long-running service (for signal forwarding test)
+# Crasher runs for 1 hour, responds to SIGTERM
+version: "1"
+
+logging:
+  base_dir: /var/log/supervizio
+  defaults:
+    timestamp_format: iso8601
+    rotation:
+      max_size: "10MB"
+      max_files: 3
+
+services:
+  - name: crasher
+    command: /usr/local/bin/crasher
+    args:
+      - "--delay=1h"
+      - "--exit=0"
+    restart:
+      policy: never
+      max_retries: 0
+      delay: 1s

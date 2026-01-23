@@ -21,6 +21,9 @@ type RestartConfig struct {
 	Delay shared.Duration
 	// DelayMax specifies the maximum delay for exponential backoff.
 	DelayMax shared.Duration
+	// StabilityWindow specifies the duration of stable running required
+	// before the restart counter resets. If not set, defaults to 5 minutes.
+	StabilityWindow shared.Duration
 }
 
 // RestartPolicy defines when to restart a service.

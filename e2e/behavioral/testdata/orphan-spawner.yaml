@@ -1,0 +1,23 @@
+# Test config: orphan process spawning (for zombie reaping test)
+# Crasher spawns an orphan process before exiting
+version: "1"
+
+logging:
+  base_dir: /var/log/supervizio
+  defaults:
+    timestamp_format: iso8601
+    rotation:
+      max_size: "10MB"
+      max_files: 3
+
+services:
+  - name: crasher
+    command: /usr/local/bin/crasher
+    args:
+      - "--delay=1s"
+      - "--exit=0"
+      - "--orphan"
+    restart:
+      policy: always
+      max_retries: 3
+      delay: 2s

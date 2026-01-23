@@ -1,0 +1,36 @@
+# Test config: Unhealthy HTTP health probe
+# Crasher runs HTTP server on port 8080 but returns 503 on /health
+# This tests that health probe failures trigger restarts.
+version: "1"
+
+logging:
+  base_dir: /var/log/supervizio
+  defaults:
+    timestamp_format: iso8601
+    rotation:
+      max_size: "10MB"
+      max_files: 3
+
+services:
+  - name: crasher
+    command: /usr/local/bin/crasher
+    args:
+      - "--delay=1h"
+      - "--http"
+      - "--port=8080"
+      - "--healthy=false"  # Returns 503 on /health instead of 200
+    restart:
+      policy: always   # Use 'always' for health-based restarts (Kubernetes pattern)
+      max_retries: 10
+      delay: 500ms
+    listeners:
+      - name: web
+        port: 8080
+        protocol: tcp
+        probe:
+          type: http
+          path: /health
+          interval: 1s
+          timeout: 500ms
+          failure_threshold: 3
+          success_threshold: 1

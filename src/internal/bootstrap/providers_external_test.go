@@ -259,3 +259,74 @@ func TestNewApp(t *testing.T) {
 		})
 	}
 }
+
+// TestProvideProberFactory verifies ProvideProberFactory returns a factory.
+func TestProvideProberFactory(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for ProvideProberFactory.
+	tests := []struct {
+		name       string
+		wantNotNil bool
+	}{
+		{
+			name:       "returns_non_nil_factory",
+			wantNotNil: true,
+		},
+	}
+
+	// Run all test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Call ProvideProberFactory.
+			factory := bootstrap.ProvideProberFactory()
+
+			// Verify factory was created.
+			if tt.wantNotNil && factory == nil {
+				t.Error("ProvideProberFactory should return non-nil factory")
+			}
+		})
+	}
+}
+
+// TestNewAppWithHealth verifies App creation with health monitoring.
+func TestNewAppWithHealth(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for NewAppWithHealth.
+	tests := []struct {
+		name           string
+		wantFactorySet bool
+	}{
+		{
+			name:           "wires_prober_factory",
+			wantFactorySet: true,
+		},
+	}
+
+	// Run all test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Create a supervisor and factory.
+			sup := &appsupervisor.Supervisor{}
+			factory := bootstrap.ProvideProberFactory()
+
+			// Call NewAppWithHealth.
+			app := bootstrap.NewAppWithHealth(sup, factory)
+
+			// Verify app was created.
+			if app == nil {
+				t.Fatal("NewAppWithHealth should return non-nil App")
+			}
+
+			// Verify supervisor is set in app.
+			if app.Supervisor != sup {
+				t.Error("NewAppWithHealth set wrong supervisor")
+			}
+		})
+	}
+}

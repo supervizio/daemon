@@ -7,6 +7,14 @@ import (
 	domain "github.com/kodflow/daemon/internal/domain/health"
 )
 
+// HealthStateLogger is called when a health state transition occurs.
+// This enables logging health state transitions for observability.
+type HealthStateLogger func(listenerName string, prevState, newState domain.SubjectState, result domain.CheckResult)
+
+// UnhealthyCallback is called when a service becomes unhealthy.
+// This enables the supervisor to trigger restart on health failure.
+type UnhealthyCallback func(listenerName string, reason string)
+
 // ProbeMonitorConfig contains configuration for ProbeMonitor.
 // It provides all necessary dependencies for creating a new ProbeMonitor.
 type ProbeMonitorConfig struct {
@@ -18,6 +26,13 @@ type ProbeMonitorConfig struct {
 	DefaultTimeout time.Duration
 	// DefaultInterval between probes when not specified per-listener.
 	DefaultInterval time.Duration
+	// OnStateChange is called when a health state transition occurs (optional).
+	// This callback is invoked before the event is sent to the Events channel.
+	OnStateChange HealthStateLogger
+	// OnUnhealthy is called when a service becomes unhealthy (optional).
+	// This callback enables the supervisor to trigger restart on health failure,
+	// following the Kubernetes liveness probe pattern.
+	OnUnhealthy UnhealthyCallback
 }
 
 // NewProbeMonitorConfig creates a new ProbeMonitorConfig with the given factory.

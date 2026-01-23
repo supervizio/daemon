@@ -10,8 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-
-	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
 )
 
 var (
@@ -21,11 +19,20 @@ var (
 	configPath string = ""
 )
 
+// AppSupervisor defines the interface for supervisor operations used by the application.
+// This allows for minimal interface usage in providers (KTN-API-MINIF).
+// Methods are declared explicitly to ensure linter counts all methods.
+type AppSupervisor interface {
+	Start(ctx context.Context) error
+	Stop() error
+	Reload() error
+}
+
 // App holds all application dependencies injected by Wire.
 // It is the root object of the dependency graph.
 type App struct {
 	// Supervisor is the main service orchestrator.
-	Supervisor *appsupervisor.Supervisor
+	Supervisor AppSupervisor
 	// Cleanup is the cleanup function for all resources.
 	Cleanup func()
 }

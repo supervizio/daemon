@@ -15,4 +15,6 @@ var (
 	ErrInvalidTransition error = errors.New("invalid state transition")
 	// ErrProcessFailed indicates the process exited with a non-zero exit code.
 	ErrProcessFailed error = errors.New("process failed")
+	// ErrHealthProbeFailed indicates the health probe failed for a process.
+	ErrHealthProbeFailed error = errors.New("health probe failed")
 )

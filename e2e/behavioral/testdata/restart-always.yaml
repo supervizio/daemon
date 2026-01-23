@@ -1,0 +1,22 @@
+# Test config: restart policy "always"
+# Crasher exits with code 0 after 1s delay, should restart regardless
+version: "1"
+
+logging:
+  base_dir: /var/log/supervizio
+  defaults:
+    timestamp_format: iso8601
+    rotation:
+      max_size: "10MB"
+      max_files: 3
+
+services:
+  - name: crasher
+    command: /usr/local/bin/crasher
+    args:
+      - "--delay=1s"
+      - "--exit=0"
+    restart:
+      policy: always
+      max_retries: 5
+      delay: 1s
