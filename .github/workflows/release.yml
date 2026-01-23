@@ -307,12 +307,13 @@ jobs:
   # =============================================================================
   # E2E Tests - Linux (Vagrant + Docker)
   # =============================================================================
-  # Validates release binaries work across Linux distributions and init systems.
+  # Validates release PACKAGES work across Linux distributions and init systems.
+  # Tests actual .deb/.rpm/.apk installation, not just raw binaries.
   # Must pass before release is published.
   # =============================================================================
   e2e-linux:
     name: E2E ${{ matrix.name }}
-    needs: [version, build]
+    needs: [version, packages]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -323,36 +324,49 @@ jobs:
             vm: debian13
             dockerfile: Dockerfile.debian
             init: systemd
+            pkg_format: deb
+            pkg_install: "sudo dpkg -i"
           - name: Fedora
             vm: fedora
             dockerfile: Dockerfile.fedora
             init: systemd
+            pkg_format: rpm
+            pkg_install: "sudo rpm -i"
           - name: Alpine
             vm: alpine
             dockerfile: Dockerfile.alpine
             init: openrc
+            pkg_format: apk
+            pkg_install: "sudo apk add --allow-untrusted"
           - name: Devuan
             vm: devuan
             dockerfile: Dockerfile.devuan
             init: sysvinit
+            pkg_format: deb
+            pkg_install: "sudo dpkg -i"
           - name: Alpine-runit
             vm: alpine-runit
             dockerfile: Dockerfile.alpine-runit
             init: runit
+            pkg_format: apk
+            pkg_install: "sudo apk add --allow-untrusted"
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Download Linux binary
+      - name: Download package
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: supervizio-linux-amd64
-          path: bin
+          name: supervizio-amd64.${{ matrix.pkg_format }}
+          path: pkg
 
-      - name: Prepare binary
+      - name: Prepare package
         run: |
-          mv bin/supervizio-linux-amd64 bin/supervizio
-          chmod +x bin/supervizio
+          echo "=== Downloaded package ==="
+          ls -la pkg/
+          # Copy to bin for Dockerfile compatibility (expects bin/supervizio)
+          mkdir -p bin
+          cp pkg/*.${{ matrix.pkg_format }} bin/
           ls -la bin/
 
       # =========================================================================
@@ -426,19 +440,26 @@ jobs:
             echo "=== Rsync succeeded ==="
           else
             echo "=== Rsync failed, using tar-over-ssh fallback ==="
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /pkg /vagrant && sudo chmod 777 /setup /pkg /vagrant"
             tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
-            tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
+            tar -cv -C .. pkg | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /pkg --strip-components=1"
             tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /pkg"
           fi
 
           echo "=== Verifying synced files ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /bin-local /vagrant"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /pkg /vagrant"
+
+      - name: Install package in VM
+        working-directory: e2e
+        run: |
+          echo "=== Installing package via ${{ matrix.pkg_install }} ==="
+          # shellcheck disable=SC2016 - Single quotes intentional for remote expansion
+          sudo -E vagrant ssh "${{ matrix.vm }}" -c 'sudo ${{ matrix.pkg_install }} /pkg/*.${{ matrix.pkg_format }}'
 
       - name: Run VM tests
         working-directory: e2e
-        run: sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo /vagrant/test-install.sh"
+        run: sudo -E vagrant ssh "${{ matrix.vm }}" -c "sudo /vagrant/test-install.sh --skip-install"
 
       - name: Cleanup VM
         if: always()

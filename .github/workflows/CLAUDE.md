@@ -8,9 +8,8 @@ CI/CD automation for build, test, release, and deployment.
 
 ```text
 workflows/
-├── ci.yml           # Continuous integration (lint, test, build)
-├── e2e.yml          # End-to-end tests (Vagrant/Docker)
-├── release.yml      # Semantic release + package generation
+├── ci.yml           # Continuous integration (lint, test, build, e2e-behavioral)
+├── release.yml      # Semantic release + packages + e2e-linux/bsd tests
 └── deploy-repo.yml  # Package repository deployment (GitHub Pages)
 ```
 
@@ -18,9 +17,8 @@ workflows/
 
 | Workflow | Trigger | Action |
 |----------|---------|--------|
-| `ci.yml` | Push/PR | Lint, test, build binaries |
-| `e2e.yml` | Manual/Schedule | Full E2E test matrix |
-| `release.yml` | Tag push | Create release + packages |
+| `ci.yml` | Push/PR | Lint, test, build, e2e-behavioral |
+| `release.yml` | Main push | Packages + e2e tests before release |
 | `deploy-repo.yml` | Release | Deploy apt/yum/apk repos |
 
 ## Conventions

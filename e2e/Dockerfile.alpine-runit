@@ -18,10 +18,11 @@ RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.21/community" >> /etc/apk/rep
 # Verify runit is installed
 RUN which runsvdir && which sv && echo "runit installed successfully"
 
-# Copy supervizio binary (built externally for the target architecture)
-# MUST be statically compiled (CGO_ENABLED=0) for Alpine/musl
-COPY bin/supervizio /usr/local/bin/supervizio
-RUN chmod +x /usr/local/bin/supervizio
+# Copy and install supervizio package
+# Note: --allow-untrusted required for self-built packages without signing key
+COPY bin/*.apk /tmp/
+RUN apk add --allow-untrusted /tmp/*.apk && rm -f /tmp/*.apk \
+    && test -x /usr/local/bin/supervizio
 
 # Copy minimal test configuration
 COPY e2e/config-scratch.yaml /etc/supervizio/config.yaml

@@ -1,11 +1,25 @@
 #!/bin/sh
 # E2E test script for supervizio installation
 # This script runs inside the VM to test install/uninstall
+#
+# Usage: test-install.sh [--skip-install]
+#   --skip-install: Skip install.sh execution (use when installed via package manager)
+#
+# Note: Uses /bin/sh for maximum portability (BSD, busybox).
+# pipefail not available in POSIX sh - using set -e for error handling.
+# Security: SAST-SAFE - No user input, all paths are hardcoded constants.
 set -e
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
+
+SKIP_INSTALL=false
+for arg in "$@"; do
+    case "$arg" in
+        --skip-install) SKIP_INSTALL=true ;;
+    esac
+done
 
 pass() { printf "${GREEN}[PASS]${NC} %s\n" "$1"; }
 fail() { printf "${RED}[FAIL]${NC} %s\n" "$1"; exit 1; }
@@ -13,11 +27,14 @@ fail() { printf "${RED}[FAIL]${NC} %s\n" "$1"; exit 1; }
 echo "=== supervizio E2E Installation Test ==="
 echo "OS: $(uname -s) $(uname -r)"
 echo "Arch: $(uname -m)"
+echo "Skip install: $SKIP_INSTALL"
 
-# Test 1: Run install script
+# Test 1: Run install script (skip if installed via package manager)
 echo ""
 echo "=== Test 1: Installation ==="
-if /setup/install.sh; then
+if [ "$SKIP_INSTALL" = "true" ]; then
+    pass "Skipped (installed via package manager)"
+elif /setup/install.sh; then
     pass "Install script completed"
 else
     fail "Install script failed"
@@ -129,15 +146,19 @@ else
     echo "[WARN] Version check returned non-zero (may be expected)"
 fi
 
-# Test 7: Uninstall
+# Test 7: Uninstall (skip if installed via package manager)
 echo ""
 echo "=== Test 7: Uninstallation ==="
-# Auto-answer 'n' to keep config and logs prompts
-printf 'n\nn\n' | /setup/uninstall.sh
-if [ ! -f /usr/local/bin/supervizio ]; then
-    pass "Binary removed"
+if [ "$SKIP_INSTALL" = "true" ]; then
+    pass "Skipped (uninstall via package manager)"
 else
-    fail "Binary still exists after uninstall"
+    # Auto-answer 'n' to keep config and logs prompts
+    printf 'n\nn\n' | /setup/uninstall.sh
+    if [ ! -f /usr/local/bin/supervizio ]; then
+        pass "Binary removed"
+    else
+        fail "Binary still exists after uninstall"
+    fi
 fi
 
 echo ""
