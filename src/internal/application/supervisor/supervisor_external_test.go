@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -41,6 +42,8 @@ func (ml *mockLoader) Load(_ string) (*config.Config, error) {
 
 // mockExecutor implements domain.Executor for testing.
 type mockExecutor struct {
+	// mu protects concurrent access to fields.
+	mu sync.Mutex
 	// startErr is the error to return from Start.
 	startErr error
 	// stopErr is the error to return from Stop.
@@ -62,6 +65,8 @@ type mockExecutor struct {
 //   - <-chan domain.ExitResult: channel for exit result.
 //   - error: the mock start error.
 func (m *mockExecutor) Start(_ context.Context, _ domain.Spec) (pid int, wait <-chan domain.ExitResult, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	// Check if start error is configured.
 	if m.startErr != nil {
 		// Return error when start fails.
