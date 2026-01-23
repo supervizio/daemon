@@ -57,6 +57,7 @@ func InitializeApp(configPath string) (*App, error) {
 
 		// Application: Supervisor orchestrates all services.
 		appsupervisor.NewSupervisor,
+		wire.Bind(new(supervisorConfigurer), new(*appsupervisor.Supervisor)),
 
 		// Bootstrap: Final App struct with health monitoring.
 		NewAppWithHealth,
