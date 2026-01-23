@@ -47,10 +47,16 @@ type RestartTracker struct {
 // Returns:
 //   - *RestartTracker: a new restart tracker instance
 func NewRestartTracker(cfg *config.RestartConfig) *RestartTracker {
-	// Initialize and return a new tracker with default stability window.
+	// Use configured stability window or default to 5 minutes.
+	window := DefaultStabilityWindow
+	// Check if custom stability window is configured.
+	if cfg.StabilityWindow.Duration() > 0 {
+		window = cfg.StabilityWindow.Duration()
+	}
+	// Initialize and return a new tracker with configured or default stability window.
 	return &RestartTracker{
 		config: cfg,
-		window: DefaultStabilityWindow,
+		window: window,
 	}
 }
 

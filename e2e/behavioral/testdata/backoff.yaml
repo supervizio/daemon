@@ -1,0 +1,23 @@
+# Test config: exponential backoff
+# Crasher exits immediately with code 1, delay should increase
+version: "1"
+
+logging:
+  base_dir: /var/log/supervizio
+  defaults:
+    timestamp_format: iso8601
+    rotation:
+      max_size: "10MB"
+      max_files: 3
+
+services:
+  - name: crasher
+    command: /usr/local/bin/crasher
+    args:
+      - "--delay=500ms"
+      - "--exit=1"
+    restart:
+      policy: on-failure
+      max_retries: 5
+      delay: 1s
+      delay_max: 10s

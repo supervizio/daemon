@@ -3,7 +3,6 @@ package scratch_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/kodflow/daemon/internal/infrastructure/resources/metrics/scratch"
@@ -18,26 +17,43 @@ import (
 func TestMemoryCollector_CollectSystem(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns ErrNotSupported", func(t *testing.T) {
-		t.Parallel()
-		collector := scratch.NewMemoryCollector()
-		require.NotNil(t, collector)
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// ctxCanceled indicates if context should be canceled.
+		ctxCanceled bool
+		// wantErr is the expected error.
+		wantErr error
+	}{
+		{
+			name:    "returns_ErrNotSupported",
+			wantErr: scratch.ErrNotSupported,
+		},
+		{
+			name:        "returns_context_error_when_canceled",
+			ctxCanceled: true,
+			wantErr:     context.Canceled,
+		},
+	}
 
-		_, err := collector.CollectSystem(context.Background())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-	})
+			collector := scratch.NewMemoryCollector()
+			require.NotNil(t, collector)
 
-	t.Run("returns context error when canceled", func(t *testing.T) {
-		t.Parallel()
-		collector := scratch.NewMemoryCollector()
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
+			ctx := context.Background()
+			if tt.ctxCanceled {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
 
-		_, err := collector.CollectSystem(ctx)
-
-		assert.ErrorIs(t, err, context.Canceled)
-	})
+			_, err := collector.CollectSystem(ctx)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
 }
 
 // TestMemoryCollector_CollectProcess tests process memory metrics collection.
@@ -47,34 +63,51 @@ func TestMemoryCollector_CollectSystem(t *testing.T) {
 func TestMemoryCollector_CollectProcess(t *testing.T) {
 	t.Parallel()
 
-	t.Run("pid 1 returns ErrNotSupported", func(t *testing.T) {
-		t.Parallel()
-		collector := scratch.NewMemoryCollector()
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// pid is the process ID to test.
+		pid int
+		// ctxCanceled indicates if context should be canceled.
+		ctxCanceled bool
+		// wantErr is the expected error.
+		wantErr error
+	}{
+		{
+			name:    "pid_1_returns_ErrNotSupported",
+			pid:     1,
+			wantErr: scratch.ErrNotSupported,
+		},
+		{
+			name:    "pid_0_returns_ErrInvalidPID",
+			pid:     0,
+			wantErr: scratch.ErrInvalidPID,
+		},
+		{
+			name:        "returns_context_error_when_canceled",
+			pid:         1,
+			ctxCanceled: true,
+			wantErr:     context.Canceled,
+		},
+	}
 
-		_, err := collector.CollectProcess(context.Background(), 1)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-	})
+			collector := scratch.NewMemoryCollector()
 
-	t.Run("pid 0 returns ErrInvalidPID", func(t *testing.T) {
-		t.Parallel()
-		collector := scratch.NewMemoryCollector()
+			ctx := context.Background()
+			if tt.ctxCanceled {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
 
-		_, err := collector.CollectProcess(context.Background(), 0)
-
-		assert.True(t, errors.Is(err, scratch.ErrInvalidPID))
-	})
-
-	t.Run("returns context error when canceled", func(t *testing.T) {
-		t.Parallel()
-		collector := scratch.NewMemoryCollector()
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-
-		_, err := collector.CollectProcess(ctx, 1)
-
-		assert.ErrorIs(t, err, context.Canceled)
-	})
+			_, err := collector.CollectProcess(ctx, tt.pid)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
 }
 
 // TestMemoryCollector_CollectAllProcesses tests all processes memory metrics collection.
@@ -84,25 +117,42 @@ func TestMemoryCollector_CollectProcess(t *testing.T) {
 func TestMemoryCollector_CollectAllProcesses(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns ErrNotSupported", func(t *testing.T) {
-		t.Parallel()
-		collector := scratch.NewMemoryCollector()
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// ctxCanceled indicates if context should be canceled.
+		ctxCanceled bool
+		// wantErr is the expected error.
+		wantErr error
+	}{
+		{
+			name:    "returns_ErrNotSupported",
+			wantErr: scratch.ErrNotSupported,
+		},
+		{
+			name:        "returns_context_error_when_canceled",
+			ctxCanceled: true,
+			wantErr:     context.Canceled,
+		},
+	}
 
-		_, err := collector.CollectAllProcesses(context.Background())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-	})
+			collector := scratch.NewMemoryCollector()
 
-	t.Run("returns context error when canceled", func(t *testing.T) {
-		t.Parallel()
-		collector := scratch.NewMemoryCollector()
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
+			ctx := context.Background()
+			if tt.ctxCanceled {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
 
-		_, err := collector.CollectAllProcesses(ctx)
-
-		assert.ErrorIs(t, err, context.Canceled)
-	})
+			_, err := collector.CollectAllProcesses(ctx)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
 }
 
 // TestMemoryCollector_CollectPressure tests memory pressure collection.
@@ -112,25 +162,42 @@ func TestMemoryCollector_CollectAllProcesses(t *testing.T) {
 func TestMemoryCollector_CollectPressure(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns ErrNotSupported", func(t *testing.T) {
-		t.Parallel()
-		collector := scratch.NewMemoryCollector()
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// ctxCanceled indicates if context should be canceled.
+		ctxCanceled bool
+		// wantErr is the expected error.
+		wantErr error
+	}{
+		{
+			name:    "returns_ErrNotSupported",
+			wantErr: scratch.ErrNotSupported,
+		},
+		{
+			name:        "returns_context_error_when_canceled",
+			ctxCanceled: true,
+			wantErr:     context.Canceled,
+		},
+	}
 
-		_, err := collector.CollectPressure(context.Background())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		assert.True(t, errors.Is(err, scratch.ErrNotSupported))
-	})
+			collector := scratch.NewMemoryCollector()
 
-	t.Run("returns context error when canceled", func(t *testing.T) {
-		t.Parallel()
-		collector := scratch.NewMemoryCollector()
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
+			ctx := context.Background()
+			if tt.ctxCanceled {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
 
-		_, err := collector.CollectPressure(ctx)
-
-		assert.ErrorIs(t, err, context.Canceled)
-	})
+			_, err := collector.CollectPressure(ctx)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
 }
 
 // Test_NewMemoryCollector verifies NewMemoryCollector creates a valid collector.
@@ -140,11 +207,27 @@ func TestMemoryCollector_CollectPressure(t *testing.T) {
 func Test_NewMemoryCollector(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns valid collector", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// wantNotNil indicates if collector should be non-nil.
+		wantNotNil bool
+	}{
+		{
+			name:       "returns_valid_collector",
+			wantNotNil: true,
+		},
+	}
 
-		collector := scratch.NewMemoryCollector()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		assert.NotNil(t, collector, "NewMemoryCollector should return a non-nil collector")
-	})
+			collector := scratch.NewMemoryCollector()
+
+			if tt.wantNotNil {
+				assert.NotNil(t, collector)
+			}
+		})
+	}
 }

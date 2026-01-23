@@ -150,8 +150,9 @@ func (p *HTTPProber) getStatusCode(ctx context.Context, method, address, path st
 		return 0, fmt.Errorf("failed to parse url: %w", err)
 	}
 
-	// If scheme is missing (e.g. "localhost:8080"), default to HTTP.
-	if targetURL.Scheme == "" {
+	// If scheme is not http/https (e.g. "localhost:8080" parses as scheme="localhost"),
+	// prepend http:// and re-parse. Go's url.Parse treats "host:port" as "scheme:opaque".
+	if targetURL.Scheme != "http" && targetURL.Scheme != "https" {
 		targetURL, err = url.Parse("http://" + address)
 		// Check if reparsing with scheme failed.
 		if err != nil {

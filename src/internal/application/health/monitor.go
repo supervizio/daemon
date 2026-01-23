@@ -53,6 +53,10 @@ type ProbeMonitor struct {
 	defaultTimeout time.Duration
 	// defaultInterval is the default probe interval.
 	defaultInterval time.Duration
+	// onStateChange is called on health state transitions.
+	onStateChange HealthStateLogger
+	// onUnhealthy is called when a service becomes unhealthy.
+	onUnhealthy UnhealthyCallback
 }
 
 // NewProbeMonitor creates a new probe-based health monitor.
@@ -85,6 +89,8 @@ func NewProbeMonitor(config ProbeMonitorConfig) *ProbeMonitor {
 		factory:         config.Factory,
 		defaultTimeout:  defaultTimeout,
 		defaultInterval: defaultInterval,
+		onStateChange:   config.OnStateChange,
+		onUnhealthy:     config.OnUnhealthy,
 	}
 }
 
@@ -398,6 +404,9 @@ func (m *ProbeMonitor) updateProbeResult(lp *ListenerProbe, result domain.CheckR
 	// Get previous state for event comparison.
 	prevState := lp.Listener.State
 
+	// Store previous failure count for threshold checking.
+	prevFailures := ls.ConsecutiveFailures
+
 	// Get probe config for thresholds.
 	config := lp.ProbeConfig()
 
@@ -412,6 +421,9 @@ func (m *ProbeMonitor) updateProbeResult(lp *ListenerProbe, result domain.CheckR
 
 	// Send event if state changed.
 	m.sendEventIfChanged(lp, ls, prevState, result)
+
+	// Check if failure threshold was just reached (triggers restart).
+	m.checkFailureThresholdReached(lp, ls, prevFailures, result)
 }
 
 // normalizeThresholds returns thresholds with zero values normalized to 1.
@@ -465,7 +477,18 @@ func (m *ProbeMonitor) updateListenerState(lp *ListenerProbe, ls subjectStatus, 
 		return
 	}
 
-	// 3. Check if Listener accepts the transition.
+	// 3. Check if already in target state (no transition needed).
+	currentSubjectState := listenerStateToSubjectState(lp.Listener.State)
+	// Skip state transition when already in target state.
+	if currentSubjectState == eval.TargetState {
+		// Already in target state - apply counter updates but skip state change.
+		ls.ApplyProbeEvaluation(eval)
+
+		// Return early when already in target state.
+		return
+	}
+
+	// 4. Check if Listener accepts the transition.
 	var accepted bool
 
 	//exhaustive:ignore
@@ -482,11 +505,11 @@ func (m *ProbeMonitor) updateListenerState(lp *ListenerProbe, ls subjectStatus, 
 		accepted = false
 	}
 
-	// 4. Apply evaluation only if Listener accepted the transition.
+	// 5. Apply evaluation only if Listener accepted the transition.
 	if accepted {
 		ls.ApplyProbeEvaluation(eval)
 	} else {
-		// Listener refused - sync SubjectStatus with Listener's actual state.
+		// Listener refused for unexpected reason - sync with Listener's actual state.
 		ls.SetState(listenerStateToSubjectState(lp.Listener.State))
 		// Reset counters to avoid drift between domain and listener state.
 		ls.ResetCounters()
@@ -538,6 +561,28 @@ func (m *ProbeMonitor) findOrCreateSubjectStatus(lp *ListenerProbe) *domain.Subj
 	return &m.health.Subjects[len(m.health.Subjects)-1]
 }
 
+// extractFailureReason extracts a human-readable reason from a probe result.
+//
+// Params:
+//   - result: the probe result.
+//
+// Returns:
+//   - string: the failure reason extracted from error or output.
+func extractFailureReason(result domain.CheckResult) string {
+	// Check if error message is available.
+	if result.Error != nil {
+		// Return the error message string.
+		return result.Error.Error()
+	}
+	// Check if output is available.
+	if result.Output != "" {
+		// Return the output as reason.
+		return result.Output
+	}
+	// Return default failure message.
+	return "health probe failed"
+}
+
 // sendEventIfChanged sends a health event if state changed.
 //
 // Params:
@@ -549,24 +594,149 @@ func (m *ProbeMonitor) sendEventIfChanged(lp *ListenerProbe, ls *domain.SubjectS
 	// Convert previous state to subject state for comparison.
 	prevSubjectState := listenerStateToSubjectState(prevState)
 
-	// Check if state changed and events channel is available.
-	if prevSubjectState != ls.State && m.events != nil {
-		// Defensive guard to avoid panics if called before a result is stored.
-		if ls.LastProbeResult == nil {
-			// Skip event when no probe result is available yet.
-			return
-		}
-
-		event := domain.NewEvent(lp.Listener.Name, m.resultToStatus(result), *ls.LastProbeResult)
-
-		// Non-blocking send to avoid deadlocks.
-		select {
-		case m.events <- event:
-			// Event sent successfully.
-		default:
-			// Channel full, skip event.
-		}
+	// Check if state has changed.
+	if prevSubjectState == ls.State {
+		// Return early when state unchanged.
+		return
 	}
+
+	// Notify state change callback if configured.
+	m.notifyStateChange(lp.Listener.Name, prevSubjectState, ls.State, result)
+
+	// Handle unhealthy transition (ready -> listening).
+	m.handleUnhealthyTransition(lp.Listener.Name, prevSubjectState, ls.State, result)
+
+	// Send event to channel.
+	m.sendEvent(lp.Listener.Name, ls, result)
+}
+
+// notifyStateChange calls the state change callback if configured.
+//
+// Params:
+//   - name: the listener name.
+//   - prevState: the previous subject state.
+//   - newState: the new subject state.
+//   - result: the probe result.
+func (m *ProbeMonitor) notifyStateChange(name string, prevState, newState domain.SubjectState, result domain.CheckResult) {
+	// Check if callback is configured.
+	if m.onStateChange == nil {
+		// Return early when no callback configured.
+		return
+	}
+	// Call the state change callback.
+	m.onStateChange(name, prevState, newState, result)
+}
+
+// handleUnhealthyTransition triggers unhealthy callback on ready->listening transition.
+//
+// Params:
+//   - name: the listener name.
+//   - prevState: the previous subject state.
+//   - newState: the new subject state.
+//   - result: the probe result.
+func (m *ProbeMonitor) handleUnhealthyTransition(name string, prevState, newState domain.SubjectState, result domain.CheckResult) {
+	// Check if this is a ready -> listening transition.
+	if newState != domain.SubjectListening || prevState != domain.SubjectReady {
+		// Return early for non-unhealthy transitions.
+		return
+	}
+	// Check if callback is configured.
+	if m.onUnhealthy == nil {
+		// Return early when no callback configured.
+		return
+	}
+	// Extract failure reason and call callback.
+	reason := extractFailureReason(result)
+	m.onUnhealthy(name, reason)
+}
+
+// sendEvent sends a health event to the events channel.
+//
+// Params:
+//   - name: the listener name.
+//   - ls: the subject status.
+//   - result: the probe result.
+func (m *ProbeMonitor) sendEvent(name string, ls *domain.SubjectStatus, result domain.CheckResult) {
+	// Check if events channel is configured.
+	if m.events == nil {
+		// Return early when no event channel.
+		return
+	}
+	// Check if probe result is stored.
+	if ls.LastProbeResult == nil {
+		// Return early when no probe result available.
+		return
+	}
+
+	// Create and send event.
+	event := domain.NewEvent(name, m.resultToStatus(result), *ls.LastProbeResult)
+
+	// Non-blocking send to avoid deadlocks.
+	select {
+	case m.events <- event:
+		// Event sent successfully.
+	default:
+		// Channel full, skip event.
+	}
+}
+
+// checkFailureThresholdReached checks if failure threshold was just reached.
+// This implements the Kubernetes liveness probe pattern: when consecutive failures
+// reach the failure threshold, the service should be restarted regardless of
+// whether there was a state transition.
+//
+// Params:
+//   - lp: the listener probe.
+//   - ls: the subject status.
+//   - prevFailures: the failure count before the probe.
+//   - result: the probe result.
+func (m *ProbeMonitor) checkFailureThresholdReached(lp *ListenerProbe, ls *domain.SubjectStatus, prevFailures int, result domain.CheckResult) {
+	// Check if probe was successful.
+	if result.Success {
+		// Return early on successful probes.
+		return
+	}
+
+	// Get the failure threshold from config.
+	failureThreshold := m.getFailureThreshold(lp)
+
+	// Check if threshold was crossed.
+	if prevFailures >= failureThreshold || ls.ConsecutiveFailures < failureThreshold {
+		// Return early when threshold not crossed.
+		return
+	}
+
+	// Check if callback is configured.
+	if m.onUnhealthy == nil {
+		// Return early when no callback configured.
+		return
+	}
+
+	// Trigger unhealthy callback with extracted reason.
+	reason := extractFailureReason(result)
+	m.onUnhealthy(lp.Listener.Name, reason)
+
+	// Reset failure counter after triggering restart.
+	// This gives the restarted process a fresh chance (Kubernetes pattern).
+	ls.ResetCounters()
+}
+
+// getFailureThreshold returns the failure threshold from config with a default of 1.
+//
+// Params:
+//   - lp: the listener probe.
+//
+// Returns:
+//   - int: the failure threshold (minimum 1).
+func (m *ProbeMonitor) getFailureThreshold(lp *ListenerProbe) int {
+	config := lp.ProbeConfig()
+	// Check if threshold is valid.
+	if config.FailureThreshold <= 0 {
+		// Return minimum threshold of 1.
+		return 1
+	}
+	// Return configured threshold.
+	return config.FailureThreshold
 }
 
 // resultToStatus converts a probe result to a health status.

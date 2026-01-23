@@ -2042,3 +2042,408 @@ func Test_ProbeMonitor_runProber_zeroInterval(t *testing.T) {
 		})
 	}
 }
+
+// Test_extractFailureReason tests the extractFailureReason helper function.
+//
+// Params:
+//   - t: the testing context.
+func Test_extractFailureReason(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// result is the check result to extract reason from.
+		result domain.CheckResult
+		// expected is the expected failure reason.
+		expected string
+	}{
+		{
+			name: "error_message",
+			result: domain.CheckResult{
+				Success: false,
+				Error:   assert.AnError,
+			},
+			expected: assert.AnError.Error(),
+		},
+		{
+			name: "output_message",
+			result: domain.CheckResult{
+				Success: false,
+				Output:  "connection refused",
+			},
+			expected: "connection refused",
+		},
+		{
+			name: "default_message",
+			result: domain.CheckResult{
+				Success: false,
+			},
+			expected: "health probe failed",
+		},
+		{
+			name: "error_takes_precedence",
+			result: domain.CheckResult{
+				Success: false,
+				Error:   assert.AnError,
+				Output:  "should not use this",
+			},
+			expected: assert.AnError.Error(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractFailureReason(tt.result)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Test_ProbeMonitor_notifyStateChange tests the notifyStateChange method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_notifyStateChange(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// hasCallback indicates whether callback is set.
+		hasCallback bool
+		// expectCall indicates whether callback should be called.
+		expectCall bool
+	}{
+		{
+			name:        "with_callback",
+			hasCallback: true,
+			expectCall:  true,
+		},
+		{
+			name:        "without_callback",
+			hasCallback: false,
+			expectCall:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+			monitor := &ProbeMonitor{}
+
+			// Set callback if requested.
+			if tt.hasCallback {
+				monitor.onStateChange = func(_ string, _, _ domain.SubjectState, _ domain.CheckResult) {
+					called = true
+				}
+			}
+
+			// Call the method.
+			monitor.notifyStateChange("test", domain.SubjectListening, domain.SubjectReady, domain.CheckResult{})
+
+			// Verify expectation.
+			assert.Equal(t, tt.expectCall, called)
+		})
+	}
+}
+
+// Test_ProbeMonitor_handleUnhealthyTransition tests the handleUnhealthyTransition method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_handleUnhealthyTransition(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// prevState is the previous subject state.
+		prevState domain.SubjectState
+		// newState is the new subject state.
+		newState domain.SubjectState
+		// hasCallback indicates whether callback is set.
+		hasCallback bool
+		// expectCall indicates whether callback should be called.
+		expectCall bool
+	}{
+		{
+			name:        "ready_to_listening_triggers",
+			prevState:   domain.SubjectReady,
+			newState:    domain.SubjectListening,
+			hasCallback: true,
+			expectCall:  true,
+		},
+		{
+			name:        "ready_to_listening_no_callback",
+			prevState:   domain.SubjectReady,
+			newState:    domain.SubjectListening,
+			hasCallback: false,
+			expectCall:  false,
+		},
+		{
+			name:        "other_transition_no_trigger",
+			prevState:   domain.SubjectListening,
+			newState:    domain.SubjectReady,
+			hasCallback: true,
+			expectCall:  false,
+		},
+		{
+			name:        "same_state_no_trigger",
+			prevState:   domain.SubjectReady,
+			newState:    domain.SubjectReady,
+			hasCallback: true,
+			expectCall:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+			monitor := &ProbeMonitor{}
+
+			// Set callback if requested.
+			if tt.hasCallback {
+				monitor.onUnhealthy = func(_ string, _ string) {
+					called = true
+				}
+			}
+
+			// Call the method.
+			monitor.handleUnhealthyTransition("test", tt.prevState, tt.newState, domain.CheckResult{})
+
+			// Verify expectation.
+			assert.Equal(t, tt.expectCall, called)
+		})
+	}
+}
+
+// Test_ProbeMonitor_sendEvent tests the sendEvent method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_sendEvent(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// hasChannel indicates whether event channel is set.
+		hasChannel bool
+		// hasProbeResult indicates whether probe result is set.
+		hasProbeResult bool
+		// expectEvent indicates whether event should be sent.
+		expectEvent bool
+	}{
+		{
+			name:           "sends_event",
+			hasChannel:     true,
+			hasProbeResult: true,
+			expectEvent:    true,
+		},
+		{
+			name:           "no_channel",
+			hasChannel:     false,
+			hasProbeResult: true,
+			expectEvent:    false,
+		},
+		{
+			name:           "no_probe_result",
+			hasChannel:     true,
+			hasProbeResult: false,
+			expectEvent:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var eventCh chan domain.Event
+			// Create channel if requested.
+			if tt.hasChannel {
+				eventCh = make(chan domain.Event, 1)
+			}
+
+			monitor := &ProbeMonitor{events: eventCh}
+
+			// Create subject status.
+			ls := &domain.SubjectStatus{}
+			// Set probe result if requested.
+			if tt.hasProbeResult {
+				probeResult := domain.NewHealthyResult("ok", 10*time.Millisecond)
+				ls.LastProbeResult = &probeResult
+			}
+
+			// Call the method.
+			monitor.sendEvent("test", ls, domain.CheckResult{Success: true})
+
+			// Verify expectation.
+			if tt.expectEvent {
+				select {
+				case <-eventCh:
+					// Event received as expected.
+				default:
+					t.Error("expected event but none received")
+				}
+			} else if tt.hasChannel {
+				select {
+				case <-eventCh:
+					t.Error("unexpected event received")
+				default:
+					// No event as expected.
+				}
+			}
+		})
+	}
+}
+
+// Test_ProbeMonitor_checkFailureThresholdReached tests the checkFailureThresholdReached method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_checkFailureThresholdReached(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// success indicates if probe was successful.
+		success bool
+		// prevFailures is the previous failure count.
+		prevFailures int
+		// currentFailures is the current failure count.
+		currentFailures int
+		// threshold is the failure threshold.
+		threshold int
+		// hasCallback indicates whether callback is set.
+		hasCallback bool
+		// expectCall indicates whether callback should be called.
+		expectCall bool
+	}{
+		{
+			name:            "threshold_crossed",
+			success:         false,
+			prevFailures:    2,
+			currentFailures: 3,
+			threshold:       3,
+			hasCallback:     true,
+			expectCall:      true,
+		},
+		{
+			name:            "threshold_not_crossed",
+			success:         false,
+			prevFailures:    1,
+			currentFailures: 2,
+			threshold:       3,
+			hasCallback:     true,
+			expectCall:      false,
+		},
+		{
+			name:            "already_above_threshold",
+			success:         false,
+			prevFailures:    3,
+			currentFailures: 4,
+			threshold:       3,
+			hasCallback:     true,
+			expectCall:      false,
+		},
+		{
+			name:            "probe_success_no_trigger",
+			success:         true,
+			prevFailures:    2,
+			currentFailures: 0,
+			threshold:       3,
+			hasCallback:     true,
+			expectCall:      false,
+		},
+		{
+			name:            "no_callback",
+			success:         false,
+			prevFailures:    2,
+			currentFailures: 3,
+			threshold:       3,
+			hasCallback:     false,
+			expectCall:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+			monitor := &ProbeMonitor{}
+
+			// Set callback if requested.
+			if tt.hasCallback {
+				monitor.onUnhealthy = func(_ string, _ string) {
+					called = true
+				}
+			}
+
+			// Create listener probe with config.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			binding := &ProbeBinding{
+				Config: ProbeConfig{
+					FailureThreshold: tt.threshold,
+				},
+			}
+			lp := NewListenerProbeWithBinding(l, binding)
+
+			// Create subject status with failure counts.
+			ls := &domain.SubjectStatus{
+				ConsecutiveFailures: tt.currentFailures,
+			}
+
+			// Call the method.
+			monitor.checkFailureThresholdReached(lp, ls, tt.prevFailures, domain.CheckResult{Success: tt.success})
+
+			// Verify expectation.
+			assert.Equal(t, tt.expectCall, called)
+		})
+	}
+}
+
+// Test_ProbeMonitor_getFailureThreshold tests the getFailureThreshold method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_getFailureThreshold(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// threshold is the configured threshold.
+		threshold int
+		// expected is the expected result.
+		expected int
+	}{
+		{
+			name:      "configured_threshold",
+			threshold: 5,
+			expected:  5,
+		},
+		{
+			name:      "zero_returns_default",
+			threshold: 0,
+			expected:  1,
+		},
+		{
+			name:      "negative_returns_default",
+			threshold: -1,
+			expected:  1,
+		},
+		{
+			name:      "one_returns_one",
+			threshold: 1,
+			expected:  1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			monitor := &ProbeMonitor{}
+
+			// Create listener probe with config.
+			l := listener.NewListener("test", "tcp", "localhost", 8080)
+			binding := &ProbeBinding{
+				Config: ProbeConfig{
+					FailureThreshold: tt.threshold,
+				},
+			}
+			lp := NewListenerProbeWithBinding(l, binding)
+
+			// Call the method.
+			result := monitor.getFailureThreshold(lp)
+
+			// Verify expectation.
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

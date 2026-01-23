@@ -1,4 +1,4 @@
-.PHONY: help build lint fmt test coverage clean
+.PHONY: help build build-e2e lint fmt test test-unit test-e2e coverage clean
 
 .DEFAULT_GOAL := help
 
@@ -10,11 +10,14 @@ help: ## Show this help
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""
-	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  $(CYAN)%-12s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@grep -E '^[a-zA-Z0-9_-]+:.*## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
 
-build: ## Build binary to bin/supervizio
-	@cd src && go build -o ../bin/supervizio ./cmd/daemon
+build: ## Build supervizio binary to bin/
+	@cd src && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
+
+build-e2e: build ## Build E2E test binaries (supervizio + crasher)
+	@cd e2e/behavioral/crasher && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../../../bin/crasher .
 
 lint: ## Run golangci-lint
 	@cd src && golangci-lint run
@@ -22,10 +25,15 @@ lint: ## Run golangci-lint
 fmt: ## Format code with gofmt
 	@cd src && go fmt ./...
 
-test: ## Run tests with race detection
+test: test-unit test-e2e ## Run all tests (unit + E2E)
+
+test-unit: ## Run unit tests with race detection
 	@cd src && go test -race ./...
 
-coverage: ## Run tests with coverage report
+test-e2e: build-e2e ## Run E2E behavioral tests (requires Docker)
+	@cd e2e/behavioral && go test -v -timeout 15m ./...
+
+coverage: ## Run unit tests with coverage report
 	@cd src && go test -race -coverprofile=coverage.out ./...
 	@cd src && go tool cover -func=coverage.out | tail -1
 	@rm -f src/coverage.out

@@ -130,10 +130,11 @@ type ProbeDTO struct {
 // RestartConfigDTO is the YAML representation of restart configuration.
 // It defines the restart policy and timing parameters for service recovery.
 type RestartConfigDTO struct {
-	Policy     string   `yaml:"policy"`
-	MaxRetries int      `yaml:"max_retries,omitempty"`
-	Delay      Duration `yaml:"delay,omitempty"`
-	DelayMax   Duration `yaml:"delay_max,omitempty"`
+	Policy          string   `yaml:"policy"`
+	MaxRetries      int      `yaml:"max_retries,omitempty"`
+	Delay           Duration `yaml:"delay,omitempty"`
+	DelayMax        Duration `yaml:"delay_max,omitempty"`
+	StabilityWindow Duration `yaml:"stability_window,omitempty"`
 }
 
 // HealthCheckDTO is the YAML representation of a health check.
@@ -391,10 +392,11 @@ func (p *ProbeDTO) getHTTPDefaults() (method string, statusCode int) {
 func (r *RestartConfigDTO) ToDomain() config.RestartConfig {
 	// Return the converted restart configuration with policy and timing
 	return config.RestartConfig{
-		Policy:     config.RestartPolicy(r.Policy),
-		MaxRetries: r.MaxRetries,
-		Delay:      shared.FromTimeDuration(time.Duration(r.Delay)),
-		DelayMax:   shared.FromTimeDuration(time.Duration(r.DelayMax)),
+		Policy:          config.RestartPolicy(r.Policy),
+		MaxRetries:      r.MaxRetries,
+		Delay:           shared.FromTimeDuration(time.Duration(r.Delay)),
+		DelayMax:        shared.FromTimeDuration(time.Duration(r.DelayMax)),
+		StabilityWindow: shared.FromTimeDuration(time.Duration(r.StabilityWindow)),
 	}
 }
 

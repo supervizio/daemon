@@ -315,6 +315,8 @@ func (m *Manager) handleProcessExit(result domain.ExitResult) bool {
 	m.mu.Lock()
 	m.exitCode = result.Code
 	m.pid = 0
+	// Calculate uptime before resetting state.
+	uptime := time.Since(m.startTime)
 	// Check if process exited successfully.
 	if result.Code == 0 {
 		m.state = domain.StateStopped
@@ -331,6 +333,9 @@ func (m *Manager) handleProcessExit(result domain.ExitResult) bool {
 		// Send failed event with exit code error.
 		m.sendEvent(domain.EventFailed, fmt.Errorf("exit code %d: %w", result.Code, domain.ErrProcessFailed))
 	}
+
+	// Reset backoff counter if process ran stably for the configured window.
+	m.tracker.MaybeReset(uptime)
 
 	// Check if restart policy allows restart.
 	if !m.tracker.ShouldRestart(result.Code) {
@@ -456,4 +461,39 @@ func (m *Manager) Status() domain.Status {
 		Restarts: m.restarts,
 		ExitCode: m.exitCode,
 	}
+}
+
+// RestartOnHealthFailure triggers a process restart due to health probe failure.
+// This implements the Kubernetes liveness probe pattern: when health probes
+// fail consecutively beyond the failure threshold, the process is killed
+// and will be restarted by the normal restart policy.
+//
+// Params:
+//   - reason: description of why the health check failed.
+//
+// Returns:
+//   - error: ErrNotRunning if no process, error from executor on stop failure.
+func (m *Manager) RestartOnHealthFailure(reason string) error {
+	m.mu.Lock()
+	pid := m.pid
+	running := m.running
+	m.mu.Unlock()
+
+	// Check if manager is not running.
+	if !running {
+		// Return error when manager is not active.
+		return domain.ErrNotRunning
+	}
+
+	// Check if process is not running.
+	if pid == 0 {
+		// Return error when no process to restart.
+		return domain.ErrNotRunning
+	}
+
+	// Send unhealthy event before stopping process.
+	m.sendEvent(domain.EventUnhealthy, fmt.Errorf("%s: %w", reason, domain.ErrHealthProbeFailed))
+
+	// Stop the process; restart loop will handle restart based on policy.
+	return m.executor.Stop(pid, defaultStopTimeout)
 }

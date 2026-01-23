@@ -26,7 +26,11 @@ e2e/
 ├── Dockerfile.fedora     # systemd, .rpm
 ├── Dockerfile.alpine     # OpenRC, .apk
 ├── Dockerfile.devuan     # SysVinit, .deb
-└── Dockerfile.alpine-runit # runit, .apk
+├── Dockerfile.alpine-runit # runit, .apk
+└── behavioral/           # Behavioral tests (testcontainers-go)
+    ├── crasher/          # Test binary
+    ├── testdata/         # YAML configs
+    └── *_test.go         # Go tests
 ```
 
 ## Init System Paths
@@ -66,3 +70,7 @@ docker run --rm supervizio-debian
 - BSD: VM tests only (no Docker support)
 - Alpine-runit: Same box as OpenRC, provisioned with runit
 - All binaries: `CGO_ENABLED=0` (static)
+
+## Behavioral Tests
+
+See `behavioral/CLAUDE.md` for runtime behavior tests (restart policies, health probes, PID1 capabilities).
