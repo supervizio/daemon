@@ -323,14 +323,77 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # E2E Tests - Linux (Vagrant + Docker)
+  # E2E Tests - Linux Docker (fast, reliable)
   # =============================================================================
   # Validates release PACKAGES work across Linux distributions and init systems.
-  # Tests actual .deb/.rpm/.apk installation, not just raw binaries.
-  # Must pass before release is published.
+  # Tests actual .deb/.rpm/.apk installation in containers.
+  # Docker tests are fast and reliable - must pass before release.
   # =============================================================================
   e2e-linux:
     name: E2E ${{ matrix.name }}
+    needs: [version, packages]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian
+            dockerfile: Dockerfile.debian
+            pkg_format: deb
+          - name: Fedora
+            dockerfile: Dockerfile.fedora
+            pkg_format: rpm
+          - name: Alpine
+            dockerfile: Dockerfile.alpine
+            pkg_format: apk
+          - name: Devuan
+            dockerfile: Dockerfile.devuan
+            pkg_format: deb
+          - name: Alpine-runit
+            dockerfile: Dockerfile.alpine-runit
+            pkg_format: apk
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-amd64.${{ matrix.pkg_format }}
+          path: pkg
+
+      - name: Prepare package
+        run: |
+          echo "=== Downloaded package ==="
+          ls -la pkg/
+          # Copy to bin for Dockerfile compatibility
+          mkdir -p bin
+          cp pkg/*.${{ matrix.pkg_format }} bin/
+          ls -la bin/
+
+      - name: Build container
+        run: docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-e2e:${{ matrix.name }} .
+
+      - name: Test version command
+        run: docker run --rm supervizio-e2e:${{ matrix.name }}
+
+      - name: Test help command
+        run: docker run --rm supervizio-e2e:${{ matrix.name }} --help || true
+
+      - name: Test config validation
+        run: |
+          # Test that binary can validate a config file
+          docker run --rm supervizio-e2e:${{ matrix.name }} --config /etc/supervizio/config.yaml --version
+
+  # =============================================================================
+  # E2E Tests - Linux VM (Vagrant + libvirt/KVM)
+  # =============================================================================
+  # Extended validation with real init systems (systemd, OpenRC, runit, SysVinit).
+  # Tests actual service installation and management - must pass before release.
+  # =============================================================================
+  e2e-linux-vm:
+    name: E2E VM ${{ matrix.name }}
     needs: [version, packages]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -340,31 +403,26 @@ jobs:
         include:
           - name: Debian
             vm: debian13
-            dockerfile: Dockerfile.debian
             init: systemd
             pkg_format: deb
             pkg_install: "sudo dpkg -i"
           - name: Fedora
             vm: fedora
-            dockerfile: Dockerfile.fedora
             init: systemd
             pkg_format: rpm
             pkg_install: "sudo rpm -i"
           - name: Alpine
             vm: alpine
-            dockerfile: Dockerfile.alpine
             init: openrc
             pkg_format: apk
             pkg_install: "sudo apk add --allow-untrusted"
           - name: Devuan
             vm: devuan
-            dockerfile: Dockerfile.devuan
             init: sysvinit
             pkg_format: deb
             pkg_install: "sudo dpkg -i"
           - name: Alpine-runit
             vm: alpine-runit
-            dockerfile: Dockerfile.alpine-runit
             init: runit
             pkg_format: apk
             pkg_install: "sudo apk add --allow-untrusted"
@@ -382,14 +440,7 @@ jobs:
         run: |
           echo "=== Downloaded package ==="
           ls -la pkg/
-          # Copy to bin for Dockerfile compatibility (expects bin/supervizio)
-          mkdir -p bin
-          cp pkg/*.${{ matrix.pkg_format }} bin/
-          ls -la bin/
 
-      # =========================================================================
-      # VM Test via Vagrant + libvirt/KVM
-      # =========================================================================
       - name: Setup KVM
         run: |
           if [ -e /dev/kvm ]; then
@@ -483,15 +534,6 @@ jobs:
         if: always()
         working-directory: e2e
         run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
-
-      # =========================================================================
-      # Container Test via Docker
-      # =========================================================================
-      - name: Build container
-        run: docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-${{ matrix.vm }}:test .
-
-      - name: Test container
-        run: docker run --rm supervizio-${{ matrix.vm }}:test
 
       - name: Collect logs on failure
         if: failure()
@@ -656,7 +698,7 @@ jobs:
   # =============================================================================
   release:
     name: Release
-    needs: [version, build, packages, e2e-linux, e2e-bsd]
+    needs: [version, build, packages, e2e-linux, e2e-linux-vm, e2e-bsd]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -764,7 +806,7 @@ jobs:
   # =============================================================================
   cleanup-on-failure:
     name: Cleanup Failed Release
-    needs: [version, e2e-linux, e2e-bsd]
+    needs: [version, e2e-linux, e2e-linux-vm, e2e-bsd]
     if: failure() && needs.version.outputs.is_new_tag == 'true'
     runs-on: ubuntu-latest
     permissions:
