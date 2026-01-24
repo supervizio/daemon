@@ -22,10 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: src/go.sum
@@ -54,10 +54,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: src/go.sum
@@ -94,19 +94,22 @@ jobs:
             -r coverage.out
 
   # =============================================================================
-  # Build validation (single build to verify compilation)
-  # Multi-platform builds are handled by release.yml
+  # Build Linux binaries (amd64 + arm64 for package testing)
   # =============================================================================
   build:
-    name: Build
+    name: Build linux/${{ matrix.goarch }}
     runs-on: ubuntu-latest
     needs: [lint, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        goarch: [amd64, arm64]
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: src/go.sum
@@ -123,10 +126,33 @@ jobs:
         env:
           CGO_ENABLED: 0
           GOOS: linux
-          GOARCH: amd64
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
-          chmod +x ../bin/supervizio
+          go build -ldflags="-s -w" -o ../supervizio-linux-${{ matrix.goarch }} ./cmd/daemon
+
+      - name: Upload binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-linux-${{ matrix.goarch }}
+          path: supervizio-linux-${{ matrix.goarch }}
+          retention-days: 1
+
+  # =============================================================================
+  # Build crasher for E2E behavioral tests (amd64 only)
+  # =============================================================================
+  build-crasher:
+    name: Build crasher
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: src/go.sum
 
       - name: Build crasher binary
         working-directory: e2e/behavioral/crasher
@@ -135,14 +161,13 @@ jobs:
           GOOS: linux
           GOARCH: amd64
         run: |
-          go build -ldflags="-s -w" -o ../../../bin/crasher .
-          chmod +x ../../../bin/crasher
+          go build -ldflags="-s -w" -o crasher .
 
-      - name: Upload binaries
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - name: Upload crasher
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: binaries-linux-amd64
-          path: bin/
+          name: crasher-linux-amd64
+          path: e2e/behavioral/crasher/crasher
           retention-days: 1
 
   # =============================================================================
@@ -151,29 +176,36 @@ jobs:
   e2e-behavioral:
     name: E2E Behavioral
     runs-on: ubuntu-24.04
-    needs: [build]
+    needs: [build, build-crasher]
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: src/go.sum
 
-      - name: Download binaries
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+      - name: Download supervizio binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: binaries-linux-amd64
+          name: supervizio-linux-amd64
           path: bin/
 
-      - name: Make binaries executable
+      - name: Download crasher binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: crasher-linux-amd64
+          path: bin/
+
+      - name: Prepare binaries
         run: |
-          if [ -d bin ] && [ -n "$(ls -A bin 2>/dev/null)" ]; then
-            chmod +x bin/*
-          fi
+          # Rename supervizio binary to expected name
+          mv bin/supervizio-linux-amd64 bin/supervizio
+          chmod +x bin/*
+          ls -la bin/
 
       - name: Download Go dependencies
         working-directory: e2e/behavioral
@@ -182,4 +214,74 @@ jobs:
       - name: Run behavioral tests
         working-directory: e2e/behavioral
         run: go test -v -timeout 15m ./...
+
+  # =============================================================================
+  # Generate Linux Packages (.deb, .rpm, .apk) - Test in CI before release
+  # =============================================================================
+  packages:
+    name: Package ${{ matrix.format }} (${{ matrix.arch }})
+    needs: [build]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        format: [deb, rpm, apk]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: src/go.sum
+
+      - name: Download Linux binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-linux-${{ matrix.arch }}
+
+      - name: Prepare binary
+        run: |
+          # download-artifact@v4 extracts files directly (no subdirectory)
+          ls -la
+          chmod +x supervizio-linux-${{ matrix.arch }}
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+      - name: Build package
+        env:
+          VERSION: "0.0.0-ci"
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          # Export for nfpm config
+          export VERSION="0.0.0"
+          export GOARCH="${{ matrix.arch }}"
+
+          # Substitute environment variables in nfpm config
+          envsubst < nfpm.yaml > nfpm-resolved.yaml
+          echo "=== Resolved nfpm config ==="
+          cat nfpm-resolved.yaml
+
+          # Generate package
+          nfpm package \
+            --config nfpm-resolved.yaml \
+            --packager ${{ matrix.format }} \
+            --target ./
+
+          # List generated package
+          echo "=== Generated packages ==="
+          ls -la *.deb *.rpm *.apk 2>/dev/null || true
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.arch }}.${{ matrix.format }}
+          path: |
+            *.deb
+            *.rpm
+            *.apk
+          retention-days: 1
 

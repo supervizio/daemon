@@ -40,7 +40,7 @@ jobs:
       is_new_tag: ${{ steps.version.outputs.is_new_tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
@@ -158,10 +158,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: src/go.sum
@@ -186,7 +186,7 @@ jobs:
             ./cmd/daemon
 
       - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: supervizio-${{ matrix.goos }}-${{ matrix.goarch }}
           path: supervizio-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -209,24 +209,23 @@ jobs:
         format: [deb, rpm, apk]
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: src/go.sum
 
       - name: Download Linux binary
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: supervizio-linux-${{ matrix.arch }}
 
       - name: Prepare binary
         run: |
-          # download-artifact@v4 extracts to subdirectory with artifact name
-          mv supervizio-linux-${{ matrix.arch }}/supervizio-linux-${{ matrix.arch }} ./
-          rmdir supervizio-linux-${{ matrix.arch }}
+          # download-artifact@v4 extracts files directly (no subdirectory)
+          ls -la
           chmod +x supervizio-linux-${{ matrix.arch }}
           ls -la supervizio-*
 
@@ -304,7 +303,7 @@ jobs:
           done
 
       - name: Upload package
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: supervizio-${{ matrix.arch }}.${{ matrix.format }}
           path: |
@@ -361,10 +360,10 @@ jobs:
             pkg_install: "sudo apk add --allow-untrusted"
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Download package
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: supervizio-amd64.${{ matrix.pkg_format }}
           path: pkg
@@ -403,7 +402,7 @@ jobs:
           vagrant plugin install vagrant-libvirt
 
       - name: Cache Vagrant box
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.vagrant.d/boxes
           key: vagrant-${{ matrix.vm }}-v1
@@ -520,10 +519,10 @@ jobs:
             goos: dragonfly
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Download BSD binary
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: supervizio-${{ matrix.goos }}-amd64
           path: bin
@@ -555,7 +554,7 @@ jobs:
           vagrant plugin install vagrant-libvirt
 
       - name: Cache Vagrant box
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.vagrant.d/boxes
           key: vagrant-${{ matrix.vm }}-v1
@@ -654,10 +653,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Download all artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
 
@@ -737,7 +736,7 @@ jobs:
           git push origin "${{ needs.version.outputs.version }}"
 
       - name: Create Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           name: superviz.io ${{ needs.version.outputs.version }}
           tag_name: ${{ needs.version.outputs.version }}
@@ -762,7 +761,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
