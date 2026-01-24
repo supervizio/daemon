@@ -222,6 +222,15 @@ jobs:
         with:
           name: supervizio-linux-${{ matrix.arch }}
 
+      - name: Prepare binary
+        run: |
+          # download-artifact@v4 creates subdirectory with artifact name
+          # Move binary to expected location for nfpm
+          mv supervizio-linux-${{ matrix.arch }}/supervizio-linux-${{ matrix.arch }} ./
+          rmdir supervizio-linux-${{ matrix.arch }}
+          chmod +x supervizio-linux-${{ matrix.arch }}
+          ls -la supervizio-*
+
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
