@@ -11,6 +11,12 @@ fi
 mkdir -p /etc/supervizio /var/log/supervizio
 chown supervizio:supervizio /var/log/supervizio
 
+# Create default config from example if not exists
+if [ ! -f /etc/supervizio/config.yaml ] && [ -f /etc/supervizio/config.example.yaml ]; then
+    cp /etc/supervizio/config.example.yaml /etc/supervizio/config.yaml
+    chmod 644 /etc/supervizio/config.yaml
+fi
+
 # Reload systemd
 if command -v systemctl >/dev/null 2>&1; then
     systemctl daemon-reload || true
