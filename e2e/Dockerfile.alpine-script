@@ -1,0 +1,35 @@
+# =============================================================================
+# E2E Test Container: Alpine 3.21 - Script Install (no package manager)
+# =============================================================================
+# Validates supervizio installation via install.sh works correctly on Alpine.
+# Tests the non-package-manager installation path with OpenRC init system.
+# Note: Alpine uses musl libc, so binary must be statically compiled.
+# =============================================================================
+
+FROM alpine:3.21
+
+# Install minimal dependencies for testing (including OpenRC for init detection)
+RUN apk add --no-cache \
+    curl \
+    procps \
+    openrc
+
+# Copy binary to /bin-local (install.sh will detect and use it)
+COPY bin/supervizio-linux-amd64 /bin-local/supervizio
+RUN chmod +x /bin-local/supervizio
+
+# Copy install scripts
+COPY setup/ /setup/
+RUN chmod +x /setup/*.sh
+
+# Run install.sh (will use /bin-local/supervizio)
+RUN /setup/install.sh
+
+# Verify installation
+RUN test -x /usr/local/bin/supervizio && \
+    test -d /etc/supervizio && \
+    test -f /etc/supervizio/config.yaml
+
+# supervizio as entrypoint
+ENTRYPOINT ["/usr/local/bin/supervizio"]
+CMD ["--version"]

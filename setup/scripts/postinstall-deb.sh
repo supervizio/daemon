@@ -17,11 +17,21 @@ if [ ! -f /etc/supervizio/config.yaml ] && [ -f /etc/supervizio/config.example.y
     chmod 644 /etc/supervizio/config.yaml
 fi
 
-# Reload systemd if available
-if command -v systemctl >/dev/null 2>&1; then
+# Enable service based on init system
+if [ -d /run/systemd/system ]; then
+    # systemd (Debian, Ubuntu, etc.)
     systemctl daemon-reload || true
+    echo "supervizio installed successfully"
+    echo "Configure: /etc/supervizio/config.yaml"
+    echo "Start: systemctl start supervizio"
+elif [ -d /etc/init.d ] && [ -f /etc/init.d/supervizio ]; then
+    # SysVinit (Devuan, etc.)
+    update-rc.d supervizio defaults 2>/dev/null || true
+    echo "supervizio installed successfully"
+    echo "Configure: /etc/supervizio/config.yaml"
+    echo "Start: /etc/init.d/supervizio start"
+else
+    echo "supervizio installed successfully"
+    echo "Configure: /etc/supervizio/config.yaml"
+    echo "Note: No supported init system detected. Start manually."
 fi
-
-echo "supervizio installed successfully"
-echo "Configure: /etc/supervizio/config.yaml"
-echo "Start: systemctl start supervizio"

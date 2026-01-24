@@ -1,0 +1,34 @@
+# =============================================================================
+# E2E Test Container: Debian 13 (trixie) - Script Install (no package manager)
+# =============================================================================
+# Validates supervizio installation via install.sh works correctly on Debian.
+# Tests the non-package-manager installation path.
+# =============================================================================
+
+FROM debian:trixie-slim
+
+# Install minimal dependencies for testing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy binary to /bin-local (install.sh will detect and use it)
+COPY bin/supervizio-linux-amd64 /bin-local/supervizio
+RUN chmod +x /bin-local/supervizio
+
+# Copy install scripts
+COPY setup/ /setup/
+RUN chmod +x /setup/*.sh
+
+# Run install.sh (will use /bin-local/supervizio)
+RUN /setup/install.sh
+
+# Verify installation
+RUN test -x /usr/local/bin/supervizio && \
+    test -d /etc/supervizio && \
+    test -f /etc/supervizio/config.yaml
+
+# supervizio as entrypoint
+ENTRYPOINT ["/usr/local/bin/supervizio"]
+CMD ["--version"]
