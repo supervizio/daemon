@@ -138,6 +138,50 @@ jobs:
           retention-days: 1
 
   # =============================================================================
+  # Build BSD binaries (for e2e-bsd-vm tests)
+  # =============================================================================
+  build-bsd:
+    name: Build ${{ matrix.goos }}/amd64
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [freebsd, openbsd, netbsd, dragonfly]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: src/go.sum
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@latest
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build binary
+        working-directory: src
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: amd64
+        run: |
+          go build -ldflags="-s -w" -o ../supervizio-${{ matrix.goos }}-amd64 ./cmd/daemon
+
+      - name: Upload binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.goos }}-amd64
+          path: supervizio-${{ matrix.goos }}-amd64
+          retention-days: 1
+
+  # =============================================================================
   # Build crasher for E2E behavioral tests (amd64 only)
   # =============================================================================
   build-crasher:
@@ -168,6 +212,63 @@ jobs:
         with:
           name: crasher-linux-amd64
           path: e2e/behavioral/crasher/crasher
+          retention-days: 1
+
+  # =============================================================================
+  # Generate Linux Packages (.deb, .rpm, .apk)
+  # =============================================================================
+  packages:
+    name: Package ${{ matrix.format }} (${{ matrix.arch }})
+    needs: [build]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        format: [deb, rpm, apk]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: src/go.sum
+
+      - name: Download Linux binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-linux-${{ matrix.arch }}
+
+      - name: Prepare binary
+        run: |
+          ls -la
+          chmod +x supervizio-linux-${{ matrix.arch }}
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
+
+      - name: Build package
+        env:
+          VERSION: "0.0.0"
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          envsubst < nfpm.yaml > nfpm-resolved.yaml
+          echo "=== Resolved nfpm config ==="
+          cat nfpm-resolved.yaml
+          nfpm package \
+            --config nfpm-resolved.yaml \
+            --packager ${{ matrix.format }} \
+            --target ./
+          echo "=== Generated package ==="
+          ls -la *.${{ matrix.format }}
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.arch }}.${{ matrix.format }}
+          path: "*.${{ matrix.format }}"
           retention-days: 1
 
   # =============================================================================
@@ -202,7 +303,6 @@ jobs:
 
       - name: Prepare binaries
         run: |
-          # Rename supervizio binary to expected name
           mv bin/supervizio-linux-amd64 bin/supervizio
           chmod +x bin/*
           ls -la bin/
@@ -216,73 +316,10 @@ jobs:
         run: go test -v -timeout 15m ./...
 
   # =============================================================================
-  # Generate Linux Packages (.deb, .rpm, .apk) - Test in CI before release
+  # E2E Linux Packages - Docker (install via package manager + uninstall)
   # =============================================================================
-  packages:
-    name: Package ${{ matrix.format }} (${{ matrix.arch }})
-    needs: [build]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [amd64, arm64]
-        format: [deb, rpm, apk]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: src/go.sum
-
-      - name: Download Linux binary
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: supervizio-linux-${{ matrix.arch }}
-
-      - name: Prepare binary
-        run: |
-          # download-artifact@v4 extracts files directly (no subdirectory)
-          ls -la
-          chmod +x supervizio-linux-${{ matrix.arch }}
-
-      - name: Install nfpm
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
-
-      - name: Build package
-        env:
-          VERSION: "0.0.0"
-          GOARCH: ${{ matrix.arch }}
-        run: |
-          # Substitute environment variables in nfpm config
-          envsubst < nfpm.yaml > nfpm-resolved.yaml
-          echo "=== Resolved nfpm config ==="
-          cat nfpm-resolved.yaml
-
-          # Generate package
-          nfpm package \
-            --config nfpm-resolved.yaml \
-            --packager ${{ matrix.format }} \
-            --target ./
-
-          # Verify package was created
-          echo "=== Generated package ==="
-          ls -la *.${{ matrix.format }}
-
-      - name: Upload package
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: supervizio-${{ matrix.arch }}.${{ matrix.format }}
-          path: "*.${{ matrix.format }}"
-          retention-days: 1
-
-  # =============================================================================
-  # E2E Tests - Linux Docker (validates packages work in containers)
-  # =============================================================================
-  e2e-linux:
-    name: E2E ${{ matrix.name }}
+  e2e-linux-packages:
+    name: E2E Packages ${{ matrix.name }}
     needs: [packages]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -292,19 +329,24 @@ jobs:
         include:
           - name: Debian
             dockerfile: Dockerfile.debian
-            pkg_format: deb
+            package_format: deb
+            uninstall_cmd: "dpkg -r supervizio"
           - name: Fedora
             dockerfile: Dockerfile.fedora
-            pkg_format: rpm
+            package_format: rpm
+            uninstall_cmd: "rpm -e supervizio"
           - name: Alpine
             dockerfile: Dockerfile.alpine
-            pkg_format: apk
+            package_format: apk
+            uninstall_cmd: "apk del supervizio"
           - name: Devuan
             dockerfile: Dockerfile.devuan
-            pkg_format: deb
+            package_format: deb
+            uninstall_cmd: "dpkg -r supervizio"
           - name: Alpine-runit
             dockerfile: Dockerfile.alpine-runit
-            pkg_format: apk
+            package_format: apk
+            uninstall_cmd: "apk del supervizio"
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -312,15 +354,12 @@ jobs:
       - name: Download package
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: supervizio-amd64.${{ matrix.pkg_format }}
-          path: pkg
+          name: supervizio-amd64.${{ matrix.package_format }}
+          path: bin
 
       - name: Prepare package
         run: |
           echo "=== Downloaded package ==="
-          ls -la pkg/
-          mkdir -p bin
-          cp pkg/*.${{ matrix.pkg_format }} bin/
           ls -la bin/
 
       - name: Build container
@@ -336,3 +375,418 @@ jobs:
         run: |
           docker run --rm supervizio-e2e:${{ matrix.name }} --config /etc/supervizio/config.yaml --version
 
+      - name: Test uninstall
+        run: |
+          docker run --rm supervizio-e2e:${{ matrix.name }} sh -c "${{ matrix.uninstall_cmd }} && test ! -x /usr/local/bin/supervizio"
+
+  # =============================================================================
+  # E2E Linux Script - Docker (install via install.sh without package manager)
+  # =============================================================================
+  e2e-linux-script:
+    name: E2E Script ${{ matrix.name }}
+    needs: [build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian
+            dockerfile: Dockerfile.debian-script
+          - name: Alpine
+            dockerfile: Dockerfile.alpine-script
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-linux-amd64
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          echo "=== Downloaded binary ==="
+          ls -la bin/
+
+      - name: Build container
+        run: docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-e2e-script:${{ matrix.name }} .
+
+      - name: Test version command
+        run: docker run --rm supervizio-e2e-script:${{ matrix.name }}
+
+      - name: Test help command
+        run: docker run --rm supervizio-e2e-script:${{ matrix.name }} --help || true
+
+      - name: Test config validation
+        run: |
+          docker run --rm supervizio-e2e-script:${{ matrix.name }} --config /etc/supervizio/config.yaml --version
+
+  # =============================================================================
+  # E2E Linux Packages - VM (full tests with real init systems)
+  # =============================================================================
+  e2e-linux-packages-vm:
+    name: E2E VM Packages ${{ matrix.name }}
+    needs: [packages]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian
+            vm: debian13
+            init: systemd
+            package_format: deb
+            package_install: "sudo dpkg -i"
+          - name: Fedora
+            vm: fedora
+            init: systemd
+            package_format: rpm
+            package_install: "sudo rpm -i"
+          - name: Alpine
+            vm: alpine
+            init: openrc
+            package_format: apk
+            package_install: "sudo apk add --allow-untrusted"
+          - name: Devuan
+            vm: devuan
+            init: sysvinit
+            package_format: deb
+            package_install: "sudo dpkg -i"
+          - name: Alpine-runit
+            vm: alpine-runit
+            init: runit
+            package_format: apk
+            package_install: "sudo apk add --allow-untrusted"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-amd64.${{ matrix.package_format }}
+          path: package
+
+      - name: Prepare package
+        run: |
+          echo "=== Downloaded package ==="
+          ls -la package/
+
+      - name: Setup KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
+      - name: Install libvirt and Vagrant
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
+          vagrant plugin install vagrant-libvirt
+
+      - name: Cache Vagrant box
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-${{ matrix.vm }}-v1
+
+      - name: Start VM
+        working-directory: e2e
+        run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+
+      - name: Sync folders
+        working-directory: e2e
+        run: |
+          echo "=== Getting VM SSH config ==="
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+          echo "VM IP: $VM_IP"
+
+          echo "=== Waiting for VM to be SSH-ready ==="
+          for i in $(seq 1 36); do
+            if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              echo "Port 22 is open on $VM_IP"
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+                echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
+                break
+              fi
+            else
+              echo "Port 22 not yet open (attempt $i/36)"
+            fi
+            if [ "$i" = "36" ]; then
+              echo "ERROR: VM not SSH-accessible after 180 seconds"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          echo "=== Attempting vagrant rsync ==="
+          if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
+            echo "=== Rsync succeeded ==="
+          else
+            echo "=== Rsync failed, using tar-over-ssh fallback ==="
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /vagrant && sudo chmod 777 /setup /vagrant"
+            tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
+            tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup"
+          fi
+
+          echo "=== Syncing packages to /package ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /package && sudo chmod 755 /package"
+          tar -cv -C "$GITHUB_WORKSPACE" package | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /package && ls -la /package/"
+
+      - name: Install package in VM
+        working-directory: e2e
+        run: |
+          echo "=== Installing package via ${{ matrix.package_install }} ==="
+          sudo -E vagrant ssh "${{ matrix.vm }}" -c "ls -la /package/"
+          sudo -E vagrant ssh "${{ matrix.vm }}" -c '${{ matrix.package_install }} /package/*.${{ matrix.package_format }}'
+
+      - name: Run VM tests (full)
+        working-directory: e2e
+        run: sudo -E vagrant ssh "${{ matrix.vm }}" -c "sudo /vagrant/test-install.sh --skip-install"
+
+      - name: Cleanup VM
+        if: always()
+        working-directory: e2e
+        run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
+
+  # =============================================================================
+  # E2E Linux Script - VM (install via install.sh, full tests)
+  # =============================================================================
+  e2e-linux-script-vm:
+    name: E2E VM Script ${{ matrix.name }}
+    needs: [build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian
+            vm: debian13
+          - name: Alpine
+            vm: alpine
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-linux-amd64
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          mv bin/supervizio-linux-amd64 bin/supervizio
+          chmod +x bin/supervizio
+          ls -la bin/
+
+      - name: Setup KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
+      - name: Install libvirt and Vagrant
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
+          vagrant plugin install vagrant-libvirt
+
+      - name: Cache Vagrant box
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-${{ matrix.vm }}-v1
+
+      - name: Start VM
+        working-directory: e2e
+        run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+
+      - name: Sync folders
+        working-directory: e2e
+        run: |
+          echo "=== Getting VM SSH config ==="
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+          echo "VM IP: $VM_IP"
+
+          echo "=== Waiting for VM to be SSH-ready ==="
+          for i in $(seq 1 36); do
+            if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+                echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
+                break
+              fi
+            fi
+            if [ "$i" = "36" ]; then
+              echo "ERROR: VM not SSH-accessible after 180 seconds"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          echo "=== Attempting vagrant rsync ==="
+          if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
+            echo "=== Rsync succeeded ==="
+          else
+            echo "=== Rsync failed, using tar-over-ssh fallback ==="
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
+            tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
+            tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
+            tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+          fi
+
+      - name: Run VM tests (full with install.sh)
+        working-directory: e2e
+        run: sudo -E vagrant ssh "${{ matrix.vm }}" -c "sudo /vagrant/test-install.sh"
+
+      - name: Cleanup VM
+        if: always()
+        working-directory: e2e
+        run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
+
+  # =============================================================================
+  # E2E BSD - VM (install via install.sh, full tests)
+  # =============================================================================
+  e2e-bsd-vm:
+    name: E2E VM ${{ matrix.name }}
+    needs: [build-bsd]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: FreeBSD
+            vm: freebsd
+            goos: freebsd
+          - name: OpenBSD
+            vm: openbsd
+            goos: openbsd
+          - name: NetBSD
+            vm: netbsd
+            goos: netbsd
+          - name: DragonFlyBSD
+            vm: dragonfly
+            goos: dragonfly
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download BSD binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-${{ matrix.goos }}-amd64
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          mv bin/supervizio-${{ matrix.goos }}-amd64 bin/supervizio
+          chmod +x bin/supervizio
+          ls -la bin/
+
+      - name: Setup KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
+      - name: Install libvirt and Vagrant
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
+          vagrant plugin install vagrant-libvirt
+
+      - name: Cache Vagrant box
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-${{ matrix.vm }}-v1
+
+      - name: Start VM
+        working-directory: e2e
+        run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+
+      - name: Sync folders
+        working-directory: e2e
+        run: |
+          echo "=== Getting VM SSH config ==="
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+          echo "VM IP: $VM_IP"
+
+          echo "=== Waiting for VM to be SSH-ready ==="
+          for i in $(seq 1 36); do
+            if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+                echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
+                break
+              fi
+            fi
+            if [ "$i" = "36" ]; then
+              echo "ERROR: VM not SSH-accessible after 180 seconds"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          echo "=== Attempting vagrant rsync ==="
+          if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
+            echo "=== Rsync succeeded ==="
+          else
+            echo "=== Rsync failed, using tar-over-ssh fallback ==="
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
+            tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
+            tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
+            tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+          fi
+
+      - name: Run VM tests (full with install.sh)
+        working-directory: e2e
+        run: |
+          echo "=== Step 1: Verify synced folders ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /bin-local/ /setup/ /vagrant/"
+
+          echo "=== Step 2: Copy binary to /usr/local/bin ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /usr/local/bin && sudo cp /bin-local/supervizio /usr/local/bin/ && sudo chmod +x /usr/local/bin/supervizio"
+
+          echo "=== Step 3: Run install script ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chmod +x /setup/*.sh && sudo /setup/install.sh"
+
+          echo "=== Step 4: Run test script ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh -x /vagrant/test-install.sh"
+
+      - name: Cleanup VM
+        if: always()
+        working-directory: e2e
+        run: sudo vagrant destroy ${{ matrix.vm }} -f || true
