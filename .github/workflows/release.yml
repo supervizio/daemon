@@ -222,6 +222,14 @@ jobs:
         with:
           name: supervizio-linux-${{ matrix.arch }}
 
+      - name: Prepare binary
+        run: |
+          # download-artifact@v4 extracts to subdirectory with artifact name
+          mv supervizio-linux-${{ matrix.arch }}/supervizio-linux-${{ matrix.arch }} ./
+          rmdir supervizio-linux-${{ matrix.arch }}
+          chmod +x supervizio-linux-${{ matrix.arch }}
+          ls -la supervizio-*
+
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
@@ -263,13 +271,8 @@ jobs:
             --packager ${{ matrix.format }} \
             --target ./
 
-          # Rename to include architecture clearly
-          for f in *.deb *.rpm *.apk 2>/dev/null; do
-            [ -f "$f" ] || continue
-            echo "Generated: $f"
-          done
-
-          ls -la
+          # List generated package
+          ls -la *.deb *.rpm *.apk 2>/dev/null || true
 
       - name: Sign DEB package
         if: matrix.format == 'deb'
