@@ -515,11 +515,14 @@ jobs:
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup"
           fi
 
-          # ALWAYS sync pkg/ via tar (not in Vagrantfile synced_folders)
-          echo "=== Syncing pkg/ to /pkg ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /pkg && sudo chmod 777 /pkg"
-          tar -cv -C .. pkg | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /pkg --strip-components=1"
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /pkg"
+          # ALWAYS sync packages via tar (not in Vagrantfile synced_folders)
+          echo "=== Syncing packages to /pkg ==="
+          echo "Package directory contents:"
+          ls -la "$GITHUB_WORKSPACE/pkg/" || echo "ERROR: pkg/ directory not found!"
+
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /pkg && sudo chmod 755 /pkg"
+          tar -cv -C "$GITHUB_WORKSPACE" pkg | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C / "
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /pkg && ls -la /pkg/"
 
           echo "=== Verifying synced files ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /pkg /vagrant"
@@ -528,6 +531,7 @@ jobs:
         working-directory: e2e
         run: |
           echo "=== Installing package via ${{ matrix.pkg_install }} ==="
+          sudo -E vagrant ssh "${{ matrix.vm }}" -c "ls -la /pkg/"
           # shellcheck disable=SC2016 - Single quotes intentional for remote expansion
           sudo -E vagrant ssh "${{ matrix.vm }}" -c 'sudo ${{ matrix.pkg_install }} /pkg/*.${{ matrix.pkg_format }}'
 
