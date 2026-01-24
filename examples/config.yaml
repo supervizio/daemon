@@ -1,0 +1,53 @@
+# =============================================================================
+# supervizio example configuration
+# =============================================================================
+# Copy this file to /etc/supervizio/config.yaml and customize for your needs.
+# Documentation: https://github.com/supervizio/daemon
+# =============================================================================
+version: "1"
+
+# Logging configuration
+logging:
+  base_dir: /var/log/supervizio
+  defaults:
+    timestamp_format: iso8601
+    rotation:
+      max_size: "10MB"
+      max_files: 5
+
+# Services to supervise
+services:
+  # Example: Simple service
+  - name: my-app
+    command: /usr/local/bin/my-app
+    args:
+      - "--config=/etc/my-app/config.yaml"
+    working_dir: /var/lib/my-app
+    # Environment variables
+    env:
+      NODE_ENV: production
+      LOG_LEVEL: info
+    # Restart policy: always, on-failure, never, unless-stopped
+    restart:
+      policy: on-failure
+      max_retries: 5
+      delay: 5s
+      delay_max: 60s
+    # Health probe (optional)
+    listeners:
+      - name: http
+        port: 8080
+        protocol: tcp
+        probe:
+          type: http
+          path: /health
+          interval: 30s
+          timeout: 5s
+          failure_threshold: 3
+
+  # Example: Background worker
+  - name: worker
+    command: /usr/local/bin/worker
+    restart:
+      policy: always
+      delay: 1s

@@ -252,9 +252,14 @@ jobs:
           export VERSION="$PKG_VERSION"
           export GOARCH="${{ matrix.arch }}"
 
+          # Substitute environment variables in nfpm config
+          envsubst < nfpm.yaml > nfpm-resolved.yaml
+          echo "=== Resolved nfpm config ==="
+          cat nfpm-resolved.yaml
+
           # Generate package
           nfpm package \
-            --config nfpm.yaml \
+            --config nfpm-resolved.yaml \
             --packager ${{ matrix.format }} \
             --target ./
 
