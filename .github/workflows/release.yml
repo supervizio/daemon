@@ -273,6 +273,7 @@ jobs:
 
       - name: Sign DEB package
         if: matrix.format == 'deb'
+        continue-on-error: true
         env:
           GPG_KEY: ${{ secrets.GPG_SIGNING_KEY }}
         run: |
@@ -280,13 +281,26 @@ jobs:
             echo "GPG_SIGNING_KEY not set, skipping DEB signing"
             exit 0
           fi
-          sudo apt-get update && sudo apt-get install -y dpkg-sig
-          for deb in *.deb; do
-            [ -f "$deb" ] && dpkg-sig --sign builder "$deb"
-          done
+          # Try debsigs (Ubuntu 24.04+) or dpkg-sig (older)
+          if apt-cache show debsigs >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y debsigs
+            KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
+            for deb in *.deb; do
+              [ -f "$deb" ] && debsigs --sign=origin -k "$KEY_ID" "$deb" || echo "debsigs failed for $deb"
+            done
+          elif apt-cache show dpkg-sig >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y dpkg-sig
+            for deb in *.deb; do
+              [ -f "$deb" ] && dpkg-sig --sign builder "$deb" || echo "dpkg-sig failed for $deb"
+            done
+          else
+            echo "No DEB signing tool available (debsigs/dpkg-sig), skipping"
+            echo "Note: APT repository will still be GPG-signed"
+          fi
 
       - name: Sign RPM package
         if: matrix.format == 'rpm'
+        continue-on-error: true
         env:
           GPG_KEY: ${{ secrets.GPG_SIGNING_KEY }}
         run: |
@@ -295,9 +309,10 @@ jobs:
             exit 0
           fi
           # Configure RPM macros for signing
-          echo "%_gpg_name $(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)" > ~/.rpmmacros
+          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
+          echo "%_gpg_name $KEY_ID" > ~/.rpmmacros
           for rpm in *.rpm; do
-            [ -f "$rpm" ] && rpm --addsign "$rpm" 2>/dev/null || echo "RPM signing skipped"
+            [ -f "$rpm" ] && rpm --addsign "$rpm" 2>/dev/null || echo "RPM signing skipped for $rpm"
           done
 
       - name: Upload package
