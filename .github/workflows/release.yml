@@ -508,13 +508,18 @@ jobs:
           if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
             echo "=== Rsync succeeded ==="
           else
-            echo "=== Rsync failed, using tar-over-ssh fallback ==="
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /pkg /vagrant && sudo chmod 777 /setup /pkg /vagrant"
+            echo "=== Rsync failed, using tar-over-ssh fallback for setup/vagrant ==="
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /vagrant && sudo chmod 777 /setup /vagrant"
             tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
-            tar -cv -C .. pkg | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /pkg --strip-components=1"
             tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /pkg"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup"
           fi
+
+          # ALWAYS sync pkg/ via tar (not in Vagrantfile synced_folders)
+          echo "=== Syncing pkg/ to /pkg ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /pkg && sudo chmod 777 /pkg"
+          tar -cv -C .. pkg | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /pkg --strip-components=1"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /pkg"
 
           echo "=== Verifying synced files ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /setup /pkg /vagrant"

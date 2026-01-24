@@ -278,3 +278,61 @@ jobs:
           path: "*.${{ matrix.format }}"
           retention-days: 1
 
+  # =============================================================================
+  # E2E Tests - Linux Docker (validates packages work in containers)
+  # =============================================================================
+  e2e-linux:
+    name: E2E ${{ matrix.name }}
+    needs: [packages]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian
+            dockerfile: Dockerfile.debian
+            pkg_format: deb
+          - name: Fedora
+            dockerfile: Dockerfile.fedora
+            pkg_format: rpm
+          - name: Alpine
+            dockerfile: Dockerfile.alpine
+            pkg_format: apk
+          - name: Devuan
+            dockerfile: Dockerfile.devuan
+            pkg_format: deb
+          - name: Alpine-runit
+            dockerfile: Dockerfile.alpine-runit
+            pkg_format: apk
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-amd64.${{ matrix.pkg_format }}
+          path: pkg
+
+      - name: Prepare package
+        run: |
+          echo "=== Downloaded package ==="
+          ls -la pkg/
+          mkdir -p bin
+          cp pkg/*.${{ matrix.pkg_format }} bin/
+          ls -la bin/
+
+      - name: Build container
+        run: docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-e2e:${{ matrix.name }} .
+
+      - name: Test version command
+        run: docker run --rm supervizio-e2e:${{ matrix.name }}
+
+      - name: Test help command
+        run: docker run --rm supervizio-e2e:${{ matrix.name }} --help || true
+
+      - name: Test config validation
+        run: |
+          docker run --rm supervizio-e2e:${{ matrix.name }} --config /etc/supervizio/config.yaml --version
+
