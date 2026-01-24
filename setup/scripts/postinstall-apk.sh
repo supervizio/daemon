@@ -11,6 +11,12 @@ fi
 mkdir -p /etc/supervizio /var/log/supervizio
 chown supervizio:nogroup /var/log/supervizio
 
+# Create default config from example if not exists
+if [ ! -f /etc/supervizio/config.yaml ] && [ -f /etc/supervizio/config.example.yaml ]; then
+    cp /etc/supervizio/config.example.yaml /etc/supervizio/config.yaml
+    chmod 644 /etc/supervizio/config.yaml
+fi
+
 echo "supervizio installed successfully"
 echo "Configure: /etc/supervizio/config.yaml"
 echo "Start: rc-service supervizio start"
