@@ -249,17 +249,13 @@ jobs:
           chmod +x supervizio-linux-${{ matrix.arch }}
 
       - name: Install nfpm
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
 
       - name: Build package
         env:
-          VERSION: "0.0.0-ci"
+          VERSION: "0.0.0"
           GOARCH: ${{ matrix.arch }}
         run: |
-          # Export for nfpm config
-          export VERSION="0.0.0"
-          export GOARCH="${{ matrix.arch }}"
-
           # Substitute environment variables in nfpm config
           envsubst < nfpm.yaml > nfpm-resolved.yaml
           echo "=== Resolved nfpm config ==="
@@ -271,17 +267,14 @@ jobs:
             --packager ${{ matrix.format }} \
             --target ./
 
-          # List generated package
-          echo "=== Generated packages ==="
-          ls -la *.deb *.rpm *.apk 2>/dev/null || true
+          # Verify package was created
+          echo "=== Generated package ==="
+          ls -la *.${{ matrix.format }}
 
       - name: Upload package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: supervizio-${{ matrix.arch }}.${{ matrix.format }}
-          path: |
-            *.deb
-            *.rpm
-            *.apk
+          path: "*.${{ matrix.format }}"
           retention-days: 1
 

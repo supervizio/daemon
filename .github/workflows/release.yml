@@ -230,7 +230,7 @@ jobs:
           ls -la supervizio-*
 
       - name: Install nfpm
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
 
       - name: Import GPG key
         env:
@@ -249,15 +249,12 @@ jobs:
 
       - name: Build package
         env:
-          VERSION: ${{ needs.version.outputs.version }}
           GOARCH: ${{ matrix.arch }}
         run: |
           # Strip 'v' prefix from version for package version
-          PKG_VERSION="${VERSION#v}"
-
-          # Export for nfpm config
-          export VERSION="$PKG_VERSION"
-          export GOARCH="${{ matrix.arch }}"
+          export VERSION="${{ needs.version.outputs.version }}"
+          VERSION="${VERSION#v}"
+          export VERSION
 
           # Substitute environment variables in nfpm config
           envsubst < nfpm.yaml > nfpm-resolved.yaml
@@ -270,8 +267,9 @@ jobs:
             --packager ${{ matrix.format }} \
             --target ./
 
-          # List generated package
-          ls -la *.deb *.rpm *.apk 2>/dev/null || true
+          # Verify package was created
+          echo "=== Generated package ==="
+          ls -la *.${{ matrix.format }}
 
       - name: Sign DEB package
         if: matrix.format == 'deb'
@@ -306,10 +304,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: supervizio-${{ matrix.arch }}.${{ matrix.format }}
-          path: |
-            *.deb
-            *.rpm
-            *.apk
+          path: "*.${{ matrix.format }}"
           retention-days: 1
 
   # =============================================================================
