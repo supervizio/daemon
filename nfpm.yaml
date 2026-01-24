@@ -61,6 +61,13 @@ contents:
       mode: 0644
     packager: rpm
 
+  # SysVinit script (deb only, for Devuan and similar)
+  - src: ./setup/init/openrc/supervizio
+    dst: /etc/init.d/supervizio
+    file_info:
+      mode: 0755
+    packager: deb
+
   # OpenRC init script (apk only)
   - src: ./setup/init/openrc/supervizio
     dst: /etc/init.d/supervizio

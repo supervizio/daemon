@@ -83,10 +83,11 @@ echo "=== Test 5: Service installed ==="
 case "$OS" in
     Linux)
         if [ -d /run/systemd/system ]; then
-            if [ -f /etc/systemd/system/supervizio.service ]; then
+            # Check both package location and manual install location
+            if [ -f /usr/lib/systemd/system/supervizio.service ] || [ -f /etc/systemd/system/supervizio.service ]; then
                 pass "systemd service installed"
             else
-                fail "systemd service not found"
+                fail "systemd service not found (checked /usr/lib/systemd/system/ and /etc/systemd/system/)"
             fi
         elif command -v rc-service >/dev/null 2>&1; then
             if [ -f /etc/init.d/supervizio ]; then
