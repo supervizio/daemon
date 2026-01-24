@@ -377,7 +377,7 @@ jobs:
 
       - name: Test uninstall
         run: |
-          docker run --rm supervizio-e2e:${{ matrix.name }} sh -c "${{ matrix.uninstall_cmd }} && test ! -x /usr/local/bin/supervizio"
+          docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }} -c "${{ matrix.uninstall_cmd }} && test ! -x /usr/local/bin/supervizio"
 
   # =============================================================================
   # E2E Linux Script - Docker (install via install.sh without package manager)
