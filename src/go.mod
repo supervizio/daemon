@@ -1,6 +1,6 @@
 module github.com/kodflow/daemon
 
-go 1.25.5
+go 1.25.6
 
 require (
 	github.com/google/wire v0.7.0
@@ -19,4 +19,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda // indirect
 )
 
-require github.com/stretchr/testify v1.10.0 // test
+require github.com/stretchr/testify v1.11.1 // test

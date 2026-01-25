@@ -26,7 +26,8 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: '1.25.5'
+  GO_VERSION: '1.25.6'
+  WIRE_VERSION: 'v0.7.0'
 
 jobs:
   # =============================================================================
@@ -34,7 +35,7 @@ jobs:
   # =============================================================================
   version:
     name: Version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
       is_new_tag: ${{ steps.version.outputs.is_new_tag }}
@@ -47,10 +48,12 @@ jobs:
       - name: Calculate version
         id: version
         run: |
+          set -euo pipefail
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             VERSION="${{ github.ref_name }}"
             IS_NEW_TAG="false"
             BUMP_TYPE="tag"
+            LATEST_TAG="$VERSION"
           else
             LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
             VERSION_NUM=${LATEST_TAG#v}
@@ -123,7 +126,7 @@ jobs:
   build:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     needs: version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -164,10 +167,11 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: true
           cache-dependency-path: src/go.sum
 
       - name: Install Wire
-        run: go install github.com/google/wire/cmd/wire@latest
+        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
 
       - name: Generate code
         working-directory: src
@@ -198,7 +202,7 @@ jobs:
   packages:
     name: Package ${{ matrix.format }} (${{ matrix.arch }})
     needs: [version, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -212,6 +216,7 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: true
           cache-dependency-path: src/go.sum
 
       - name: Download Linux binary
@@ -232,6 +237,7 @@ jobs:
           GPG_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_PASS: ${{ secrets.GPG_PASSPHRASE }}
         run: |
+          set -uo pipefail
           if [ -z "$GPG_KEY" ]; then
             echo "GPG_SIGNING_KEY not set, skipping GPG import"
             exit 0
@@ -246,6 +252,7 @@ jobs:
         env:
           GOARCH: ${{ matrix.arch }}
         run: |
+          set -euo pipefail
           export VERSION="${{ needs.version.outputs.version }}"
           VERSION="${VERSION#v}"
           export VERSION
@@ -268,6 +275,7 @@ jobs:
         env:
           GPG_KEY: ${{ secrets.GPG_SIGNING_KEY }}
         run: |
+          set -uo pipefail
           if [ -z "$GPG_KEY" ]; then
             echo "GPG_SIGNING_KEY not set, skipping DEB signing"
             exit 0
@@ -286,6 +294,7 @@ jobs:
         env:
           GPG_KEY: ${{ secrets.GPG_SIGNING_KEY }}
         run: |
+          set -uo pipefail
           if [ -z "$GPG_KEY" ]; then
             echo "GPG_SIGNING_KEY not set, skipping RPM signing"
             exit 0
@@ -345,6 +354,7 @@ jobs:
 
       - name: Test version command
         run: |
+          set -euo pipefail
           OUTPUT=$(docker run --rm supervizio-e2e:${{ matrix.name }})
           echo "Version output: $OUTPUT"
           echo "$OUTPUT" | grep -q "${{ needs.version.outputs.version }}" || echo "Warning: version mismatch"
@@ -380,6 +390,7 @@ jobs:
 
       - name: Test version command
         run: |
+          set -euo pipefail
           OUTPUT=$(docker run --rm supervizio-e2e-script:${{ matrix.name }})
           echo "Version output: $OUTPUT"
           echo "$OUTPUT" | grep -q "${{ needs.version.outputs.version }}" || echo "Warning: version mismatch"
@@ -436,6 +447,7 @@ jobs:
 
       - name: Install libvirt and Vagrant
         run: |
+          set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
           sudo systemctl start libvirtd
@@ -458,6 +470,7 @@ jobs:
       - name: Sync and install package
         working-directory: e2e
         run: |
+          set -uo pipefail
           echo "=== Waiting for VM to be SSH-ready ==="
           for i in $(seq 1 36); do
             if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
@@ -481,6 +494,7 @@ jobs:
       - name: Test version command
         working-directory: e2e
         run: |
+          set -euo pipefail
           OUTPUT=$(sudo -E vagrant ssh "${{ matrix.vm }}" -c "/usr/local/bin/supervizio --version")
           echo "Version output: $OUTPUT"
 
@@ -530,6 +544,7 @@ jobs:
 
       - name: Install libvirt and Vagrant
         run: |
+          set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
           sudo systemctl start libvirtd
@@ -552,6 +567,7 @@ jobs:
       - name: Sync and install via script
         working-directory: e2e
         run: |
+          set -uo pipefail
           echo "=== Waiting for VM to be SSH-ready ==="
           for i in $(seq 1 36); do
             if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
@@ -577,6 +593,7 @@ jobs:
       - name: Test version command
         working-directory: e2e
         run: |
+          set -euo pipefail
           OUTPUT=$(sudo -E vagrant ssh "${{ matrix.vm }}" -c "/usr/local/bin/supervizio --version")
           echo "Version output: $OUTPUT"
 
@@ -634,6 +651,7 @@ jobs:
 
       - name: Install libvirt and Vagrant
         run: |
+          set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
           sudo systemctl start libvirtd
@@ -656,6 +674,7 @@ jobs:
       - name: Sync folders
         working-directory: e2e
         run: |
+          set -uo pipefail
           echo "=== Getting VM SSH config ==="
           sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
           VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
@@ -690,6 +709,7 @@ jobs:
       - name: Install and test
         working-directory: e2e
         run: |
+          set -euo pipefail
           echo "=== Copying binary to /usr/local/bin ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /usr/local/bin && sudo cp /bin-local/supervizio /usr/local/bin/ && sudo chmod +x /usr/local/bin/supervizio"
 
@@ -699,6 +719,7 @@ jobs:
       - name: Test version command
         working-directory: e2e
         run: |
+          set -euo pipefail
           OUTPUT=$(sudo -E vagrant ssh "${{ matrix.vm }}" -c "/usr/local/bin/supervizio --version")
           echo "Version output: $OUTPUT"
 
@@ -708,12 +729,14 @@ jobs:
         run: sudo vagrant destroy ${{ matrix.vm }} -f || true
 
   # =============================================================================
-  # Create Release (only after all E2E tests pass)
+  # Create Release (atomic: draft → upload → publish)
   # =============================================================================
   release:
     name: Release
     needs: [version, build, packages, e2e-linux-packages, e2e-linux-script, e2e-linux-packages-vm, e2e-linux-script-vm, e2e-bsd-vm]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    outputs:
+      release_created: ${{ steps.publish.outputs.release_created }}
     permissions:
       contents: write
 
@@ -726,8 +749,9 @@ jobs:
         with:
           path: artifacts
 
-      - name: Prepare release
+      - name: Prepare release assets
         run: |
+          set -euo pipefail
           mkdir -p release
           cd artifacts
           for dir in */; do
@@ -744,6 +768,7 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
+          set -euo pipefail
           cat > release-notes.md << 'EOF'
           ## superviz.io ${{ needs.version.outputs.version }}
 
@@ -796,30 +821,72 @@ jobs:
       - name: Create tag (if needed)
         if: needs.version.outputs.is_new_tag == 'true'
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "${{ needs.version.outputs.version }}" -m "Release ${{ needs.version.outputs.version }}"
           git push origin "${{ needs.version.outputs.version }}"
 
-      - name: Create Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
-        with:
-          name: superviz.io ${{ needs.version.outputs.version }}
-          tag_name: ${{ needs.version.outputs.version }}
-          body_path: release-notes.md
-          draft: false
-          prerelease: ${{ contains(needs.version.outputs.version, '-') }}
-          files: release/*
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create draft release
+        id: draft
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          echo "Creating draft release for $VERSION..."
+
+          PRERELEASE_FLAG=""
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          gh release create "$VERSION" \
+            --draft \
+            --title "superviz.io $VERSION" \
+            --notes-file release-notes.md \
+            $PRERELEASE_FLAG
+
+          echo "Draft release created successfully"
+
+      - name: Upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          echo "Uploading assets to draft release..."
+
+          for file in release/*; do
+            [ -f "$file" ] || continue
+            echo "Uploading: $(basename "$file")"
+            gh release upload "$VERSION" "$file" --clobber
+          done
+
+          echo "All assets uploaded successfully"
+
+      - name: Publish release (remove draft)
+        id: publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          echo "Publishing release (removing draft status)..."
+
+          gh release edit "$VERSION" --draft=false
+
+          echo "release_created=true" >> $GITHUB_OUTPUT
+          echo "Release $VERSION published successfully!"
 
   # =============================================================================
-  # Cleanup on E2E Failure
+  # Cleanup on Failure (safe: only delete draft releases)
   # =============================================================================
   cleanup-on-failure:
     name: Cleanup Failed Release
     needs: [version, e2e-linux-packages, e2e-linux-script, e2e-linux-packages-vm, e2e-linux-script-vm, e2e-bsd-vm]
     if: failure() && needs.version.outputs.is_new_tag == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -828,29 +895,46 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Delete tag if E2E failed
+      - name: Safe cleanup (draft releases only)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          echo "E2E tests failed. Checking if tag $VERSION exists..."
-          if git ls-remote --tags origin | grep -q "refs/tags/$VERSION"; then
-            echo "Tag $VERSION exists. Deleting..."
-            git push origin --delete "$VERSION" || echo "Tag deletion failed (may not exist yet)"
+          set -uo pipefail
+          echo "=== Safe Cleanup for $VERSION ==="
+          echo "E2E tests failed. Checking release state..."
+
+          # Check if release exists and get its status
+          RELEASE_INFO=$(gh release view "$VERSION" --json isDraft,tagName 2>/dev/null || echo "NOT_FOUND")
+
+          if [ "$RELEASE_INFO" = "NOT_FOUND" ]; then
+            echo "No release found for $VERSION. Checking tag..."
+
+            # Only delete tag if it was created by this workflow (is_new_tag=true)
+            if git ls-remote --tags origin | grep -q "refs/tags/$VERSION"; then
+              echo "Tag $VERSION exists. Since is_new_tag=true, deleting tag created by this workflow..."
+              git push origin --delete "$VERSION" || echo "Tag deletion failed"
+            else
+              echo "Tag $VERSION does not exist remotely. Nothing to delete."
+            fi
           else
-            echo "Tag $VERSION does not exist remotely. Nothing to delete."
+            # Release exists - check if it's a draft
+            IS_DRAFT=$(echo "$RELEASE_INFO" | jq -r '.isDraft')
+
+            if [ "$IS_DRAFT" = "true" ]; then
+              echo "Release $VERSION is a DRAFT. Safe to delete."
+              gh release delete "$VERSION" --yes || echo "Release deletion failed"
+
+              # Also delete the tag since the release was never published
+              if git ls-remote --tags origin | grep -q "refs/tags/$VERSION"; then
+                echo "Deleting associated tag..."
+                git push origin --delete "$VERSION" || echo "Tag deletion failed"
+              fi
+            else
+              echo "SAFETY CHECK: Release $VERSION is NOT a draft (isDraft=$IS_DRAFT)."
+              echo "Refusing to delete a published release. Manual intervention required."
+              echo "::warning::Release $VERSION exists and is published. Not deleting."
+            fi
           fi
 
-      - name: Delete release if exists
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          echo "Checking if release $VERSION exists..."
-          RELEASE_ID=$(gh release view "$VERSION" --json id --jq '.id' 2>/dev/null || echo "")
-          if [ -n "$RELEASE_ID" ]; then
-            echo "Release $VERSION exists. Deleting..."
-            gh release delete "$VERSION" --yes || echo "Release deletion failed"
-          else
-            echo "Release $VERSION does not exist. Nothing to delete."
-          fi
+          echo "=== Cleanup complete ==="
