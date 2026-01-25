@@ -13,9 +13,9 @@ type EventType int
 const (
 	// EventStarted indicates the process has started.
 	EventStarted EventType = iota
-	// EventStopped indicates the process has stopped normally.
+	// EventStopped indicates the process has stopped normally (exit code 0).
 	EventStopped
-	// EventFailed indicates the process has failed.
+	// EventFailed indicates the process has failed (non-zero exit code).
 	EventFailed
 	// EventRestarting indicates the process is restarting.
 	EventRestarting
@@ -23,6 +23,8 @@ const (
 	EventHealthy
 	// EventUnhealthy indicates the process became unhealthy.
 	EventUnhealthy
+	// EventExhausted indicates max restart attempts have been reached.
+	EventExhausted
 )
 
 // String returns the string representation of the event type.
@@ -56,6 +58,10 @@ func (e EventType) String() string {
 	case EventUnhealthy:
 		// Return "unhealthy" for EventUnhealthy.
 		return "unhealthy"
+	// Handle exhausted event type.
+	case EventExhausted:
+		// Return "exhausted" for EventExhausted.
+		return "exhausted"
 	// Handle unknown or unrecognized event types.
 	default:
 		// Return "unknown" for any unrecognized event type.

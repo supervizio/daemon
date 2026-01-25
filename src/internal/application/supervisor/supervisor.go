@@ -833,6 +833,41 @@ func (s *Supervisor) Services() map[string]ServiceInfo {
 	return info
 }
 
+// ServiceSnapshotForTUI contains service info for TUI display.
+// This struct uses basic types to avoid import cycles with TUI packages.
+type ServiceSnapshotForTUI struct {
+	Name         string
+	StateInt     int
+	StateName    string
+	PID          int
+	UptimeSecs   int64
+	CPUPercent   float64
+	MemoryRSS    uint64
+	RestartCount int
+}
+
+// ServiceSnapshotsForTUI returns service data formatted for TUI display.
+//
+// Returns:
+//   - []ServiceSnapshotForTUI: a slice of service snapshots.
+func (s *Supervisor) ServiceSnapshotsForTUI() []ServiceSnapshotForTUI {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]ServiceSnapshotForTUI, 0, len(s.managers))
+	for _, mgr := range s.managers {
+		state := mgr.State()
+		result = append(result, ServiceSnapshotForTUI{
+			Name:       mgr.Name(),
+			StateInt:   int(state),
+			StateName:  state.String(),
+			PID:        mgr.PID(),
+			UptimeSecs: mgr.Uptime(),
+		})
+	}
+	return result
+}
+
 // Service returns a specific service manager.
 //
 // Params:

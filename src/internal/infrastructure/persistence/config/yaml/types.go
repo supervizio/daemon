@@ -156,8 +156,35 @@ type HealthCheckDTO struct {
 // LoggingConfigDTO is the YAML representation of logging configuration.
 // It contains global logging settings including defaults and base directory.
 type LoggingConfigDTO struct {
-	Defaults LogDefaultsDTO `yaml:"defaults"`
-	BaseDir  string         `yaml:"base_dir"`
+	Defaults LogDefaultsDTO   `yaml:"defaults"`
+	BaseDir  string           `yaml:"base_dir"`
+	Daemon   DaemonLoggingDTO `yaml:"daemon,omitempty"`
+}
+
+// DaemonLoggingDTO is the YAML representation of daemon-level logging.
+// It defines writers for daemon event logging.
+type DaemonLoggingDTO struct {
+	Writers []WriterConfigDTO `yaml:"writers,omitempty"`
+}
+
+// WriterConfigDTO is the YAML representation of a log writer configuration.
+type WriterConfigDTO struct {
+	Type  string              `yaml:"type"`
+	Level string              `yaml:"level,omitempty"`
+	File  FileWriterConfigDTO `yaml:"file,omitempty"`
+	JSON  JSONWriterConfigDTO `yaml:"json,omitempty"`
+}
+
+// FileWriterConfigDTO is the YAML representation of file writer configuration.
+type FileWriterConfigDTO struct {
+	Path     string            `yaml:"path,omitempty"`
+	Rotation RotationConfigDTO `yaml:"rotation,omitempty"`
+}
+
+// JSONWriterConfigDTO is the YAML representation of JSON writer configuration.
+type JSONWriterConfigDTO struct {
+	Path     string            `yaml:"path,omitempty"`
+	Rotation RotationConfigDTO `yaml:"rotation,omitempty"`
 }
 
 // LogDefaultsDTO is the YAML representation of logging defaults.
@@ -428,10 +455,64 @@ func (h *HealthCheckDTO) ToDomain() config.HealthCheckConfig {
 // Returns:
 //   - config.LoggingConfig: the converted domain logging configuration
 func (l *LoggingConfigDTO) ToDomain() config.LoggingConfig {
-	// Return the converted logging configuration with base directory and defaults
+	// Return the converted logging configuration with base directory, defaults, and daemon
 	return config.LoggingConfig{
 		BaseDir:  l.BaseDir,
 		Defaults: l.Defaults.ToDomain(),
+		Daemon:   l.Daemon.ToDomain(),
+	}
+}
+
+// ToDomain converts DaemonLoggingDTO to domain DaemonLogging.
+// It transforms daemon-level logging settings to the domain model format.
+//
+// Returns:
+//   - config.DaemonLogging: the converted domain daemon logging configuration
+func (d *DaemonLoggingDTO) ToDomain() config.DaemonLogging {
+	writers := make([]config.WriterConfig, 0, len(d.Writers))
+	for i := range d.Writers {
+		writers = append(writers, d.Writers[i].ToDomain())
+	}
+	return config.DaemonLogging{
+		Writers: writers,
+	}
+}
+
+// ToDomain converts WriterConfigDTO to domain WriterConfig.
+// It transforms writer configuration to the domain model format.
+//
+// Returns:
+//   - config.WriterConfig: the converted domain writer configuration
+func (w *WriterConfigDTO) ToDomain() config.WriterConfig {
+	return config.WriterConfig{
+		Type:  w.Type,
+		Level: w.Level,
+		File:  w.File.ToDomain(),
+		JSON:  w.JSON.ToDomain(),
+	}
+}
+
+// ToDomain converts FileWriterConfigDTO to domain FileWriterConfig.
+// It transforms file writer configuration to the domain model format.
+//
+// Returns:
+//   - config.FileWriterConfig: the converted domain file writer configuration
+func (f *FileWriterConfigDTO) ToDomain() config.FileWriterConfig {
+	return config.FileWriterConfig{
+		Path:     f.Path,
+		Rotation: f.Rotation.ToDomain(),
+	}
+}
+
+// ToDomain converts JSONWriterConfigDTO to domain JSONWriterConfig.
+// It transforms JSON writer configuration to the domain model format.
+//
+// Returns:
+//   - config.JSONWriterConfig: the converted domain JSON writer configuration
+func (j *JSONWriterConfigDTO) ToDomain() config.JSONWriterConfig {
+	return config.JSONWriterConfig{
+		Path:     j.Path,
+		Rotation: j.Rotation.ToDomain(),
 	}
 }
 

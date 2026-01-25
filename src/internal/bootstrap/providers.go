@@ -9,6 +9,7 @@ import (
 
 	appconfig "github.com/kodflow/daemon/internal/application/config"
 	apphealth "github.com/kodflow/daemon/internal/application/health"
+	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
 	domainconfig "github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/domain/lifecycle"
 	infrahealthcheck "github.com/kodflow/daemon/internal/infrastructure/observability/healthcheck"
@@ -33,6 +34,7 @@ type supervisorConfigurer interface {
 	Stop() error
 	Reload() error
 	SetProberFactory(factory apphealth.Creator)
+	SetEventHandler(handler appsupervisor.EventHandler)
 }
 
 // ProvideReaper returns the zombie reaper only if running as PID 1.
@@ -102,16 +104,18 @@ func ProvideProberFactory() *infrahealthcheck.Factory {
 // Params:
 //   - sup: the configured supervisor instance (minimal interface).
 //   - factory: the health prober factory.
+//   - cfg: the domain configuration for daemon logging.
 //
 // Returns:
 //   - *App: the application container with health monitoring enabled.
-func NewAppWithHealth(sup supervisorConfigurer, factory apphealth.Creator) *App {
+func NewAppWithHealth(sup supervisorConfigurer, factory apphealth.Creator, cfg *domainconfig.Config) *App {
 	// Wire the prober factory to enable health monitoring.
 	sup.SetProberFactory(factory)
 
-	// Return the App with supervisor and optional cleanup.
+	// Return the App with supervisor, config, and optional cleanup.
 	return &App{
 		Supervisor: sup,
+		Config:     cfg,
 		Cleanup:    nil, // No cleanup needed currently; add if resources require it.
 	}
 }

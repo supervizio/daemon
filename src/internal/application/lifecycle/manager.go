@@ -71,6 +71,15 @@ func (m *Manager) Events() <-chan domain.Event {
 	return m.events
 }
 
+// Name returns the service name.
+//
+// Returns:
+//   - string: the service name from configuration.
+func (m *Manager) Name() string {
+	// Return the service name from config.
+	return m.config.Name
+}
+
 // State returns the current process state.
 //
 // Returns:
@@ -226,6 +235,10 @@ func (m *Manager) tryStartProcess() bool {
 		m.sendEvent(domain.EventFailed, err)
 		// Check if restart policy allows retry.
 		if !m.tracker.ShouldRestart(-1) {
+			// Check if restarts were exhausted.
+			if m.tracker.IsExhausted() {
+				m.sendEvent(domain.EventExhausted, fmt.Errorf("max restarts (%d) exceeded: %w", m.tracker.Attempts(), domain.ErrMaxRetriesExceeded))
+			}
 			// Return false when no more restarts allowed.
 			return false
 		}
@@ -339,6 +352,10 @@ func (m *Manager) handleProcessExit(result domain.ExitResult) bool {
 
 	// Check if restart policy allows restart.
 	if !m.tracker.ShouldRestart(result.Code) {
+		// Check if restarts were exhausted (not a clean exit with on-failure policy).
+		if m.tracker.IsExhausted() && result.Code != 0 {
+			m.sendEvent(domain.EventExhausted, fmt.Errorf("max restarts (%d) exceeded: %w", m.tracker.Attempts(), domain.ErrMaxRetriesExceeded))
+		}
 		// Return true to stop restart loop.
 		return true
 	}
