@@ -443,6 +443,7 @@ func TestGRPCProber_handleHealthStatus(t *testing.T) {
 		})
 	}
 }
+
 // TestErrGRPCUnknownStatus tests the exported error variables.
 func TestErrGRPCUnknownStatus(t *testing.T) {
 	tests := []struct {
@@ -504,8 +505,8 @@ func TestGRPCProber_Probe_allPaths(t *testing.T) {
 			expectSuccess: true,
 		},
 		{
-			name:         "connection_fails",
-			setupServer:  false,
+			name:          "connection_fails",
+			setupServer:   false,
 			expectSuccess: false,
 		},
 		{

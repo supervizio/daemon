@@ -1,0 +1,43 @@
+# Development config for testing supervizio
+version: "1"
+
+logging:
+  base_dir: /tmp/supervizio-dev
+  defaults:
+    timestamp_format: iso8601
+    rotation:
+      max_size: "1MB"
+      max_files: 3
+
+services:
+  # Simple sleep service for testing
+  - name: sleeper
+    command: /bin/sleep
+    args:
+      - "infinity"
+    restart:
+      policy: always
+      delay: 1s
+
+  # Ticker: exits cleanly (exit 0) and restarts forever.
+  # Expected behavior: "stopped cleanly" → "restarting" → "started" (loop forever)
+  - name: ticker
+    command: /bin/sh
+    args:
+      - "-c"
+      - "echo '[ticker] tick at $(date)' && sleep 3 && exit 0"
+    restart:
+      policy: always
+      delay: 2s
+
+  # Crasher: exits with error (exit 1) and fails after max_retries.
+  # Expected behavior: "failed" → "restarting" (3 times) → "exhausted" (ERROR)
+  - name: crasher
+    command: /bin/sh
+    args:
+      - "-c"
+      - "echo '[crasher] simulating crash' && sleep 2 && exit 1"
+    restart:
+      policy: on-failure
+      max_retries: 3
+      delay: 1s

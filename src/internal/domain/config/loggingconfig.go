@@ -8,6 +8,8 @@ type LoggingConfig struct {
 	Defaults LogDefaults
 	// BaseDir specifies the base directory for all log files.
 	BaseDir string
+	// Daemon specifies daemon-level event logging configuration.
+	Daemon DaemonLogging
 }
 
 // DefaultLoggingConfig returns a LoggingConfig with sensible defaults.

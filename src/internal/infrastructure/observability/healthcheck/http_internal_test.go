@@ -340,7 +340,6 @@ func TestHTTPProber_getStatusCode_urlWithSchemeAndPath(t *testing.T) {
 	}
 }
 
-
 // TestHTTPProber_getStatusCode_schemeFailSecondParse tests second parse failure.
 func TestHTTPProber_getStatusCode_schemeFailSecondParse(t *testing.T) {
 	tests := []struct {

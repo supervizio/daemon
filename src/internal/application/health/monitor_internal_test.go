@@ -1820,33 +1820,33 @@ func (m *mockSubjectStatus) SetState(state domain.SubjectState) {
 // updateListenerState handles all invalid target states properly.
 func Test_ProbeMonitor_updateListenerState_invalidTargetStates(t *testing.T) {
 	tests := []struct {
-		name         string
-		targetState  domain.SubjectState
+		name          string
+		targetState   domain.SubjectState
 		listenerState listener.State
 	}{
 		{
-			name:         "handles_subject_unknown_target",
-			targetState:  domain.SubjectUnknown,
+			name:          "handles_subject_unknown_target",
+			targetState:   domain.SubjectUnknown,
 			listenerState: listener.StateListening,
 		},
 		{
-			name:         "handles_subject_closed_target",
-			targetState:  domain.SubjectClosed,
+			name:          "handles_subject_closed_target",
+			targetState:   domain.SubjectClosed,
 			listenerState: listener.StateListening,
 		},
 		{
-			name:         "handles_subject_running_target",
-			targetState:  domain.SubjectRunning,
+			name:          "handles_subject_running_target",
+			targetState:   domain.SubjectRunning,
 			listenerState: listener.StateListening,
 		},
 		{
-			name:         "handles_subject_stopped_target",
-			targetState:  domain.SubjectStopped,
+			name:          "handles_subject_stopped_target",
+			targetState:   domain.SubjectStopped,
 			listenerState: listener.StateListening,
 		},
 		{
-			name:         "handles_subject_failed_target",
-			targetState:  domain.SubjectFailed,
+			name:          "handles_subject_failed_target",
+			targetState:   domain.SubjectFailed,
 			listenerState: listener.StateListening,
 		},
 	}

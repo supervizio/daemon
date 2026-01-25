@@ -311,12 +311,13 @@ func TestNewAppWithHealth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Create a supervisor and factory.
+			// Create a supervisor, factory, and config.
 			sup := &appsupervisor.Supervisor{}
 			factory := bootstrap.ProvideProberFactory()
+			cfg := &domainconfig.Config{}
 
 			// Call NewAppWithHealth.
-			app := bootstrap.NewAppWithHealth(sup, factory)
+			app := bootstrap.NewAppWithHealth(sup, factory, cfg)
 
 			// Verify app was created.
 			if app == nil {
@@ -326,6 +327,11 @@ func TestNewAppWithHealth(t *testing.T) {
 			// Verify supervisor is set in app.
 			if app.Supervisor != sup {
 				t.Error("NewAppWithHealth set wrong supervisor")
+			}
+
+			// Verify config is set in app.
+			if app.Config != cfg {
+				t.Error("NewAppWithHealth set wrong config")
 			}
 		})
 	}

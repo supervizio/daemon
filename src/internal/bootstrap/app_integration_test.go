@@ -43,7 +43,7 @@ func TestRunWithConfig_Integration(t *testing.T) {
 	// Send SIGINT to current process to trigger shutdown.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT)
-	
+
 	// Trigger the signal.
 	if err := syscall.Kill(syscall.Getpid(), syscall.SIGINT); err != nil {
 		t.Fatalf("Failed to send SIGINT: %v", err)

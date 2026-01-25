@@ -12,6 +12,7 @@ import (
 	"time"
 
 	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
+	"github.com/kodflow/daemon/internal/infrastructure/transport/tui"
 )
 
 // mockSignalHandler is a test double for signalHandler interface.
@@ -335,9 +336,9 @@ func TestRun_SupervisorStartError_Internal(t *testing.T) {
 // This test manually creates a run-like scenario with cleanup.
 func TestRun_CleanupPath_Internal(t *testing.T) {
 	tests := []struct {
-		name         string
-		hasCleanup   bool
-		wantCleanup  bool
+		name        string
+		hasCleanup  bool
+		wantCleanup bool
 	}{
 		{
 			name:        "cleanup_function_provided",
@@ -452,7 +453,7 @@ func Test_run(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := run(tt.cfgPath)
+			err := run(tt.cfgPath, tui.ModeRaw)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("run() error = %v, wantErr %v", err, tt.wantErr)
 			}

@@ -1373,7 +1373,7 @@ func Test_Supervisor_removeDeletedServices_withStopError(t *testing.T) {
 // NOTE ON COVERAGE: updateServices currently shows 84.6% coverage because lines 307-309
 // and 314-316 are unreachable defensive error handling code:
 //
-// - updateServices calls applifecycle.NewManager() which always creates managers with running=false  
+// - updateServices calls applifecycle.NewManager() which always creates managers with running=false
 // - Manager.Start() only returns an error when running=true (ErrAlreadyRunning)
 // - Therefore, Start() can never fail on a newly created manager
 //
