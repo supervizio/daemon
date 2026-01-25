@@ -684,7 +684,7 @@ jobs:
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local && sudo chmod 777 /setup /bin-local"
             tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
             tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:wheel /setup /bin-local"
           fi
 
       - name: Install and test
