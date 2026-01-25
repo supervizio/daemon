@@ -128,7 +128,7 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -ldflags="-s -w" -o ../supervizio-linux-${{ matrix.goarch }} ./cmd/daemon
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" -o ../supervizio-linux-${{ matrix.goarch }} ./cmd/daemon
 
       - name: Upload binary
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -172,7 +172,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: amd64
         run: |
-          go build -ldflags="-s -w" -o ../supervizio-${{ matrix.goos }}-amd64 ./cmd/daemon
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" -o ../supervizio-${{ matrix.goos }}-amd64 ./cmd/daemon
 
       - name: Upload binary
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

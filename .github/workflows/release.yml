@@ -181,7 +181,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           go build -buildvcs=false \
-            -ldflags="-s -w -X main.version=${{ needs.version.outputs.version }}" \
+            -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=${{ needs.version.outputs.version }}" \
             -o ../supervizio-${{ matrix.goos }}-${{ matrix.goarch }} \
             ./cmd/daemon
 
