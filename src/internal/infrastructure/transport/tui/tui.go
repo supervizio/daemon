@@ -41,7 +41,7 @@ type Config struct {
 func DefaultConfig(version string) Config {
 	return Config{
 		Mode:            ModeRaw,
-		RefreshInterval: time.Second,
+		RefreshInterval: 100 * time.Millisecond, // 10 FPS for smooth updates.
 		Version:         version,
 		Output:          os.Stdout,
 	}
@@ -120,6 +120,10 @@ func (t *TUI) Run(ctx context.Context) error {
 
 // runRaw outputs a single snapshot.
 func (t *TUI) runRaw() error {
+	// Wait briefly for services to start and bind to ports.
+	// This allows port status to be accurate in the startup banner.
+	time.Sleep(500 * time.Millisecond)
+
 	// Collect data.
 	t.collectData()
 

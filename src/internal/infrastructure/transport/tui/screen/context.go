@@ -66,7 +66,7 @@ func (c *ContextRenderer) Render(snap *model.Snapshot) string {
 	box := widget.NewBox(c.width).
 		SetTitle("Context").
 		SetTitleColor(c.theme.Header).
-				AddLines(lines)
+		AddLines(lines)
 
 	return box.Render()
 }
@@ -112,7 +112,7 @@ func (c *ContextRenderer) RenderLimits(snap *model.Snapshot) string {
 	box := widget.NewBox(c.width).
 		SetTitle("Limits").
 		SetTitleColor(c.theme.Header).
-				AddLines(lines)
+		AddLines(lines)
 
 	return box.Render()
 }
@@ -165,7 +165,7 @@ func (c *ContextRenderer) RenderSandboxes(snap *model.Snapshot) string {
 	box := widget.NewBox(c.width).
 		SetTitle("Sandboxes").
 		SetTitleColor(c.theme.Header).
-				AddLines(lines)
+		AddLines(lines)
 
 	return box.Render()
 }

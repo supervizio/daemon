@@ -11,11 +11,11 @@ import (
 
 // ANSI color codes for log levels.
 const (
-	colorReset  = "\033[0m"
-	colorDebug  = "\033[36m" // Cyan
-	colorInfo   = "\033[32m" // Green
-	colorWarn   = "\033[33m" // Yellow
-	colorError  = "\033[31m" // Red
+	colorReset = "\033[0m"
+	colorDebug = "\033[36m" // Cyan
+	colorInfo  = "\033[32m" // Green
+	colorWarn  = "\033[33m" // Yellow
+	colorError = "\033[31m" // Red
 )
 
 // ConsoleWriter writes log events to stdout/stderr based on level.

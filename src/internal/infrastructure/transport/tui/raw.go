@@ -355,7 +355,7 @@ func (r *RawRenderer) renderSandboxesWithWidth(snap *model.Snapshot, width int) 
 	box := widget.NewBox(width).
 		SetTitle("Sandboxes").
 		SetTitleColor(r.theme.Header).
-				AddLines(lines)
+		AddLines(lines)
 
 	return box.Render()
 }
@@ -374,12 +374,6 @@ func mergeSideBySide(left, right, separator string) string {
 		}
 	}
 
-	// Ensure same number of lines.
-	maxLines := len(leftLines)
-	if len(rightLines) > maxLines {
-		maxLines = len(rightLines)
-	}
-
 	// Remove trailing empty lines.
 	for len(leftLines) > 0 && strings.TrimSpace(leftLines[len(leftLines)-1]) == "" {
 		leftLines = leftLines[:len(leftLines)-1]
@@ -388,7 +382,7 @@ func mergeSideBySide(left, right, separator string) string {
 		rightLines = rightLines[:len(rightLines)-1]
 	}
 
-	maxLines = len(leftLines)
+	maxLines := len(leftLines)
 	if len(rightLines) > maxLines {
 		maxLines = len(rightLines)
 	}
@@ -404,7 +398,7 @@ func mergeSideBySide(left, right, separator string) string {
 		// Pad left line to consistent width.
 		visLen := widget.VisibleLen(leftLine)
 		if visLen < leftWidth {
-			leftLine = leftLine + strings.Repeat(" ", leftWidth-visLen)
+			leftLine += strings.Repeat(" ", leftWidth-visLen)
 		}
 
 		// Get right line.

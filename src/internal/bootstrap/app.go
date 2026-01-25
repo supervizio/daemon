@@ -9,11 +9,14 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
+	appmetrics "github.com/kodflow/daemon/internal/application/metrics"
 	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
 	domainconfig "github.com/kodflow/daemon/internal/domain/config"
+	domainhealth "github.com/kodflow/daemon/internal/domain/health"
 	domainlogging "github.com/kodflow/daemon/internal/domain/logging"
 	domainprocess "github.com/kodflow/daemon/internal/domain/process"
 	daemonlogger "github.com/kodflow/daemon/internal/infrastructure/observability/logging/daemon"
@@ -45,6 +48,8 @@ type App struct {
 	Supervisor AppSupervisor
 	// Config holds the domain configuration for daemon logging.
 	Config *domainconfig.Config
+	// MetricsTracker tracks process CPU and memory metrics.
+	MetricsTracker *appmetrics.Tracker
 	// Cleanup is the cleanup function for all resources.
 	Cleanup func()
 }
@@ -128,22 +133,41 @@ type supervisorServiceProvider struct {
 }
 
 // Services implements tui.ServiceProvider.
+// Services are returned in definition order (as configured), not sorted.
 func (p *supervisorServiceProvider) Services() []model.ServiceSnapshot {
 	snapshots := p.sup.ServiceSnapshotsForTUI()
 	result := make([]model.ServiceSnapshot, 0, len(snapshots))
 
 	for _, snap := range snapshots {
+		// Convert listeners.
+		listeners := make([]model.ListenerSnapshot, 0, len(snap.Listeners))
+		for _, l := range snap.Listeners {
+			listeners = append(listeners, model.ListenerSnapshot{
+				Name:      l.Name,
+				Port:      l.Port,
+				Protocol:  l.Protocol,
+				Exposed:   l.Exposed,
+				Listening: l.Listening,
+				Status:    model.PortStatus(l.StatusInt),
+			})
+		}
+
 		result = append(result, model.ServiceSnapshot{
-			Name:         snap.Name,
-			State:        domainprocess.State(snap.StateInt),
-			PID:          snap.PID,
-			Uptime:       time.Duration(snap.UptimeSecs) * time.Second,
-			CPUPercent:   snap.CPUPercent,
-			MemoryRSS:    snap.MemoryRSS,
-			RestartCount: snap.RestartCount,
+			Name:            snap.Name,
+			State:           domainprocess.State(snap.StateInt),
+			Health:          domainhealth.Status(snap.HealthInt),
+			HasHealthChecks: snap.HasHealthChecks,
+			PID:             snap.PID,
+			Uptime:          time.Duration(snap.UptimeSecs) * time.Second,
+			CPUPercent:      snap.CPUPercent,
+			MemoryRSS:       snap.MemoryRSS,
+			RestartCount:    snap.RestartCount,
+			Ports:           snap.Ports,
+			Listeners:       listeners,
 		})
 	}
 
+	// Keep definition order - no sorting (stable display, values update in place).
 	return result
 }
 
@@ -168,21 +192,58 @@ func run(cfgPath string, tuiMode tui.Mode) error {
 		defer app.Cleanup()
 	}
 
-	// Build daemon event logger from configuration.
-	logger, loggerErr := daemonlogger.BuildLogger(
-		app.Config.Logging.Daemon,
-		app.Config.Logging.BaseDir,
-	)
+	// Create log adapter for TUI (captures logs for display).
+	logAdapter := tui.NewLogAdapter()
+
+	// Load recent log history from file if available (tail -n 100).
+	if logFilePath := findLogFilePath(app.Config); logFilePath != "" {
+		if err := logAdapter.LoadLogHistory(logFilePath, 100); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to load log history: %v\n", err)
+		}
+	}
+
+	// Build daemon event logger based on TUI mode.
+	// In interactive mode: no console output (TUI handles display).
+	// In raw mode: buffered console output (logs displayed after MOTD banner).
+	var logger domainlogging.Logger
+	var bufferedConsole *daemonlogger.BufferedWriter
+	var loggerErr error
+
+	if tuiMode == tui.ModeInteractive {
+		// Interactive mode: only file writers + TUI writer (no console pollution).
+		logger, loggerErr = daemonlogger.BuildLoggerWithoutConsole(
+			app.Config.Logging.Daemon,
+			app.Config.Logging.BaseDir,
+		)
+	} else {
+		// Raw mode: use buffered console writer so logs appear after MOTD banner.
+		logger, bufferedConsole, loggerErr = daemonlogger.BuildLoggerWithBufferedConsole(
+			app.Config.Logging.Daemon,
+			app.Config.Logging.BaseDir,
+		)
+	}
+
 	if loggerErr != nil {
 		// Log warning but continue - daemon can run without event logging.
 		fmt.Fprintf(os.Stderr, "warning: failed to build daemon logger: %v\n", loggerErr)
-		logger = daemonlogger.DefaultLogger()
+		if tuiMode == tui.ModeInteractive {
+			// In interactive mode, use a silent logger (TUI only).
+			logger = daemonlogger.NewSilentLogger()
+		} else {
+			logger = daemonlogger.DefaultLogger()
+		}
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
+
+	// Add TUI writer to logger to capture events for TUI display.
+	if ml, ok := logger.(*daemonlogger.MultiLogger); ok {
+		tuiWriter := tui.NewTUILogWriter(logAdapter)
+		ml.AddWriter(tuiWriter)
+	}
 
 	// Set up event handler to log service events.
-	app.Supervisor.SetEventHandler(func(serviceName string, event *domainprocess.Event) {
-		logEvent := convertProcessEventToLogEvent(serviceName, event)
+	app.Supervisor.SetEventHandler(func(serviceName string, event *domainprocess.Event, stats *appsupervisor.ServiceStats) {
+		logEvent := convertProcessEventToLogEvent(serviceName, event, stats)
 		logger.Log(logEvent)
 	})
 
@@ -202,6 +263,12 @@ func run(cfgPath string, tuiMode tui.Mode) error {
 		return fmt.Errorf("failed to start supervisor: %w", err)
 	}
 
+	// Start metrics tracker for CPU/memory monitoring.
+	if app.MetricsTracker != nil {
+		_ = app.MetricsTracker.Start(ctx)
+		defer app.MetricsTracker.Stop()
+	}
+
 	// Create TUI with the configured mode.
 	tuiConfig := tui.DefaultConfig(version)
 	tuiConfig.Mode = tuiMode
@@ -214,15 +281,22 @@ func run(cfgPath string, tuiMode tui.Mode) error {
 		t.SetServiceProvider(provider)
 	}
 
+	// Set log adapter as health provider to display logs in TUI.
+	t.SetHealthProvider(logAdapter)
+
 	// Set config path for TUI display.
 	t.SetConfigPath(cfgPath)
 
 	// Run TUI based on mode.
 	switch tuiMode {
 	case tui.ModeRaw:
-		// Raw mode: show MOTD once, then wait for signals.
+		// Raw mode: show MOTD once, then flush buffered logs and wait for signals.
 		if err := t.Run(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: TUI error: %v\n", err)
+		}
+		// Flush buffered logs after MOTD banner is displayed.
+		if bufferedConsole != nil {
+			_ = bufferedConsole.Flush()
 		}
 		// Continue to signal handling.
 		return WaitForSignals(ctx, cancel, sigCh, app.Supervisor)
@@ -313,10 +387,11 @@ func WaitForSignals(ctx context.Context, cancel context.CancelFunc, sigCh <-chan
 // Params:
 //   - serviceName: the name of the service.
 //   - event: the process event.
+//   - stats: optional service statistics for enriched logging.
 //
 // Returns:
 //   - domainlogging.LogEvent: the converted log event.
-func convertProcessEventToLogEvent(serviceName string, event *domainprocess.Event) domainlogging.LogEvent {
+func convertProcessEventToLogEvent(serviceName string, event *domainprocess.Event, stats *appsupervisor.ServiceStats) domainlogging.LogEvent {
 	// Determine log level based on event type.
 	var level domainlogging.Level
 	switch event.Type {
@@ -324,7 +399,8 @@ func convertProcessEventToLogEvent(serviceName string, event *domainprocess.Even
 		level = domainlogging.LevelWarn
 	case domainprocess.EventExhausted:
 		level = domainlogging.LevelError
-	default:
+	case domainprocess.EventStarted, domainprocess.EventStopped,
+		domainprocess.EventRestarting, domainprocess.EventHealthy:
 		level = domainlogging.LevelInfo
 	}
 
@@ -335,24 +411,40 @@ func convertProcessEventToLogEvent(serviceName string, event *domainprocess.Even
 	var message string
 	switch event.Type {
 	case domainprocess.EventStarted:
-		message = "Service started"
+		if stats != nil && stats.RestartCount > 0 {
+			message = fmt.Sprintf("Service started (restart #%d)", stats.RestartCount)
+		} else {
+			message = "Service started"
+		}
 	case domainprocess.EventStopped:
 		// Differentiate clean exit from non-clean exit.
 		if event.ExitCode == 0 {
 			message = "Service stopped cleanly"
 		} else {
-			message = "Service exited"
+			message = fmt.Sprintf("Service exited with code %d", event.ExitCode)
 		}
 	case domainprocess.EventFailed:
-		message = "Service failed"
+		if stats != nil && stats.FailCount > 1 {
+			message = fmt.Sprintf("Service failed (failure #%d)", stats.FailCount)
+		} else {
+			message = "Service failed"
+		}
 	case domainprocess.EventRestarting:
-		message = "Service restarting"
+		if stats != nil {
+			message = fmt.Sprintf("Service restarting (attempt #%d)", stats.RestartCount+1)
+		} else {
+			message = "Service restarting"
+		}
 	case domainprocess.EventHealthy:
 		message = "Service became healthy"
 	case domainprocess.EventUnhealthy:
 		message = "Service became unhealthy"
 	case domainprocess.EventExhausted:
-		message = "Service abandoned (max restarts exceeded)"
+		if stats != nil {
+			message = fmt.Sprintf("Service abandoned after %d restarts (max exceeded)", stats.RestartCount)
+		} else {
+			message = "Service abandoned (max restarts exceeded)"
+		}
 	default:
 		message = "Service event"
 	}
@@ -371,6 +463,36 @@ func convertProcessEventToLogEvent(serviceName string, event *domainprocess.Even
 	if event.Error != nil {
 		logEvent = logEvent.WithMeta("error", event.Error.Error())
 	}
+	// Add restart count for restarting/exhausted events.
+	if stats != nil && (event.Type == domainprocess.EventRestarting || event.Type == domainprocess.EventExhausted) {
+		logEvent = logEvent.WithMeta("restarts", stats.RestartCount)
+	}
 
 	return logEvent
+}
+
+// findLogFilePath finds the first file writer's path from the config.
+// Returns the absolute path to the log file, or empty string if not configured.
+//
+// Params:
+//   - app: the application containing the config.
+//
+// Returns:
+//   - string: the log file path, or empty string if not found.
+func findLogFilePath(cfg *domainconfig.Config) string {
+	if cfg == nil {
+		return ""
+	}
+
+	baseDir := cfg.Logging.BaseDir
+	for _, w := range cfg.Logging.Daemon.Writers {
+		if w.Type == "file" && w.File.Path != "" {
+			path := w.File.Path
+			if !filepath.IsAbs(path) && baseDir != "" {
+				path = filepath.Join(baseDir, path)
+			}
+			return path
+		}
+	}
+	return ""
 }

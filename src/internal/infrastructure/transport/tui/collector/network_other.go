@@ -10,3 +10,8 @@ func getInterfaceStats(name string) (rxBytes, txBytes, speed uint64) {
 	_ = name
 	return 0, 0, 0
 }
+
+// UpdateAdaptiveSpeed is a no-op on non-Linux platforms.
+func UpdateAdaptiveSpeed(_ string, _ uint64) {
+	// No-op: adaptive speed only implemented on Linux.
+}

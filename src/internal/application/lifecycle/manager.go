@@ -352,9 +352,29 @@ func (m *Manager) handleProcessExit(result domain.ExitResult) bool {
 
 	// Check if restart policy allows restart.
 	if !m.tracker.ShouldRestart(result.Code) {
-		// Check if restarts were exhausted (not a clean exit with on-failure policy).
-		if m.tracker.IsExhausted() && result.Code != 0 {
-			m.sendEvent(domain.EventExhausted, fmt.Errorf("max restarts (%d) exceeded: %w", m.tracker.Attempts(), domain.ErrMaxRetriesExceeded))
+		// Check if restarts were exhausted.
+		// For RestartAlways: exhausted if attempts >= max (regardless of exit code).
+		// For RestartOnFailure: exhausted only if exit code != 0 and attempts >= max.
+		if m.tracker.IsExhausted() {
+			policy := m.config.Restart.Policy
+			shouldEmitExhausted := false
+			switch policy {
+			case config.RestartAlways:
+				// Always emit when exhausted, even for clean exits (e.g., killed by health check).
+				shouldEmitExhausted = true
+			case config.RestartOnFailure:
+				// Only emit if the process actually failed.
+				shouldEmitExhausted = result.Code != 0
+			case config.RestartNever:
+				// Never restarts, so exhausted doesn't apply.
+				shouldEmitExhausted = false
+			case config.RestartUnless:
+				// Always restarts (no max), so exhausted doesn't apply.
+				shouldEmitExhausted = false
+			}
+			if shouldEmitExhausted {
+				m.sendEvent(domain.EventExhausted, fmt.Errorf("max restarts (%d) exceeded: %w", m.tracker.Attempts(), domain.ErrMaxRetriesExceeded))
+			}
 		}
 		// Return true to stop restart loop.
 		return true

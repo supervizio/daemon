@@ -31,6 +31,13 @@ type ListenerConfig struct {
 	// Empty means bind to all interfaces (0.0.0.0).
 	Address string
 
+	// Exposed indicates whether this port should be publicly accessible.
+	// Used for status display:
+	//   - Green: port state matches exposed setting
+	//   - Yellow: mismatch (exposed but unreachable, or not exposed but reachable)
+	//   - Red: expected port but nothing listening
+	Exposed bool
+
 	// Probe contains the probe configuration for this listener.
 	// If nil, no probing is performed (only port listening is checked).
 	Probe *ProbeConfig

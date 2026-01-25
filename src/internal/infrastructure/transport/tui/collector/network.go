@@ -72,6 +72,16 @@ func (c *NetworkCollector) CollectInto(snap *model.Snapshot) error {
 			if txBytes >= prev.txBytes {
 				ni.TxBytesPerSec = txBytes - prev.txBytes
 			}
+
+			// Update adaptive speed based on observed throughput (for virtual interfaces).
+			// Use max of RX and TX, convert to bits/sec.
+			maxBytes := ni.RxBytesPerSec
+			if ni.TxBytesPerSec > maxBytes {
+				maxBytes = ni.TxBytesPerSec
+			}
+			if maxBytes > 0 {
+				UpdateAdaptiveSpeed(iface.Name, maxBytes*8)
+			}
 		}
 
 		// Store for next iteration.

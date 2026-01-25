@@ -60,13 +60,13 @@ func TestMultiLogger_ConvenienceMethods(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		logFunc  func(logger logging.Logger)
-		level    logging.Level
-		service  string
-		event    string
-		metaKey  string
-		metaVal  any
+		name    string
+		logFunc func(logger logging.Logger)
+		level   logging.Level
+		service string
+		event   string
+		metaKey string
+		metaVal any
 	}{
 		{
 			name: "Debug",

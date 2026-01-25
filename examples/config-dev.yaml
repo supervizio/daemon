@@ -10,34 +10,116 @@ logging:
       max_files: 3
 
 services:
-  # Simple sleep service for testing
-  - name: sleeper
-    command: /bin/sleep
+  # Simple HTTP server on port 8080 (exposed to internet)
+  - name: web
+    command: python3
     args:
-      - "infinity"
+      - "-m"
+      - "http.server"
+      - "8080"
+    restart:
+      policy: always
+      delay: 2s
+    listeners:
+      - port: 8080
+        exposed: true
+        probe:
+          type: http
+          path: /
+          interval: 10s
+          timeout: 5s
+
+  # Simple HTTP server on port 8081 (internal API, not exposed)
+  - name: api
+    command: python3
+    args:
+      - "-m"
+      - "http.server"
+      - "8081"
+    restart:
+      policy: always
+      delay: 2s
+    listeners:
+      - port: 8081
+        exposed: false
+        probe:
+          type: http
+          path: /
+          interval: 10s
+          timeout: 5s
+
+  # TCP echo server using socat on port 9000 (internal only)
+  - name: echo
+    command: socat
+    args:
+      - "TCP-LISTEN:9000,fork,reuseaddr"
+      - "EXEC:cat"
+    restart:
+      policy: always
+      delay: 2s
+    listeners:
+      - port: 9000
+        exposed: false
+        probe:
+          type: tcp
+          interval: 10s
+          timeout: 5s
+
+  # Background worker (no ports)
+  - name: worker
+    command: /bin/sh
+    args:
+      - "-c"
+      - "while true; do echo '[worker] processing...'; sleep 5; done"
     restart:
       policy: always
       delay: 1s
 
-  # Ticker: exits cleanly (exit 0) and restarts forever.
-  # Expected behavior: "stopped cleanly" → "restarting" → "started" (loop forever)
-  - name: ticker
+  # Scheduler (no ports)
+  - name: scheduler
     command: /bin/sh
     args:
       - "-c"
-      - "echo '[ticker] tick at $(date)' && sleep 3 && exit 0"
+      - "while true; do echo '[scheduler] tick'; sleep 10; done"
+    restart:
+      policy: always
+      delay: 1s
+
+  # Metrics collector (no ports)
+  - name: metrics
+    command: /bin/sh
+    args:
+      - "-c"
+      - "while true; do echo '[metrics] collecting...'; sleep 15; done"
+    restart:
+      policy: always
+      delay: 1s
+
+  # Docker whoami container (port 8082, exposed to internet)
+  - name: whoami
+    command: /bin/sh
+    args:
+      - "-c"
+      - "docker rm -f supervizio-whoami 2>/dev/null; exec docker run --rm --name supervizio-whoami -p 8082:80 traefik/whoami"
     restart:
       policy: always
       delay: 2s
+    listeners:
+      - port: 8082
+        exposed: true
+        probe:
+          type: http
+          path: /
+          interval: 10s
+          timeout: 5s
 
-  # Crasher: exits with error (exit 1) and fails after max_retries.
-  # Expected behavior: "failed" → "restarting" (3 times) → "exhausted" (ERROR)
+  # Crasher for testing failure handling
   - name: crasher
     command: /bin/sh
     args:
       - "-c"
-      - "echo '[crasher] simulating crash' && sleep 2 && exit 1"
+      - "echo '[crasher] starting...'; sleep 3; echo '[crasher] crashing!'; exit 1"
     restart:
       policy: on-failure
       max_retries: 3
-      delay: 1s
+      delay: 2s

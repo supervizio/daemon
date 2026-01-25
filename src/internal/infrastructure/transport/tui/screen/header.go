@@ -46,153 +46,111 @@ func (h *HeaderRenderer) Render(snap *model.Snapshot, showTime bool) string {
 }
 
 // renderCompact renders a minimal header for small terminals.
-func (h *HeaderRenderer) renderCompact(snap *model.Snapshot, showTime bool) string {
-	// Logo.
+func (h *HeaderRenderer) renderCompact(snap *model.Snapshot, _ bool) string {
+	ctx := snap.Context
+
+	// Logo with version.
 	logo := h.theme.Primary + "superviz" + ansi.Reset +
 		h.theme.Accent + ".io" + ansi.Reset
 
-	// Version.
-	version := h.theme.Accent + "v" + snap.Context.Version + ansi.Reset
+	version := ctx.Version
+	if len(version) > 0 && version[0] != 'v' {
+		version = "v" + version
+	}
+	versionStr := h.theme.Accent + version + ansi.Reset
 
-	// Time (optional).
-	var timeStr string
-	if showTime {
-		timeStr = snap.Timestamp.Format("15:04:05")
+	// Runtime.
+	runtime := ctx.Mode.String()
+	if ctx.ContainerRuntime != "" {
+		runtime = ctx.ContainerRuntime
 	}
 
-	// Build lines.
-	line1 := fmt.Sprintf("%s %s", logo, version)
-	if timeStr != "" {
-		line1 = fmt.Sprintf("%s %s", logo, timeStr)
-	}
-
-	line2 := fmt.Sprintf("%s │ Up %s",
-		snap.Context.Hostname,
-		widget.FormatDurationShort(snap.Context.Uptime))
+	line1 := fmt.Sprintf("  %s %s", logo, versionStr)
+	line2 := fmt.Sprintf("  %s │ %s │ Up %s",
+		ctx.Hostname,
+		runtime,
+		widget.FormatDurationShort(ctx.Uptime))
 
 	// Box.
 	box := widget.NewBox(h.width).
 		SetStyle(widget.RoundedBox).
-		AddLine("  " + line1).
-		AddLine("  " + line2)
+		AddLine(line1).
+		AddLine(line2)
 
 	return box.Render()
 }
 
-// renderNormal renders a standard header.
-func (h *HeaderRenderer) renderNormal(snap *model.Snapshot, showTime bool) string {
-	// Logo.
-	logo := h.theme.Primary + "superviz" + ansi.Reset +
-		h.theme.Accent + ".io" + ansi.Reset +
-		" " + h.theme.Accent + "v" + snap.Context.Version + ansi.Reset
+// renderNormal renders a standard header matching raw mode format.
+func (h *HeaderRenderer) renderNormal(snap *model.Snapshot, _ bool) string {
+	ctx := snap.Context
 
-	// Time.
-	var timeStr string
-	if showTime {
-		timeStr = snap.Timestamp.Format("15:04:05")
+	// Version string (add 'v' prefix if not present).
+	version := ctx.Version
+	if len(version) > 0 && version[0] != 'v' {
+		version = "v" + version
 	}
 
-	// Context line.
-	mode := snap.Context.Mode.String()
-	if snap.Context.ContainerRuntime != "" {
-		mode += " (" + snap.Context.ContainerRuntime + ")"
+	// Title line: "   superviz.io ─────────────────────── v0.2.0   "
+	logo := h.theme.Primary + "superviz" + ansi.Reset + h.theme.Accent + ".io" + ansi.Reset
+	versionStr := h.theme.Accent + version + ansi.Reset
+
+	// Calculate separator.
+	innerWidth := h.width - 2
+	pad := 3
+	logoLen := 11 // "superviz.io" visible
+	versionLen := len(version)
+	separatorLen := innerWidth - (2 * pad) - logoLen - 2 - versionLen
+	if separatorLen < 3 {
+		separatorLen = 3
+	}
+	separator := h.theme.Muted + strings.Repeat("─", separatorLen) + ansi.Reset
+
+	titleLine := strings.Repeat(" ", pad) + logo + " " + separator + " " + versionStr
+
+	// Runtime mode.
+	runtime := ctx.Mode.String()
+	if ctx.ContainerRuntime != "" {
+		runtime = ctx.Mode.String() + " (" + ctx.ContainerRuntime + ")"
 	}
 
-	// Build content.
-	line1Parts := []string{logo}
-	if timeStr != "" {
-		padding := h.width - 4 - widget.VisibleLen(logo) - len(timeStr)
-		if padding > 0 {
-			line1Parts = append(line1Parts, strings.Repeat(" ", padding)+timeStr)
-		}
+	// Platform.
+	platform := ctx.OS + "/" + ctx.Arch
+
+	// Config path.
+	configPath := ctx.ConfigPath
+	if configPath == "" {
+		configPath = "/etc/supervizio/config.yaml"
 	}
-	line1 := strings.Join(line1Parts, "")
 
-	line2 := fmt.Sprintf("%s │ %s │ %s",
-		snap.Context.Hostname,
-		snap.Context.PrimaryIP,
-		mode)
+	// Uptime for interactive mode (dynamic).
+	uptime := widget.FormatDuration(ctx.Uptime)
 
-	line3 := fmt.Sprintf("%s %s │ Up %s",
-		snap.Context.OS,
-		snap.Context.Arch,
-		widget.FormatDuration(snap.Context.Uptime))
+	// Bullet point style.
+	bullet := h.theme.Accent + "▸" + ansi.Reset
 
+	// Build content lines with visual hierarchy.
 	box := widget.NewBox(h.width).
-		SetStyle(widget.RoundedBox).
-		AddLine("  " + line1).
-		AddLine("  " + h.theme.Muted + "PID1 Process Supervisor" + ansi.Reset).
-		AddLine("  " + line2).
-		AddLine("  " + line3)
+		AddLine("").
+		AddLine(titleLine).
+		AddLine("").
+		AddLine("   " + bullet + " " + h.theme.Muted + "Host" + ansi.Reset + "       " + ctx.Hostname).
+		AddLine("   " + bullet + " " + h.theme.Muted + "Platform" + ansi.Reset + "   " + platform).
+		AddLine("   " + bullet + " " + h.theme.Muted + "Runtime" + ansi.Reset + "    " + runtime).
+		AddLine("   " + bullet + " " + h.theme.Muted + "Config" + ansi.Reset + "     " + configPath).
+		AddLine("   " + bullet + " " + h.theme.Muted + "Uptime" + ansi.Reset + "     " + uptime).
+		AddLine("")
 
 	return box.Render()
 }
 
-// renderWide renders an expanded header for wide terminals.
-func (h *HeaderRenderer) renderWide(snap *model.Snapshot, showTime bool) string {
-	// Logo with more spacing.
-	logo := h.theme.Primary + "superviz" + ansi.Reset +
-		h.theme.Accent + ".io" + ansi.Reset
-
-	version := h.theme.Accent + "v" + snap.Context.Version + ansi.Reset
-	subtitle := h.theme.Muted + "PID1 Process Supervisor" + ansi.Reset
-
-	// Right side info.
-	rightParts := []string{
-		snap.Context.Hostname,
-		snap.Context.PrimaryIP,
-	}
-
-	if snap.Context.Mode == model.ModeContainer && snap.Context.ContainerRuntime != "" {
-		rightParts = append(rightParts, snap.Context.ContainerRuntime)
-	}
-
-	rightInfo := strings.Join(rightParts, " │ ")
-
-	// Time.
-	var timeStr string
-	if showTime {
-		timeStr = snap.Timestamp.Format("15:04:05")
-	}
-
-	// System info.
-	sysInfo := fmt.Sprintf("%s %s %s │ Up %s",
-		snap.Context.OS,
-		snap.Context.Kernel,
-		snap.Context.Arch,
-		widget.FormatDuration(snap.Context.Uptime))
-
-	// Build lines.
-	line1 := fmt.Sprintf("%s %s", logo, version)
-	line1Right := rightInfo
-	if timeStr != "" {
-		line1Right = timeStr + "  " + rightInfo
-	}
-
-	// Pad line1.
-	padding := h.width - 4 - widget.VisibleLen(line1) - widget.VisibleLen(line1Right)
-	if padding > 0 {
-		line1 = line1 + strings.Repeat(" ", padding) + line1Right
-	}
-
-	box := widget.NewBox(h.width).
-		SetStyle(widget.RoundedBox).
-		AddLine("  " + line1).
-		AddLine("  " + subtitle + strings.Repeat(" ", max(0, h.width-4-24-len(sysInfo))) + sysInfo)
-
-	return box.Render()
+// renderWide renders an expanded header for wide terminals (same as normal).
+func (h *HeaderRenderer) renderWide(snap *model.Snapshot, _ bool) string {
+	// Use same format as normal for consistency.
+	return h.renderNormal(snap, false)
 }
 
 // RenderBrandOnly returns just the brand logo.
 func (h *HeaderRenderer) RenderBrandOnly() string {
 	return h.theme.Primary + "superviz" + ansi.Reset +
 		h.theme.Accent + ".io" + ansi.Reset
-}
-
-// Helper for max.
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

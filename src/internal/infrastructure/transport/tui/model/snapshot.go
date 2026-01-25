@@ -134,10 +134,14 @@ type ServiceSnapshot struct {
 	LastError string
 	// Health status.
 	Health health.Status
+	// HasHealthChecks indicates whether health probes are configured.
+	HasHealthChecks bool
 	// HealthLatency of last probe.
 	HealthLatency time.Duration
 	// Listeners with their states.
 	Listeners []ListenerSnapshot
+	// Ports are the TCP/UDP ports the service is listening on.
+	Ports []int
 	// CPUPercent usage (0-100).
 	CPUPercent float64
 	// MemoryRSS in bytes.
@@ -145,6 +149,21 @@ type ServiceSnapshot struct {
 	// MemoryPercent of total system memory.
 	MemoryPercent float64
 }
+
+// PortStatus represents the display status of a port.
+type PortStatus int
+
+// Port status constants for coloring.
+const (
+	// PortStatusOK: port state matches configuration (green).
+	PortStatusOK PortStatus = iota
+	// PortStatusWarning: mismatch between config and reality (yellow).
+	PortStatusWarning
+	// PortStatusError: expected port but nothing listening (red).
+	PortStatusError
+	// PortStatusUnknown: status cannot be determined.
+	PortStatusUnknown
+)
 
 // ListenerSnapshot contains listener state for display.
 type ListenerSnapshot struct {
@@ -156,7 +175,15 @@ type ListenerSnapshot struct {
 	Port int
 	// Address (bind address).
 	Address string
-	// State of the listener.
+	// Exposed indicates if this port should be publicly accessible.
+	Exposed bool
+	// Listening indicates if the port is actually listening.
+	Listening bool
+	// Reachable indicates if the port is reachable externally (for exposed ports).
+	Reachable bool
+	// Status for display coloring.
+	Status PortStatus
+	// State of the listener (deprecated, use Status).
 	State string
 	// ProbeType (tcp, http, grpc, exec).
 	ProbeType string
@@ -254,8 +281,12 @@ type LogEntry struct {
 	Level string
 	// Service name.
 	Service string
+	// EventType categorizes the event (started, stopped, failed, etc.).
+	EventType string
 	// Message content.
 	Message string
+	// Metadata contains additional key-value data.
+	Metadata map[string]any
 }
 
 // SandboxInfo contains detected container runtime information.

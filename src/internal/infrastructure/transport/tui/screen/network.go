@@ -3,7 +3,6 @@ package screen
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/model"
@@ -30,7 +29,7 @@ func (n *NetworkRenderer) SetWidth(width int) {
 	n.width = width
 }
 
-// Render returns the network section.
+// Render returns the network section with progress bars.
 func (n *NetworkRenderer) Render(snap *model.Snapshot) string {
 	// Filter to interesting interfaces.
 	interfaces := n.filterInterfaces(snap.Network)
@@ -45,9 +44,9 @@ func (n *NetworkRenderer) Render(snap *model.Snapshot) string {
 	case terminal.LayoutCompact:
 		return n.renderCompact(interfaces)
 	case terminal.LayoutNormal, terminal.LayoutWide, terminal.LayoutUltraWide:
-		return n.renderNormal(interfaces)
+		return n.renderWithBars(interfaces)
 	}
-	return n.renderNormal(interfaces)
+	return n.renderWithBars(interfaces)
 }
 
 // filterInterfaces removes uninteresting interfaces.
@@ -55,13 +54,22 @@ func (n *NetworkRenderer) filterInterfaces(ifaces []model.NetworkInterface) []mo
 	result := make([]model.NetworkInterface, 0, len(ifaces))
 
 	for _, iface := range ifaces {
-		// Skip down interfaces (except loopback).
-		if !iface.IsUp && !iface.IsLoopback {
+		// Skip down interfaces.
+		if !iface.IsUp {
 			continue
 		}
 
-		// Skip interfaces without IP.
-		if iface.IP == "" && !iface.IsLoopback {
+		// Include loopback even without explicit IP.
+		if iface.IsLoopback {
+			if iface.IP == "" {
+				iface.IP = "127.0.0.1"
+			}
+			result = append(result, iface)
+			continue
+		}
+
+		// Skip non-loopback interfaces without IP.
+		if iface.IP == "" {
 			continue
 		}
 
@@ -76,7 +84,7 @@ func (n *NetworkRenderer) renderEmpty() string {
 	box := widget.NewBox(n.width).
 		SetTitle("Network").
 		SetTitleColor(n.theme.Header).
-				AddLine("  " + n.theme.Muted + "No network interfaces" + ansi.Reset)
+		AddLine("  " + n.theme.Muted + "No network interfaces" + ansi.Reset)
 
 	return box.Render()
 }
@@ -91,55 +99,94 @@ func (n *NetworkRenderer) renderCompact(ifaces []model.NetworkInterface) string 
 			ip = "-"
 		}
 
-		// Compact: just name and IP.
-		line := fmt.Sprintf("  %-6s %s", iface.Name, ip)
+		// Compact: name, IP, and rates.
+		rx := widget.FormatBytesPerSec(iface.RxBytesPerSec)
+		tx := widget.FormatBytesPerSec(iface.TxBytesPerSec)
+		line := fmt.Sprintf("  %-6s %-15s ↓%s ↑%s", iface.Name, ip, rx, tx)
 		lines = append(lines, line)
 	}
 
 	box := widget.NewBox(n.width).
 		SetTitle("Network").
 		SetTitleColor(n.theme.Header).
-				AddLines(lines)
+		AddLines(lines)
 
 	return box.Render()
 }
 
-// renderNormal renders a standard network table.
-func (n *NetworkRenderer) renderNormal(ifaces []model.NetworkInterface) string {
-	table := widget.NewTable(n.width-4).
-		AddColumn("IFACE", 8, widget.AlignLeft).
-		AddFlexColumn("IP", 15, widget.AlignLeft).
-		AddColumn("RX/s", 10, widget.AlignRight).
-		AddColumn("TX/s", 10, widget.AlignRight).
-		AddColumn("SPEED", 8, widget.AlignRight)
-
-	for _, iface := range ifaces {
-		ip := iface.IP
-		if ip == "" {
-			ip = "-"
-		}
-
-		rx := "-"
-		tx := "-"
-		if iface.RxBytesPerSec > 0 || iface.TxBytesPerSec > 0 {
-			rx = "↓" + widget.FormatBytesPerSec(iface.RxBytesPerSec)
-			tx = "↑" + widget.FormatBytesPerSec(iface.TxBytesPerSec)
-		}
-
-		speed := "-"
-		if iface.Speed > 0 {
-			speed = widget.FormatSpeedShort(iface.Speed)
-		}
-
-		table.AddRow(iface.Name, ip, rx, tx, speed)
+// renderWithBars renders network interfaces with progress bars like CPU/RAM.
+// For interfaces without speed info (loopback, virtual), shows throughput only.
+func (n *NetworkRenderer) renderWithBars(ifaces []model.NetworkInterface) string {
+	// Calculate bar width.
+	// Format: "  eth0   ↓[bar] 1.2 MB/s  ↑[bar] 256 KB/s  1 Gbps"
+	barWidth := (n.width - 55) / 2
+	if barWidth < 8 {
+		barWidth = 8
 	}
 
-	lines := strings.Split(table.Render(), "\n")
+	lines := make([]string, 0, len(ifaces))
+
+	for _, iface := range ifaces {
+		// Format rates.
+		rxRate := widget.FormatBytesPerSec(iface.RxBytesPerSec)
+		txRate := widget.FormatBytesPerSec(iface.TxBytesPerSec)
+
+		var line string
+
+		if iface.Speed > 0 {
+			// Has speed - show progress bars with percentage.
+			rxBps := iface.RxBytesPerSec * 8
+			txBps := iface.TxBytesPerSec * 8
+			rxPercent := float64(rxBps) / float64(iface.Speed) * 100
+			txPercent := float64(txBps) / float64(iface.Speed) * 100
+			if rxPercent > 100 {
+				rxPercent = 100
+			}
+			if txPercent > 100 {
+				txPercent = 100
+			}
+
+			// Create progress bars.
+			rxBar := widget.NewProgressBar(barWidth, rxPercent).
+				SetLabel("").
+				SetColorByPercent()
+			rxBar.ShowValue = false
+
+			txBar := widget.NewProgressBar(barWidth, txPercent).
+				SetLabel("").
+				SetColorByPercent()
+			txBar.ShowValue = false
+
+			// Format speed.
+			speed := widget.FormatSpeedShort(iface.Speed)
+
+			// Format: "  eth0   ↓[bar] 1.2 MB/s  ↑[bar] 256 KB/s  1 Gbps"
+			line = fmt.Sprintf("  %-6s ↓%s %8s  ↑%s %8s  %s",
+				iface.Name,
+				rxBar.Render(),
+				rxRate,
+				txBar.Render(),
+				txRate,
+				speed,
+			)
+		} else {
+			// No speed info (non-Linux platforms) - show throughput only.
+			// Format: "  lo     ↓ 1.2 MB/s  ↑ 256 KB/s  (no limit)"
+			line = fmt.Sprintf("  %-6s ↓ %8s  ↑ %8s  %s",
+				iface.Name,
+				rxRate,
+				txRate,
+				n.theme.Muted+"(no limit)"+ansi.Reset,
+			)
+		}
+
+		lines = append(lines, line)
+	}
 
 	box := widget.NewBox(n.width).
 		SetTitle("Network").
 		SetTitleColor(n.theme.Header).
-				AddLines(prefixLines(lines, "  "))
+		AddLines(lines)
 
 	return box.Render()
 }

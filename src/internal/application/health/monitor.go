@@ -57,6 +57,8 @@ type ProbeMonitor struct {
 	onStateChange HealthStateLogger
 	// onUnhealthy is called when a service becomes unhealthy.
 	onUnhealthy UnhealthyCallback
+	// onHealthy is called when a service becomes healthy.
+	onHealthy HealthyCallback
 }
 
 // NewProbeMonitor creates a new probe-based health monitor.
@@ -91,6 +93,7 @@ func NewProbeMonitor(config ProbeMonitorConfig) *ProbeMonitor {
 		defaultInterval: defaultInterval,
 		onStateChange:   config.OnStateChange,
 		onUnhealthy:     config.OnUnhealthy,
+		onHealthy:       config.OnHealthy,
 	}
 }
 
@@ -606,6 +609,9 @@ func (m *ProbeMonitor) sendEventIfChanged(lp *ListenerProbe, ls *domain.SubjectS
 	// Handle unhealthy transition (ready -> listening).
 	m.handleUnhealthyTransition(lp.Listener.Name, prevSubjectState, ls.State, result)
 
+	// Handle healthy transition (listening -> ready).
+	m.handleHealthyTransition(lp.Listener.Name, prevSubjectState, ls.State)
+
 	// Send event to channel.
 	m.sendEvent(lp.Listener.Name, ls, result)
 }
@@ -648,6 +654,27 @@ func (m *ProbeMonitor) handleUnhealthyTransition(name string, prevState, newStat
 	// Extract failure reason and call callback.
 	reason := extractFailureReason(result)
 	m.onUnhealthy(name, reason)
+}
+
+// handleHealthyTransition triggers healthy callback on listening->ready transition.
+//
+// Params:
+//   - name: the listener name.
+//   - prevState: the previous subject state.
+//   - newState: the new subject state.
+func (m *ProbeMonitor) handleHealthyTransition(name string, prevState, newState domain.SubjectState) {
+	// Check if this is a listening -> ready transition (became healthy).
+	if newState != domain.SubjectReady || prevState != domain.SubjectListening {
+		// Return early for non-healthy transitions.
+		return
+	}
+	// Check if callback is configured.
+	if m.onHealthy == nil {
+		// Return early when no callback configured.
+		return
+	}
+	// Call healthy callback.
+	m.onHealthy(name)
 }
 
 // sendEvent sends a health event to the events channel.

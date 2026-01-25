@@ -114,7 +114,7 @@ func (s *SystemRenderer) renderNormal(snap *model.Snapshot) string {
 	box := widget.NewBox(s.width).
 		SetTitle("System").
 		SetTitleColor(s.theme.Header).
-				AddLines(lines)
+		AddLines(lines)
 
 	return box.Render()
 }
@@ -174,7 +174,7 @@ func (s *SystemRenderer) renderWide(snap *model.Snapshot) string {
 	box := widget.NewBox(s.width).
 		SetTitle("System").
 		SetTitleColor(s.theme.Header).
-				AddLines(lines)
+		AddLines(lines)
 
 	return box.Render()
 }
@@ -187,6 +187,75 @@ func (s *SystemRenderer) RenderInline(snap *model.Snapshot) string {
 		widget.FormatPercent(sys.CPUPercent),
 		widget.FormatPercent(sys.MemoryPercent),
 		sys.LoadAvg1)
+}
+
+// RenderForInteractive renders system metrics for interactive mode.
+// Same format as raw mode but with "System" title (updates in real-time).
+func (s *SystemRenderer) RenderForInteractive(snap *model.Snapshot) string {
+	sys := snap.System
+	limits := snap.Limits
+
+	barWidth := s.width - 45
+	if barWidth < 10 {
+		barWidth = 10
+	}
+
+	// CPU bar.
+	cpuBar := widget.NewProgressBar(barWidth, sys.CPUPercent).
+		SetLabel("CPU  ").
+		SetColorByPercent()
+
+	// RAM bar.
+	ramBar := widget.NewProgressBar(barWidth, sys.MemoryPercent).
+		SetLabel("RAM  ").
+		SetColorByPercent()
+
+	// Swap bar.
+	swapBar := widget.NewProgressBar(barWidth, sys.SwapPercent).
+		SetLabel("Swap ").
+		SetColorByPercent()
+
+	// Disk bar.
+	diskBar := widget.NewProgressBar(barWidth, sys.DiskPercent).
+		SetLabel("Disk ").
+		SetColorByPercent()
+
+	// Format values with padding.
+	cpuInfo := fmt.Sprintf("  Load: %.2f %.2f %.2f", sys.LoadAvg1, sys.LoadAvg5, sys.LoadAvg15)
+	ramInfo := fmt.Sprintf("  %s / %s", widget.FormatBytes(sys.MemoryUsed), widget.FormatBytes(sys.MemoryTotal))
+	swapInfo := fmt.Sprintf("  %s / %s", widget.FormatBytes(sys.SwapUsed), widget.FormatBytes(sys.SwapTotal))
+	diskInfo := fmt.Sprintf("  %s / %s", widget.FormatBytes(sys.DiskUsed), widget.FormatBytes(sys.DiskTotal))
+
+	lines := []string{
+		"  " + cpuBar.Render() + cpuInfo,
+		"  " + ramBar.Render() + ramInfo,
+		"  " + swapBar.Render() + swapInfo,
+		"  " + diskBar.Render() + diskInfo,
+	}
+
+	// Limits if present.
+	if limits.HasLimits {
+		var limitParts []string
+		if limits.CPUQuota > 0 {
+			limitParts = append(limitParts, fmt.Sprintf("CPU: %.0f cores", limits.CPUQuota))
+		}
+		if limits.MemoryMax > 0 {
+			limitParts = append(limitParts, fmt.Sprintf("Memory: %s", widget.FormatBytes(limits.MemoryMax)))
+		}
+		if limits.CPUSet != "" {
+			limitParts = append(limitParts, fmt.Sprintf("CPUSet: %s", limits.CPUSet))
+		}
+		if len(limitParts) > 0 {
+			lines = append(lines, "  "+s.theme.Muted+"Limits: "+strings.Join(limitParts, " │ ")+ansi.Reset)
+		}
+	}
+
+	box := widget.NewBox(s.width).
+		SetTitle("System").
+		SetTitleColor(s.theme.Header).
+		AddLines(lines)
+
+	return box.Render()
 }
 
 // RenderForRaw renders system metrics for raw mode with "at start" indicator.
@@ -250,7 +319,7 @@ func (s *SystemRenderer) RenderForRaw(snap *model.Snapshot) string {
 	box := widget.NewBox(s.width).
 		SetTitle("System (at start)").
 		SetTitleColor(s.theme.Header).
-				AddLines(lines)
+		AddLines(lines)
 
 	return box.Render()
 }

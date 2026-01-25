@@ -90,7 +90,7 @@ func formatMetadata(meta map[string]any) string {
 	}
 	sort.Strings(keys)
 
-	var parts []string
+	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
 		v := meta[k]
 		parts = append(parts, fmt.Sprintf("%s=%v", k, v))

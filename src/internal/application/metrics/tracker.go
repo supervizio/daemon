@@ -412,7 +412,66 @@ func (t *Tracker) collectProcess(proc *trackedProcess) {
 		return
 	}
 
+	// Calculate CPU percentage using delta between snapshots.
+	now := time.Now()
+	if cpuErr == nil && !proc.prevCPUTime.IsZero() {
+		cpu.UsagePercent = t.calculateCPUPercent(proc.prevCPU, cpu, proc.prevCPUTime, now)
+	}
+
+	// Store current CPU snapshot for next calculation.
+	if cpuErr == nil {
+		proc.prevCPU = cpu
+		proc.prevCPUTime = now
+	}
+
 	t.updateProcessMetrics(proc, cpu, mem)
+}
+
+// calculateCPUPercent calculates CPU usage percentage from two snapshots.
+// The formula compares the change in CPU jiffies over time.
+//
+// Params:
+//   - prev: previous CPU snapshot
+//   - curr: current CPU snapshot
+//   - prevTime: time of previous snapshot
+//   - currTime: time of current snapshot
+//
+// Returns:
+//   - float64: CPU usage percentage (0-100 per core, can exceed 100 for multi-core)
+func (t *Tracker) calculateCPUPercent(prev, curr domainmetrics.ProcessCPU, prevTime, currTime time.Time) float64 {
+	// Calculate elapsed time in seconds.
+	elapsed := currTime.Sub(prevTime).Seconds()
+	if elapsed <= 0 {
+		return 0
+	}
+
+	// Calculate total jiffies used (user + system) for both snapshots.
+	prevTotal := prev.User + prev.System
+	currTotal := curr.User + curr.System
+
+	// Avoid underflow if counters wrapped or process restarted.
+	if currTotal < prevTotal {
+		return 0
+	}
+
+	// Calculate jiffies delta.
+	delta := currTotal - prevTotal
+
+	// Convert jiffies to seconds (assuming 100 Hz = 100 jiffies per second).
+	// This is the standard USER_HZ on Linux.
+	const jiffiesPerSecond float64 = 100.0
+	cpuSeconds := float64(delta) / jiffiesPerSecond
+
+	// Calculate percentage relative to elapsed wall time.
+	// Result can exceed 100% for multi-threaded processes using multiple cores.
+	percent := (cpuSeconds / elapsed) * 100.0
+
+	// Clamp negative values to zero.
+	if percent < 0 {
+		return 0
+	}
+
+	return percent
 }
 
 // updateProcessMetrics updates and publishes metrics for a process.

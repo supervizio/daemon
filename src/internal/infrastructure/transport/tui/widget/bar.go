@@ -19,7 +19,7 @@ type BarStyle struct {
 // BlockBar uses block characters.
 var BlockBar = BarStyle{
 	Full:  "█",
-	Empty: "░",
+	Empty: " ",
 	Left:  "",
 	Right: "",
 }
@@ -27,7 +27,7 @@ var BlockBar = BarStyle{
 // BracketBar uses brackets with block fill.
 var BracketBar = BarStyle{
 	Full:  "█",
-	Empty: "░",
+	Empty: " ",
 	Left:  "[",
 	Right: "]",
 }
@@ -39,6 +39,10 @@ var ASCIIBar = BarStyle{
 	Left:  "[",
 	Right: "]",
 }
+
+// SubBlockChars provides 1/8th granularity for progress bars.
+// Index 0 = empty, 1-7 = partial fills, 8 = full.
+var SubBlockChars = []string{" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"}
 
 // ProgressBar renders a progress bar.
 type ProgressBar struct {
@@ -94,7 +98,7 @@ func (p *ProgressBar) SetColorByPercent() *ProgressBar {
 	return p
 }
 
-// Render returns the progress bar as a string.
+// Render returns the progress bar as a string with 1/8th character granularity.
 func (p *ProgressBar) Render() string {
 	var sb strings.Builder
 
@@ -119,22 +123,38 @@ func (p *ProgressBar) Render() string {
 		barWidth = 1
 	}
 
-	filled := int(float64(barWidth) * p.Percent / 100.0)
-	empty := barWidth - filled
+	// Calculate with 1/8th granularity (8 sub-levels per character).
+	// Total sub-units = barWidth * 8.
+	totalSubUnits := barWidth * 8
+	filledSubUnits := int(float64(totalSubUnits) * p.Percent / 100.0)
 
-	// Fill.
-	if filled > 0 {
-		sb.WriteString(p.Color)
-		sb.WriteString(strings.Repeat(p.Style.Full, filled))
+	// Full characters.
+	fullChars := filledSubUnits / 8
+	// Partial character (0-7 eighths).
+	partialEighths := filledSubUnits % 8
+	// Empty characters.
+	emptyChars := barWidth - fullChars
+	if partialEighths > 0 {
+		emptyChars--
 	}
 
-	// Empty.
-	if empty > 0 {
-		sb.WriteString(p.EmptyColor)
-		sb.WriteString(strings.Repeat(p.Style.Empty, empty))
+	// Render filled portion.
+	sb.WriteString(p.Color)
+	if fullChars > 0 {
+		sb.WriteString(strings.Repeat(p.Style.Full, fullChars))
+	}
+
+	// Render partial character if any.
+	if partialEighths > 0 {
+		sb.WriteString(SubBlockChars[partialEighths])
 	}
 
 	sb.WriteString(ansi.Reset)
+
+	// Render empty portion (no color - just spaces).
+	if emptyChars > 0 {
+		sb.WriteString(strings.Repeat(p.Style.Empty, emptyChars))
+	}
 
 	// Right bracket.
 	sb.WriteString(p.Style.Right)

@@ -10,26 +10,6 @@ import (
 	"github.com/kodflow/daemon/internal/domain/logging"
 )
 
-// fileWriterConfig implements the writerConfig interface for the underlying Writer.
-type fileWriterConfig struct {
-	rotation config.RotationConfig
-}
-
-// File returns empty since we handle paths separately.
-func (c *fileWriterConfig) File() string {
-	return ""
-}
-
-// TimestampFormat returns empty since we handle formatting ourselves.
-func (c *fileWriterConfig) TimestampFormat() string {
-	return ""
-}
-
-// Rotation returns the rotation configuration.
-func (c *fileWriterConfig) Rotation() config.RotationConfig {
-	return c.rotation
-}
-
 // FileWriter writes log events to a file with rotation support.
 type FileWriter struct {
 	// mu protects concurrent writes.

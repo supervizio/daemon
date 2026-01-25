@@ -93,7 +93,7 @@ func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 	box := widget.NewBox(l.width).
 		SetTitle("Logs Summary").
 		SetTitleColor(l.theme.Header).
-				AddLines(lines)
+		AddLines(lines)
 
 	return box.Render()
 }

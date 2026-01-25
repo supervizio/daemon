@@ -59,7 +59,7 @@ func (s *ServicesRenderer) renderEmpty() string {
 	box := widget.NewBox(s.width).
 		SetTitle("Services").
 		SetTitleColor(s.theme.Header).
-				AddLine("  " + s.theme.Muted + "No services configured" + ansi.Reset)
+		AddLine("  " + s.theme.Muted + "No services configured" + ansi.Reset)
 
 	return box.Render()
 }
@@ -90,7 +90,7 @@ func (s *ServicesRenderer) renderCompact(snap *model.Snapshot) string {
 	box := widget.NewBox(s.width).
 		SetTitle("Services").
 		SetTitleColor(s.theme.Header).
-				AddLines(lines)
+		AddLines(lines)
 
 	return box.Render()
 }
@@ -138,7 +138,7 @@ func (s *ServicesRenderer) renderNormal(snap *model.Snapshot) string {
 	box := widget.NewBox(s.width).
 		SetTitle("Services").
 		SetTitleColor(s.theme.Header).
-				AddLines(prefixLines(lines, "  "))
+		AddLines(prefixLines(lines, "  "))
 
 	return box.Render()
 }
@@ -198,7 +198,7 @@ func (s *ServicesRenderer) renderWide(snap *model.Snapshot) string {
 	box := widget.NewBox(s.width).
 		SetTitle("Services").
 		SetTitleColor(s.theme.Header).
-				AddLines(prefixLines(lines, "  "))
+		AddLines(prefixLines(lines, "  "))
 
 	return box.Render()
 }
@@ -230,22 +230,38 @@ func (s *ServicesRenderer) stateShort(state process.State) string {
 	return s.status.ProcessStateShort(state)
 }
 
-// formatPorts formats listener ports.
+// formatPorts formats listener ports with colors based on status.
+// Colors: Green (OK), Yellow (Warning), Red (Error).
 func (s *ServicesRenderer) formatPorts(listeners []model.ListenerSnapshot) string {
 	if len(listeners) == 0 {
 		return "-"
 	}
 
-	ports := make([]string, 0, len(listeners))
-	for _, l := range listeners {
-		ports = append(ports, fmt.Sprintf(":%d", l.Port))
+	var sb strings.Builder
+	for i, l := range listeners {
+		if i > 0 {
+			sb.WriteString(" ")
+		}
+
+		// Choose color based on status.
+		var color string
+		switch l.Status {
+		case model.PortStatusOK:
+			color = s.theme.Success // Green.
+		case model.PortStatusWarning:
+			color = s.theme.Warning // Yellow.
+		case model.PortStatusError:
+			color = s.theme.Error // Red.
+		default:
+			color = s.theme.Muted
+		}
+
+		sb.WriteString(color)
+		sb.WriteString(fmt.Sprintf(":%d", l.Port))
+		sb.WriteString(ansi.Reset)
 	}
 
-	result := strings.Join(ports, " ")
-	if len(result) > 12 {
-		return result[:11] + "…"
-	}
-	return result
+	return sb.String()
 }
 
 // prefixLines adds a prefix to each line.
@@ -257,55 +273,107 @@ func prefixLines(lines []string, prefix string) []string {
 	return result
 }
 
-// RenderNamesOnly renders service names in columns (for raw mode startup banner).
-// No dynamic data (state, PID, metrics) - just service names.
-// Column width is dynamically calculated based on the longest service name.
+// RenderNamesOnly renders service names with ports in columns (for raw mode startup banner).
+// Shows service name followed by colored ports (based on listener status).
+// Column width is dynamically calculated based on content.
 func (s *ServicesRenderer) RenderNamesOnly(snap *model.Snapshot) string {
 	if len(snap.Services) == 0 {
 		box := widget.NewBox(s.width).
 			SetTitle("Services (0 configured)").
 			SetTitleColor(s.theme.Header).
-						AddLine("  " + s.theme.Muted + "No services configured" + ansi.Reset)
+			AddLine("  " + s.theme.Muted + "No services configured" + ansi.Reset)
 		return box.Render()
 	}
 
-	// Find longest service name.
-	maxLen := 0
+	// Build service entries with name and ports.
+	type serviceEntry struct {
+		display    string // Full display string with ANSI codes.
+		visibleLen int    // Length without ANSI codes.
+	}
+	entries := make([]serviceEntry, 0, len(snap.Services))
+
 	for _, svc := range snap.Services {
-		if len(svc.Name) > maxLen {
-			maxLen = len(svc.Name)
+		var sb strings.Builder
+		sb.WriteString(svc.Name)
+
+		// Add colored ports if available.
+		if len(svc.Listeners) > 0 {
+			sb.WriteString(" ")
+			for i, l := range svc.Listeners {
+				if i > 0 {
+					sb.WriteString(",")
+				}
+				// Choose color based on status.
+				var color string
+				switch l.Status {
+				case model.PortStatusOK:
+					color = s.theme.Success // Green.
+				case model.PortStatusWarning:
+					color = s.theme.Warning // Yellow.
+				case model.PortStatusError:
+					color = s.theme.Error // Red.
+				default:
+					color = s.theme.Muted
+				}
+				sb.WriteString(color)
+				sb.WriteString(fmt.Sprintf(":%d", l.Port))
+				sb.WriteString(ansi.Reset)
+			}
+		}
+
+		display := sb.String()
+		// Calculate visible length (name + ports, no ANSI).
+		visibleLen := len(svc.Name)
+		if len(svc.Listeners) > 0 {
+			visibleLen++ // space
+			for i, l := range svc.Listeners {
+				if i > 0 {
+					visibleLen++ // comma
+				}
+				visibleLen += 1 + len(fmt.Sprintf("%d", l.Port)) // :PORT
+			}
+		}
+
+		entries = append(entries, serviceEntry{display: display, visibleLen: visibleLen})
+	}
+
+	// Find longest entry for column width.
+	maxLen := 0
+	for _, e := range entries {
+		if e.visibleLen > maxLen {
+			maxLen = e.visibleLen
 		}
 	}
 
-	// Column width = longest name + 2 chars padding (minimum 8).
+	// Column width = longest entry + 2 chars padding (minimum 10).
 	colWidth := maxLen + 2
-	if colWidth < 8 {
-		colWidth = 8
+	if colWidth < 10 {
+		colWidth = 10
 	}
 
 	// Calculate number of columns that fit.
-	usableWidth := s.width - 6 // Box borders + left padding
+	usableWidth := s.width - 6 // Box borders + left padding.
 	cols := usableWidth / colWidth
 	if cols < 1 {
 		cols = 1
 	}
 
 	// Build rows.
-	rows := (len(snap.Services) + cols - 1) / cols
+	rows := (len(entries) + cols - 1) / cols
 	lines := make([]string, rows)
 
 	for row := 0; row < rows; row++ {
 		var rowParts []string
 		for col := 0; col < cols; col++ {
 			idx := row*cols + col
-			if idx < len(snap.Services) {
-				name := snap.Services[idx].Name
-				// Truncate if somehow still too long.
-				if len(name) > colWidth-1 {
-					name = name[:colWidth-2] + "…"
+			if idx < len(entries) {
+				e := entries[idx]
+				// Pad to column width using visible length.
+				padding := colWidth - e.visibleLen
+				if padding < 0 {
+					padding = 0
 				}
-				// Pad to column width.
-				rowParts = append(rowParts, widget.Pad(name, colWidth, widget.AlignLeft))
+				rowParts = append(rowParts, e.display+strings.Repeat(" ", padding))
 			}
 		}
 		lines[row] = "  " + strings.Join(rowParts, "")
@@ -315,7 +383,7 @@ func (s *ServicesRenderer) RenderNamesOnly(snap *model.Snapshot) string {
 	box := widget.NewBox(s.width).
 		SetTitle(title).
 		SetTitleColor(s.theme.Header).
-				AddLines(lines)
+		AddLines(lines)
 
 	return box.Render()
 }

@@ -108,6 +108,7 @@ type ListenerDTO struct {
 	Port     int      `yaml:"port"`
 	Protocol string   `yaml:"protocol,omitempty"`
 	Address  string   `yaml:"address,omitempty"`
+	Exposed  bool     `yaml:"exposed,omitempty"`
 	Probe    ProbeDTO `yaml:"probe,omitempty"`
 }
 
@@ -300,6 +301,7 @@ func (l *ListenerDTO) ToDomain() config.ListenerConfig {
 		Port:     l.Port,
 		Protocol: protocol,
 		Address:  l.Address,
+		Exposed:  l.Exposed,
 	}
 
 	// Add probe if configured.

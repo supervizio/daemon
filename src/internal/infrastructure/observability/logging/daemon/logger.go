@@ -96,6 +96,17 @@ func (l *MultiLogger) Error(service, eventType, message string, meta map[string]
 	l.Log(event)
 }
 
+// AddWriter adds a writer to the logger at runtime.
+// This is useful for adding TUI writers after initial setup.
+//
+// Params:
+//   - w: the writer to add.
+func (l *MultiLogger) AddWriter(w logging.Writer) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.writers = append(l.writers, w)
+}
+
 // Close closes all writers.
 //
 // Returns:

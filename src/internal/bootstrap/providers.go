@@ -9,6 +9,7 @@ import (
 
 	appconfig "github.com/kodflow/daemon/internal/application/config"
 	apphealth "github.com/kodflow/daemon/internal/application/health"
+	appmetrics "github.com/kodflow/daemon/internal/application/metrics"
 	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
 	domainconfig "github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/domain/lifecycle"
@@ -34,6 +35,7 @@ type supervisorConfigurer interface {
 	Stop() error
 	Reload() error
 	SetProberFactory(factory apphealth.Creator)
+	SetMetricsTracker(tracker appmetrics.ProcessTracker)
 	SetEventHandler(handler appsupervisor.EventHandler)
 }
 
@@ -96,26 +98,43 @@ func ProvideProberFactory() *infrahealthcheck.Factory {
 	return infrahealthcheck.NewFactory(defaultProbeTimeout)
 }
 
-// NewAppWithHealth creates the App struct with health monitoring wired.
-// This provider connects the health prober factory to the supervisor,
+// ProvideMetricsTracker creates a metrics tracker with a platform-specific collector.
+//
+// Params:
+//   - collector: the process metrics collector.
+//
+// Returns:
+//   - *appmetrics.Tracker: the metrics tracker instance.
+func ProvideMetricsTracker(collector appmetrics.Collector) *appmetrics.Tracker {
+	// Return tracker with default collection interval.
+	return appmetrics.NewTracker(collector)
+}
+
+// NewAppWithHealth creates the App struct with health monitoring and metrics wired.
+// This provider connects the health prober factory and metrics tracker to the supervisor,
 // enabling health-probe-triggered restarts following the Kubernetes
-// liveness probe pattern.
+// liveness probe pattern and process CPU/memory tracking.
 //
 // Params:
 //   - sup: the configured supervisor instance (minimal interface).
 //   - factory: the health prober factory.
+//   - tracker: the metrics tracker for CPU/memory monitoring.
 //   - cfg: the domain configuration for daemon logging.
 //
 // Returns:
-//   - *App: the application container with health monitoring enabled.
-func NewAppWithHealth(sup supervisorConfigurer, factory apphealth.Creator, cfg *domainconfig.Config) *App {
+//   - *App: the application container with health monitoring and metrics enabled.
+func NewAppWithHealth(sup supervisorConfigurer, factory apphealth.Creator, tracker *appmetrics.Tracker, cfg *domainconfig.Config) *App {
 	// Wire the prober factory to enable health monitoring.
 	sup.SetProberFactory(factory)
 
-	// Return the App with supervisor, config, and optional cleanup.
+	// Wire the metrics tracker to enable CPU/memory monitoring.
+	sup.SetMetricsTracker(tracker)
+
+	// Return the App with supervisor, config, tracker, and cleanup function.
 	return &App{
-		Supervisor: sup,
-		Config:     cfg,
-		Cleanup:    nil, // No cleanup needed currently; add if resources require it.
+		Supervisor:     sup,
+		Config:         cfg,
+		MetricsTracker: tracker,
+		Cleanup:        nil, // Cleanup added via MetricsTracker.Stop() in app.go
 	}
 }

@@ -665,9 +665,11 @@ func Test_handleEvent_calls_event_handler(t *testing.T) {
 			// Track handler calls.
 			var calledService string
 			var calledEvent *domain.Event
-			handler := func(serviceName string, event *domain.Event) {
+			var calledStats *ServiceStats
+			handler := func(serviceName string, event *domain.Event, stats *ServiceStats) {
 				calledService = serviceName
 				calledEvent = event
+				calledStats = stats
 			}
 
 			// Set the handler.
@@ -682,6 +684,7 @@ func Test_handleEvent_calls_event_handler(t *testing.T) {
 			assert.NotNil(t, calledEvent)
 			assert.Equal(t, domain.EventStarted, calledEvent.Type)
 			assert.Equal(t, 123, calledEvent.PID)
+			assert.NotNil(t, calledStats)
 		})
 	}
 }
@@ -2222,7 +2225,7 @@ func Test_Supervisor_addSingleListenerWithProbe(t *testing.T) {
 			}
 
 			// Call addSingleListenerWithProbe - should not panic.
-			sup.addSingleListenerWithProbe(mockMonitor, tt.listener, "testservice")
+			sup.addSingleListenerWithProbe(mockMonitor, tt.listener)
 
 			// Verify listener was added.
 			assert.Equal(t, 1, mockMonitor.addedCount)
