@@ -653,14 +653,21 @@ jobs:
         working-directory: e2e
         run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
 
-      - name: Sync and install via script
+      - name: Sync folders
         working-directory: e2e
         run: |
+          echo "=== Getting VM SSH config ==="
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+          echo "VM IP: $VM_IP"
+
           echo "=== Waiting for VM to be SSH-ready ==="
           for i in $(seq 1 36); do
-            if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
-              echo "=== VM is SSH-accessible ==="
-              break
+            if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+                echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
+                break
+              fi
             fi
             if [ "$i" = "36" ]; then
               echo "ERROR: VM not SSH-accessible after 180 seconds"
@@ -669,12 +676,20 @@ jobs:
             sleep 5
           done
 
-          echo "=== Syncing files to VM ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local && sudo chmod 777 /setup /bin-local"
-          tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
-          tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+          echo "=== Attempting vagrant rsync ==="
+          if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
+            echo "=== Rsync succeeded ==="
+          else
+            echo "=== Rsync failed, using tar-over-ssh fallback ==="
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local && sudo chmod 777 /setup /bin-local"
+            tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
+            tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+          fi
 
+      - name: Install and test
+        working-directory: e2e
+        run: |
           echo "=== Copying binary to /usr/local/bin ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /usr/local/bin && sudo cp /bin-local/supervizio /usr/local/bin/ && sudo chmod +x /usr/local/bin/supervizio"
 
