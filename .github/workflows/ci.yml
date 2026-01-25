@@ -538,13 +538,13 @@ jobs:
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /vagrant && sudo chmod 777 /setup /vagrant"
             tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
             tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup"
           fi
 
           echo "=== Syncing packages to /package ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /package && sudo chmod 755 /package"
           tar -cv -C "$GITHUB_WORKSPACE" package | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /"
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /package && ls -la /package/"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /package && ls -la /package/"
 
       - name: Install package in VM
         working-directory: e2e
@@ -655,7 +655,7 @@ jobs:
             tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
             tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
             tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:root /setup /bin-local"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup /bin-local"
           fi
 
       - name: Run VM tests (full with install.sh)
@@ -768,7 +768,7 @@ jobs:
             tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
             tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
             tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root:wheel /setup /bin-local"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup /bin-local"
           fi
 
       - name: Run VM tests (full with install.sh)
