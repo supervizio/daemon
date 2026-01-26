@@ -110,8 +110,12 @@ func (s *ServicesRenderer) renderCompact(snap *model.Snapshot) string {
 
 // renderNormal renders a standard service table.
 func (s *ServicesRenderer) renderNormal(snap *model.Snapshot) string {
-	// Build table.
-	table := widget.NewTable(s.width-4).
+	// Build table (clamp width to prevent negative on tiny terminals).
+	tableWidth := s.width - 4
+	if tableWidth < 10 {
+		tableWidth = 10
+	}
+	table := widget.NewTable(tableWidth).
 		AddColumn("", 2, widget.AlignLeft).         // Icon
 		AddFlexColumn("NAME", 8, widget.AlignLeft). // Name
 		AddColumn("STATE", 8, widget.AlignLeft).    // State
@@ -158,8 +162,12 @@ func (s *ServicesRenderer) renderNormal(snap *model.Snapshot) string {
 
 // renderWide renders an expanded service table.
 func (s *ServicesRenderer) renderWide(snap *model.Snapshot) string {
-	// Build table with more columns.
-	table := widget.NewTable(s.width-4).
+	// Build table with more columns (clamp width to prevent negative).
+	tableWidth := s.width - 4
+	if tableWidth < 10 {
+		tableWidth = 10
+	}
+	table := widget.NewTable(tableWidth).
 		AddColumn("", 2, widget.AlignLeft).          // Icon
 		AddFlexColumn("NAME", 10, widget.AlignLeft). // Name
 		AddColumn("STATE", 8, widget.AlignLeft).     // State

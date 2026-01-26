@@ -40,13 +40,23 @@ func NewLayout(size terminal.Size) *Layout {
 }
 
 // ContentWidth returns the usable content width.
+// Returns at least 1 to prevent negative widths on tiny terminals.
 func (l *Layout) ContentWidth() int {
-	return l.Size.Cols - (l.Padding * 2)
+	w := l.Size.Cols - (l.Padding * 2)
+	if w < 1 {
+		return 1
+	}
+	return w
 }
 
 // ContentHeight returns the usable content height.
+// Returns at least 1 to prevent negative heights on tiny terminals.
 func (l *Layout) ContentHeight() int {
-	return l.Size.Rows - (l.Padding * 2)
+	h := l.Size.Rows - (l.Padding * 2)
+	if h < 1 {
+		return 1
+	}
+	return h
 }
 
 // Columns returns the number of content columns.
@@ -55,6 +65,7 @@ func (l *Layout) Columns() int {
 }
 
 // ColumnWidth returns the width of each column.
+// Returns at least 1 to prevent zero/negative widths.
 func (l *Layout) ColumnWidth() int {
 	cols := l.Columns()
 	if cols <= 1 {
@@ -62,7 +73,11 @@ func (l *Layout) ColumnWidth() int {
 	}
 
 	totalGap := (cols - 1) * l.Gap
-	return (l.ContentWidth() - totalGap) / cols
+	w := (l.ContentWidth() - totalGap) / cols
+	if w < 1 {
+		return 1
+	}
+	return w
 }
 
 // ColumnRegion returns the region for a specific column (0-indexed).

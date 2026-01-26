@@ -25,6 +25,8 @@ type BufferedWriter struct {
 	buffer []logging.LogEvent
 	// flushed indicates whether Flush has been called.
 	flushed bool
+	// closed indicates whether Close has been called (prevents write after close).
+	closed bool
 	// dropped counts events dropped due to buffer overflow.
 	dropped int
 }
@@ -45,6 +47,7 @@ func NewBufferedWriter(inner logging.Writer) *BufferedWriter {
 
 // Write buffers or writes an event depending on whether Flush has been called.
 // If buffer is full (maxBufferSize reached), events are dropped to prevent OOM.
+// Returns nil silently if writer is closed (no error, events discarded).
 //
 // Params:
 //   - event: the log event to write.
@@ -54,6 +57,11 @@ func NewBufferedWriter(inner logging.Writer) *BufferedWriter {
 func (w *BufferedWriter) Write(event logging.LogEvent) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
+	// Closed writer discards events (no error to avoid cascading failures).
+	if w.closed {
+		return nil
+	}
 
 	if w.flushed {
 		// After flush, write directly to inner writer.
@@ -100,10 +108,19 @@ func (w *BufferedWriter) Flush() error {
 }
 
 // Close flushes any remaining buffered events and closes the inner writer.
+// Thread-safe: sets closed flag under lock to prevent write-after-close races.
 //
 // Returns:
 //   - error: error from flushing or closing, or nil.
 func (w *BufferedWriter) Close() error {
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		return nil
+	}
+	w.closed = true
+	w.mu.Unlock()
+
 	flushErr := w.Flush()
 	closeErr := w.inner.Close()
 	if flushErr != nil {
