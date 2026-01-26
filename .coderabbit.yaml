@@ -5,14 +5,11 @@
 # Hexagonal architecture (DDD) | Go 1.25+ | Multi-platform (Linux/BSD/macOS)
 # =============================================================================
 
-language: en-US
+language: fr-FR
 
 tone_instructions: >
-  Professional, technical, rigorous. Priority: correctness, concurrency safety,
-  resource management, cross-platform compatibility. This is a PID1 process
-  supervisor - bugs here crash entire containers. Focus on: signal handling,
-  process lifecycle, goroutine/channel safety, file descriptor leaks,
-  graceful shutdown. Mark blocking issues clearly. No fluff.
+  Technical, rigorous. PID1 supervisor - bugs crash containers.
+  Focus: signals, lifecycle, goroutines, FD leaks, shutdown. No fluff.
 
 early_access: false
 enable_free_tier: true
@@ -402,45 +399,34 @@ reviews:
     issue_assessment:
       mode: warning
     custom_checks:
-      - name: "Process Supervisor: Signal & Lifecycle Safety"
+      - name: "Signal & Lifecycle Safety"
         instructions: >
-          ERROR if: Signal handlers missing for SIGTERM/SIGINT/SIGCHLD,
-          child processes not cleaned up on shutdown, zombie processes possible,
-          goroutine leaks on shutdown path.
+          ERROR if: Signal handlers missing, child processes not cleaned up,
+          zombie processes possible, goroutine leaks on shutdown.
         mode: error
 
-      - name: "Go: Context & Error Handling"
+      - name: "Context & Error Handling"
         instructions: >
-          ERROR if: Errors silently ignored (no log, no return), panic used for
-          normal control flow, context.Context missing on I/O operations,
-          timeouts/deadlines not set on blocking calls.
+          ERROR if: Errors ignored, panic for control flow, context missing
+          on I/O, no timeouts on blocking calls.
         mode: error
 
-      - name: "Concurrency: Data Races & Leaks"
+      - name: "Concurrency Safety"
         instructions: >
-          ERROR if: Shared state accessed without synchronization, channels
-          never closed (goroutine leak), mutex held across blocking calls,
-          select without default on non-blocking path.
+          ERROR if: Data races, channels never closed, mutex held across
+          blocking calls.
         mode: error
 
-      - name: "Security: Secrets & Injection"
+      - name: "Security"
         instructions: >
-          ERROR if: Secrets/tokens hardcoded or logged, command injection
-          possible (unsanitized exec args), path traversal in file operations,
-          TLS verification disabled without justification.
+          ERROR if: Secrets hardcoded/logged, command injection, path traversal,
+          TLS verification disabled.
         mode: error
 
-      - name: "Testing: Coverage & Race Detection"
+      - name: "Testing & Platform"
         instructions: >
-          WARNING if: New code without tests, concurrent code without -race tests,
-          bugfix without regression test, flaky tests with time.Sleep.
-        mode: warning
-
-      - name: "Platform: Cross-Platform Compatibility"
-        instructions: >
-          WARNING if: Linux-specific code without build tags, hardcoded paths
-          (/proc, /sys) without platform check, GNU-specific shell commands
-          in portable scripts.
+          WARNING if: New code without tests, no -race tests, Linux-specific
+          code without build tags, hardcoded /proc paths.
         mode: warning
 
   # ---------------------------------------------------------------------------
@@ -483,7 +469,7 @@ reviews:
     # GitHub integration
     github-checks:
       enabled: true
-      timeout_ms: 300000  # 5 min for E2E tests
+      timeout_ms: 300000 # 5 min for E2E tests
 
     # Disabled (not applicable to Go project)
     biome:
