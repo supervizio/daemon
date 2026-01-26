@@ -4,6 +4,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
@@ -260,8 +261,11 @@ func (r *RawRenderer) buildSystemContentLines(snap *model.Snapshot, width int) [
 		SetLabel("Disk").
 		SetColorByPercent()
 
+	// Build load average string without fmt.Sprintf.
+	loadAvgStr := "  Load: " + strconv.FormatFloat(sys.LoadAvg1, 'f', 2, 64) + " " + strconv.FormatFloat(sys.LoadAvg5, 'f', 2, 64)
+
 	lines := []string{
-		"  " + cpuBar.Render() + "  Load: " + fmt.Sprintf("%.2f %.2f", sys.LoadAvg1, sys.LoadAvg5),
+		"  " + cpuBar.Render() + loadAvgStr,
 		"  " + ramBar.Render() + "  " + widget.FormatBytes(sys.MemoryUsed) + " / " + widget.FormatBytes(sys.MemoryTotal),
 		"  " + swapBar.Render() + "  " + widget.FormatBytes(sys.SwapUsed) + " / " + widget.FormatBytes(sys.SwapTotal),
 		"  " + diskBar.Render() + "  " + widget.FormatBytes(sys.DiskUsed) + " / " + widget.FormatBytes(sys.DiskTotal),
@@ -269,15 +273,16 @@ func (r *RawRenderer) buildSystemContentLines(snap *model.Snapshot, width int) [
 
 	// Limits if present.
 	if limits.HasLimits {
-		var limitParts []string
+		// Pre-allocate for max 3 limit parts.
+		limitParts := make([]string, 0, 3)
 		if limits.CPUSet != "" {
-			limitParts = append(limitParts, fmt.Sprintf("CPUSet: %s", limits.CPUSet))
+			limitParts = append(limitParts, "CPUSet: "+limits.CPUSet)
 		}
 		if limits.CPUQuota > 0 {
-			limitParts = append(limitParts, fmt.Sprintf("CPU: %.1f cores", limits.CPUQuota))
+			limitParts = append(limitParts, "CPU: "+strconv.FormatFloat(limits.CPUQuota, 'f', 1, 64)+" cores")
 		}
 		if limits.MemoryMax > 0 {
-			limitParts = append(limitParts, fmt.Sprintf("MEM: %s", widget.FormatBytes(limits.MemoryMax)))
+			limitParts = append(limitParts, "MEM: "+widget.FormatBytes(limits.MemoryMax))
 		}
 		if len(limitParts) > 0 {
 			lines = append(lines, "  "+r.theme.Muted+"Limits: "+strings.Join(limitParts, " │ ")+ansi.Reset)
@@ -288,34 +293,53 @@ func (r *RawRenderer) buildSystemContentLines(snap *model.Snapshot, width int) [
 }
 
 // buildSandboxContentLines builds the content lines for sandboxes section.
+// Pre-allocates slice capacity for efficiency.
 func (r *RawRenderer) buildSandboxContentLines(snap *model.Snapshot, width int) []string {
 	status := widget.NewStatusIndicator()
-	var lines []string
+	// Pre-allocate for all sandboxes.
+	lines := make([]string, 0, len(snap.Sandboxes))
+
+	maxEndpoint := width - 20
+	detectedIcon := status.Detected(true)
+	notDetectedIcon := status.Detected(false)
 
 	// Show detected sandboxes first.
 	for _, sb := range snap.Sandboxes {
 		if sb.Detected {
-			icon := status.Detected(true)
 			endpoint := sb.Endpoint
-			maxEndpoint := width - 20
 			if len(endpoint) > maxEndpoint && maxEndpoint > 3 {
 				endpoint = endpoint[:maxEndpoint-3] + "..."
 			}
-			line := fmt.Sprintf("  %s %-12s %s", icon, sb.Name, endpoint)
-			lines = append(lines, line)
+			lines = append(lines, r.formatSandboxLine(detectedIcon, sb.Name, endpoint))
 		}
 	}
 
 	// Then show not detected ones.
+	notDetectedText := r.theme.Muted + "not detected" + ansi.Reset
 	for _, sb := range snap.Sandboxes {
 		if !sb.Detected {
-			icon := status.Detected(false)
-			line := fmt.Sprintf("  %s %-12s %s", icon, sb.Name, r.theme.Muted+"not detected"+ansi.Reset)
-			lines = append(lines, line)
+			lines = append(lines, r.formatSandboxLine(notDetectedIcon, sb.Name, notDetectedText))
 		}
 	}
 
 	return lines
+}
+
+// formatSandboxLine formats a sandbox line with strings.Builder.
+func (r *RawRenderer) formatSandboxLine(icon, name, endpoint string) string {
+	var sb strings.Builder
+	sb.Grow(32 + len(endpoint))
+	sb.WriteString("  ")
+	sb.WriteString(icon)
+	sb.WriteByte(' ')
+	sb.WriteString(name)
+	// Pad name to 12 chars.
+	for i := len(name); i < 12; i++ {
+		sb.WriteByte(' ')
+	}
+	sb.WriteByte(' ')
+	sb.WriteString(endpoint)
+	return sb.String()
 }
 
 // renderSandboxes renders the sandboxes section.
@@ -325,32 +349,8 @@ func (r *RawRenderer) renderSandboxes(snap *model.Snapshot) string {
 
 // renderSandboxesWithWidth renders sandboxes with a specific width.
 func (r *RawRenderer) renderSandboxesWithWidth(snap *model.Snapshot, width int) string {
-	status := widget.NewStatusIndicator()
-
-	var lines []string
-
-	// Show detected sandboxes first.
-	for _, sb := range snap.Sandboxes {
-		if sb.Detected {
-			icon := status.Detected(true)
-			endpoint := sb.Endpoint
-			maxEndpoint := width - 20
-			if len(endpoint) > maxEndpoint && maxEndpoint > 3 {
-				endpoint = endpoint[:maxEndpoint-3] + "..."
-			}
-			line := fmt.Sprintf("  %s %-12s %s", icon, sb.Name, endpoint)
-			lines = append(lines, line)
-		}
-	}
-
-	// Then show not detected ones.
-	for _, sb := range snap.Sandboxes {
-		if !sb.Detected {
-			icon := status.Detected(false)
-			line := fmt.Sprintf("  %s %-12s %s", icon, sb.Name, r.theme.Muted+"not detected"+ansi.Reset)
-			lines = append(lines, line)
-		}
-	}
+	// Reuse buildSandboxContentLines for consistency and efficiency.
+	lines := r.buildSandboxContentLines(snap, width)
 
 	box := widget.NewBox(width).
 		SetTitle("Sandboxes").
