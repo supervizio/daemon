@@ -2,7 +2,9 @@ package daemon
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/domain/logging"
@@ -65,21 +67,50 @@ func buildWriter(wcfg config.WriterConfig, baseDir string) (logging.Writer, erro
 
 	case writerTypeFile:
 		path := wcfg.File.Path
-		if !filepath.IsAbs(path) && baseDir != "" {
-			path = filepath.Join(baseDir, path)
+		if path == "" {
+			return nil, fmt.Errorf("file writer requires File.Path configuration")
 		}
-		return NewFileWriter(path, wcfg.File.Rotation)
+		resolvedPath, err := resolvePath(path, baseDir)
+		if err != nil {
+			return nil, fmt.Errorf("file writer: %w", err)
+		}
+		return NewFileWriter(resolvedPath, wcfg.File.Rotation)
 
 	case writerTypeJSON:
 		path := wcfg.JSON.Path
-		if !filepath.IsAbs(path) && baseDir != "" {
-			path = filepath.Join(baseDir, path)
+		if path == "" {
+			return nil, fmt.Errorf("json writer requires JSON.Path configuration")
 		}
-		return NewJSONWriter(path, wcfg.JSON.Rotation)
+		resolvedPath, err := resolvePath(path, baseDir)
+		if err != nil {
+			return nil, fmt.Errorf("json writer: %w", err)
+		}
+		return NewJSONWriter(resolvedPath, wcfg.JSON.Rotation)
 
 	default:
 		return nil, fmt.Errorf("unknown writer type: %s", wcfg.Type)
 	}
+}
+
+// resolvePath resolves a path relative to baseDir and validates it doesn't escape.
+func resolvePath(path, baseDir string) (string, error) {
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+	if baseDir == "" {
+		return path, nil
+	}
+
+	// Resolve the path and ensure it doesn't escape the base directory.
+	resolvedPath := filepath.Clean(filepath.Join(baseDir, path))
+	cleanBase := filepath.Clean(baseDir)
+
+	// Check that resolved path is within base directory.
+	if !strings.HasPrefix(resolvedPath, cleanBase+string(os.PathSeparator)) && resolvedPath != cleanBase {
+		return "", fmt.Errorf("path %q escapes base directory %q", path, baseDir)
+	}
+
+	return resolvedPath, nil
 }
 
 // BuildLoggerWithoutConsole creates a MultiLogger from configuration

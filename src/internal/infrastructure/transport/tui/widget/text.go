@@ -112,7 +112,10 @@ func FormatBytes(bytes uint64) string {
 		exp++
 	}
 
-	units := []string{"KB", "MB", "GB", "TB", "PB"}
+	units := []string{"KB", "MB", "GB", "TB", "PB", "EB", "ZB"}
+	if exp >= len(units) {
+		exp = len(units) - 1
+	}
 	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), units[exp])
 }
 
@@ -129,7 +132,10 @@ func FormatBytesShort(bytes uint64) string {
 		exp++
 	}
 
-	units := []string{"K", "M", "G", "T", "P"}
+	units := []string{"K", "M", "G", "T", "P", "E", "Z"}
+	if exp >= len(units) {
+		exp = len(units) - 1
+	}
 	value := float64(bytes) / float64(div)
 
 	if value >= 100 {

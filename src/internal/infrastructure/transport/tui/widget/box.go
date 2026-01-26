@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
+	"github.com/mattn/go-runewidth"
 )
 
 // BoxStyle defines the border characters for a box.
@@ -173,8 +174,10 @@ func (b *Box) Render() string {
 }
 
 // VisibleLen returns the visible length of a string (excluding ANSI codes).
+// Uses runewidth to correctly handle CJK characters and emoji which occupy
+// 2 terminal columns.
 func VisibleLen(s string) int {
-	// Simple approach: remove all escape sequences.
+	// Remove escape sequences and count terminal column width.
 	inEscape := false
 	length := 0
 
@@ -189,7 +192,7 @@ func VisibleLen(s string) int {
 			}
 			continue
 		}
-		length++
+		length += runewidth.RuneWidth(r)
 	}
 
 	return length
