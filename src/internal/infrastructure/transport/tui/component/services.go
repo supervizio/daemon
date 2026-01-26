@@ -99,8 +99,8 @@ func (s *ServicesPanel) updateContent() {
 
 		// Name (truncate if needed, pad to 12).
 		name := svc.Name
-		if len(name) > 12 {
-			name = name[:9] + "..."
+		if len([]rune(name)) > 12 {
+			name = widget.TruncateRunes(name, 12, "...")
 		}
 
 		// State text (pad to 9).

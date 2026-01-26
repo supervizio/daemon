@@ -83,6 +83,10 @@ func (l *LogsPanel) SetEntries(entries []model.LogEntry) {
 // AddEntry adds a new log entry and scrolls to bottom.
 func (l *LogsPanel) AddEntry(entry model.LogEntry) {
 	l.entries = append(l.entries, entry)
+	// Enforce buffer size limit to prevent unbounded memory growth.
+	if len(l.entries) > l.maxSize {
+		l.entries = l.entries[len(l.entries)-l.maxSize:]
+	}
 	l.updateContent()
 	l.viewport.GotoBottom()
 }
@@ -117,8 +121,8 @@ func (l *LogsPanel) updateContent() {
 		if service == "" {
 			service = "daemon"
 		}
-		if len(service) > 12 {
-			service = service[:11] + "…"
+		if len([]rune(service)) > 12 {
+			service = widget.TruncateRunes(service, 12, "…")
 		}
 
 		// Message with metadata.
@@ -129,8 +133,8 @@ func (l *LogsPanel) updateContent() {
 		if len(entry.Metadata) > 0 {
 			msg += " " + l.formatMetadata(entry.Metadata)
 		}
-		if len(msg) > msgWidth {
-			msg = msg[:msgWidth-1] + "…"
+		if len([]rune(msg)) > msgWidth {
+			msg = widget.TruncateRunes(msg, msgWidth, "…")
 		}
 
 		// Build line with proper padding (pad BEFORE adding colors).

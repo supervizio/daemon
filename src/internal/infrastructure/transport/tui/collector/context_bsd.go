@@ -4,26 +4,28 @@ package collector
 
 import (
 	"net"
-	"syscall"
+	"os"
+	"strings"
 )
 
 // getKernelVersion returns the kernel version on BSD.
+// Uses /etc/os-release or falls back to a simple version string.
 func getKernelVersion() string {
-	var uname syscall.Utsname
-	if err := syscall.Uname(&uname); err != nil {
-		return "unknown"
-	}
-
-	// Convert [256]int8 to string.
-	release := make([]byte, 0, 256)
-	for _, b := range uname.Release {
-		if b == 0 {
-			break
+	// Try to read from /etc/os-release.
+	if content, err := os.ReadFile("/etc/os-release"); err == nil {
+		for _, line := range strings.Split(string(content), "\n") {
+			if strings.HasPrefix(line, "VERSION_ID=") {
+				ver := strings.TrimPrefix(line, "VERSION_ID=")
+				ver = strings.Trim(ver, "\"")
+				if ver != "" {
+					return ver
+				}
+			}
 		}
-		release = append(release, byte(b))
 	}
 
-	return string(release)
+	// Fallback: just return "BSD".
+	return "BSD"
 }
 
 // getPrimaryIP returns the primary non-loopback IP address.
@@ -31,7 +33,7 @@ func getPrimaryIP() string {
 	// Try to get the IP used for outbound connections.
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err == nil {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
 			return addr.IP.String()
 		}
@@ -40,7 +42,7 @@ func getPrimaryIP() string {
 	// Fallback: iterate interfaces.
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		return "unknown"
+		return unknownValue
 	}
 
 	for _, iface := range interfaces {
@@ -73,5 +75,5 @@ func getPrimaryIP() string {
 		}
 	}
 
-	return "unknown"
+	return unknownValue
 }

@@ -227,6 +227,20 @@ func RepeatString(s string, n int) string {
 	return strings.Repeat(s, n)
 }
 
+// TruncateRunes truncates a string to maxRunes runes, adding suffix if truncated.
+// This is UTF-8 safe, unlike byte-slicing which can corrupt multi-byte characters.
+func TruncateRunes(s string, maxRunes int, suffix string) string {
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	suffixRunes := []rune(suffix)
+	if maxRunes <= len(suffixRunes) {
+		return suffix
+	}
+	return string(runes[:maxRunes-len(suffixRunes)]) + suffix
+}
+
 // PadRight pads a string to the right with spaces (plain text).
 func PadRight(s string, width int) string {
 	if len(s) >= width {

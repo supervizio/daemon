@@ -3,6 +3,7 @@
 package terminal
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -99,7 +100,7 @@ func (l Layout) Columns() int {
 
 // WatchResize creates a channel that receives size updates on terminal resize.
 // The channel is closed when the context is cancelled.
-func WatchResize() <-chan Size {
+func WatchResize(ctx context.Context) <-chan Size {
 	ch := make(chan Size, 1)
 
 	// Send initial size.
@@ -113,11 +114,16 @@ func WatchResize() <-chan Size {
 		defer close(ch)
 		defer signal.Stop(sigCh)
 
-		for range sigCh {
+		for {
 			select {
-			case ch <- GetSize():
-			default:
-				// Channel full, skip this update.
+			case <-ctx.Done():
+				return
+			case <-sigCh:
+				select {
+				case ch <- GetSize():
+				default:
+					// Channel full, skip this update.
+				}
 			}
 		}
 	}()

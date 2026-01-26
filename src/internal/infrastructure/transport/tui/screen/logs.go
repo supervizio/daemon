@@ -77,8 +77,14 @@ func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 		// Truncate message if needed.
 		msgWidth := maxWidth - prefixLen
 		msg := entry.Message
-		if len(msg) > msgWidth {
-			msg = msg[:msgWidth-1] + "…"
+		if msgWidth <= 0 {
+			msg = ""
+		} else if len(msg) > msgWidth {
+			if msgWidth <= 1 {
+				msg = "…"
+			} else {
+				msg = msg[:msgWidth-1] + "…"
+			}
 		}
 
 		line := fmt.Sprintf("  %s%s", prefix, msg)

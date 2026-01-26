@@ -4,26 +4,31 @@ package collector
 
 import (
 	"net"
-	"syscall"
+	"os"
+	"strings"
 )
 
 // getKernelVersion returns the kernel version on macOS.
+// Uses /System/Library/CoreServices/SystemVersion.plist or simple fallback.
 func getKernelVersion() string {
-	var uname syscall.Utsname
-	if err := syscall.Uname(&uname); err != nil {
-		return "unknown"
-	}
-
-	// Convert [256]int8 to string.
-	release := make([]byte, 0, 256)
-	for _, b := range uname.Release {
-		if b == 0 {
-			break
+	// Try to read macOS version from SystemVersion.plist.
+	if content, err := os.ReadFile("/System/Library/CoreServices/SystemVersion.plist"); err == nil {
+		// Simple parsing for ProductVersion.
+		lines := strings.Split(string(content), "\n")
+		for i, line := range lines {
+			if strings.Contains(line, "ProductVersion") && i+1 < len(lines) {
+				ver := strings.TrimSpace(lines[i+1])
+				ver = strings.TrimPrefix(ver, "<string>")
+				ver = strings.TrimSuffix(ver, "</string>")
+				if ver != "" {
+					return ver
+				}
+			}
 		}
-		release = append(release, byte(b))
 	}
 
-	return string(release)
+	// Fallback: just return "macOS".
+	return "macOS"
 }
 
 // getPrimaryIP returns the primary non-loopback IP address.
@@ -31,7 +36,7 @@ func getPrimaryIP() string {
 	// Try to get the IP used for outbound connections.
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err == nil {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
 			return addr.IP.String()
 		}
@@ -40,7 +45,7 @@ func getPrimaryIP() string {
 	// Fallback: iterate interfaces.
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		return "unknown"
+		return unknownValue
 	}
 
 	for _, iface := range interfaces {
@@ -73,5 +78,5 @@ func getPrimaryIP() string {
 		}
 	}
 
-	return "unknown"
+	return unknownValue
 }

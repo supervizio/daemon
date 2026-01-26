@@ -1,3 +1,5 @@
+//go:build linux
+
 // Package collector provides data collection for the TUI.
 package collector
 

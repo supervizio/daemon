@@ -291,24 +291,23 @@ func (a *LogAdapter) LoadLogHistory(path string, maxLines int) error {
 	}
 	defer func() { _ = file.Close() }()
 
-	// Read all lines (simple approach for small files).
-	var lines []string
+	// Read lines using a sliding window to avoid loading entire file into memory.
+	lines := make([]string, 0, maxLines)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
+		if len(lines) > maxLines {
+			// Shift: remove oldest, keep last maxLines.
+			copy(lines, lines[1:])
+			lines = lines[:maxLines]
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		return err
 	}
 
-	// Take only the last maxLines.
-	startIdx := 0
-	if len(lines) > maxLines {
-		startIdx = len(lines) - maxLines
-	}
-
 	// Parse and add entries.
-	for _, line := range lines[startIdx:] {
+	for _, line := range lines {
 		if entry, ok := parseLogLine(line); ok {
 			a.buffer.Add(entry)
 		}
