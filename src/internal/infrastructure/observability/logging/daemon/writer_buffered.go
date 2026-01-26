@@ -84,12 +84,17 @@ func (w *BufferedWriter) Flush() error {
 	return firstErr
 }
 
-// Close closes the inner writer.
+// Close flushes any remaining buffered events and closes the inner writer.
 //
 // Returns:
-//   - error: error from closing the inner writer, or nil.
+//   - error: error from flushing or closing, or nil.
 func (w *BufferedWriter) Close() error {
-	return w.inner.Close()
+	flushErr := w.Flush()
+	closeErr := w.inner.Close()
+	if flushErr != nil {
+		return flushErr
+	}
+	return closeErr
 }
 
 // Ensure BufferedWriter implements logging.Writer.

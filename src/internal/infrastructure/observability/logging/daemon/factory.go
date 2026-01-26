@@ -167,9 +167,11 @@ func BuildLoggerWithBufferedConsole(cfg config.DaemonLogging, baseDir string) (l
 		var err error
 
 		if wcfg.Type == writerTypeConsole {
-			// Wrap console writer in a buffered writer.
-			consoleWriter := NewConsoleWriter()
-			bufferedConsole = NewBufferedWriter(consoleWriter)
+			// Reuse buffered console if already created (handles multiple console entries).
+			if bufferedConsole == nil {
+				consoleWriter := NewConsoleWriter()
+				bufferedConsole = NewBufferedWriter(consoleWriter)
+			}
 			w = bufferedConsole
 		} else {
 			w, err = buildWriter(wcfg, baseDir)

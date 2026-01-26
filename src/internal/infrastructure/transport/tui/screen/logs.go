@@ -60,7 +60,11 @@ func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 
 	// Separator.
 	if len(logs.RecentEntries) > 0 {
-		lines = append(lines, "  "+l.theme.Muted+strings.Repeat("─", l.width-6)+ansi.Reset)
+		sepWidth := l.width - 6
+		if sepWidth < 0 {
+			sepWidth = 0
+		}
+		lines = append(lines, "  "+l.theme.Muted+strings.Repeat("─", sepWidth)+ansi.Reset)
 	}
 
 	// Recent entries.
@@ -74,16 +78,19 @@ func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 		prefix := fmt.Sprintf("%s [%s] %s: ", ts, level, service)
 		prefixLen := len(ts) + 3 + len(entry.Level) + 2 + len(service) + 2
 
-		// Truncate message if needed.
+		// Truncate message if needed (rune-safe for UTF-8).
 		msgWidth := maxWidth - prefixLen
 		msg := entry.Message
 		if msgWidth <= 0 {
 			msg = ""
-		} else if len(msg) > msgWidth {
-			if msgWidth <= 1 {
-				msg = "…"
-			} else {
-				msg = msg[:msgWidth-1] + "…"
+		} else {
+			msgRunes := []rune(msg)
+			if len(msgRunes) > msgWidth {
+				if msgWidth <= 1 {
+					msg = "…"
+				} else {
+					msg = string(msgRunes[:msgWidth-1]) + "…"
+				}
 			}
 		}
 

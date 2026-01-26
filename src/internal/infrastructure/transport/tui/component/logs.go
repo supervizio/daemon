@@ -36,8 +36,16 @@ const DefaultLogBufferSize = 100
 
 // NewLogsPanel creates a new logs panel.
 func NewLogsPanel(width, height int) LogsPanel {
-	// -3 for borders (left border, right border, scrollbar)
-	vp := viewport.New(width-3, height-2)
+	// -3 for borders (left border, right border, scrollbar).
+	vw := width - 3
+	vh := height - 2
+	if vw < 1 {
+		vw = 1
+	}
+	if vh < 1 {
+		vh = 1
+	}
+	vp := viewport.New(vw, vh)
 
 	return LogsPanel{
 		viewport: vp,
@@ -52,6 +60,9 @@ func NewLogsPanel(width, height int) LogsPanel {
 
 // SetMaxSize sets the maximum buffer size for display indicator.
 func (l *LogsPanel) SetMaxSize(maxSize int) {
+	if maxSize <= 0 {
+		maxSize = DefaultLogBufferSize
+	}
 	l.maxSize = maxSize
 }
 
@@ -59,8 +70,18 @@ func (l *LogsPanel) SetMaxSize(maxSize int) {
 func (l *LogsPanel) SetSize(width, height int) {
 	l.width = width
 	l.height = height
-	l.viewport.Width = width - 3   // -3 for left border, right border, scrollbar
-	l.viewport.Height = height - 2 // -2 for top/bottom borders
+
+	// -3 for left border, right border, scrollbar.
+	vw := width - 3
+	vh := height - 2
+	if vw < 1 {
+		vw = 1
+	}
+	if vh < 1 {
+		vh = 1
+	}
+	l.viewport.Width = vw
+	l.viewport.Height = vh
 	l.updateContent()
 }
 
