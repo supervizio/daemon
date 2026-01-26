@@ -182,4 +182,3 @@ func (c *ContextRenderer) formatSandbox(sb model.SandboxInfo, width int) string 
 
 	return icon + " " + name + " " + status
 }
-

@@ -225,4 +225,3 @@ func (t *Table) calculateWidths() []int {
 
 	return widths
 }
-
