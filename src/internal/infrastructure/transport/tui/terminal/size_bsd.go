@@ -1,4 +1,4 @@
-//go:build freebsd || openbsd || netbsd
+//go:build freebsd || openbsd || netbsd || dragonfly
 
 package terminal
 
