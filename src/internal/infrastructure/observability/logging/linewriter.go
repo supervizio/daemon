@@ -18,17 +18,23 @@ const (
 
 // LineWriter writes lines with optional prefix.
 // It buffers input and writes complete lines with the configured prefix.
+// Uses a reusable write buffer to minimize allocations.
 type LineWriter struct {
 	// writer is the underlying writer that receives formatted output.
 	writer io.Writer
 	// prefix is the string prepended to each line.
 	prefix string
+	// prefixBytes is the prefix as bytes (cached to avoid conversion).
+	prefixBytes []byte
 	// buf holds incomplete line data until a newline is received.
 	buf []byte
+	// writeBuf is a reusable buffer for batching prefix + line writes.
+	writeBuf []byte
 }
 
 // NewLineWriter creates a writer that prefixes each line.
 // It wraps an existing writer and adds prefix support with line buffering.
+// Pre-allocates buffers for efficient writes.
 //
 // Params:
 //   - w: the underlying writer to write to.
@@ -37,15 +43,18 @@ type LineWriter struct {
 // Returns:
 //   - *LineWriter: the initialized line writer instance.
 func NewLineWriter(w io.Writer, prefix string) *LineWriter {
-	// Return a new LineWriter initialized with the provided writer and prefix.
+	// Return a new LineWriter with pre-allocated write buffer.
 	return &LineWriter{
-		writer: w,
-		prefix: prefix,
+		writer:      w,
+		prefix:      prefix,
+		prefixBytes: []byte(prefix),
+		writeBuf:    make([]byte, 0, 256), // Pre-allocate for typical line length.
 	}
 }
 
 // Write implements io.Writer with line buffering.
 // It buffers data until complete lines are available, then writes them with prefix.
+// Batches prefix + line into a single write call for efficiency.
 //
 // Params:
 //   - p: the byte slice to write.
@@ -76,18 +85,20 @@ func (lw *LineWriter) Write(p []byte) (n int, err error) {
 		line := lw.buf[:idx+1]
 		lw.buf = lw.buf[idx+1:]
 
-		// Check if a prefix is configured and should be written.
-		if lw.prefix != "" {
-			// Check if prefix write operation failed.
-			if _, err := lw.writer.Write([]byte(lw.prefix)); err != nil {
-				// Return zero bytes written and propagate the prefix write error.
+		// Batch prefix + line into single write to reduce syscalls.
+		if len(lw.prefixBytes) > 0 {
+			// Reuse write buffer to avoid allocations.
+			lw.writeBuf = lw.writeBuf[:0]
+			lw.writeBuf = append(lw.writeBuf, lw.prefixBytes...)
+			lw.writeBuf = append(lw.writeBuf, line...)
+			if _, err := lw.writer.Write(lw.writeBuf); err != nil {
 				return zeroBytes, err
 			}
-		}
-		// Check if line write operation failed.
-		if _, err := lw.writer.Write(line); err != nil {
-			// Return zero bytes written and propagate the line write error.
-			return zeroBytes, err
+		} else {
+			// No prefix, write line directly.
+			if _, err := lw.writer.Write(line); err != nil {
+				return zeroBytes, err
+			}
 		}
 	}
 
@@ -97,28 +108,22 @@ func (lw *LineWriter) Write(p []byte) (n int, err error) {
 
 // Flush writes any remaining buffered data.
 // It ensures all data is written even if no trailing newline was received.
+// Batches prefix + content + newline into a single write call.
 //
 // Returns:
 //   - error: an error if writing to the underlying writer fails.
 func (lw *LineWriter) Flush() error {
 	// Check if there is any buffered data remaining to be flushed.
 	if len(lw.buf) > zeroBytes {
-		// Check if a prefix is configured and should be written.
-		if lw.prefix != "" {
-			// Check if prefix write operation failed.
-			if _, err := lw.writer.Write([]byte(lw.prefix)); err != nil {
-				// Return the prefix write error.
-				return err
-			}
+		// Batch prefix + content + newline into single write.
+		lw.writeBuf = lw.writeBuf[:0]
+		if len(lw.prefixBytes) > 0 {
+			lw.writeBuf = append(lw.writeBuf, lw.prefixBytes...)
 		}
-		// Check if buffer content write operation failed.
-		if _, err := lw.writer.Write(lw.buf); err != nil {
-			// Return the buffer content write error.
-			return err
-		}
-		// Check if trailing newline write operation failed.
-		if _, err := lw.writer.Write([]byte{newlineChar}); err != nil {
-			// Return the newline write error.
+		lw.writeBuf = append(lw.writeBuf, lw.buf...)
+		lw.writeBuf = append(lw.writeBuf, newlineChar)
+
+		if _, err := lw.writer.Write(lw.writeBuf); err != nil {
 			return err
 		}
 		lw.buf = nil

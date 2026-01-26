@@ -235,7 +235,7 @@ func run(cfgPath string, tuiMode tui.Mode) error {
 	}
 
 	// Set up event handler to log service events.
-	app.Supervisor.SetEventHandler(func(serviceName string, event *domainprocess.Event, stats *appsupervisor.ServiceStats) {
+	app.Supervisor.SetEventHandler(func(serviceName string, event *domainprocess.Event, stats *appsupervisor.ServiceStatsSnapshot) {
 		logEvent := convertProcessEventToLogEvent(serviceName, event, stats)
 		logger.Log(logEvent)
 	})
@@ -380,11 +380,11 @@ func WaitForSignals(ctx context.Context, cancel context.CancelFunc, sigCh <-chan
 // Params:
 //   - serviceName: the name of the service.
 //   - event: the process event.
-//   - stats: optional service statistics for enriched logging.
+//   - stats: optional atomic service statistics snapshot for enriched logging.
 //
 // Returns:
 //   - domainlogging.LogEvent: the converted log event.
-func convertProcessEventToLogEvent(serviceName string, event *domainprocess.Event, stats *appsupervisor.ServiceStats) domainlogging.LogEvent {
+func convertProcessEventToLogEvent(serviceName string, event *domainprocess.Event, stats *appsupervisor.ServiceStatsSnapshot) domainlogging.LogEvent {
 	// Determine log level based on event type.
 	var level domainlogging.Level
 	switch event.Type {

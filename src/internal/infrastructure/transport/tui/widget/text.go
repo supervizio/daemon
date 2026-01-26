@@ -63,7 +63,7 @@ func Truncate(text string, maxLen int) string {
 }
 
 // FormatDuration formats duration in human-readable form.
-// Uses strconv instead of fmt.Sprintf for integer formatting.
+// Uses strings.Builder for efficient string concatenation.
 func FormatDuration(d time.Duration) string {
 	if d < 0 {
 		return "-"
@@ -74,20 +74,34 @@ func FormatDuration(d time.Duration) string {
 	minutes := int(d.Minutes()) % 60
 	seconds := int(d.Seconds()) % 60
 
+	var sb strings.Builder
+	sb.Grow(8) // Pre-allocate for typical output like "12d 23h"
+
 	switch {
 	case days > 0:
-		return strconv.Itoa(days) + "d " + strconv.Itoa(hours) + "h"
+		sb.WriteString(strconv.Itoa(days))
+		sb.WriteString("d ")
+		sb.WriteString(strconv.Itoa(hours))
+		sb.WriteByte('h')
 	case hours > 0:
-		return strconv.Itoa(hours) + "h " + strconv.Itoa(minutes) + "m"
+		sb.WriteString(strconv.Itoa(hours))
+		sb.WriteString("h ")
+		sb.WriteString(strconv.Itoa(minutes))
+		sb.WriteByte('m')
 	case minutes > 0:
-		return strconv.Itoa(minutes) + "m " + strconv.Itoa(seconds) + "s"
+		sb.WriteString(strconv.Itoa(minutes))
+		sb.WriteString("m ")
+		sb.WriteString(strconv.Itoa(seconds))
+		sb.WriteByte('s')
 	default:
-		return strconv.Itoa(seconds) + "s"
+		sb.WriteString(strconv.Itoa(seconds))
+		sb.WriteByte('s')
 	}
+	return sb.String()
 }
 
 // FormatDurationShort formats duration in compact form.
-// Uses strconv instead of fmt.Sprintf for integer formatting.
+// Uses strings.Builder for efficient string concatenation.
 func FormatDurationShort(d time.Duration) string {
 	if d < 0 {
 		return "-"
@@ -98,16 +112,28 @@ func FormatDurationShort(d time.Duration) string {
 	minutes := int(d.Minutes()) % 60
 	seconds := int(d.Seconds()) % 60
 
+	var sb strings.Builder
+	sb.Grow(6) // Pre-allocate for typical output like "12d23h"
+
 	switch {
 	case days > 0:
-		return strconv.Itoa(days) + "d" + strconv.Itoa(hours) + "h"
+		sb.WriteString(strconv.Itoa(days))
+		sb.WriteByte('d')
+		sb.WriteString(strconv.Itoa(hours))
+		sb.WriteByte('h')
 	case hours > 0:
-		return strconv.Itoa(hours) + "h" + strconv.Itoa(minutes) + "m"
+		sb.WriteString(strconv.Itoa(hours))
+		sb.WriteByte('h')
+		sb.WriteString(strconv.Itoa(minutes))
+		sb.WriteByte('m')
 	case minutes > 0:
-		return strconv.Itoa(minutes) + "m"
+		sb.WriteString(strconv.Itoa(minutes))
+		sb.WriteByte('m')
 	default:
-		return strconv.Itoa(seconds) + "s"
+		sb.WriteString(strconv.Itoa(seconds))
+		sb.WriteByte('s')
 	}
+	return sb.String()
 }
 
 // FormatBytes formats bytes in human-readable form.

@@ -3,6 +3,7 @@
 package supervisor_test
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,42 +31,49 @@ func TestNewServiceStats(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stats := supervisor.NewServiceStats()
 
-			// Verify all fields are initialized to zero.
+			// Verify all fields are initialized to zero via getter methods.
 			assert.NotNil(t, stats)
-			assert.Equal(t, 0, stats.StartCount)
-			assert.Equal(t, 0, stats.StopCount)
-			assert.Equal(t, 0, stats.FailCount)
-			assert.Equal(t, 0, stats.RestartCount)
+			assert.Equal(t, 0, stats.StartCount())
+			assert.Equal(t, 0, stats.StopCount())
+			assert.Equal(t, 0, stats.FailCount())
+			assert.Equal(t, 0, stats.RestartCount())
 		})
 	}
 }
 
-// TestServiceStats_fields tests that ServiceStats fields can be modified.
+// TestServiceStats_atomic_increments tests the atomic increment methods.
 //
 // Params:
 //   - t: the testing context.
-func TestServiceStats_fields(t *testing.T) {
+func TestServiceStats_atomic_increments(t *testing.T) {
 	tests := []struct {
 		// name is the test case name.
 		name string
-		// startCount is the value to set for StartCount.
+		// startCount is the number of times to call IncrementStart.
 		startCount int
-		// stopCount is the value to set for StopCount.
+		// stopCount is the number of times to call IncrementStop.
 		stopCount int
-		// failCount is the value to set for FailCount.
+		// failCount is the number of times to call IncrementFail.
 		failCount int
-		// restartCount is the value to set for RestartCount.
+		// restartCount is the number of times to call IncrementRestart.
 		restartCount int
 	}{
 		{
-			name:         "fields_can_be_set_and_read",
+			name:         "single_increments",
+			startCount:   1,
+			stopCount:    1,
+			failCount:    1,
+			restartCount: 1,
+		},
+		{
+			name:         "multiple_increments",
 			startCount:   5,
 			stopCount:    3,
 			failCount:    2,
 			restartCount: 4,
 		},
 		{
-			name:         "fields_can_be_zero",
+			name:         "zero_increments",
 			startCount:   0,
 			stopCount:    0,
 			failCount:    0,
@@ -79,17 +87,101 @@ func TestServiceStats_fields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stats := supervisor.NewServiceStats()
 
-			// Set the fields.
-			stats.StartCount = tt.startCount
-			stats.StopCount = tt.stopCount
-			stats.FailCount = tt.failCount
-			stats.RestartCount = tt.restartCount
+			// Call increment methods the specified number of times.
+			for range tt.startCount {
+				stats.IncrementStart()
+			}
+			for range tt.stopCount {
+				stats.IncrementStop()
+			}
+			for range tt.failCount {
+				stats.IncrementFail()
+			}
+			for range tt.restartCount {
+				stats.IncrementRestart()
+			}
 
-			// Verify the fields were set correctly.
-			assert.Equal(t, tt.startCount, stats.StartCount)
-			assert.Equal(t, tt.stopCount, stats.StopCount)
-			assert.Equal(t, tt.failCount, stats.FailCount)
-			assert.Equal(t, tt.restartCount, stats.RestartCount)
+			// Verify the counts via getter methods.
+			assert.Equal(t, tt.startCount, stats.StartCount())
+			assert.Equal(t, tt.stopCount, stats.StopCount())
+			assert.Equal(t, tt.failCount, stats.FailCount())
+			assert.Equal(t, tt.restartCount, stats.RestartCount())
 		})
 	}
+}
+
+// TestServiceStats_Snapshot tests the Snapshot method returns consistent values.
+//
+// Params:
+//   - t: the testing context.
+func TestServiceStats_Snapshot(t *testing.T) {
+	stats := supervisor.NewServiceStats()
+
+	// Increment some counters.
+	stats.IncrementStart()
+	stats.IncrementStart()
+	stats.IncrementStop()
+	stats.IncrementFail()
+	stats.IncrementFail()
+	stats.IncrementFail()
+	stats.IncrementRestart()
+
+	// Get snapshot.
+	snap := stats.Snapshot()
+
+	// Verify snapshot values.
+	assert.Equal(t, 2, snap.StartCount)
+	assert.Equal(t, 1, snap.StopCount)
+	assert.Equal(t, 3, snap.FailCount)
+	assert.Equal(t, 1, snap.RestartCount)
+}
+
+// TestServiceStats_concurrent_increments tests thread safety of atomic operations.
+//
+// Params:
+//   - t: the testing context.
+func TestServiceStats_concurrent_increments(t *testing.T) {
+	stats := supervisor.NewServiceStats()
+	const numGoroutines = 100
+	const incrementsPerGoroutine = 100
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines * 4) // 4 counters
+
+	// Concurrent increments for each counter type.
+	for range numGoroutines {
+		go func() {
+			defer wg.Done()
+			for range incrementsPerGoroutine {
+				stats.IncrementStart()
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for range incrementsPerGoroutine {
+				stats.IncrementStop()
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for range incrementsPerGoroutine {
+				stats.IncrementFail()
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for range incrementsPerGoroutine {
+				stats.IncrementRestart()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Verify all increments were counted.
+	expected := numGoroutines * incrementsPerGoroutine
+	assert.Equal(t, expected, stats.StartCount())
+	assert.Equal(t, expected, stats.StopCount())
+	assert.Equal(t, expected, stats.FailCount())
+	assert.Equal(t, expected, stats.RestartCount())
 }

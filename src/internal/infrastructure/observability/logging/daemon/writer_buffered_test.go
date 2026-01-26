@@ -3,10 +3,12 @@ package daemon
 import (
 	"bytes"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/kodflow/daemon/internal/domain/logging"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBufferedWriter_BuffersUntilFlush(t *testing.T) {
@@ -70,4 +72,63 @@ func TestBufferedWriter_OrderPreserved(t *testing.T) {
 		expected := "Event " + string(rune('1'+i))
 		assert.Contains(t, line, expected)
 	}
+}
+
+// TestBufferedWriter_EnforcesMaxSize tests that buffer size is limited to prevent OOM.
+func TestBufferedWriter_EnforcesMaxSize(t *testing.T) {
+	var buf bytes.Buffer
+	cw := NewConsoleWriterWithOptions(&buf, &buf, false)
+	bw := NewBufferedWriter(cw)
+
+	// Write more than maxBufferSize events.
+	for i := range maxBufferSize + 100 {
+		event := logging.NewLogEvent(logging.LevelInfo, "test", "event", "message")
+		event = event.WithMeta("index", i)
+		err := bw.Write(event)
+		require.NoError(t, err)
+	}
+
+	// Flush and count lines (events).
+	err := bw.Flush()
+	require.NoError(t, err)
+
+	// Should have exactly maxBufferSize events (oldest dropped).
+	output := buf.String()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	assert.Equal(t, maxBufferSize, len(lines), "Buffer should be limited to maxBufferSize")
+}
+
+// TestBufferedWriter_ConcurrentWrites tests thread safety of buffered writes.
+func TestBufferedWriter_ConcurrentWrites(t *testing.T) {
+	var buf bytes.Buffer
+	cw := NewConsoleWriterWithOptions(&buf, &buf, false)
+	bw := NewBufferedWriter(cw)
+
+	const numGoroutines = 50
+	const writesPerGoroutine = 10
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for range numGoroutines {
+		go func() {
+			defer wg.Done()
+			for range writesPerGoroutine {
+				event := logging.NewLogEvent(logging.LevelInfo, "test", "event", "concurrent message")
+				_ = bw.Write(event)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Flush and verify no panic or race.
+	err := bw.Flush()
+	require.NoError(t, err)
+
+	// Total events should be capped at maxBufferSize.
+	output := buf.String()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	expected := min(numGoroutines*writesPerGoroutine, maxBufferSize)
+	assert.Equal(t, expected, len(lines))
 }

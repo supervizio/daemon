@@ -7,8 +7,15 @@ import (
 	"github.com/kodflow/daemon/internal/domain/logging"
 )
 
+// Buffer size limits to prevent OOM.
+const (
+	defaultBufferCap = 64
+	maxBufferSize    = 1024
+)
+
 // BufferedWriter buffers log events until Flush is called.
 // This is useful for delaying console output until after the MOTD banner is displayed.
+// Buffer size is limited to maxBufferSize to prevent unbounded memory growth.
 type BufferedWriter struct {
 	// mu protects concurrent access.
 	mu sync.Mutex
@@ -18,6 +25,8 @@ type BufferedWriter struct {
 	buffer []logging.LogEvent
 	// flushed indicates whether Flush has been called.
 	flushed bool
+	// dropped counts events dropped due to buffer overflow.
+	dropped int
 }
 
 // NewBufferedWriter creates a new buffered writer wrapping the given writer.
@@ -30,11 +39,12 @@ type BufferedWriter struct {
 func NewBufferedWriter(inner logging.Writer) *BufferedWriter {
 	return &BufferedWriter{
 		inner:  inner,
-		buffer: make([]logging.LogEvent, 0, 64),
+		buffer: make([]logging.LogEvent, 0, defaultBufferCap),
 	}
 }
 
 // Write buffers or writes an event depending on whether Flush has been called.
+// If buffer is full (maxBufferSize reached), events are dropped to prevent OOM.
 //
 // Params:
 //   - event: the log event to write.
@@ -50,7 +60,12 @@ func (w *BufferedWriter) Write(event logging.LogEvent) error {
 		return w.inner.Write(event)
 	}
 
-	// Before flush, buffer the event.
+	// Before flush, buffer the event (with size limit to prevent OOM).
+	if len(w.buffer) >= maxBufferSize {
+		// Buffer full, drop oldest event to make room.
+		w.dropped++
+		w.buffer = w.buffer[1:]
+	}
 	w.buffer = append(w.buffer, event)
 	return nil
 }

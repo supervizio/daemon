@@ -1010,7 +1010,7 @@ func TestSupervisor_SetEventHandler(t *testing.T) {
 			require.NoError(t, err)
 
 			// Set a handler - should not panic.
-			handler := func(_ string, _ *domain.Event, _ *supervisor.ServiceStats) {}
+			handler := func(_ string, _ *domain.Event, _ *supervisor.ServiceStatsSnapshot) {}
 			sup.SetEventHandler(handler)
 
 			// Set nil handler - should not panic.

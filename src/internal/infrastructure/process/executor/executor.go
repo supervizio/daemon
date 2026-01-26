@@ -300,12 +300,14 @@ func (e *Executor) buildCommand(ctx context.Context, spec domain.Spec) (*exec.Cm
 		cmd.Dir = spec.Dir
 	}
 
-	// Initialize environment with current process environment
-	cmd.Env = os.Environ()
-	// Append custom environment variables from spec
+	// Initialize environment with current process environment.
+	// Pre-allocate capacity for spec.Env additions.
+	baseEnv := os.Environ()
+	cmd.Env = make([]string, len(baseEnv), len(baseEnv)+len(spec.Env))
+	copy(cmd.Env, baseEnv)
+	// Append custom environment variables using string concatenation (faster than fmt.Sprintf).
 	for k, v := range spec.Env {
-		// Add each environment variable in KEY=VALUE format
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 
 	// Note: stdout/stderr are inherited from parent process by default.

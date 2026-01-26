@@ -20,6 +20,7 @@ const (
 	collectionTimeoutDivisor  int           = 2
 	defaultProcessMapCap      int           = 16
 	defaultSubscriberMapCap   int           = 4
+	maxSubscribers            int           = 64
 )
 
 // Tracker implements ProcessTracker using infrastructure collectors.
@@ -254,17 +255,21 @@ func (t *Tracker) All() []domainmetrics.ProcessMetrics {
 }
 
 // Subscribe returns a channel that receives metrics updates.
+// Returns nil if max subscribers limit is reached to prevent resource exhaustion.
 //
 // Returns:
-//   - <-chan ProcessMetrics: receive-only channel for updates
+//   - <-chan ProcessMetrics: receive-only channel for updates, or nil if limit reached.
 func (t *Tracker) Subscribe() <-chan domainmetrics.ProcessMetrics {
-	ch := make(chan domainmetrics.ProcessMetrics, defaultSubscriberBuffer)
-
 	t.subsMu.Lock()
+	// Enforce max subscribers limit to prevent resource exhaustion.
+	if len(t.subscribers) >= maxSubscribers {
+		t.subsMu.Unlock()
+		return nil
+	}
+	ch := make(chan domainmetrics.ProcessMetrics, defaultSubscriberBuffer)
 	t.subscribers[ch] = struct{}{}
 	t.subsMu.Unlock()
 
-	// Return receive-only channel.
 	return ch
 }
 

@@ -589,37 +589,37 @@ func Test_Supervisor_handleEvent(t *testing.T) {
 		// event is the process event.
 		event domain.Event
 		// expectedStats is the expected stats after handling.
-		expectedStats ServiceStats
+		expectedStats ServiceStatsSnapshot
 	}{
 		{
 			name:          "handle_started_event",
 			serviceName:   "test-service",
 			event:         domain.Event{Type: domain.EventStarted},
-			expectedStats: ServiceStats{StartCount: 1},
+			expectedStats: ServiceStatsSnapshot{StartCount: 1},
 		},
 		{
 			name:          "handle_stopped_event",
 			serviceName:   "test-service",
 			event:         domain.Event{Type: domain.EventStopped},
-			expectedStats: ServiceStats{StopCount: 1},
+			expectedStats: ServiceStatsSnapshot{StopCount: 1},
 		},
 		{
 			name:          "handle_failed_event",
 			serviceName:   "test-service",
 			event:         domain.Event{Type: domain.EventFailed},
-			expectedStats: ServiceStats{FailCount: 1},
+			expectedStats: ServiceStatsSnapshot{FailCount: 1},
 		},
 		{
 			name:          "handle_restarting_event",
 			serviceName:   "test-service",
 			event:         domain.Event{Type: domain.EventRestarting},
-			expectedStats: ServiceStats{RestartCount: 1},
+			expectedStats: ServiceStatsSnapshot{RestartCount: 1},
 		},
 		{
 			name:          "handle_unknown_service",
 			serviceName:   "unknown-service",
 			event:         domain.Event{Type: domain.EventStarted},
-			expectedStats: ServiceStats{StartCount: 1},
+			expectedStats: ServiceStatsSnapshot{StartCount: 1},
 		},
 	}
 
@@ -665,8 +665,8 @@ func Test_handleEvent_calls_event_handler(t *testing.T) {
 			// Track handler calls.
 			var calledService string
 			var calledEvent *domain.Event
-			var calledStats *ServiceStats
-			handler := func(serviceName string, event *domain.Event, stats *ServiceStats) {
+			var calledStats *ServiceStatsSnapshot
+			handler := func(serviceName string, event *domain.Event, stats *ServiceStatsSnapshot) {
 				calledService = serviceName
 				calledEvent = event
 				calledStats = stats

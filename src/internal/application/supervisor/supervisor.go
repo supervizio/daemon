@@ -43,8 +43,8 @@ var (
 
 // EventHandler is a callback function for process events.
 // It is called when a service emits a lifecycle event.
-// The stats parameter contains service statistics at the time of the event.
-type EventHandler func(serviceName string, event *domain.Event, stats *ServiceStats)
+// The stats parameter contains an atomic snapshot of service statistics.
+type EventHandler func(serviceName string, event *domain.Event, stats *ServiceStatsSnapshot)
 
 // ErrorHandler is a callback function for handling non-fatal errors.
 // These errors occur in recovery/cleanup paths where the supervisor
@@ -479,23 +479,23 @@ func (s *Supervisor) handleEvent(name string, event *domain.Event) {
 		s.stats[name] = stats
 	}
 
-	// Update statistics based on event type.
+	// Update statistics based on event type using atomic increments.
 	switch event.Type {
 	// Started: service successfully started.
 	case domain.EventStarted:
-		stats.StartCount++
+		stats.IncrementStart()
 	// Stopped: service stopped normally.
 	case domain.EventStopped:
-		stats.StopCount++
+		stats.IncrementStop()
 	// Failed: service exited with error.
 	case domain.EventFailed:
-		stats.FailCount++
+		stats.IncrementFail()
 	// Restarting: service is restarting after exit.
 	case domain.EventRestarting:
-		stats.RestartCount++
+		stats.IncrementRestart()
 	// Exhausted: service restart limit reached.
 	case domain.EventExhausted:
-		stats.FailCount++
+		stats.IncrementFail()
 	// Health events: tracked by health monitor, not stats.
 	case domain.EventHealthy, domain.EventUnhealthy:
 		// Health events are tracked by the health monitor, not stats.
@@ -532,21 +532,17 @@ func (s *Supervisor) handleEvent(name string, event *domain.Event) {
 			// No action needed.
 		}
 	}
-	// Copy stats for the callback (to avoid lock during callback).
-	var statsCopy *ServiceStats
+	// Get atomic snapshot for the callback (lock-free, no copy needed).
+	var statsSnap *ServiceStatsSnapshot
 	if stats != nil {
-		statsCopy = &ServiceStats{
-			StartCount:   stats.StartCount,
-			StopCount:    stats.StopCount,
-			FailCount:    stats.FailCount,
-			RestartCount: stats.RestartCount,
-		}
+		snap := stats.Snapshot()
+		statsSnap = &snap
 	}
 	s.mu.Unlock()
 
 	// Call user event handler if registered.
 	if s.eventHandler != nil {
-		s.eventHandler(name, event, statsCopy)
+		s.eventHandler(name, event, statsSnap)
 	}
 }
 
@@ -673,20 +669,16 @@ func (s *Supervisor) createProbeMonitorConfig(serviceName string) apphealth.Prob
 			if s.eventHandler != nil {
 				s.mu.RLock()
 				stats, ok := s.stats[serviceName]
-				var statsCopy *ServiceStats
+				var statsSnap *ServiceStatsSnapshot
 				if ok && stats != nil {
-					statsCopy = &ServiceStats{
-						StartCount:   stats.StartCount,
-						StopCount:    stats.StopCount,
-						FailCount:    stats.FailCount,
-						RestartCount: stats.RestartCount,
-					}
+					snap := stats.Snapshot()
+					statsSnap = &snap
 				}
 				s.mu.RUnlock()
 				event := &domain.Event{
 					Type: domain.EventHealthy,
 				}
-				s.eventHandler(serviceName, event, statsCopy)
+				s.eventHandler(serviceName, event, statsSnap)
 			}
 		},
 	}
@@ -817,15 +809,14 @@ func (s *Supervisor) handleRecoveryError(operation, serviceName string, err erro
 //   - name: the service name.
 //
 // Returns:
-//   - *ServiceStats: the service statistics, or nil if not found.
-func (s *Supervisor) Stats(name string) *ServiceStats {
+//   - *ServiceStatsSnapshot: the service statistics snapshot, or nil if not found.
+func (s *Supervisor) Stats(name string) *ServiceStatsSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	// Return a copy to avoid race conditions.
+	// Return atomic snapshot (lock-free read).
 	if stats, ok := s.stats[name]; ok {
-		statsCopy := *stats
-		// Return copy of stats for the requested service.
-		return &statsCopy
+		snap := stats.Snapshot()
+		return &snap
 	}
 	// Service not found, return nil.
 	return nil
@@ -834,18 +825,16 @@ func (s *Supervisor) Stats(name string) *ServiceStats {
 // AllStats returns statistics for all services.
 //
 // Returns:
-//   - map[string]*ServiceStats: a copy of all service statistics.
-func (s *Supervisor) AllStats() map[string]*ServiceStats {
+//   - map[string]*ServiceStatsSnapshot: atomic snapshots of all service statistics.
+func (s *Supervisor) AllStats() map[string]*ServiceStatsSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	// Return a copy of all stats.
-	result := make(map[string]*ServiceStats, len(s.stats))
-	// Copy each service's stats to avoid race conditions.
+	// Return atomic snapshots (lock-free reads).
+	result := make(map[string]*ServiceStatsSnapshot, len(s.stats))
 	for name, stats := range s.stats {
-		statsCopy := *stats
-		result[name] = &statsCopy
+		snap := stats.Snapshot()
+		result[name] = &snap
 	}
-	// Return the copied stats map.
 	return result
 }
 
@@ -975,9 +964,9 @@ func (s *Supervisor) ServiceSnapshotsForTUI() []ServiceSnapshotForTUI {
 			snap.HealthInt = int(monitor.Status())
 		}
 
-		// Get restart count from stats.
+		// Get restart count from stats (atomic read).
 		if stats, ok := s.stats[name]; ok {
-			snap.RestartCount = stats.RestartCount
+			snap.RestartCount = stats.RestartCount()
 		}
 
 		// Get listening ports for running processes.

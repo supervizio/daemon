@@ -259,7 +259,7 @@ func TestLineWriter_Write_LineError(t *testing.T) {
 			name:      "line_write_fails_with_prefix",
 			prefix:    "[PREFIX] ",
 			input:     "hello world\n",
-			failAfter: 1,
+			failAfter: 0, // Batched write: prefix+line in single write.
 		},
 		{
 			name:      "line_write_fails_no_prefix",
@@ -351,7 +351,7 @@ func TestLineWriter_Flush_ContentError(t *testing.T) {
 			name:      "flush_content_write_fails",
 			prefix:    "[PREFIX] ",
 			input:     "partial",
-			failAfter: 1,
+			failAfter: 0, // Batched write: prefix+content+newline in single write.
 		},
 		{
 			name:      "flush_content_write_fails_no_prefix",
@@ -379,11 +379,12 @@ func TestLineWriter_Flush_ContentError(t *testing.T) {
 	}
 }
 
-// TestLineWriter_Flush_NewlineError tests Flush when newline writing fails.
+// TestLineWriter_Flush_BatchedWriteError tests Flush when the batched write fails.
+// Note: With batched writes, prefix+content+newline are written together.
 //
 // Params:
 //   - t: the testing context.
-func TestLineWriter_Flush_NewlineError(t *testing.T) {
+func TestLineWriter_Flush_BatchedWriteError(t *testing.T) {
 	tests := []struct {
 		// name is the test case name.
 		name string
@@ -395,16 +396,16 @@ func TestLineWriter_Flush_NewlineError(t *testing.T) {
 		failAfter int
 	}{
 		{
-			name:      "flush_newline_write_fails",
+			name:      "flush_batched_write_fails_with_prefix",
 			prefix:    "[PREFIX] ",
 			input:     "partial",
-			failAfter: 2,
+			failAfter: 0, // First write fails (batched prefix+content+newline).
 		},
 		{
-			name:      "flush_newline_write_fails_no_prefix",
+			name:      "flush_batched_write_fails_no_prefix",
 			prefix:    "",
 			input:     "partial",
-			failAfter: 1,
+			failAfter: 0, // First write fails (batched content+newline).
 		},
 	}
 
@@ -419,7 +420,7 @@ func TestLineWriter_Flush_NewlineError(t *testing.T) {
 			_, err := lw.Write([]byte(tt.input))
 			require.NoError(t, err)
 
-			// Flush should fail on newline write.
+			// Flush should fail on batched write.
 			err = lw.Flush()
 			assert.Error(t, err)
 		})
