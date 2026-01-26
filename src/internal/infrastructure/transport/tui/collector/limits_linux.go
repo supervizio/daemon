@@ -7,8 +7,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/model"
+)
+
+// Cached cgroup paths - computed once per process lifetime.
+var (
+	cachedCgroupV2Path  = sync.OnceValue(getCgroupV2Path)
+	cachedCgroupV1Paths = sync.OnceValue(getCgroupV1Paths)
 )
 
 // cgroupMax is the value used in cgroups to indicate unlimited.
@@ -26,9 +33,10 @@ func collectCgroupLimits(limits *model.ResourceLimits) {
 }
 
 // collectCgroupV2 reads cgroup v2 limits.
+// Uses cached cgroup path for efficiency.
 func collectCgroupV2(limits *model.ResourceLimits) bool {
-	// Find cgroup path.
-	cgroupPath := getCgroupV2Path()
+	// Find cgroup path (cached).
+	cgroupPath := cachedCgroupV2Path()
 	if cgroupPath == "" {
 		return false
 	}
@@ -125,9 +133,10 @@ func getCgroupV2Path() string {
 }
 
 // collectCgroupV1 reads cgroup v1 limits.
+// Uses cached cgroup paths for efficiency.
 func collectCgroupV1(limits *model.ResourceLimits) {
-	// Find cgroup paths.
-	cgroupPaths := getCgroupV1Paths()
+	// Find cgroup paths (cached).
+	cgroupPaths := cachedCgroupV1Paths()
 
 	// CPU quota (cpu.cfs_quota_us / cpu.cfs_period_us).
 	if cpuPath, ok := cgroupPaths["cpu"]; ok {

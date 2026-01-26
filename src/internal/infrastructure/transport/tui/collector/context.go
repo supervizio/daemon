@@ -5,10 +5,52 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/model"
 )
+
+// Cached static system data - computed once per process lifetime.
+var (
+	cachedHostname    = sync.OnceValue(getHostnameOnce)
+	cachedKernel      = sync.OnceValue(getKernelVersion)
+	cachedRuntimeMode = sync.OnceValue(detectRuntimeModeOnce)
+	cachedDNSConfig   = sync.OnceValue(getDNSConfigOnce)
+	cachedPrimaryIP   = sync.OnceValue(getPrimaryIP)
+)
+
+// runtimeModeResult holds the cached runtime mode detection result.
+type runtimeModeResult struct {
+	mode    model.RuntimeMode
+	runtime string
+}
+
+// dnsConfigResult holds the cached DNS configuration.
+type dnsConfigResult struct {
+	servers []string
+	search  []string
+}
+
+// getHostnameOnce returns the hostname (called once).
+func getHostnameOnce() string {
+	if hostname, err := os.Hostname(); err == nil {
+		return hostname
+	}
+	return unknownValue
+}
+
+// detectRuntimeModeOnce wraps detectRuntimeMode for sync.OnceValue.
+func detectRuntimeModeOnce() runtimeModeResult {
+	mode, rt := detectRuntimeMode()
+	return runtimeModeResult{mode: mode, runtime: rt}
+}
+
+// getDNSConfigOnce wraps getDNSConfig for sync.OnceValue.
+func getDNSConfigOnce() dnsConfigResult {
+	servers, search := getDNSConfig()
+	return dnsConfigResult{servers: servers, search: search}
+}
 
 // unknownValue is the default string for unknown fields.
 const unknownValue = "unknown"
@@ -34,10 +76,11 @@ func (c *ContextCollector) SetConfigPath(path string) {
 }
 
 // CollectInto populates context information.
+// Uses cached values for static data (hostname, kernel, runtime mode, DNS, IP).
 func (c *ContextCollector) CollectInto(snap *model.Snapshot) error {
 	ctx := &snap.Context
 
-	// Basic info.
+	// Basic info (dynamic).
 	ctx.Version = c.version
 	ctx.StartTime = c.startTime
 	ctx.Uptime = time.Since(c.startTime)
@@ -45,24 +88,22 @@ func (c *ContextCollector) CollectInto(snap *model.Snapshot) error {
 	ctx.OS = runtime.GOOS
 	ctx.Arch = runtime.GOARCH
 
-	// Hostname.
-	if hostname, err := os.Hostname(); err == nil {
-		ctx.Hostname = hostname
-	} else {
-		ctx.Hostname = unknownValue
-	}
+	// Static info (cached - computed once per process lifetime).
+	ctx.Hostname = cachedHostname()
+	ctx.Kernel = cachedKernel()
 
-	// Kernel version (platform-specific).
-	ctx.Kernel = getKernelVersion()
+	// Runtime mode (cached).
+	rtResult := cachedRuntimeMode()
+	ctx.Mode = rtResult.mode
+	ctx.ContainerRuntime = rtResult.runtime
 
-	// Detect runtime mode.
-	ctx.Mode, ctx.ContainerRuntime = detectRuntimeMode()
+	// DNS info (cached).
+	dnsResult := cachedDNSConfig()
+	ctx.DNSServers = dnsResult.servers
+	ctx.DNSSearch = dnsResult.search
 
-	// DNS info.
-	ctx.DNSServers, ctx.DNSSearch = getDNSConfig()
-
-	// Primary IP.
-	ctx.PrimaryIP = getPrimaryIP()
+	// Primary IP (cached).
+	ctx.PrimaryIP = cachedPrimaryIP()
 
 	// Config path.
 	ctx.ConfigPath = c.configPath
@@ -71,6 +112,7 @@ func (c *ContextCollector) CollectInto(snap *model.Snapshot) error {
 }
 
 // detectRuntimeMode determines if we're in a container, VM, or host.
+// Reads /proc/1/cgroup only once to avoid duplicate I/O.
 func detectRuntimeMode() (model.RuntimeMode, string) {
 	// Check for container indicators.
 
@@ -91,22 +133,22 @@ func detectRuntimeMode() (model.RuntimeMode, string) {
 		}
 	}
 
-	// Podman (check cgroup).
+	// Read /proc/1/cgroup ONCE and check all patterns.
 	if content, err := os.ReadFile("/proc/1/cgroup"); err == nil {
-		s := string(content)
-		if strings.Contains(s, "libpod") || strings.Contains(s, "podman") {
+		cgroupContent := string(content)
+
+		// Podman detection.
+		if strings.Contains(cgroupContent, "libpod") || strings.Contains(cgroupContent, "podman") {
 			return model.ModeContainer, "podman"
 		}
-		// Generic container detection via cgroup.
-		if strings.Contains(s, "docker") || strings.Contains(s, "containerd") {
+
+		// Docker/containerd detection.
+		if strings.Contains(cgroupContent, "docker") || strings.Contains(cgroupContent, "containerd") {
 			return model.ModeContainer, "docker"
 		}
-	}
 
-	// Check for container via /proc/1/cgroup.
-	if content, err := os.ReadFile("/proc/1/cgroup"); err == nil {
-		if !strings.Contains(string(content), ":/\n") {
-			// Non-root cgroup suggests container.
+		// Generic container detection: non-root cgroup suggests container.
+		if !strings.Contains(cgroupContent, ":/\n") {
 			return model.ModeContainer, unknownValue
 		}
 	}
