@@ -1,4 +1,4 @@
-.PHONY: help build build-e2e run run-dev run-tui lint fmt test test-unit test-e2e coverage clean
+.PHONY: help build build-e2e run run-dev run-tui lint lint-golangci lint-ktn fmt test test-unit test-e2e coverage clean
 
 .DEFAULT_GOAL := help
 
@@ -31,8 +31,13 @@ run-tui: build ## Run the daemon in interactive TUI mode
 build-e2e: build ## Build E2E test binaries (supervizio + crasher)
 	@cd e2e/behavioral/crasher && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../../../bin/crasher .
 
-lint: ## Run golangci-lint
+lint: lint-golangci lint-ktn ## Run all linters
+
+lint-golangci: ## Run golangci-lint
 	@cd src && golangci-lint run
+
+lint-ktn: ## Run ktn-linter
+	@cd src && ktn-linter lint ./...
 
 fmt: ## Format code with gofmt
 	@cd src && go fmt ./...
