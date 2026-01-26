@@ -27,15 +27,28 @@ var (
 )
 
 // Pre-computed strings for common padding operations to avoid allocations.
-// Space cache for padding (up to 256 spaces).
-const maxCachedSpaces = 256
+const (
+	maxCachedSpaces = 256
+	maxCachedBars   = 200 // Max width for horizontal bars.
+)
 
-var spacesCache = initSpacesCache()
+var (
+	spacesCache = initSpacesCache()
+	barsCache   = initBarsCache()
+)
 
 func initSpacesCache() [maxCachedSpaces + 1]string {
 	var cache [maxCachedSpaces + 1]string
 	for i := range cache {
 		cache[i] = strings.Repeat(" ", i)
+	}
+	return cache
+}
+
+func initBarsCache() [maxCachedBars + 1]string {
+	var cache [maxCachedBars + 1]string
+	for i := range cache {
+		cache[i] = strings.Repeat("─", i)
 	}
 	return cache
 }
@@ -49,6 +62,18 @@ func Spaces(n int) string {
 		return spacesCache[n]
 	}
 	return strings.Repeat(" ", n)
+}
+
+// HorizontalBar returns a string of n horizontal bar characters (─).
+// Uses cache for common sizes.
+func HorizontalBar(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if n <= maxCachedBars {
+		return barsCache[n]
+	}
+	return strings.Repeat("─", n)
 }
 
 // Pad pads text to width with specified alignment.

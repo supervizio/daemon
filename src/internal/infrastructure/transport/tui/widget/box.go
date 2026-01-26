@@ -152,7 +152,7 @@ func (b *Box) Render() string {
 		lineLen := VisibleLen(line)
 		if lineLen < innerWidth {
 			sb.WriteString(line)
-			sb.WriteString(strings.Repeat(" ", innerWidth-lineLen))
+			sb.WriteString(Spaces(innerWidth - lineLen)) // Use cached spaces.
 		} else {
 			sb.WriteString(truncateVisible(line, innerWidth))
 		}
