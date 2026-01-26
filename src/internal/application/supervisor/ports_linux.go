@@ -11,7 +11,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// dockerCommandTimeout is the maximum time to wait for Docker CLI commands.
+// Prevents hanging if Docker daemon is unresponsive.
+const dockerCommandTimeout = 5 * time.Second
 
 // getListeningPorts returns TCP/UDP ports the process is listening on.
 // Reads from /proc/net/tcp, /proc/net/tcp6, /proc/net/udp, /proc/net/udp6.
@@ -132,7 +137,10 @@ func getDockerPorts(pid int) []int {
 // findDockerContainerByPID tries to find a Docker container associated with a PID.
 func findDockerContainerByPID(pid int) string {
 	// Use docker ps to find containers and match by checking if our PID is ancestor.
-	ctx := context.Background()
+	// Use timeout to prevent hanging if Docker daemon is unresponsive.
+	ctx, cancel := context.WithTimeout(context.Background(), dockerCommandTimeout)
+	defer cancel()
+
 	out, err := exec.CommandContext(ctx, "docker", "ps", "-q").Output()
 	if err != nil {
 		return ""
@@ -208,7 +216,11 @@ func isAncestor(ancestorPID, childPID int) bool {
 // getDockerContainerPorts returns the host ports mapped for a container.
 func getDockerContainerPorts(containerNameOrID string) []int {
 	// Use docker port command to get mappings.
-	out, err := exec.CommandContext(context.Background(), "docker", "port", containerNameOrID).Output()
+	// Use timeout to prevent hanging if Docker daemon is unresponsive.
+	ctx, cancel := context.WithTimeout(context.Background(), dockerCommandTimeout)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, "docker", "port", containerNameOrID).Output()
 	if err != nil {
 		return nil
 	}
