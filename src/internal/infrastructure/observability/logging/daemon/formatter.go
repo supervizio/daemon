@@ -5,9 +5,29 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/kodflow/daemon/internal/domain/logging"
 )
+
+// builderPool provides reusable strings.Builder instances to reduce allocations.
+// This is safe for concurrent use as sync.Pool handles synchronization.
+var builderPool = sync.Pool{
+	New: func() any {
+		return &strings.Builder{}
+	},
+}
+
+// getBuilder retrieves a strings.Builder from the pool.
+func getBuilder() *strings.Builder {
+	return builderPool.Get().(*strings.Builder)
+}
+
+// putBuilder returns a strings.Builder to the pool after resetting it.
+func putBuilder(sb *strings.Builder) {
+	sb.Reset()
+	builderPool.Put(sb)
+}
 
 // Formatter formats log events into strings.
 type Formatter interface {
@@ -42,6 +62,7 @@ func NewTextFormatter(timestampFormat string) *TextFormatter {
 }
 
 // Format formats a log event as text.
+// Uses sync.Pool for strings.Builder to minimize allocations in hot paths.
 //
 // Params:
 //   - event: the log event to format.
@@ -49,21 +70,25 @@ func NewTextFormatter(timestampFormat string) *TextFormatter {
 // Returns:
 //   - string: the formatted log line.
 func (f *TextFormatter) Format(event logging.LogEvent) string {
-	var sb strings.Builder
+	sb := getBuilder()
+	defer putBuilder(sb)
+
+	// Pre-grow for typical log line length.
+	sb.Grow(128)
 
 	// Timestamp.
 	sb.WriteString(event.Timestamp.Format(f.timestampFormat))
-	sb.WriteString(" ")
+	sb.WriteByte(' ')
 
 	// Level.
-	sb.WriteString("[")
+	sb.WriteByte('[')
 	sb.WriteString(event.Level.String())
 	sb.WriteString("] ")
 
 	// Service name.
 	if event.Service != "" {
 		sb.WriteString(event.Service)
-		sb.WriteString(" ")
+		sb.WriteByte(' ')
 	}
 
 	// Use message if set, otherwise fall back to event type.
@@ -75,16 +100,16 @@ func (f *TextFormatter) Format(event logging.LogEvent) string {
 
 	// Metadata.
 	if len(event.Metadata) > 0 {
-		sb.WriteString(" ")
-		sb.WriteString(formatMetadata(event.Metadata))
+		sb.WriteByte(' ')
+		formatMetadataToBuilder(sb, event.Metadata)
 	}
 
 	return sb.String()
 }
 
-// formatMetadata formats metadata as key=value pairs.
-// Uses type switch for common types to avoid fmt.Sprintf allocations.
-func formatMetadata(meta map[string]any) string {
+// formatMetadataToBuilder formats metadata directly to a builder.
+// Avoids intermediate string allocation by writing directly.
+func formatMetadataToBuilder(sb *strings.Builder, meta map[string]any) {
 	// Sort keys for consistent output.
 	keys := make([]string, 0, len(meta))
 	for k := range meta {
@@ -92,18 +117,24 @@ func formatMetadata(meta map[string]any) string {
 	}
 	sort.Strings(keys)
 
-	// Use strings.Builder to avoid intermediate allocations.
-	var sb strings.Builder
-	sb.Grow(len(keys) * 16) // Pre-allocate for typical key=value pairs.
-
 	for i, k := range keys {
 		if i > 0 {
 			sb.WriteByte(' ')
 		}
 		sb.WriteString(k)
 		sb.WriteByte('=')
-		formatValue(&sb, meta[k])
+		formatValue(sb, meta[k])
 	}
+}
+
+// formatMetadata formats metadata as key=value pairs.
+// Uses type switch for common types to avoid fmt.Sprintf allocations.
+func formatMetadata(meta map[string]any) string {
+	sb := getBuilder()
+	defer putBuilder(sb)
+
+	sb.Grow(len(meta) * 16) // Pre-allocate for typical key=value pairs.
+	formatMetadataToBuilder(sb, meta)
 	return sb.String()
 }
 

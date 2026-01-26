@@ -2,7 +2,6 @@
 package screen
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -33,6 +32,7 @@ func (l *LogsRenderer) SetWidth(width int) {
 }
 
 // Render returns the logs summary section (raw mode).
+// Uses pre-allocated slices and strings.Builder for efficiency.
 func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 	logs := snap.Logs
 
@@ -43,21 +43,41 @@ func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 	}
 	periodStr := widget.FormatDurationShort(period)
 
-	summary := fmt.Sprintf("Last %s:  INFO: %d  WARN: %d  ERROR: %d",
-		periodStr, logs.InfoCount, logs.WarnCount, logs.ErrorCount)
+	// Build summary with strings.Builder to avoid allocations.
+	var sb strings.Builder
+	sb.Grow(64)
+	sb.WriteString("Last ")
+	sb.WriteString(periodStr)
+	sb.WriteString(":  INFO: ")
+	sb.WriteString(strconv.Itoa(logs.InfoCount))
+	sb.WriteString("  ")
 
 	// Color warnings/errors.
+	if logs.WarnCount > 0 && logs.ErrorCount == 0 {
+		sb.WriteString(l.theme.Warning)
+		sb.WriteString("WARN: ")
+		sb.WriteString(strconv.Itoa(logs.WarnCount))
+		sb.WriteString(ansi.Reset)
+	} else {
+		sb.WriteString("WARN: ")
+		sb.WriteString(strconv.Itoa(logs.WarnCount))
+	}
+	sb.WriteString("  ")
+
 	if logs.ErrorCount > 0 {
-		summary = fmt.Sprintf("Last %s:  INFO: %d  WARN: %d  %sERROR: %d%s",
-			periodStr, logs.InfoCount, logs.WarnCount,
-			l.theme.Error, logs.ErrorCount, ansi.Reset)
-	} else if logs.WarnCount > 0 {
-		summary = fmt.Sprintf("Last %s:  INFO: %d  %sWARN: %d%s  ERROR: %d",
-			periodStr, logs.InfoCount,
-			l.theme.Warning, logs.WarnCount, ansi.Reset, logs.ErrorCount)
+		sb.WriteString(l.theme.Error)
+		sb.WriteString("ERROR: ")
+		sb.WriteString(strconv.Itoa(logs.ErrorCount))
+		sb.WriteString(ansi.Reset)
+	} else {
+		sb.WriteString("ERROR: ")
+		sb.WriteString(strconv.Itoa(logs.ErrorCount))
 	}
 
-	lines := []string{"  " + summary}
+	// Pre-allocate lines slice: summary + separator + entries + empty state.
+	linesCap := 2 + len(logs.RecentEntries)
+	lines := make([]string, 0, linesCap)
+	lines = append(lines, "  "+sb.String())
 
 	// Separator.
 	if len(logs.RecentEntries) > 0 {
@@ -68,15 +88,14 @@ func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 		lines = append(lines, "  "+l.theme.Muted+strings.Repeat("─", sepWidth)+ansi.Reset)
 	}
 
-	// Recent entries.
+	// Recent entries using strings.Builder.
 	maxWidth := l.width - 6
 	for _, entry := range logs.RecentEntries {
 		ts := entry.Timestamp.Format("15:04:05")
 		level := l.status.LogLevel(entry.Level)
 		service := entry.Service
 
-		// Format: timestamp [level] service: message
-		prefix := fmt.Sprintf("%s [%s] %s: ", ts, level, service)
+		// Calculate prefix length for truncation.
 		prefixLen := len(ts) + 3 + len(entry.Level) + 2 + len(service) + 2
 
 		// Truncate message if needed (rune-safe for UTF-8).
@@ -95,8 +114,18 @@ func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 			}
 		}
 
-		line := fmt.Sprintf("  %s%s", prefix, msg)
-		lines = append(lines, line)
+		// Build line with strings.Builder.
+		var lineSb strings.Builder
+		lineSb.Grow(prefixLen + len(msg) + 4)
+		lineSb.WriteString("  ")
+		lineSb.WriteString(ts)
+		lineSb.WriteString(" [")
+		lineSb.WriteString(level)
+		lineSb.WriteString("] ")
+		lineSb.WriteString(service)
+		lineSb.WriteString(": ")
+		lineSb.WriteString(msg)
+		lines = append(lines, lineSb.String())
 	}
 
 	// Empty state.

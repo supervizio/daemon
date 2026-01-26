@@ -301,15 +301,39 @@ type SandboxInfo struct {
 	Version string
 }
 
+// Default capacities for pre-allocation to reduce allocations.
+const (
+	defaultNetworkCap   = 6   // Typical system has 2-5 interfaces.
+	defaultSandboxCap   = 5   // 4-5 sandbox types (docker, podman, k8s, lxc, systemd).
+	defaultLogEntryCap  = 100 // Default log buffer size.
+	defaultServicesCap  = 16  // Typical setup has 5-15 services.
+	defaultListenersCap = 4   // Typical service has 1-3 listeners.
+)
+
 // NewSnapshot creates an empty snapshot with current timestamp.
+// Uses pre-allocated capacities for typical workloads.
 func NewSnapshot() *Snapshot {
 	return &Snapshot{
 		Timestamp: time.Now(),
-		Services:  make([]ServiceSnapshot, 0),
-		Network:   make([]NetworkInterface, 0),
-		Sandboxes: make([]SandboxInfo, 0),
+		Services:  make([]ServiceSnapshot, 0, defaultServicesCap),
+		Network:   make([]NetworkInterface, 0, defaultNetworkCap),
+		Sandboxes: make([]SandboxInfo, 0, defaultSandboxCap),
 		Logs: LogSummary{
-			RecentEntries: make([]LogEntry, 0),
+			RecentEntries: make([]LogEntry, 0, defaultLogEntryCap),
+		},
+	}
+}
+
+// NewSnapshotWithCapacity creates a snapshot with specified service capacity.
+// Use this when the number of services is known ahead of time.
+func NewSnapshotWithCapacity(serviceCount int) *Snapshot {
+	return &Snapshot{
+		Timestamp: time.Now(),
+		Services:  make([]ServiceSnapshot, 0, serviceCount),
+		Network:   make([]NetworkInterface, 0, defaultNetworkCap),
+		Sandboxes: make([]SandboxInfo, 0, defaultSandboxCap),
+		Logs: LogSummary{
+			RecentEntries: make([]LogEntry, 0, defaultLogEntryCap),
 		},
 	}
 }
