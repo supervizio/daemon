@@ -403,13 +403,18 @@ func (m *Manager) waitAndRestart() bool {
 
 	delay := m.tracker.NextDelay()
 
+	// Use NewTimer instead of time.After to allow proper cleanup.
+	// time.After creates a timer that won't be GC'd until it fires.
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
 	select {
 	// Handle context cancellation during delay.
 	case <-m.ctx.Done():
 		// Return false to cancel restart.
 		return false
 	// Wait for delay duration.
-	case <-time.After(delay):
+	case <-timer.C:
 		// Return true to proceed with restart.
 		return true
 	}

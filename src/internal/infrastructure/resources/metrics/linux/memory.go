@@ -30,9 +30,6 @@ const (
 	// statusFieldCount is the typical number of fields in /proc/[pid]/status.
 	statusFieldCount int = 10
 
-	// colonFieldCount is the expected number of parts when splitting by colon.
-	colonFieldCount int = 2
-
 	// decimalBase is the base for decimal number parsing.
 	decimalBase int = 10
 
@@ -182,16 +179,17 @@ func (c *MemoryCollector) buildSystemMemory(values map[string]uint64) metrics.Sy
 //   - key: field name (e.g., "MemTotal")
 //   - value: numeric value in kilobytes
 func (c *MemoryCollector) parseMemInfoLine(line string) (key string, value uint64) {
-	parts := strings.SplitN(line, ":", colonFieldCount)
+	// Use strings.Cut for more efficient parsing (avoids slice allocation).
+	keyPart, valuePart, found := strings.Cut(line, ":")
 
 	// Require colon separator for valid lines.
-	if len(parts) != colonFieldCount {
+	if !found {
 		// Invalid format, skip this line.
 		return "", 0
 	}
 
-	key = strings.TrimSpace(parts[0])
-	valueStr := strings.TrimSpace(parts[1])
+	key = strings.TrimSpace(keyPart)
+	valueStr := strings.TrimSpace(valuePart)
 
 	// Remove "kB" suffix if present.
 	valueStr = strings.TrimSuffix(valueStr, " kB")
@@ -331,15 +329,16 @@ func (c *MemoryCollector) mapProcessMemoryValues(proc *metrics.ProcessMemory, va
 //   - key: memory field name (e.g., "VmRSS")
 //   - value: numeric value in kilobytes
 func (c *MemoryCollector) parseStatusLine(line string) (key string, value uint64) {
-	parts := strings.SplitN(line, ":", colonFieldCount)
+	// Use strings.Cut for more efficient parsing (avoids slice allocation).
+	keyPart, valuePart, found := strings.Cut(line, ":")
 
 	// Require colon separator for valid lines.
-	if len(parts) != colonFieldCount {
+	if !found {
 		// Invalid format, skip this line.
 		return "", 0
 	}
 
-	key = strings.TrimSpace(parts[0])
+	key = strings.TrimSpace(keyPart)
 
 	// Only parse memory-related fields to avoid unnecessary work.
 	if !strings.HasPrefix(key, "Vm") && !strings.HasPrefix(key, "Rss") {
@@ -347,7 +346,7 @@ func (c *MemoryCollector) parseStatusLine(line string) (key string, value uint64
 		return "", 0
 	}
 
-	valueStr := strings.TrimSpace(parts[1])
+	valueStr := strings.TrimSpace(valuePart)
 	valueStr = strings.TrimSuffix(valueStr, " kB")
 	valueStr = strings.TrimSpace(valueStr)
 

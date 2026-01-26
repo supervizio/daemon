@@ -3,11 +3,9 @@ package metrics
 
 import (
 	"context"
-	"maps"
-	"reflect"
-	"slices"
 	"sync"
 	"time"
+	"unsafe"
 
 	domainmetrics "github.com/kodflow/daemon/internal/domain/metrics"
 	"github.com/kodflow/daemon/internal/domain/process"
@@ -279,20 +277,19 @@ func (t *Tracker) Subscribe() <-chan domainmetrics.ProcessMetrics {
 //   - ch: channel to unsubscribe
 func (t *Tracker) Unsubscribe(ch <-chan domainmetrics.ProcessMetrics) {
 	// Get pointer value for channel identity comparison.
-	// Since Subscribe() returns a receive-only channel (<-chan) but internally
-	// stores a bidirectional channel (chan), we need to use reflection to
-	// compare channel identity across type conversions.
-	recvPtr := reflect.ValueOf(ch).Pointer()
+	// Uses unsafe.Pointer instead of reflect.ValueOf().Pointer() for efficiency.
+	// Both <-chan and chan have the same underlying pointer representation.
+	recvPtr := *(*uintptr)(unsafe.Pointer(&ch))
 
 	t.subsMu.Lock()
 	var bidirCh chan domainmetrics.ProcessMetrics
 	var found bool
 
 	// Find the bidirectional channel with matching pointer.
-	for ch := range t.subscribers {
+	for c := range t.subscribers {
 		// Check if this channel's pointer matches the receive channel.
-		if reflect.ValueOf(ch).Pointer() == recvPtr {
-			bidirCh = ch
+		if *(*uintptr)(unsafe.Pointer(&c)) == recvPtr {
+			bidirCh = c
 			found = true
 			break
 		}
@@ -382,7 +379,11 @@ func (t *Tracker) collectLoop() {
 func (t *Tracker) collectAll() {
 	t.mu.Lock()
 	// Collect process snapshots to avoid holding lock during collection.
-	processes := slices.Collect(maps.Values(t.processes))
+	// Preallocate slice to avoid allocation in slices.Collect.
+	processes := make([]*trackedProcess, 0, len(t.processes))
+	for _, p := range t.processes {
+		processes = append(processes, p)
+	}
 	t.mu.Unlock()
 
 	// Collect metrics for each process.

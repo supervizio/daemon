@@ -227,6 +227,11 @@ func (e *Executor) Stop(pid int, timeout time.Duration) error {
 		done <- err
 	}()
 
+	// Use NewTimer instead of time.After to allow proper cleanup.
+	// time.After creates a timer that won't be GC'd until it fires.
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
 	// Wait for process to exit or timeout
 	select {
 	// Handle process exit completion
@@ -234,7 +239,7 @@ func (e *Executor) Stop(pid int, timeout time.Duration) error {
 		// Return nil on successful exit
 		return nil
 	// Handle timeout case
-	case <-time.After(timeout):
+	case <-timer.C:
 		// Force kill after timeout exceeded
 		if err := proc.Kill(); err != nil {
 			// Return error if kill failed

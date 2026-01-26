@@ -7,11 +7,16 @@ import "time"
 //
 // This value object captures the CPU time used by a specific process and its children.
 // All time values are measured in jiffies from the process start.
+//
+// Fields are ordered by size for optimal memory alignment:
+// time.Time (24B), string (16B), then 8-byte fields.
 type ProcessCPU struct {
-	// PID is the process identifier.
-	PID int
+	// Timestamp is when this sample was taken.
+	Timestamp time.Time
 	// Name is the process command name (from comm field).
 	Name string
+	// PID is the process identifier.
+	PID int
 	// User is the user mode CPU time (jiffies).
 	User uint64
 	// System is the kernel mode CPU time (jiffies).
@@ -24,8 +29,6 @@ type ProcessCPU struct {
 	StartTime uint64
 	// UsagePercent is the calculated CPU usage percentage (0-100).
 	UsagePercent float64
-	// Timestamp is when this sample was taken.
-	Timestamp time.Time
 }
 
 // NewProcessCPU creates a new ProcessCPU instance.

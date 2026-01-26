@@ -70,8 +70,16 @@ const (
 )
 
 // MoveTo returns escape sequence to position cursor at row, col (1-indexed).
+// Uses byte buffer to avoid multiple string allocations.
 func MoveTo(row, col int) string {
-	return "\033[" + strconv.Itoa(row) + ";" + strconv.Itoa(col) + "H"
+	var buf [24]byte
+	b := buf[:0]
+	b = append(b, "\033["...)
+	b = strconv.AppendInt(b, int64(row), 10)
+	b = append(b, ';')
+	b = strconv.AppendInt(b, int64(col), 10)
+	b = append(b, 'H')
+	return string(b)
 }
 
 // MoveUp returns escape sequence to move cursor up n lines.
@@ -79,7 +87,12 @@ func MoveUp(n int) string {
 	if n <= 0 {
 		return ""
 	}
-	return "\033[" + strconv.Itoa(n) + "A"
+	var buf [16]byte
+	b := buf[:0]
+	b = append(b, "\033["...)
+	b = strconv.AppendInt(b, int64(n), 10)
+	b = append(b, 'A')
+	return string(b)
 }
 
 // MoveDown returns escape sequence to move cursor down n lines.
@@ -87,7 +100,12 @@ func MoveDown(n int) string {
 	if n <= 0 {
 		return ""
 	}
-	return "\033[" + strconv.Itoa(n) + "B"
+	var buf [16]byte
+	b := buf[:0]
+	b = append(b, "\033["...)
+	b = strconv.AppendInt(b, int64(n), 10)
+	b = append(b, 'B')
+	return string(b)
 }
 
 // MoveRight returns escape sequence to move cursor right n columns.
@@ -95,7 +113,12 @@ func MoveRight(n int) string {
 	if n <= 0 {
 		return ""
 	}
-	return "\033[" + strconv.Itoa(n) + "C"
+	var buf [16]byte
+	b := buf[:0]
+	b = append(b, "\033["...)
+	b = strconv.AppendInt(b, int64(n), 10)
+	b = append(b, 'C')
+	return string(b)
 }
 
 // MoveLeft returns escape sequence to move cursor left n columns.
@@ -103,25 +126,62 @@ func MoveLeft(n int) string {
 	if n <= 0 {
 		return ""
 	}
-	return "\033[" + strconv.Itoa(n) + "D"
+	var buf [16]byte
+	b := buf[:0]
+	b = append(b, "\033["...)
+	b = strconv.AppendInt(b, int64(n), 10)
+	b = append(b, 'D')
+	return string(b)
 }
 
 // RGB returns 24-bit true color foreground escape sequence.
+// Uses byte buffer to avoid 7 string allocations per call.
 func RGB(r, g, b uint8) string {
-	return "\033[38;2;" + strconv.Itoa(int(r)) + ";" + strconv.Itoa(int(g)) + ";" + strconv.Itoa(int(b)) + "m"
+	var buf [24]byte
+	n := copy(buf[:], "\033[38;2;")
+	n += copy(buf[n:], strconv.FormatUint(uint64(r), 10))
+	buf[n] = ';'
+	n++
+	n += copy(buf[n:], strconv.FormatUint(uint64(g), 10))
+	buf[n] = ';'
+	n++
+	n += copy(buf[n:], strconv.FormatUint(uint64(b), 10))
+	buf[n] = 'm'
+	return string(buf[:n+1])
 }
 
 // BgRGB returns 24-bit true color background escape sequence.
+// Uses byte buffer to avoid 7 string allocations per call.
 func BgRGB(r, g, b uint8) string {
-	return "\033[48;2;" + strconv.Itoa(int(r)) + ";" + strconv.Itoa(int(g)) + ";" + strconv.Itoa(int(b)) + "m"
+	var buf [24]byte
+	n := copy(buf[:], "\033[48;2;")
+	n += copy(buf[n:], strconv.FormatUint(uint64(r), 10))
+	buf[n] = ';'
+	n++
+	n += copy(buf[n:], strconv.FormatUint(uint64(g), 10))
+	buf[n] = ';'
+	n++
+	n += copy(buf[n:], strconv.FormatUint(uint64(b), 10))
+	buf[n] = 'm'
+	return string(buf[:n+1])
 }
 
 // Color256 returns 256-color foreground escape sequence.
 func Color256(code uint8) string {
-	return "\033[38;5;" + strconv.Itoa(int(code)) + "m"
+	var buf [16]byte
+	b := buf[:0]
+	b = append(b, "\033[38;5;"...)
+	b = strconv.AppendUint(b, uint64(code), 10)
+	b = append(b, 'm')
+	return string(b)
 }
 
 // BgColor256 returns 256-color background escape sequence.
 func BgColor256(code uint8) string {
-	return "\033[48;5;" + strconv.Itoa(int(code)) + "m"
+	var buf [16]byte
+	b := buf[:0]
+	b = append(b, "\033[48;5;"...)
+	b = strconv.AppendUint(b, uint64(code), 10)
+	b = append(b, 'm')
+	return string(b)
 }

@@ -93,3 +93,18 @@ type ServiceStatsSnapshot struct {
 	FailCount    int
 	RestartCount int
 }
+
+// SnapshotPtr returns a pointer to a copy of all counters.
+// Use this instead of &Snapshot() to avoid escape analysis issues
+// where taking address of return value causes heap allocation.
+//
+// Returns:
+//   - *ServiceStatsSnapshot: a pointer to a copy of all counter values.
+func (s *ServiceStats) SnapshotPtr() *ServiceStatsSnapshot {
+	return &ServiceStatsSnapshot{
+		StartCount:   int(s.startCount.Load()),
+		StopCount:    int(s.stopCount.Load()),
+		FailCount:    int(s.failCount.Load()),
+		RestartCount: int(s.restartCount.Load()),
+	}
+}

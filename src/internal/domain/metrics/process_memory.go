@@ -7,11 +7,16 @@ import "time"
 //
 // This value object captures the memory usage of a specific process including
 // resident, virtual, shared, and swap memory.
+//
+// Fields are ordered by size for optimal memory alignment:
+// time.Time (24B), string (16B), then 8-byte fields.
 type ProcessMemory struct {
-	// PID is the process identifier.
-	PID int
+	// Timestamp is when this sample was taken.
+	Timestamp time.Time
 	// Name is the process command name.
 	Name string
+	// PID is the process identifier.
+	PID int
 	// RSS is the Resident Set Size in bytes (physical memory used).
 	RSS uint64
 	// VMS is the Virtual Memory Size in bytes (total virtual memory).
@@ -26,8 +31,6 @@ type ProcessMemory struct {
 	Stack uint64
 	// UsagePercent is the percentage of total system RAM used by this process (0-100).
 	UsagePercent float64
-	// Timestamp is when this sample was taken.
-	Timestamp time.Time
 }
 
 // NewProcessMemory creates a new ProcessMemory instance with calculated fields.

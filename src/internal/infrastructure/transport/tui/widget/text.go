@@ -204,7 +204,12 @@ func FormatBytes(bytes uint64) string {
 	if exp >= len(byteUnitsLong) {
 		exp = len(byteUnitsLong) - 1
 	}
-	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), byteUnitsLong[exp])
+	// Use strconv.AppendFloat to avoid fmt.Sprintf allocations.
+	var buf [32]byte
+	b := strconv.AppendFloat(buf[:0], float64(bytes)/float64(div), 'f', 1, 64)
+	b = append(b, ' ')
+	b = append(b, byteUnitsLong[exp]...)
+	return string(b)
 }
 
 // FormatBytesShort formats bytes in compact form.
@@ -226,13 +231,19 @@ func FormatBytesShort(bytes uint64) string {
 	}
 	value := float64(bytes) / float64(div)
 
-	if value >= 100 {
-		return fmt.Sprintf("%.0f%s", value, byteUnitsShort[exp])
+	// Use strconv.AppendFloat to avoid fmt.Sprintf allocations.
+	var buf [32]byte
+	var b []byte
+	switch {
+	case value >= 100:
+		b = strconv.AppendFloat(buf[:0], value, 'f', 0, 64)
+	case value >= 10:
+		b = strconv.AppendFloat(buf[:0], value, 'f', 1, 64)
+	default:
+		b = strconv.AppendFloat(buf[:0], value, 'f', 2, 64)
 	}
-	if value >= 10 {
-		return fmt.Sprintf("%.1f%s", value, byteUnitsShort[exp])
-	}
-	return fmt.Sprintf("%.2f%s", value, byteUnitsShort[exp])
+	b = append(b, byteUnitsShort[exp]...)
+	return string(b)
 }
 
 // FormatBytesPerSec formats bytes per second.

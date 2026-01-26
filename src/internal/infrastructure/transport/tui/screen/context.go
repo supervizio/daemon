@@ -2,7 +2,6 @@
 package screen
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -53,15 +52,14 @@ func (c *ContextRenderer) Render(snap *model.Snapshot) string {
 		search = "-"
 	}
 
-	// Build lines.
+	// Build lines using string concatenation to avoid fmt.Sprintf allocations.
 	lines := []string{
-		fmt.Sprintf("  Host: %-30s Mode: %s", ctx.Hostname, mode),
-		fmt.Sprintf("  OS: %s %s %s %s Uptime: %s",
-			ctx.OS, ctx.Kernel, ctx.Arch,
-			strings.Repeat(" ", maxInt(0, 20-len(ctx.Kernel)-len(ctx.Arch))),
-			widget.FormatDuration(ctx.Uptime)),
-		fmt.Sprintf("  IP: %-30s PID: %d", ctx.PrimaryIP, ctx.DaemonPID),
-		fmt.Sprintf("  DNS: %-28s Search: %s", dns, search),
+		"  Host: " + widget.PadRight(ctx.Hostname, 30) + " Mode: " + mode,
+		"  OS: " + ctx.OS + " " + ctx.Kernel + " " + ctx.Arch +
+			strings.Repeat(" ", maxInt(0, 20-len(ctx.Kernel)-len(ctx.Arch))) +
+			" Uptime: " + widget.FormatDuration(ctx.Uptime),
+		"  IP: " + widget.PadRight(ctx.PrimaryIP, 30) + " PID: " + strconv.Itoa(ctx.DaemonPID),
+		"  DNS: " + widget.PadRight(dns, 28) + " Search: " + search,
 	}
 
 	box := widget.NewBox(c.width).
@@ -80,17 +78,18 @@ func (c *ContextRenderer) RenderLimits(snap *model.Snapshot) string {
 		return ""
 	}
 
-	// CPU limits.
+	// CPU limits - use string concatenation to avoid fmt.Sprintf.
 	cpuStr := "-"
 	if limits.CPUQuota > 0 {
-		cpuStr = fmt.Sprintf("%.1f cores (quota %d/%d)",
-			limits.CPUQuota, limits.CPUQuotaRaw, limits.CPUPeriod)
+		cpuStr = formatFloat1(limits.CPUQuota) + " cores (quota " +
+			strconv.FormatInt(limits.CPUQuotaRaw, 10) + "/" +
+			strconv.FormatInt(limits.CPUPeriod, 10) + ")"
 	}
 
 	// Memory limits.
 	memStr := "-"
 	if limits.MemoryMax > 0 {
-		memStr = fmt.Sprintf("%s max", widget.FormatBytes(limits.MemoryMax))
+		memStr = widget.FormatBytes(limits.MemoryMax) + " max"
 	}
 
 	// PIDs.
@@ -106,8 +105,8 @@ func (c *ContextRenderer) RenderLimits(snap *model.Snapshot) string {
 	}
 
 	lines := []string{
-		fmt.Sprintf("  CPU: %-35s Memory: %s", cpuStr, memStr),
-		fmt.Sprintf("  PIDs: %-34s Cpuset: %s", pidsStr, cpusetStr),
+		"  CPU: " + widget.PadRight(cpuStr, 35) + " Memory: " + memStr,
+		"  PIDs: " + widget.PadRight(pidsStr, 34) + " Cpuset: " + cpusetStr,
 	}
 
 	box := widget.NewBox(c.width).
@@ -181,7 +180,7 @@ func (c *ContextRenderer) formatSandbox(sb model.SandboxInfo, width int) string 
 		status = widget.Truncate(sb.Endpoint, width-15)
 	}
 
-	return fmt.Sprintf("%s %s %s", icon, name, status)
+	return icon + " " + name + " " + status
 }
 
 // maxInt returns the larger of two ints.

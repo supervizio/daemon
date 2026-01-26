@@ -5,13 +5,13 @@ import "time"
 
 // CheckResult represents the outcome of a probe execution.
 // It contains the probe status, latency measurement, output, and any error.
+//
+// Fields are ordered by size for optimal memory alignment:
+// error interface (16B), string (16B), Duration (8B), bool (1B).
 type CheckResult struct {
-	// Success indicates whether the probe succeeded.
-	Success bool
-
-	// Latency records how long the probe took to complete.
-	// This is useful for measuring network latency and service response times.
-	Latency time.Duration
+	// Error holds any error that occurred during probing.
+	// When Success is false, this should contain the failure reason.
+	Error error
 
 	// Output contains any output from the probe.
 	// For exec probes: stdout content.
@@ -19,9 +19,12 @@ type CheckResult struct {
 	// For other probes: connection details.
 	Output string
 
-	// Error holds any error that occurred during probing.
-	// When Success is false, this should contain the failure reason.
-	Error error
+	// Latency records how long the probe took to complete.
+	// This is useful for measuring network latency and service response times.
+	Latency time.Duration
+
+	// Success indicates whether the probe succeeded.
+	Success bool
 }
 
 // NewCheckResult creates a new probe result with the specified parameters.

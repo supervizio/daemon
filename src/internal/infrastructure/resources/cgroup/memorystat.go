@@ -28,22 +28,39 @@ type MemoryStat struct {
 	Pgmajfault uint64
 }
 
-// fieldMap returns the field mapping for MemoryStat parsing.
+// setField sets the appropriate field based on the key.
+// Uses switch instead of map to avoid heap allocations on every call.
+//
+// Params:
+//   - key: field name from memory.stat
+//   - value: parsed uint64 value
 //
 // Returns:
-//   - map[string]*uint64: field name to struct field pointer mapping
-func (m *MemoryStat) fieldMap() map[string]*uint64 {
-	// Return mapping of memory.stat keys to struct fields
-	return map[string]*uint64{
-		"anon":       &m.Anon,
-		"file":       &m.File,
-		"kernel":     &m.Kernel,
-		"slab":       &m.Slab,
-		"sock":       &m.Sock,
-		"shmem":      &m.Shmem,
-		"mapped":     &m.Mapped,
-		"dirty":      &m.Dirty,
-		"pgfault":    &m.Pgfault,
-		"pgmajfault": &m.Pgmajfault,
+//   - bool: true if key was recognized and field was set
+func (m *MemoryStat) setField(key string, value uint64) bool {
+	switch key {
+	case "anon":
+		m.Anon = value
+	case "file":
+		m.File = value
+	case "kernel":
+		m.Kernel = value
+	case "slab":
+		m.Slab = value
+	case "sock":
+		m.Sock = value
+	case "shmem":
+		m.Shmem = value
+	case "mapped":
+		m.Mapped = value
+	case "dirty":
+		m.Dirty = value
+	case "pgfault":
+		m.Pgfault = value
+	case "pgmajfault":
+		m.Pgmajfault = value
+	default:
+		return false
 	}
+	return true
 }

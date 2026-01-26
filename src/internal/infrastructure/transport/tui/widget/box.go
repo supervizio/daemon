@@ -130,12 +130,12 @@ func (b *Box) Render() string {
 			sb.WriteString(b.BorderColor)
 			sb.WriteString(b.Style.TitleRight)
 			remaining := innerWidth - titleLen - 4
-			sb.WriteString(strings.Repeat(b.Style.Horizontal, remaining))
+			sb.WriteString(repeatHorizontal(b.Style.Horizontal, remaining))
 		} else {
-			sb.WriteString(strings.Repeat(b.Style.Horizontal, innerWidth))
+			sb.WriteString(repeatHorizontal(b.Style.Horizontal, innerWidth))
 		}
 	} else {
-		sb.WriteString(strings.Repeat(b.Style.Horizontal, innerWidth))
+		sb.WriteString(repeatHorizontal(b.Style.Horizontal, innerWidth))
 	}
 
 	sb.WriteString(b.Style.TopRight)
@@ -166,7 +166,7 @@ func (b *Box) Render() string {
 	// Bottom border.
 	sb.WriteString(b.BorderColor)
 	sb.WriteString(b.Style.BottomLeft)
-	sb.WriteString(strings.Repeat(b.Style.Horizontal, innerWidth))
+	sb.WriteString(repeatHorizontal(b.Style.Horizontal, innerWidth))
 	sb.WriteString(b.Style.BottomRight)
 	sb.WriteString(ansi.Reset)
 
@@ -240,4 +240,13 @@ func truncateVisible(s string, maxLen int) string {
 // TruncateVisible truncates a string to maxLen visible characters.
 func TruncateVisible(s string, maxLen int) string {
 	return truncateVisible(s, maxLen)
+}
+
+// repeatHorizontal returns n repetitions of the horizontal character.
+// Uses cache for the common "─" character to avoid allocations.
+func repeatHorizontal(char string, n int) string {
+	if char == "─" {
+		return HorizontalBar(n)
+	}
+	return strings.Repeat(char, n)
 }

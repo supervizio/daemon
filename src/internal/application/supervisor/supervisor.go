@@ -533,10 +533,10 @@ func (s *Supervisor) handleEvent(name string, event *domain.Event) {
 		}
 	}
 	// Get atomic snapshot for the callback (lock-free, no copy needed).
+	// Use SnapshotPtr to avoid escape analysis issue from &Snapshot().
 	var statsSnap *ServiceStatsSnapshot
 	if stats != nil {
-		snap := stats.Snapshot()
-		statsSnap = &snap
+		statsSnap = stats.SnapshotPtr()
 	}
 	s.mu.Unlock()
 
@@ -830,10 +830,10 @@ func (s *Supervisor) AllStats() map[string]*ServiceStatsSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	// Return atomic snapshots (lock-free reads).
+	// Use SnapshotPtr to avoid escape analysis issue from &Snapshot().
 	result := make(map[string]*ServiceStatsSnapshot, len(s.stats))
 	for name, stats := range s.stats {
-		snap := stats.Snapshot()
-		result[name] = &snap
+		result[name] = stats.SnapshotPtr()
 	}
 	return result
 }

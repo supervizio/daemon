@@ -9,11 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Test_MemoryStat_fieldMap verifies the fieldMap method returns correct mappings.
+// Test_MemoryStat_setField verifies the setField method sets correct fields.
 //
 // Params:
 //   - t: testing instance
-func Test_MemoryStat_fieldMap(t *testing.T) {
+func Test_MemoryStat_setField(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -21,7 +21,7 @@ func Test_MemoryStat_fieldMap(t *testing.T) {
 		expectedFields []string
 	}{
 		{
-			name: "returns all expected memory stat fields",
+			name: "recognizes all expected memory stat fields",
 			expectedFields: []string{
 				"anon",
 				"file",
@@ -45,27 +45,25 @@ func Test_MemoryStat_fieldMap(t *testing.T) {
 			// Create MemoryStat instance
 			stat := &MemoryStat{}
 
-			// Get field map
-			fm := stat.fieldMap()
-
-			// Verify all expected fields are present
+			// Verify all expected fields are recognized
 			for _, field := range tt.expectedFields {
-				// Check if field exists in map
-				_, exists := fm[field]
-				assert.True(t, exists, "field %q should exist in fieldMap", field)
+				// Check if field is recognized by setField
+				recognized := stat.setField(field, 1)
+				assert.True(t, recognized, "field %q should be recognized by setField", field)
 			}
 
-			// Verify correct number of fields
-			assert.Len(t, fm, len(tt.expectedFields), "fieldMap should have correct number of fields")
+			// Verify unknown field returns false
+			recognized := stat.setField("unknown_field", 1)
+			assert.False(t, recognized, "unknown field should return false")
 		})
 	}
 }
 
-// Test_MemoryStat_fieldMap_PointerValidity verifies fieldMap pointers update struct fields.
+// Test_MemoryStat_setField_Values verifies setField updates struct fields correctly.
 //
 // Params:
 //   - t: testing instance
-func Test_MemoryStat_fieldMap_PointerValidity(t *testing.T) {
+func Test_MemoryStat_setField_Values(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -74,52 +72,52 @@ func Test_MemoryStat_fieldMap_PointerValidity(t *testing.T) {
 		setValue uint64
 	}{
 		{
-			name:     "anon field pointer is valid",
+			name:     "anon field is set correctly",
 			field:    "anon",
 			setValue: 1024,
 		},
 		{
-			name:     "file field pointer is valid",
+			name:     "file field is set correctly",
 			field:    "file",
 			setValue: 2048,
 		},
 		{
-			name:     "kernel field pointer is valid",
+			name:     "kernel field is set correctly",
 			field:    "kernel",
 			setValue: 4096,
 		},
 		{
-			name:     "slab field pointer is valid",
+			name:     "slab field is set correctly",
 			field:    "slab",
 			setValue: 8192,
 		},
 		{
-			name:     "sock field pointer is valid",
+			name:     "sock field is set correctly",
 			field:    "sock",
 			setValue: 16384,
 		},
 		{
-			name:     "shmem field pointer is valid",
+			name:     "shmem field is set correctly",
 			field:    "shmem",
 			setValue: 32768,
 		},
 		{
-			name:     "mapped field pointer is valid",
+			name:     "mapped field is set correctly",
 			field:    "mapped",
 			setValue: 65536,
 		},
 		{
-			name:     "dirty field pointer is valid",
+			name:     "dirty field is set correctly",
 			field:    "dirty",
 			setValue: 131072,
 		},
 		{
-			name:     "pgfault field pointer is valid",
+			name:     "pgfault field is set correctly",
 			field:    "pgfault",
 			setValue: 262144,
 		},
 		{
-			name:     "pgmajfault field pointer is valid",
+			name:     "pgmajfault field is set correctly",
 			field:    "pgmajfault",
 			setValue: 524288,
 		},
@@ -133,11 +131,9 @@ func Test_MemoryStat_fieldMap_PointerValidity(t *testing.T) {
 			// Create MemoryStat instance
 			stat := &MemoryStat{}
 
-			// Get field map
-			fm := stat.fieldMap()
-
-			// Set value through pointer
-			*fm[tt.field] = tt.setValue
+			// Set value through setField
+			ok := stat.setField(tt.field, tt.setValue)
+			assert.True(t, ok, "setField should return true for known field")
 
 			// Verify value was set in struct
 			var actual uint64
@@ -165,7 +161,7 @@ func Test_MemoryStat_fieldMap_PointerValidity(t *testing.T) {
 			}
 
 			// Verify value
-			assert.Equal(t, tt.setValue, actual, "value should be set correctly through pointer")
+			assert.Equal(t, tt.setValue, actual, "value should be set correctly through setField")
 		})
 	}
 }

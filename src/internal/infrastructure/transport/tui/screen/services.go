@@ -2,7 +2,6 @@
 package screen
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -79,9 +78,22 @@ func (s *ServicesRenderer) renderCompact(snap *model.Snapshot) string {
 			extra = widget.FormatPercent(svc.CPUPercent)
 		}
 
-		line := fmt.Sprintf("  %s %-10s %s %s",
-			icon, name, state, extra)
-		lines = append(lines, line)
+		// Use strings.Builder to avoid fmt.Sprintf allocation.
+		var sb strings.Builder
+		sb.Grow(40)
+		sb.WriteString("  ")
+		sb.WriteString(icon)
+		sb.WriteByte(' ')
+		sb.WriteString(name)
+		// Pad name to 10 chars.
+		for i := len([]rune(name)); i < 10; i++ {
+			sb.WriteByte(' ')
+		}
+		sb.WriteByte(' ')
+		sb.WriteString(state)
+		sb.WriteByte(' ')
+		sb.WriteString(extra)
+		lines = append(lines, sb.String())
 	}
 
 	// Summary.

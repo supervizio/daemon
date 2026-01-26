@@ -161,12 +161,33 @@ func (l *LogsPanel) updateContent() {
 
 		// Build line with proper padding (pad BEFORE adding colors).
 		// Format: "HH:MM:SS [LEVEL] service      message"
-		line := fmt.Sprintf("%s%s%s %s[%s%-5s%s]%s %-12s %s",
-			l.theme.Muted, ts, ansi.Reset,
-			levelColor, ansi.Reset, levelStr, levelColor, ansi.Reset,
-			service,
-			msg,
-		)
+		// Uses strings.Builder to avoid fmt.Sprintf allocation.
+		var lineBuf strings.Builder
+		lineBuf.Grow(len(ts) + len(levelStr) + len(service) + len(msg) + 60)
+		lineBuf.WriteString(l.theme.Muted)
+		lineBuf.WriteString(ts)
+		lineBuf.WriteString(ansi.Reset)
+		lineBuf.WriteByte(' ')
+		lineBuf.WriteString(levelColor)
+		lineBuf.WriteByte('[')
+		lineBuf.WriteString(ansi.Reset)
+		lineBuf.WriteString(levelStr)
+		// Pad level to 5 chars.
+		for i := len(levelStr); i < 5; i++ {
+			lineBuf.WriteByte(' ')
+		}
+		lineBuf.WriteString(levelColor)
+		lineBuf.WriteByte(']')
+		lineBuf.WriteString(ansi.Reset)
+		lineBuf.WriteByte(' ')
+		lineBuf.WriteString(service)
+		// Pad service to 12 chars.
+		for i := len([]rune(service)); i < 12; i++ {
+			lineBuf.WriteByte(' ')
+		}
+		lineBuf.WriteByte(' ')
+		lineBuf.WriteString(msg)
+		line := lineBuf.String()
 
 		sb.WriteString(line)
 		sb.WriteString("\n")
@@ -192,6 +213,7 @@ func (l *LogsPanel) getLevelInfo(level string) (string, string) {
 }
 
 // formatMetadata formats metadata as key=value pairs.
+// Uses strings.Builder to avoid fmt.Sprintf allocations.
 func (l *LogsPanel) formatMetadata(meta map[string]any) string {
 	if len(meta) == 0 {
 		return ""
@@ -203,11 +225,34 @@ func (l *LogsPanel) formatMetadata(meta map[string]any) string {
 	}
 	sort.Strings(keys)
 
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		parts = append(parts, fmt.Sprintf("%s=%v", k, meta[k]))
+	var sb strings.Builder
+	sb.Grow(len(keys) * 16) // Estimate ~16 chars per key=value pair.
+	for i, k := range keys {
+		if i > 0 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString(k)
+		sb.WriteByte('=')
+		// Format value based on type to avoid fmt.Sprintf.
+		switch v := meta[k].(type) {
+		case string:
+			sb.WriteString(v)
+		case int:
+			sb.WriteString(strconv.Itoa(v))
+		case int64:
+			sb.WriteString(strconv.FormatInt(v, 10))
+		case uint64:
+			sb.WriteString(strconv.FormatUint(v, 10))
+		case float64:
+			sb.WriteString(strconv.FormatFloat(v, 'f', -1, 64))
+		case bool:
+			sb.WriteString(strconv.FormatBool(v))
+		default:
+			// Fallback for complex types - use fmt but only when needed.
+			sb.WriteString(fmt.Sprint(v))
+		}
 	}
-	return strings.Join(parts, " ")
+	return sb.String()
 }
 
 // Init initializes the component.
@@ -263,7 +308,15 @@ func (l LogsPanel) View() string {
 
 	// === Top border ===
 	// Format: ╭─ Logs ────────────────── 50% ─╮
-	titlePart := fmt.Sprintf("─ %s%s%s ", l.theme.Header, l.title, borderColor)
+	// Build titlePart with strings.Builder to avoid fmt.Sprintf.
+	var titleBuf strings.Builder
+	titleBuf.Grow(len(l.title) + 32)
+	titleBuf.WriteString("─ ")
+	titleBuf.WriteString(l.theme.Header)
+	titleBuf.WriteString(l.title)
+	titleBuf.WriteString(borderColor)
+	titleBuf.WriteByte(' ')
+	titlePart := titleBuf.String()
 	scrollPart := l.scrollIndicator()
 
 	// Calculate dashes needed.
@@ -332,6 +385,7 @@ func (l LogsPanel) View() string {
 }
 
 // scrollIndicator returns the entry count as [ count / max ].
+// Uses strings.Builder to avoid string concatenation allocations.
 func (l LogsPanel) scrollIndicator() string {
 	count := len(l.entries)
 	max := l.maxSize
@@ -339,7 +393,16 @@ func (l LogsPanel) scrollIndicator() string {
 		max = DefaultLogBufferSize
 	}
 
-	return l.theme.Muted + "[ " + strconv.Itoa(count) + " / " + strconv.Itoa(max) + " ]" + ansi.Reset
+	var sb strings.Builder
+	sb.Grow(32)
+	sb.WriteString(l.theme.Muted)
+	sb.WriteString("[ ")
+	sb.WriteString(strconv.Itoa(count))
+	sb.WriteString(" / ")
+	sb.WriteString(strconv.Itoa(max))
+	sb.WriteString(" ]")
+	sb.WriteString(ansi.Reset)
+	return sb.String()
 }
 
 // renderVerticalScrollbar returns the scrollbar characters for each row.

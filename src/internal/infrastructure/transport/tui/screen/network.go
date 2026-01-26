@@ -2,7 +2,7 @@
 package screen
 
 import (
-	"fmt"
+	"strings"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/model"
@@ -99,11 +99,20 @@ func (n *NetworkRenderer) renderCompact(ifaces []model.NetworkInterface) string 
 			ip = "-"
 		}
 
-		// Compact: name, IP, and rates.
+		// Compact: name, IP, and rates. Use strings.Builder to avoid fmt.Sprintf.
 		rx := widget.FormatBytesPerSec(iface.RxBytesPerSec)
 		tx := widget.FormatBytesPerSec(iface.TxBytesPerSec)
-		line := fmt.Sprintf("  %-6s %-15s ↓%s ↑%s", iface.Name, ip, rx, tx)
-		lines = append(lines, line)
+		var sb strings.Builder
+		sb.Grow(50)
+		sb.WriteString("  ")
+		sb.WriteString(widget.PadRight(iface.Name, 6))
+		sb.WriteByte(' ')
+		sb.WriteString(widget.PadRight(ip, 15))
+		sb.WriteString(" ↓")
+		sb.WriteString(rx)
+		sb.WriteString(" ↑")
+		sb.WriteString(tx)
+		lines = append(lines, sb.String())
 	}
 
 	box := widget.NewBox(n.width).
@@ -161,23 +170,39 @@ func (n *NetworkRenderer) renderWithBars(ifaces []model.NetworkInterface) string
 			speed := widget.FormatSpeedShort(iface.Speed)
 
 			// Format: "  eth0   ↓[bar] 1.2 MB/s  ↑[bar] 256 KB/s  1 Gbps"
-			line = fmt.Sprintf("  %-6s ↓%s %8s  ↑%s %8s  %s",
-				iface.Name,
-				rxBar.Render(),
-				rxRate,
-				txBar.Render(),
-				txRate,
-				speed,
-			)
+			// Use strings.Builder to avoid fmt.Sprintf allocation.
+			var sb strings.Builder
+			sb.Grow(100)
+			sb.WriteString("  ")
+			sb.WriteString(widget.PadRight(iface.Name, 6))
+			sb.WriteString(" ↓")
+			sb.WriteString(rxBar.Render())
+			sb.WriteByte(' ')
+			sb.WriteString(widget.PadLeft(rxRate, 8))
+			sb.WriteString("  ↑")
+			sb.WriteString(txBar.Render())
+			sb.WriteByte(' ')
+			sb.WriteString(widget.PadLeft(txRate, 8))
+			sb.WriteString("  ")
+			sb.WriteString(speed)
+			line = sb.String()
 		} else {
 			// No speed info (non-Linux platforms) - show throughput only.
 			// Format: "  lo     ↓ 1.2 MB/s  ↑ 256 KB/s  (no limit)"
-			line = fmt.Sprintf("  %-6s ↓ %8s  ↑ %8s  %s",
-				iface.Name,
-				rxRate,
-				txRate,
-				n.theme.Muted+"(no limit)"+ansi.Reset,
-			)
+			// Use strings.Builder to avoid fmt.Sprintf allocation.
+			var sb strings.Builder
+			sb.Grow(60)
+			sb.WriteString("  ")
+			sb.WriteString(widget.PadRight(iface.Name, 6))
+			sb.WriteString(" ↓ ")
+			sb.WriteString(widget.PadLeft(rxRate, 8))
+			sb.WriteString("  ↑ ")
+			sb.WriteString(widget.PadLeft(txRate, 8))
+			sb.WriteString("  ")
+			sb.WriteString(n.theme.Muted)
+			sb.WriteString("(no limit)")
+			sb.WriteString(ansi.Reset)
+			line = sb.String()
 		}
 
 		lines = append(lines, line)
@@ -192,15 +217,14 @@ func (n *NetworkRenderer) renderWithBars(ifaces []model.NetworkInterface) string
 }
 
 // RenderInline returns a single-line summary.
+// Uses string concatenation to avoid fmt.Sprintf allocation.
 func (n *NetworkRenderer) RenderInline(snap *model.Snapshot) string {
 	// Find primary interface (non-loopback, has IP).
 	for _, iface := range snap.Network {
 		if !iface.IsLoopback && iface.IP != "" {
-			return fmt.Sprintf("%s %s ↓%s ↑%s",
-				iface.Name,
-				iface.IP,
-				widget.FormatBytesPerSec(iface.RxBytesPerSec),
-				widget.FormatBytesPerSec(iface.TxBytesPerSec))
+			return iface.Name + " " + iface.IP +
+				" ↓" + widget.FormatBytesPerSec(iface.RxBytesPerSec) +
+				" ↑" + widget.FormatBytesPerSec(iface.TxBytesPerSec)
 		}
 	}
 	return "No network"

@@ -127,17 +127,6 @@ func formatMetadataToBuilder(sb *strings.Builder, meta map[string]any) {
 	}
 }
 
-// formatMetadata formats metadata as key=value pairs.
-// Uses type switch for common types to avoid fmt.Sprintf allocations.
-func formatMetadata(meta map[string]any) string {
-	sb := getBuilder()
-	defer putBuilder(sb)
-
-	sb.Grow(len(meta) * 16) // Pre-allocate for typical key=value pairs.
-	formatMetadataToBuilder(sb, meta)
-	return sb.String()
-}
-
 // formatValue formats a value to the builder using type switch for efficiency.
 func formatValue(sb *strings.Builder, v any) {
 	switch val := v.(type) {
@@ -155,7 +144,7 @@ func formatValue(sb *strings.Builder, v any) {
 		sb.WriteString(strconv.FormatBool(val))
 	default:
 		// Fallback for complex types.
-		sb.WriteString(fmt.Sprintf("%v", val))
+		fmt.Fprintf(sb, "%v", val)
 	}
 }
 

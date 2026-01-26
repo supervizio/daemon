@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"sync"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -19,6 +20,14 @@ import (
 	"github.com/kodflow/daemon/internal/domain/metrics"
 	"github.com/kodflow/daemon/internal/domain/storage"
 )
+
+// bufferPool provides reusable bytes.Buffer instances to reduce allocations
+// during gob encoding operations.
+var bufferPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
 
 // File permissions and timeouts for database operations.
 const (
@@ -796,15 +805,20 @@ func int64ToBytes(n int64) []byte {
 // The error handling is retained for robustness if struct types change in the future.
 // Coverage gap on error branch is accepted as theoretically unreachable with current types.
 func encodeSystemCPU(data *metrics.SystemCPU) ([]byte, error) {
-	// Create buffer for encoded data
-	var buf bytes.Buffer
+	// Get pooled buffer to reduce allocations
+	buf := bufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufferPool.Put(buf)
+
 	// Encode value using gob
-	if err := gob.NewEncoder(&buf).Encode(data); err != nil {
+	if err := gob.NewEncoder(buf).Encode(data); err != nil {
 		// Encoding failed
 		return nil, fmt.Errorf("gob encode: %w", err)
 	}
-	// Return encoded bytes
-	return buf.Bytes(), nil
+	// Copy bytes since buffer will be reused
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+	return result, nil
 }
 
 // decodeSystemCPU deserializes system CPU metrics using gob.
@@ -833,15 +847,20 @@ func decodeSystemCPU(data []byte, dest *metrics.SystemCPU) error {
 // The error handling is retained for robustness if struct types change in the future.
 // Coverage gap on error branch is accepted as theoretically unreachable with current types.
 func encodeSystemMemory(data *metrics.SystemMemory) ([]byte, error) {
-	// Create buffer for encoded data
-	var buf bytes.Buffer
+	// Get pooled buffer to reduce allocations
+	buf := bufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufferPool.Put(buf)
+
 	// Encode value using gob
-	if err := gob.NewEncoder(&buf).Encode(data); err != nil {
+	if err := gob.NewEncoder(buf).Encode(data); err != nil {
 		// Encoding failed
 		return nil, fmt.Errorf("gob encode: %w", err)
 	}
-	// Return encoded bytes
-	return buf.Bytes(), nil
+	// Copy bytes since buffer will be reused
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+	return result, nil
 }
 
 // decodeSystemMemory deserializes system memory metrics using gob.
@@ -870,15 +889,20 @@ func decodeSystemMemory(data []byte, dest *metrics.SystemMemory) error {
 // The error handling is retained for robustness if struct types change in the future.
 // Coverage gap on error branch is accepted as theoretically unreachable with current types.
 func encodeProcessMetrics(data *metrics.ProcessMetrics) ([]byte, error) {
-	// Create buffer for encoded data
-	var buf bytes.Buffer
+	// Get pooled buffer to reduce allocations
+	buf := bufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufferPool.Put(buf)
+
 	// Encode value using gob
-	if err := gob.NewEncoder(&buf).Encode(data); err != nil {
+	if err := gob.NewEncoder(buf).Encode(data); err != nil {
 		// Encoding failed
 		return nil, fmt.Errorf("gob encode: %w", err)
 	}
-	// Return encoded bytes
-	return buf.Bytes(), nil
+	// Copy bytes since buffer will be reused
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+	return result, nil
 }
 
 // decodeProcessMetrics deserializes process metrics using gob.

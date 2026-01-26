@@ -3,6 +3,7 @@
 package logging
 
 import (
+	"bytes"
 	"io"
 )
 
@@ -67,15 +68,8 @@ func (lw *LineWriter) Write(p []byte) (n int, err error) {
 
 	// Iterate through the buffer to find and process complete lines.
 	for {
-		idx := indexNotFound
-		// Iterate through buffer bytes to find the next newline character.
-		for i, b := range lw.buf {
-			// Check if current byte is a newline character.
-			if b == newlineChar {
-				idx = i
-				break
-			}
-		}
+		// Use bytes.IndexByte for optimized newline search (assembly-optimized).
+		idx := bytes.IndexByte(lw.buf, newlineChar)
 
 		// Check if no newline was found, meaning no complete line is available.
 		if idx == indexNotFound {

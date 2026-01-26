@@ -21,6 +21,14 @@ type JSONLogEntry struct {
 	Metadata  map[string]any `json:",inline"`
 }
 
+// jsonMapPool provides reusable map[string]any instances to reduce allocations.
+// Maps are cleared before returning to pool.
+var jsonMapPool = sync.Pool{
+	New: func() any {
+		return make(map[string]any, 16) // Pre-allocate for typical log entries
+	},
+}
+
 // JSONWriter writes log events as JSON lines to a file.
 type JSONWriter struct {
 	// mu protects concurrent writes.
@@ -74,9 +82,10 @@ func (w *JSONWriter) Write(event logging.LogEvent) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// Get a pooled map to reduce allocations in hot path.
+	entry := jsonMapPool.Get().(map[string]any)
+
 	// Build the JSON entry with metadata flattened.
-	// Pre-allocate for base fields (5) + metadata.
-	entry := make(map[string]any, 5+len(event.Metadata))
 	entry["ts"] = event.Timestamp.Format("2006-01-02T15:04:05Z07:00")
 	entry["level"] = event.Level.String()
 	if event.Service != "" {
@@ -92,7 +101,15 @@ func (w *JSONWriter) Write(event logging.LogEvent) error {
 		entry[k] = v
 	}
 
-	return w.encoder.Encode(entry)
+	err := w.encoder.Encode(entry)
+
+	// Clear and return map to pool.
+	for k := range entry {
+		delete(entry, k)
+	}
+	jsonMapPool.Put(entry)
+
+	return err
 }
 
 // Close closes the file.

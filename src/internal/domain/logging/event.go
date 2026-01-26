@@ -35,7 +35,7 @@ func NewLogEvent(level Level, service, eventType, message string) LogEvent {
 		Service:   service,
 		EventType: eventType,
 		Message:   message,
-		Metadata:  make(map[string]any),
+		Metadata:  make(map[string]any, 4), // Preallocate for typical 2-4 metadata entries
 	}
 }
 
