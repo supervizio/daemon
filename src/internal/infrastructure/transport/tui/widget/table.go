@@ -86,6 +86,9 @@ func (t *Table) Render() string {
 	widths := t.calculateWidths()
 
 	var sb strings.Builder
+	// Pre-allocate for estimated output size.
+	estimatedSize := (t.Width + 20) * (len(t.Rows) + 2) // rows + header + separator
+	sb.Grow(estimatedSize)
 
 	// Header.
 	if t.ShowHeader {
@@ -105,7 +108,7 @@ func (t *Table) Render() string {
 			if i > 0 {
 				sb.WriteString(t.Separator)
 			}
-			sb.WriteString(strings.Repeat("─", w))
+			sb.WriteString(HorizontalBar(w)) // Use cached horizontal bar.
 		}
 		sb.WriteString(ansi.Reset)
 		sb.WriteString("\n")
@@ -139,6 +142,8 @@ func (t *Table) RenderCompact() string {
 
 	widths := t.calculateWidths()
 	var sb strings.Builder
+	// Pre-allocate for estimated output size.
+	sb.Grow((t.Width + 10) * (len(t.Rows) + 1))
 
 	// Header.
 	if t.ShowHeader {
