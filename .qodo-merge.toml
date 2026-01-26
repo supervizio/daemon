@@ -1,14 +1,23 @@
-# Qodo Merge (PR-Agent) Configuration — devcontainer-template (strict, high-signal)
+# =============================================================================
+# Qodo Merge (PR-Agent) Configuration - supervizio/daemon
+# =============================================================================
+# PID1-capable process supervisor for containers and Unix systems
+# Hexagonal architecture (DDD) | Go 1.25+ | Multi-platform (Linux/BSD/macOS)
 # https://qodo-merge-docs.qodo.ai/usage-guide/configuration_options/
+# =============================================================================
 #
 # Strategy:
-# - pr_reviewer: full review narrative (P0/P1/P2 triage, diff-first, structured output)
-# - pr_code_suggestions: ONLY safe, minimal, production-ready patches for P0 items
-# - RAG enabled to reduce hallucinations + enforce repo conventions (CLAUDE.md + RULES.md)
+# - pr_reviewer: Full review with P0/P1/P2 triage, process supervisor focus
+# - pr_code_suggestions: Safe, minimal patches for P0 blockers only
+# - RAG enabled with CLAUDE.md + RULES.md for repo conventions
 #
-# Notes:
-# - Keep pr_reviewer verbose enough to drive reasoning.
-# - Keep pr_code_suggestions extremely constrained to prevent “refactor storms”.
+# Project-specific concerns:
+# - Signal handling (SIGTERM, SIGINT, SIGHUP, SIGCHLD)
+# - Graceful shutdown and process cleanup
+# - Goroutine/channel safety, no leaks
+# - Cross-platform (Linux, BSD variants, macOS)
+# - Hexagonal architecture boundaries
+# =============================================================================
 
 [pr_reviewer]
 # Review labels / gates
@@ -20,95 +29,181 @@ require_estimate_effort_to_review = true
 
 extra_instructions = """
 ROLE
-You are a Staff-level reviewer. Be strict, concise, and evidence-driven. Optimize for correctness, security, and maintainability.
+You are a Staff-level reviewer for a PID1 process supervisor. Be strict, concise, and evidence-driven.
+Bugs here crash entire containers. Optimize for correctness, concurrency safety, and resource management.
+
+CONTEXT: supervizio/daemon
+- PID1-capable process supervisor for containers and Unix systems
+- Hexagonal architecture (domain → application → infrastructure)
+- Go 1.25+ with zero CGO, multi-platform (Linux, FreeBSD, OpenBSD, NetBSD, DragonFly, macOS)
+- Wire for DI, gRPC API, Bubble Tea TUI, BoltDB storage
 
 SCOPE (DIFF-FIRST)
-- Review the diff and its direct impact only. Do NOT do drive-by refactors in unrelated legacy code.
-- If the change touches a boundary (auth/authz, request parsing/validation, CORS, storage schema/migrations, crypto, CLI execution, network, permissions, IaC), treat it as high-risk and scrutinize deeply.
-- If a change modifies a public API (types, endpoints, CLI args, config schema, persistence format), request call sites and tests when needed.
+- Review the diff and its direct impact only. No drive-by refactors.
+- HIGH-RISK BOUNDARIES for this project:
+  * Signal handling (SIGTERM, SIGINT, SIGHUP, SIGCHLD)
+  * Process lifecycle (start, stop, restart, graceful shutdown)
+  * Child process management (exec, wait, zombie reaping)
+  * Goroutine/channel lifecycle (leaks, races, deadlocks)
+  * File descriptor management (no leaks)
+  * Platform-specific code (_linux, _darwin, _bsd)
+  * gRPC streaming (proper cancellation, backpressure)
+  * Config parsing/validation
+  * Health checks and probes
+
+HEXAGONAL ARCHITECTURE (ENFORCE)
+- domain/: ZERO external imports. Pure business logic. Port interfaces only.
+- application/: Orchestrates domain. May depend on domain/, never infrastructure/.
+- infrastructure/: Implements domain ports. Platform-specific code here.
+- Flag violations: "domain/ imports infrastructure/" is ALWAYS P0.
 
 CONVENTIONS (MUST ENFORCE)
-- Read and enforce CLAUDE.md (and any CONTRIBUTING/ARCHITECTURE docs).
-- Also enforce rules in: .devcontainer/features/languages/<lang>/RULES.md
-- Do NOT provide generic advice. Every comment must reference a concrete file/symbol and a specific fix.
+- Read and enforce CLAUDE.md files at each level
+- Enforce .devcontainer/features/languages/go/RULES.md
+- Every comment must reference a concrete file/symbol and specific fix
 
 TRIAGE (SEVERITY)
-- P0 BLOCKER: security boundary flaw, auth/authz issue, injection, secret exposure, panic/crash in production path, data loss/corruption, unsafe deserialization, SSRF/RCE, path traversal, reflected/permissive CORS, race/deadlock, blocking I/O in async runtime, insecure default config.
-- P1 MAJOR: correctness risk, missing validation, ambiguous error handling, performance footgun introduced by this diff (N+1, O(n^2) on hot path), missing observability on critical path, missing tests for changed behavior.
-- P2 MINOR: maintainability/style issues that are directly caused by the diff (only show if there are zero P0 and few P1).
+- P0 BLOCKER:
+  * Signal handler missing for SIGTERM/SIGINT/SIGCHLD
+  * Child processes not cleaned up on shutdown (zombie risk)
+  * Goroutine leak on shutdown path
+  * Data race in concurrent code
+  * Channel never closed (goroutine leak)
+  * Panic/crash in production path
+  * Security: secret exposure, command injection, path traversal
+  * Domain layer importing infrastructure (architecture violation)
+  * Context not propagated through call chain
+  * Missing timeout on blocking I/O
+
+- P1 MAJOR:
+  * Missing error handling (error ignored, not logged)
+  * Correctness risk in process lifecycle
+  * Performance footgun (O(n²) on hot path, allocation in loop)
+  * Missing tests for changed behavior
+  * Platform-specific code without build tags
+  * Health check timeout not configurable
+
+- P2 MINOR:
+  * Style/maintainability in changed code only
+  * Documentation updates needed
+  * Test coverage could be improved
 
 SIGNAL / NOISE CONTROL
-- Cap at 10 findings total. If more exist, group duplicates (“N occurrences”) and show 1 representative example.
-- If any P0 exists: hide P2 entirely. Keep P1 only if it materially affects correctness/security/reliability.
+- Cap at 10 findings total. Group duplicates with count.
+- If any P0 exists: hide P2. Keep P1 only if it affects correctness/security.
 
 EACH FINDING MUST INCLUDE
 1) What/Where: file + symbol (and line if available)
 2) Why: concrete impact (bug/security/perf/reliability)
-3) Fix: minimal patch steps (or snippet). Prefer minimal diffs.
+3) Fix: minimal patch steps (or snippet)
 
-TEST POLICY (STRICT)
-- If the change touches a boundary (security/correctness/persistence/parsing): require at least:
-  * 1 positive test covering the new/changed behavior
-  * 1 negative test (invalid input / forbidden origin / auth failure / error path)
-- If tests are not added, require an explicit justification + manual verification steps.
+TEST POLICY (STRICT FOR PROCESS SUPERVISOR)
+- Process lifecycle changes: require tests with proper cleanup (t.Cleanup)
+- Concurrent code: require race detection tests
+- Signal handling: require integration/e2e test
+- Bugfix: require regression test
 
-SECURITY CHECKLIST (HIGH-SIGNAL ONLY)
-- Input validation/parsing: prefer strict parsers (URL/path/serde) over ad-hoc string logic. Reject/deny by default on parse failure.
-- Secrets/PII: never log tokens/cookies/Authorization headers/private keys/user secrets. Redact if unavoidable.
-- Dependencies: flag risky additions (crypto, http clients, native bindings, “unsafe” crates/features) without justification and constraints.
-- AuthZ: verify ownership checks / least privilege. Flag IDOR and missing tenant scoping.
-- Configuration: secure defaults (no debug, no permissive CORS, no wildcard origins, minimal permissions).
+PLATFORM CHECKLIST
+- Linux: procfs/sysfs paths correct? cgroup v1/v2 handled?
+- BSD: procfs optional? kqueue for events?
+- macOS: sysctl/mach APIs? Sandbox restrictions?
+- All: build tags correct? No Linux-only syscalls without guards?
+
+SECURITY CHECKLIST (PROCESS SUPERVISOR SPECIFIC)
+- exec.Command: Arguments properly quoted? No shell injection?
+- File paths: Traversal checked? Symlink following controlled?
+- Privileges: Proper dropping after binding ports? setuid/setgid handling?
+- Config: Secure defaults? No debug mode in production?
+- Logs: No secrets, PIDs, or sensitive paths exposed?
 
 OUTPUT FORMAT (EXACT)
-1) Summary (max 6 bullets)
+1) Summary (max 6 bullets, mention platform impact if any)
 2) P0 Blockers (file/symbol + why + fix)
 3) P1 Majors (file/symbol + why + fix)
-4) Test impact (what to add/update + suggested cases)
-5) Manual verification (only if relevant; precise steps)
+4) Architecture impact (hexagonal layer violations)
+5) Test requirements (what to add + suggested cases)
+6) Platform considerations (if cross-platform code changed)
 """
 
 [pr_code_suggestions]
-# Suggestions should be few but high quality; patches only for P0.
+# Few but high quality; patches only for P0
 num_code_suggestions = 6
 
 extra_instructions = """
 ROLE
-You generate code suggestions (patches). Only produce safe-by-default, production-ready changes.
+You generate code suggestions (patches) for a PID1 process supervisor.
+Only produce safe-by-default, production-ready changes. Bugs here crash containers.
 
 HARD LIMITS
-- Focus ONLY on P0 issues (BLOCKERS). If it’s not a blocker, do not propose a patch.
-- Prefer minimal diffs. Avoid refactors, renames, formatting-only changes, or “cleanup”.
-- Do NOT introduce new dependencies unless strictly necessary to fix the blocker; if you do, justify briefly.
+- Focus ONLY on P0 issues (BLOCKERS). If not a blocker, no patch.
+- Prefer minimal diffs. No refactors, renames, formatting, or "cleanup".
+- Do NOT introduce new dependencies unless strictly necessary.
 
 PATCH QUALITY BAR
-- Must compile (best effort) and preserve existing behavior except for the security/correctness fix.
-- Keep changes localized to the smallest surface area.
-- If changing runtime behavior, update/add tests in the same suggestion when feasible.
+- Must compile and preserve existing behavior except for the fix
+- Keep changes localized to smallest surface area
+- If changing runtime behavior, update/add tests in same suggestion
 
-CORS / ORIGIN ALLOWLIST (STRICT, SAFE DEFAULTS)
-- NEVER use prefix/substring matching (starts_with/contains/ends_with) for origins.
-- Parse Origin with a real URL parser. If parsing fails: NOT allowed.
-- Canonical compare:
-  * scheme exact (http vs https)
-  * host exact after normalization (DNS case-insensitive; reject invalid host)
-  * port: compare explicit port; apply defaults 80/443 when missing
-- Reject:
-  * embedded credentials (username/password)
-  * opaque origins ('null') unless explicitly required + justified
-  * non-http(s) schemes unless explicitly allowed (tauri:// ok for desktop apps)
-- Credentials rule: NEVER allow_credentials with allow_any_origin or reflected-origin patterns.
-- Avoid wildcards. If absolutely required, constrain via eTLD+1 and dot-boundary suffix rules.
+PROCESS SUPERVISOR SPECIFIC FIXES
 
-ERROR HANDLING (NO PANICS)
-- Flag and fix unwrap/expect (or equivalents) in production paths.
-- Every fallback path must:
-  * return an explicit error OR a documented default
-  * log at appropriate level with context (request_id/component if available), never secrets
+Signal Handling:
+- Always check signal.Notify setup for required signals
+- Ensure signal channels are buffered (size 1 minimum)
+- Verify graceful shutdown sequence: stop children → wait → cleanup → exit
 
-LOGGING
-- Replace print/console statements with proper logging.
-- Use structured fields for context.
-- Preserve error context (wrap/annotate); don’t swallow errors.
+Goroutine Safety:
+- Fix data races with proper synchronization (mutex, atomic, channels)
+- Close channels to signal completion (use defer where appropriate)
+- Use context.Context for cancellation propagation
+- Add select with ctx.Done() for blocking operations
+
+Resource Cleanup:
+- File descriptors: defer file.Close() immediately after open
+- Child processes: always call cmd.Wait() after Start()
+- Timers: defer timer.Stop() or use time.AfterFunc
+
+Error Handling:
+- Wrap errors with context: fmt.Errorf("operation %s: %w", name, err)
+- Never ignore errors from Close(), Wait(), Signal() in cleanup paths
+- Log errors in goroutines that can't return them
+
+Platform Compatibility:
+- Use build tags for platform-specific code
+- Avoid Linux-only syscalls without guards
+- Use filepath.Join for paths, not string concatenation
+
+Example fixes for common P0 issues:
+
+// BAD: Goroutine leak - channel never closed
+go func() {
+    for event := range events {
+        process(event)
+    }
+}()
+
+// GOOD: Proper cleanup
+go func() {
+    defer close(done)
+    for {
+        select {
+        case event, ok := <-events:
+            if !ok {
+                return
+            }
+            process(event)
+        case <-ctx.Done():
+            return
+        }
+    }
+}()
+
+// BAD: Signal not handled
+// (missing)
+
+// GOOD: Proper signal handling
+sigCh := make(chan os.Signal, 1)
+signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGCHLD)
+defer signal.Stop(sigCh)
 """
 
 [pr_description]
@@ -116,11 +211,27 @@ enable_semantic_files_types = true
 collapsible_file_list = "adaptive"
 generate_ai_title = false
 
+extra_instructions = """
+For supervizio/daemon PRs, include in description:
+- Which layer(s) affected: domain / application / infrastructure
+- Platform impact: Linux-only / cross-platform / BSD-specific
+- Signal/lifecycle changes: mention any changes to shutdown behavior
+- Breaking changes: API, config format, CLI flags
+"""
+
 [pr_questions]
 enable_help_text = true
 
 [rag_arguments]
 enable_rag = true
+
+# RAG should prioritize these files for context
+rag_files = [
+    "**/CLAUDE.md",
+    "**/RULES.md",
+    "src/internal/domain/**/*.go",
+    "src/internal/application/**/*.go"
+]
 
 [pr_compliance]
 enable_codebase_duplication = true
@@ -133,3 +244,10 @@ auto_improve = true
 [config]
 # Set true temporarily if debugging behavior
 output_relevant_configurations = false
+
+# Language model settings
+model = "claude-3-5-sonnet"
+fallback_models = ["gpt-4o"]
+
+# Repository context
+repo_language = "go"
