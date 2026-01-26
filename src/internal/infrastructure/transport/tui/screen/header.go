@@ -2,7 +2,6 @@
 package screen
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
@@ -49,15 +48,24 @@ func (h *HeaderRenderer) Render(snap *model.Snapshot, showTime bool) string {
 func (h *HeaderRenderer) renderCompact(snap *model.Snapshot, _ bool) string {
 	ctx := snap.Context
 
-	// Logo with version.
-	logo := h.theme.Primary + "superviz" + ansi.Reset +
-		h.theme.Accent + ".io" + ansi.Reset
-
-	version := ctx.Version
-	if len(version) > 0 && version[0] != 'v' {
-		version = "v" + version
+	// Logo with version using strings.Builder for efficiency.
+	var sb1 strings.Builder
+	sb1.Grow(64)
+	sb1.WriteString("  ")
+	sb1.WriteString(h.theme.Primary)
+	sb1.WriteString("superviz")
+	sb1.WriteString(ansi.Reset)
+	sb1.WriteString(h.theme.Accent)
+	sb1.WriteString(".io")
+	sb1.WriteString(ansi.Reset)
+	sb1.WriteByte(' ')
+	sb1.WriteString(h.theme.Accent)
+	if len(ctx.Version) > 0 && ctx.Version[0] != 'v' {
+		sb1.WriteByte('v')
 	}
-	versionStr := h.theme.Accent + version + ansi.Reset
+	sb1.WriteString(ctx.Version)
+	sb1.WriteString(ansi.Reset)
+	line1 := sb1.String()
 
 	// Runtime.
 	runtime := ctx.Mode.String()
@@ -65,11 +73,16 @@ func (h *HeaderRenderer) renderCompact(snap *model.Snapshot, _ bool) string {
 		runtime = ctx.ContainerRuntime
 	}
 
-	line1 := fmt.Sprintf("  %s %s", logo, versionStr)
-	line2 := fmt.Sprintf("  %s │ %s │ Up %s",
-		ctx.Hostname,
-		runtime,
-		widget.FormatDurationShort(ctx.Uptime))
+	// Line 2 with strings.Builder.
+	var sb2 strings.Builder
+	sb2.Grow(64)
+	sb2.WriteString("  ")
+	sb2.WriteString(ctx.Hostname)
+	sb2.WriteString(" │ ")
+	sb2.WriteString(runtime)
+	sb2.WriteString(" │ Up ")
+	sb2.WriteString(widget.FormatDurationShort(ctx.Uptime))
+	line2 := sb2.String()
 
 	// Box.
 	box := widget.NewBox(h.width).
