@@ -26,7 +26,33 @@ var (
 	speedUnits     = [...]string{"K", "M", "G", "T"}
 )
 
+// Pre-computed strings for common padding operations to avoid allocations.
+// Space cache for padding (up to 256 spaces).
+const maxCachedSpaces = 256
+
+var spacesCache = initSpacesCache()
+
+func initSpacesCache() [maxCachedSpaces + 1]string {
+	var cache [maxCachedSpaces + 1]string
+	for i := range cache {
+		cache[i] = strings.Repeat(" ", i)
+	}
+	return cache
+}
+
+// Spaces returns a string of n spaces, using cache for common sizes.
+func Spaces(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if n <= maxCachedSpaces {
+		return spacesCache[n]
+	}
+	return strings.Repeat(" ", n)
+}
+
 // Pad pads text to width with specified alignment.
+// Uses cached space strings for efficiency.
 func Pad(text string, width int, align Align) string {
 	visLen := VisibleLen(text)
 	if visLen >= width {
@@ -37,15 +63,15 @@ func Pad(text string, width int, align Align) string {
 
 	switch align {
 	case AlignLeft:
-		return text + strings.Repeat(" ", padding)
+		return text + Spaces(padding)
 	case AlignRight:
-		return strings.Repeat(" ", padding) + text
+		return Spaces(padding) + text
 	case AlignCenter:
 		left := padding / 2
 		right := padding - left
-		return strings.Repeat(" ", left) + text + strings.Repeat(" ", right)
+		return Spaces(left) + text + Spaces(right)
 	}
-	return text + strings.Repeat(" ", padding)
+	return text + Spaces(padding)
 }
 
 // Truncate truncates text to maxLen, adding ellipsis if needed.
@@ -292,37 +318,41 @@ func TruncateRunes(s string, maxRunes int, suffix string) string {
 }
 
 // PadRight pads a string to the right with spaces (plain text).
+// Uses cached space strings for efficiency.
 func PadRight(s string, width int) string {
 	if len(s) >= width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	return s + Spaces(width-len(s))
 }
 
 // PadLeft pads a string to the left with spaces (plain text).
+// Uses cached space strings for efficiency.
 func PadLeft(s string, width int) string {
 	if len(s) >= width {
 		return s
 	}
-	return strings.Repeat(" ", width-len(s)) + s
+	return Spaces(width-len(s)) + s
 }
 
 // PadRightAnsi pads an ANSI-colored string to the right based on visible length.
+// Uses cached space strings for efficiency.
 func PadRightAnsi(s string, width int) string {
 	visLen := VisibleLen(s)
 	if visLen >= width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-visLen)
+	return s + Spaces(width-visLen)
 }
 
 // PadLeftAnsi pads an ANSI-colored string to the left based on visible length.
+// Uses cached space strings for efficiency.
 func PadLeftAnsi(s string, width int) string {
 	visLen := VisibleLen(s)
 	if visLen >= width {
 		return s
 	}
-	return strings.Repeat(" ", width-visLen) + s
+	return Spaces(width-visLen) + s
 }
 
 // JoinWithSep joins strings with separator, skipping empty strings.
