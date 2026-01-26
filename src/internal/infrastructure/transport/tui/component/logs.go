@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/model"
+	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/widget"
 )
 
 // Scrollbar characters.
@@ -241,7 +242,7 @@ func (l LogsPanel) View() string {
 
 	// Calculate dashes needed.
 	titleVisLen := 3 + len(l.title) // "─ " + title + " "
-	scrollVisLen := visibleLen(scrollPart)
+	scrollVisLen := widget.VisibleLen(scrollPart)
 	dashCount := innerWidth - titleVisLen - scrollVisLen - 1 // -1 for final "─"
 	if dashCount < 0 {
 		dashCount = 0
@@ -273,7 +274,7 @@ func (l LogsPanel) View() string {
 		// Content.
 		if i < len(lines) {
 			line := lines[i]
-			visLen := visibleLen(line)
+			visLen := widget.VisibleLen(line)
 			sb.WriteString(line)
 			if visLen < innerWidth {
 				sb.WriteString(strings.Repeat(" ", innerWidth-visLen))
@@ -371,26 +372,4 @@ func (l *LogsPanel) ScrollToBottom() {
 // ScrollToTop scrolls to the top of the logs.
 func (l *LogsPanel) ScrollToTop() {
 	l.viewport.GotoTop()
-}
-
-// visibleLen calculates the visible length of a string (excluding ANSI codes).
-func visibleLen(s string) int {
-	inEscape := false
-	length := 0
-
-	for _, r := range s {
-		if r == '\033' {
-			inEscape = true
-			continue
-		}
-		if inEscape {
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
-				inEscape = false
-			}
-			continue
-		}
-		length++
-	}
-
-	return length
 }

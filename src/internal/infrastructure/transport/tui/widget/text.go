@@ -227,6 +227,40 @@ func RepeatString(s string, n int) string {
 	return strings.Repeat(s, n)
 }
 
+// PadRight pads a string to the right with spaces (plain text).
+func PadRight(s string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-len(s))
+}
+
+// PadLeft pads a string to the left with spaces (plain text).
+func PadLeft(s string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+	return strings.Repeat(" ", width-len(s)) + s
+}
+
+// PadRightAnsi pads an ANSI-colored string to the right based on visible length.
+func PadRightAnsi(s string, width int) string {
+	visLen := VisibleLen(s)
+	if visLen >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-visLen)
+}
+
+// PadLeftAnsi pads an ANSI-colored string to the left based on visible length.
+func PadLeftAnsi(s string, width int) string {
+	visLen := VisibleLen(s)
+	if visLen >= width {
+		return s
+	}
+	return strings.Repeat(" ", width-visLen) + s
+}
+
 // JoinWithSep joins strings with separator, skipping empty strings.
 func JoinWithSep(sep string, parts ...string) string {
 	nonEmpty := make([]string, 0, len(parts))

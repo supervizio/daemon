@@ -10,7 +10,7 @@ Common value objects, interfaces, and constants used across domain packages.
 | `size.go` | Size parsing and formatting (ParseSize, FormatSize) |
 | `clock.go` | `Nower` interface, `RealClock` for time abstraction |
 | `filesystem.go` | `FileSystem` interface for OS file operations |
-| `constants.go` | Shared constants (e.g., MaxValidPort = 65535) |
+| `constants.go` | Shared constants (network, numeric, unit conversion) |
 | `errors.go` | Common domain errors |
 
 ## Key Types
@@ -34,6 +34,12 @@ Common value objects, interfaces, and constants used across domain packages.
 - `FileSystem` interface: `Stat(name)`, `ReadFile(name)`
 - `OSFileSystem` - Real OS implementation
 - `DefaultFileSystem` - Global default
+
+### Constants
+- `MaxValidPort` (65535) - Maximum valid TCP/UDP port
+- `Base10`, `BitSize64` - Numeric parsing constants
+- `PercentMultiplier` (100.0) - Ratio to percentage conversion
+- `BitsPerByte` (8) - Bits per byte
 
 ## Domain Errors
 

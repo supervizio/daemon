@@ -147,52 +147,27 @@ func (s *ServicesPanel) updateContent() {
 		sb.WriteString(" ")
 		sb.WriteString(stateIcon)
 		sb.WriteString(" ")
-		sb.WriteString(padRight(name, 12))
+		sb.WriteString(widget.PadRight(name, 12))
 		sb.WriteString(" ")
-		sb.WriteString(padRightAnsi(stateText, 9))
+		sb.WriteString(widget.PadRightAnsi(stateText, 9))
 		sb.WriteString(" ")
-		sb.WriteString(padRightAnsi(healthText, 9))
+		sb.WriteString(widget.PadRightAnsi(healthText, 9))
 		sb.WriteString(" ")
-		sb.WriteString(padLeft(uptime, 7))
+		sb.WriteString(widget.PadLeft(uptime, 7))
 		sb.WriteString(" ")
-		sb.WriteString(padLeft(pid, 6))
+		sb.WriteString(widget.PadLeft(pid, 6))
 		sb.WriteString(" ")
-		sb.WriteString(padLeft(restarts, 3))
+		sb.WriteString(widget.PadLeft(restarts, 3))
 		sb.WriteString(" ")
-		sb.WriteString(padLeft(cpu, 5))
+		sb.WriteString(widget.PadLeft(cpu, 5))
 		sb.WriteString(" ")
-		sb.WriteString(padLeft(mem, 8))
+		sb.WriteString(widget.PadLeft(mem, 8))
 		sb.WriteString(" ")
 		sb.WriteString(ports) // Ports at the end, left-aligned with colors.
 		sb.WriteString("\n")
 	}
 
 	s.viewport.SetContent(sb.String())
-}
-
-// padRight pads a string to the right with spaces.
-func padRight(s string, width int) string {
-	if len(s) >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-len(s))
-}
-
-// padRightAnsi pads an ANSI-colored string to the right based on visible length.
-func padRightAnsi(s string, width int) string {
-	visLen := visibleLen(s)
-	if visLen >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-visLen)
-}
-
-// padLeft pads a string to the left with spaces.
-func padLeft(s string, width int) string {
-	if len(s) >= width {
-		return s
-	}
-	return strings.Repeat(" ", width-len(s)) + s
 }
 
 // formatPorts formats a list of ports as a comma-separated string.
@@ -376,7 +351,7 @@ func (s ServicesPanel) View() string {
 
 	// Calculate dashes needed.
 	titleVisLen := 3 + len(s.title) // "─ " + title + " "
-	countVisLen := visibleLen(countPart)
+	countVisLen := widget.VisibleLen(countPart)
 	dashCount := innerWidth - titleVisLen - countVisLen - 1 // -1 for final "─"
 	if dashCount < 0 {
 		dashCount = 0
@@ -399,7 +374,7 @@ func (s ServicesPanel) View() string {
 	sb.WriteString("│")
 	sb.WriteString(ansi.Reset)
 	sb.WriteString(headerLine)
-	headerVisLen := visibleLen(headerLine)
+	headerVisLen := widget.VisibleLen(headerLine)
 	if headerVisLen < innerWidth {
 		sb.WriteString(strings.Repeat(" ", innerWidth-headerVisLen))
 	}
@@ -430,7 +405,7 @@ func (s ServicesPanel) View() string {
 		// Content.
 		if i < len(lines) {
 			line := lines[i]
-			visLen := visibleLen(line)
+			visLen := widget.VisibleLen(line)
 			sb.WriteString(line)
 			if visLen < innerWidth {
 				sb.WriteString(strings.Repeat(" ", innerWidth-visLen))
@@ -469,21 +444,21 @@ func (s ServicesPanel) renderHeader(_ int) string {
 	sb.WriteString(" ")
 	sb.WriteString(s.theme.Muted + "S" + ansi.Reset)
 	sb.WriteString(" ")
-	sb.WriteString(s.theme.Muted + padRight("NAME", 12) + ansi.Reset)
+	sb.WriteString(s.theme.Muted + widget.PadRight("NAME", 12) + ansi.Reset)
 	sb.WriteString(" ")
-	sb.WriteString(s.theme.Muted + padRight("STATE", 9) + ansi.Reset)
+	sb.WriteString(s.theme.Muted + widget.PadRight("STATE", 9) + ansi.Reset)
 	sb.WriteString(" ")
-	sb.WriteString(s.theme.Muted + padRight("HEALTH", 9) + ansi.Reset)
+	sb.WriteString(s.theme.Muted + widget.PadRight("HEALTH", 9) + ansi.Reset)
 	sb.WriteString(" ")
-	sb.WriteString(s.theme.Muted + padLeft("UPTIME", 7) + ansi.Reset)
+	sb.WriteString(s.theme.Muted + widget.PadLeft("UPTIME", 7) + ansi.Reset)
 	sb.WriteString(" ")
-	sb.WriteString(s.theme.Muted + padLeft("PID", 6) + ansi.Reset)
+	sb.WriteString(s.theme.Muted + widget.PadLeft("PID", 6) + ansi.Reset)
 	sb.WriteString(" ")
-	sb.WriteString(s.theme.Muted + padLeft("RST", 3) + ansi.Reset)
+	sb.WriteString(s.theme.Muted + widget.PadLeft("RST", 3) + ansi.Reset)
 	sb.WriteString(" ")
-	sb.WriteString(s.theme.Muted + padLeft("CPU", 5) + ansi.Reset)
+	sb.WriteString(s.theme.Muted + widget.PadLeft("CPU", 5) + ansi.Reset)
 	sb.WriteString(" ")
-	sb.WriteString(s.theme.Muted + padLeft("MEM", 8) + ansi.Reset)
+	sb.WriteString(s.theme.Muted + widget.PadLeft("MEM", 8) + ansi.Reset)
 	sb.WriteString(" ")
 	sb.WriteString(s.theme.Muted + "PORTS" + ansi.Reset)
 

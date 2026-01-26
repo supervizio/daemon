@@ -17,13 +17,7 @@ const (
 	Gigabyte int64 = 1024 * Megabyte
 )
 
-// Parsing constants for strconv.ParseInt.
-const (
-	// base10 is the numeric base for decimal parsing.
-	base10 int = 10
-	// bitSize64 is the bit size for int64 parsing.
-	bitSize64 int = 64
-)
+// Use constants from constants.go: Base10, BitSize64.
 
 // Error variables for size parsing.
 var (
@@ -54,7 +48,7 @@ func ParseSize(s string) (int64, error) {
 
 	multiplier, numStr := extractSizeComponents(s)
 	numStr = strings.TrimSpace(numStr)
-	num, err := strconv.ParseInt(numStr, base10, bitSize64)
+	num, err := strconv.ParseInt(numStr, Base10, BitSize64)
 
 	// Check for parsing errors.
 	if err != nil {
