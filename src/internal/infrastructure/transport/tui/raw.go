@@ -388,7 +388,7 @@ func mergeSideBySide(left, right, separator string) string {
 	}
 
 	var result strings.Builder
-	for i := 0; i < maxLines; i++ {
+	for i := range maxLines {
 		// Get left line, pad to width.
 		leftLine := ""
 		if i < len(leftLines) {

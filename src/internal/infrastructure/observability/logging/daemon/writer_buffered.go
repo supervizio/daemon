@@ -2,6 +2,7 @@
 package daemon
 
 import (
+	"cmp"
 	"sync"
 
 	"github.com/kodflow/daemon/internal/domain/logging"
@@ -9,8 +10,8 @@ import (
 
 // Buffer size limits to prevent OOM.
 const (
-	defaultBufferCap = 64
-	maxBufferSize    = 1024
+	defaultBufferCap int = 64
+	maxBufferSize    int = 1024
 )
 
 // BufferedWriter buffers log events until Flush is called.
@@ -123,10 +124,8 @@ func (w *BufferedWriter) Close() error {
 
 	flushErr := w.Flush()
 	closeErr := w.inner.Close()
-	if flushErr != nil {
-		return flushErr
-	}
-	return closeErr
+	// Return first non-nil error (flush takes priority).
+	return cmp.Or(flushErr, closeErr)
 }
 
 // Ensure BufferedWriter implements logging.Writer.

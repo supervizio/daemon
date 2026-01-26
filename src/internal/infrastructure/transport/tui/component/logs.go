@@ -345,7 +345,7 @@ func (l LogsPanel) View() string {
 	// Calculate scrollbar.
 	scrollbarChars := l.renderVerticalScrollbar()
 
-	for i := 0; i < l.viewport.Height; i++ {
+	for i := range l.viewport.Height {
 		sb.WriteString(borderColor)
 		sb.WriteString("│")
 		sb.WriteString(ansi.Reset)
@@ -433,7 +433,7 @@ func (l LogsPanel) renderVerticalScrollbar() []string {
 
 	// Build scrollbar.
 	result := make([]string, height)
-	for i := 0; i < height; i++ {
+	for i := range height {
 		if i >= thumbPos && i < thumbPos+thumbSize {
 			result[i] = scrollThumb
 		} else {

@@ -401,7 +401,7 @@ func (s ServicesPanel) View() string {
 		contentHeight = 1
 	}
 
-	for i := 0; i < contentHeight; i++ {
+	for i := range contentHeight {
 		sb.WriteString(borderColor)
 		sb.WriteString("│")
 		sb.WriteString(ansi.Reset)
@@ -513,7 +513,7 @@ func (s ServicesPanel) renderVerticalScrollbar() []string {
 
 	// Build scrollbar.
 	result := make([]string, height)
-	for i := 0; i < height; i++ {
+	for i := range height {
 		if i >= thumbPos && i < thumbPos+thumbSize {
 			result[i] = scrollThumb
 		} else {

@@ -316,7 +316,7 @@ func (m Model) renderWide(snap *model.Snapshot) string {
 		maxLines = len(networkLines)
 	}
 
-	for i := 0; i < maxLines; i++ {
+	for i := range maxLines {
 		left := ""
 		right := ""
 		if i < len(systemLines) {

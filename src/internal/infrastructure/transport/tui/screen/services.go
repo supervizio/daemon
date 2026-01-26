@@ -111,10 +111,7 @@ func (s *ServicesRenderer) renderCompact(snap *model.Snapshot) string {
 // renderNormal renders a standard service table.
 func (s *ServicesRenderer) renderNormal(snap *model.Snapshot) string {
 	// Build table (clamp width to prevent negative on tiny terminals).
-	tableWidth := s.width - 4
-	if tableWidth < 10 {
-		tableWidth = 10
-	}
+	tableWidth := max(s.width-4, 10)
 	table := widget.NewTable(tableWidth).
 		AddColumn("", 2, widget.AlignLeft).         // Icon
 		AddFlexColumn("NAME", 8, widget.AlignLeft). // Name
@@ -163,10 +160,7 @@ func (s *ServicesRenderer) renderNormal(snap *model.Snapshot) string {
 // renderWide renders an expanded service table.
 func (s *ServicesRenderer) renderWide(snap *model.Snapshot) string {
 	// Build table with more columns (clamp width to prevent negative).
-	tableWidth := s.width - 4
-	if tableWidth < 10 {
-		tableWidth = 10
-	}
+	tableWidth := max(s.width-4, 10)
 	table := widget.NewTable(tableWidth).
 		AddColumn("", 2, widget.AlignLeft).          // Icon
 		AddFlexColumn("NAME", 10, widget.AlignLeft). // Name
@@ -344,33 +338,24 @@ func (s *ServicesRenderer) RenderNamesOnly(snap *model.Snapshot) string {
 	}
 
 	// Column width = longest entry + 2 chars padding (minimum 10).
-	colWidth := maxLen + 2
-	if colWidth < 10 {
-		colWidth = 10
-	}
+	colWidth := max(maxLen+2, 10)
 
 	// Calculate number of columns that fit.
 	usableWidth := s.width - 6 // Box borders + left padding.
-	cols := usableWidth / colWidth
-	if cols < 1 {
-		cols = 1
-	}
+	cols := max(usableWidth/colWidth, 1)
 
 	// Build rows.
 	rows := (len(entries) + cols - 1) / cols
 	lines := make([]string, rows)
 
-	for row := 0; row < rows; row++ {
+	for row := range rows {
 		var rowParts []string
-		for col := 0; col < cols; col++ {
+		for col := range cols {
 			idx := row*cols + col
 			if idx < len(entries) {
 				e := entries[idx]
 				// Pad to column width using visible length.
-				padding := colWidth - e.visibleLen
-				if padding < 0 {
-					padding = 0
-				}
+				padding := max(colWidth-e.visibleLen, 0)
 				rowParts = append(rowParts, e.display+strings.Repeat(" ", padding))
 			}
 		}

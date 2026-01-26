@@ -42,21 +42,13 @@ func NewLayout(size terminal.Size) *Layout {
 // ContentWidth returns the usable content width.
 // Returns at least 1 to prevent negative widths on tiny terminals.
 func (l *Layout) ContentWidth() int {
-	w := l.Size.Cols - (l.Padding * 2)
-	if w < 1 {
-		return 1
-	}
-	return w
+	return max(l.Size.Cols-(l.Padding*2), 1)
 }
 
 // ContentHeight returns the usable content height.
 // Returns at least 1 to prevent negative heights on tiny terminals.
 func (l *Layout) ContentHeight() int {
-	h := l.Size.Rows - (l.Padding * 2)
-	if h < 1 {
-		return 1
-	}
-	return h
+	return max(l.Size.Rows-(l.Padding*2), 1)
 }
 
 // Columns returns the number of content columns.
@@ -73,11 +65,7 @@ func (l *Layout) ColumnWidth() int {
 	}
 
 	totalGap := (cols - 1) * l.Gap
-	w := (l.ContentWidth() - totalGap) / cols
-	if w < 1 {
-		return 1
-	}
-	return w
+	return max((l.ContentWidth()-totalGap)/cols, 1)
 }
 
 // ColumnRegion returns the region for a specific column (0-indexed).
@@ -119,7 +107,7 @@ func SplitHorizontal(r Region, n int) []Region {
 	regions := make([]Region, n)
 	height := r.Height / n
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		regions[i] = Region{
 			X:      r.X,
 			Y:      r.Y + i*height,
@@ -149,7 +137,7 @@ func SplitVertical(r Region, n int, gap int) []Region {
 	width := (r.Width - totalGap) / n
 	regions := make([]Region, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		regions[i] = Region{
 			X:      r.X + i*(width+gap),
 			Y:      r.Y,

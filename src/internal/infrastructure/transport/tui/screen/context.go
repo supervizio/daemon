@@ -56,7 +56,7 @@ func (c *ContextRenderer) Render(snap *model.Snapshot) string {
 	lines := []string{
 		"  Host: " + widget.PadRight(ctx.Hostname, 30) + " Mode: " + mode,
 		"  OS: " + ctx.OS + " " + ctx.Kernel + " " + ctx.Arch +
-			strings.Repeat(" ", maxInt(0, 20-len(ctx.Kernel)-len(ctx.Arch))) +
+			strings.Repeat(" ", max(0, 20-len(ctx.Kernel)-len(ctx.Arch))) +
 			" Uptime: " + widget.FormatDuration(ctx.Uptime),
 		"  IP: " + widget.PadRight(ctx.PrimaryIP, 30) + " PID: " + strconv.Itoa(ctx.DaemonPID),
 		"  DNS: " + widget.PadRight(dns, 28) + " Search: " + search,
@@ -139,7 +139,7 @@ func (c *ContextRenderer) RenderSandboxes(snap *model.Snapshot) string {
 	lines := make([]string, perCol)
 	halfWidth := (c.width - 6) / 2
 
-	for i := 0; i < perCol; i++ {
+	for i := range perCol {
 		left := ""
 		right := ""
 
@@ -183,10 +183,3 @@ func (c *ContextRenderer) formatSandbox(sb model.SandboxInfo, width int) string 
 	return icon + " " + name + " " + status
 }
 
-// maxInt returns the larger of two ints.
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
