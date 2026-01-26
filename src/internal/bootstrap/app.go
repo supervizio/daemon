@@ -69,8 +69,7 @@ type SignalHandler interface {
 func Run() int {
 	flag.StringVar(&configPath, "config", "/etc/daemon/config.yaml", "path to configuration file")
 	showVersion := flag.Bool("version", false, "show version and exit")
-	forceInteractive := flag.Bool("tui", false, "force interactive TUI mode")
-	forceRaw := flag.Bool("raw", false, "force raw MOTD mode (no interactive TUI)")
+	forceInteractive := flag.Bool("tui", false, "enable interactive TUI mode")
 	flag.Parse()
 
 	// Check if version flag was provided to display version and exit.
@@ -80,8 +79,8 @@ func Run() int {
 		return 0
 	}
 
-	// Determine TUI mode.
-	tuiMode := determineTUIMode(*forceInteractive, *forceRaw)
+	// Determine TUI mode: raw by default, interactive only with --tui flag.
+	tuiMode := determineTUIMode(*forceInteractive)
 
 	// Run the main application logic and handle any errors.
 	if err := run(configPath, tuiMode); err != nil {
@@ -93,19 +92,13 @@ func Run() int {
 	return 0
 }
 
-// determineTUIMode determines the TUI mode based on flags and environment.
-func determineTUIMode(forceInteractive, forceRaw bool) tui.Mode {
-	// Explicit flags take precedence.
+// determineTUIMode determines the TUI mode based on flags.
+// Raw mode is the default; interactive mode requires explicit --tui flag.
+func determineTUIMode(forceInteractive bool) tui.Mode {
 	if forceInteractive {
 		return tui.ModeInteractive
 	}
-	if forceRaw {
-		return tui.ModeRaw
-	}
-	// Auto-detect: interactive if TTY, raw otherwise.
-	if tui.ShouldUseInteractive() {
-		return tui.ModeInteractive
-	}
+	// Raw mode is the default (no TTY auto-detection).
 	return tui.ModeRaw
 }
 
@@ -118,8 +111,8 @@ func determineTUIMode(forceInteractive, forceRaw bool) tui.Mode {
 // Returns:
 //   - error: nil on success, error on failure.
 func RunWithConfig(cfgPath string) error {
-	// Delegate to internal run function with auto-detected mode.
-	return run(cfgPath, determineTUIMode(false, false))
+	// Delegate to internal run function with default mode (raw).
+	return run(cfgPath, determineTUIMode(false))
 }
 
 // TUISnapshotsProvider provides service snapshots for TUI.

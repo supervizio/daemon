@@ -49,7 +49,7 @@ tui/
 
 | Mode | Description | Usage |
 |------|-------------|-------|
-| Raw | Static startup banner + log stream | `--raw` flag |
+| Raw | Static startup banner + log stream | Default (no flag needed) |
 | Interactive | Real-time TUI with 1Hz refresh | `--tui` flag |
 
 ### Raw Mode Banner
@@ -89,7 +89,7 @@ Only startup-time information is displayed (no dynamic metrics that would become
 - System metrics "at start" (CPU/RAM/Swap/Disk)
 - Cgroup limits
 - Detected sandboxes (Docker, Podman, etc.)
-- Service names only (no state/PID/metrics)
+- Service names with ports from config (plain text, no colors, no status verification)
 
 **What's NOT shown (dynamic, would become stale):**
 - Uptime (changes every second)
@@ -114,8 +114,9 @@ Only startup-time information is displayed (no dynamic metrics that would become
 
 | Flag | Description |
 |------|-------------|
-| `--status` | Show system status (raw mode) and exit |
-| `--tui` | Run interactive TUI (future) |
+| `--tui` | Enable interactive TUI mode (real-time refresh) |
+
+**Note**: Raw mode is the default. No `--raw` flag exists.
 
 ## Data Flow
 

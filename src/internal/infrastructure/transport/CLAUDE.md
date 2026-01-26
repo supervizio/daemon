@@ -38,8 +38,8 @@ transport/
 
 | Mode | Flag | Description |
 |------|------|-------------|
-| Raw | `--status` | Static MOTD snapshot, exits immediately |
-| Interactive | `--tui` | Real-time TUI with 1Hz refresh (future) |
+| Raw | (default) | Static MOTD snapshot + log stream |
+| Interactive | `--tui` | Real-time TUI with 1Hz refresh |
 
 ## Related Packages
 

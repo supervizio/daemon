@@ -252,7 +252,7 @@ func (s *ServicesRenderer) formatPorts(listeners []model.ListenerSnapshot) strin
 			color = s.theme.Warning // Yellow.
 		case model.PortStatusError:
 			color = s.theme.Error // Red.
-		default:
+		case model.PortStatusUnknown:
 			color = s.theme.Muted
 		}
 
@@ -274,7 +274,7 @@ func prefixLines(lines []string, prefix string) []string {
 }
 
 // RenderNamesOnly renders service names with ports in columns (for raw mode startup banner).
-// Shows service name followed by colored ports (based on listener status).
+// Shows service name followed by port numbers from config (no colors, no status checking).
 // Column width is dynamically calculated based on content.
 func (s *ServicesRenderer) RenderNamesOnly(snap *model.Snapshot) string {
 	if len(snap.Services) == 0 {
@@ -285,10 +285,10 @@ func (s *ServicesRenderer) RenderNamesOnly(snap *model.Snapshot) string {
 		return box.Render()
 	}
 
-	// Build service entries with name and ports.
+	// Build service entries with name and ports (plain text, no colors).
 	type serviceEntry struct {
-		display    string // Full display string with ANSI codes.
-		visibleLen int    // Length without ANSI codes.
+		display    string // Full display string.
+		visibleLen int    // Length of display string.
 	}
 	entries := make([]serviceEntry, 0, len(snap.Services))
 
@@ -296,45 +296,20 @@ func (s *ServicesRenderer) RenderNamesOnly(snap *model.Snapshot) string {
 		var sb strings.Builder
 		sb.WriteString(svc.Name)
 
-		// Add colored ports if available.
+		// Add ports if available (plain text from config, no status colors).
 		if len(svc.Listeners) > 0 {
 			sb.WriteString(" ")
 			for i, l := range svc.Listeners {
 				if i > 0 {
 					sb.WriteString(",")
 				}
-				// Choose color based on status.
-				var color string
-				switch l.Status {
-				case model.PortStatusOK:
-					color = s.theme.Success // Green.
-				case model.PortStatusWarning:
-					color = s.theme.Warning // Yellow.
-				case model.PortStatusError:
-					color = s.theme.Error // Red.
-				default:
-					color = s.theme.Muted
-				}
-				sb.WriteString(color)
 				sb.WriteString(fmt.Sprintf(":%d", l.Port))
-				sb.WriteString(ansi.Reset)
 			}
 		}
 
 		display := sb.String()
-		// Calculate visible length (name + ports, no ANSI).
-		visibleLen := len(svc.Name)
-		if len(svc.Listeners) > 0 {
-			visibleLen++ // space
-			for i, l := range svc.Listeners {
-				if i > 0 {
-					visibleLen++ // comma
-				}
-				visibleLen += 1 + len(fmt.Sprintf("%d", l.Port)) // :PORT
-			}
-		}
-
-		entries = append(entries, serviceEntry{display: display, visibleLen: visibleLen})
+		// In raw mode, display has no ANSI codes, so visibleLen = len(display).
+		entries = append(entries, serviceEntry{display: display, visibleLen: len(display)})
 	}
 
 	// Find longest entry for column width.

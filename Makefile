@@ -1,4 +1,4 @@
-.PHONY: help build build-e2e run run-dev run-raw lint fmt test test-unit test-e2e coverage clean
+.PHONY: help build build-e2e run run-dev run-tui lint fmt test test-unit test-e2e coverage clean
 
 .DEFAULT_GOAL := help
 
@@ -19,14 +19,11 @@ help: ## Show this help
 build: ## Build supervizio binary to bin/
 	@cd src && CGO_ENABLED=0 go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=$(VERSION)" -o ../bin/supervizio ./cmd/daemon
 
-run: build ## Run the daemon with auto-detected TUI mode (requires /etc/daemon/config.yaml)
+run: build ## Run the daemon (raw mode by default, requires /etc/daemon/config.yaml)
 	@./bin/supervizio
 
-run-dev: build ## Run the daemon with examples/config-dev.yaml (interactive if TTY)
+run-dev: build ## Run the daemon with examples/config-dev.yaml (raw mode)
 	@./bin/supervizio --config=examples/config-dev.yaml
-
-run-raw: build ## Run the daemon in raw mode (MOTD once, then silent)
-	@./bin/supervizio --config=examples/config-dev.yaml --raw
 
 run-tui: build ## Run the daemon in interactive TUI mode
 	@./bin/supervizio --config=examples/config-dev.yaml --tui

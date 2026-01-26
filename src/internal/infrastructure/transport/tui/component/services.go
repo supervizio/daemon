@@ -244,7 +244,7 @@ func (s *ServicesPanel) formatPortsWithStatus(svc model.ServiceSnapshot) string 
 			color = s.theme.Warning // Yellow.
 		case model.PortStatusError:
 			color = s.theme.Error // Red.
-		default:
+		case model.PortStatusUnknown:
 			color = s.theme.Muted
 		}
 

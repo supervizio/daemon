@@ -14,7 +14,7 @@ services:
   - name: crasher
     command: /usr/local/bin/crasher
     args:
-      - "--delay=1s"
+      - "--delay=3s"
       - "--exit=1"
     restart:
       policy: never
