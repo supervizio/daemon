@@ -75,7 +75,8 @@ func (w *JSONWriter) Write(event logging.LogEvent) error {
 	defer w.mu.Unlock()
 
 	// Build the JSON entry with metadata flattened.
-	entry := make(map[string]any)
+	// Pre-allocate for base fields (5) + metadata.
+	entry := make(map[string]any, 5+len(event.Metadata))
 	entry["ts"] = event.Timestamp.Format("2006-01-02T15:04:05Z07:00")
 	entry["level"] = event.Level.String()
 	if event.Service != "" {

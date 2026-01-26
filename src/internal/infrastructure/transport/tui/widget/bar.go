@@ -2,7 +2,7 @@
 package widget
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
@@ -101,6 +101,8 @@ func (p *ProgressBar) SetColorByPercent() *ProgressBar {
 // Render returns the progress bar as a string with 1/8th character granularity.
 func (p *ProgressBar) Render() string {
 	var sb strings.Builder
+	// Pre-allocate for typical bar: label + bracket + bar + bracket + value.
+	sb.Grow(len(p.Label) + p.Width + 20)
 
 	// Label.
 	if p.Label != "" {
@@ -161,7 +163,16 @@ func (p *ProgressBar) Render() string {
 
 	// Percentage value.
 	if p.ShowValue {
-		sb.WriteString(fmt.Sprintf(" %3.0f%%", p.Percent))
+		sb.WriteByte(' ')
+		// Pad to 3 digits for alignment.
+		pct := int(p.Percent)
+		if pct < 10 {
+			sb.WriteString("  ")
+		} else if pct < 100 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString(strconv.Itoa(pct))
+		sb.WriteByte('%')
 	}
 
 	return sb.String()
@@ -216,6 +227,8 @@ func (s *SparkLine) Render() string {
 
 	// Normalize and render.
 	var sb strings.Builder
+	// Pre-allocate for sparkline chars + ANSI codes.
+	sb.Grow(s.Width*4 + 20)
 	sb.WriteString(s.Color)
 
 	valueRange := max - min
