@@ -3,6 +3,7 @@ package daemon
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/kodflow/daemon/internal/domain/logging"
@@ -82,6 +83,7 @@ func (f *TextFormatter) Format(event logging.LogEvent) string {
 }
 
 // formatMetadata formats metadata as key=value pairs.
+// Uses type switch for common types to avoid fmt.Sprintf allocations.
 func formatMetadata(meta map[string]any) string {
 	// Sort keys for consistent output.
 	keys := make([]string, 0, len(meta))
@@ -90,12 +92,40 @@ func formatMetadata(meta map[string]any) string {
 	}
 	sort.Strings(keys)
 
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		v := meta[k]
-		parts = append(parts, fmt.Sprintf("%s=%v", k, v))
+	// Use strings.Builder to avoid intermediate allocations.
+	var sb strings.Builder
+	sb.Grow(len(keys) * 16) // Pre-allocate for typical key=value pairs.
+
+	for i, k := range keys {
+		if i > 0 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString(k)
+		sb.WriteByte('=')
+		formatValue(&sb, meta[k])
 	}
-	return strings.Join(parts, " ")
+	return sb.String()
+}
+
+// formatValue formats a value to the builder using type switch for efficiency.
+func formatValue(sb *strings.Builder, v any) {
+	switch val := v.(type) {
+	case string:
+		sb.WriteString(val)
+	case int:
+		sb.WriteString(strconv.Itoa(val))
+	case int64:
+		sb.WriteString(strconv.FormatInt(val, 10))
+	case uint64:
+		sb.WriteString(strconv.FormatUint(val, 10))
+	case float64:
+		sb.WriteString(strconv.FormatFloat(val, 'f', -1, 64))
+	case bool:
+		sb.WriteString(strconv.FormatBool(val))
+	default:
+		// Fallback for complex types.
+		sb.WriteString(fmt.Sprintf("%v", val))
+	}
 }
 
 // Ensure TextFormatter implements Formatter.

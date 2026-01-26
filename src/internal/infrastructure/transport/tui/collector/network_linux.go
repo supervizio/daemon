@@ -14,7 +14,7 @@ import (
 // Starts at 1 Gbps and auto-scales up based on observed throughput.
 var (
 	adaptiveSpeedMu sync.RWMutex
-	adaptiveSpeed   = make(map[string]uint64)
+	adaptiveSpeed   = make(map[string]uint64, 8) // Pre-allocate for typical interface count.
 )
 
 // Standard speed tiers in bps.

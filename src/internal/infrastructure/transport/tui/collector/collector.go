@@ -18,10 +18,13 @@ type Collectors struct {
 	collectors []Collector
 }
 
+// Default capacity for collectors slice (typical setup has 5 collectors).
+const defaultCollectorsCap = 8
+
 // NewCollectors creates a new collector aggregator.
 func NewCollectors() *Collectors {
 	return &Collectors{
-		collectors: make([]Collector, 0),
+		collectors: make([]Collector, 0, defaultCollectorsCap),
 	}
 }
 
