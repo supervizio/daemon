@@ -3,6 +3,7 @@ package screen
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/kodflow/daemon/internal/domain/process"
@@ -113,7 +114,7 @@ func (s *ServicesRenderer) renderNormal(snap *model.Snapshot) string {
 
 		pid := "-"
 		if svc.PID > 0 {
-			pid = fmt.Sprintf("%d", svc.PID)
+			pid = strconv.Itoa(svc.PID)
 		}
 
 		uptime := "-"
@@ -164,7 +165,7 @@ func (s *ServicesRenderer) renderWide(snap *model.Snapshot) string {
 
 		pid := "-"
 		if svc.PID > 0 {
-			pid = fmt.Sprintf("%d", svc.PID)
+			pid = strconv.Itoa(svc.PID)
 		}
 
 		uptime := "-"
@@ -174,7 +175,7 @@ func (s *ServicesRenderer) renderWide(snap *model.Snapshot) string {
 
 		restarts := "-"
 		if svc.RestartCount > 0 {
-			restarts = fmt.Sprintf("%d", svc.RestartCount)
+			restarts = strconv.Itoa(svc.RestartCount)
 		}
 
 		healthStr := s.status.HealthStatusText(svc.Health)
@@ -210,16 +211,16 @@ func (s *ServicesRenderer) renderSummary(snap *model.Snapshot) string {
 	failed := snap.FailedCount()
 	healthy := snap.HealthyCount()
 
-	parts := []string{fmt.Sprintf("%d services", total)}
+	parts := []string{strconv.Itoa(total) + " services"}
 
 	if running > 0 {
-		parts = append(parts, fmt.Sprintf("%d running", running))
+		parts = append(parts, strconv.Itoa(running)+" running")
 	}
 	if failed > 0 {
-		parts = append(parts, fmt.Sprintf("%d failed", failed))
+		parts = append(parts, strconv.Itoa(failed)+" failed")
 	}
 	if healthy > 0 && healthy != running {
-		parts = append(parts, fmt.Sprintf("%d healthy", healthy))
+		parts = append(parts, strconv.Itoa(healthy)+" healthy")
 	}
 
 	return "[" + strings.Join(parts, ", ") + "]"
@@ -257,7 +258,8 @@ func (s *ServicesRenderer) formatPorts(listeners []model.ListenerSnapshot) strin
 		}
 
 		sb.WriteString(color)
-		sb.WriteString(fmt.Sprintf(":%d", l.Port))
+		sb.WriteByte(':')
+		sb.WriteString(strconv.Itoa(l.Port))
 		sb.WriteString(ansi.Reset)
 	}
 
@@ -298,12 +300,13 @@ func (s *ServicesRenderer) RenderNamesOnly(snap *model.Snapshot) string {
 
 		// Add ports if available (plain text from config, no status colors).
 		if len(svc.Listeners) > 0 {
-			sb.WriteString(" ")
+			sb.WriteByte(' ')
 			for i, l := range svc.Listeners {
 				if i > 0 {
-					sb.WriteString(",")
+					sb.WriteByte(',')
 				}
-				sb.WriteString(fmt.Sprintf(":%d", l.Port))
+				sb.WriteByte(':')
+				sb.WriteString(strconv.Itoa(l.Port))
 			}
 		}
 
@@ -354,7 +357,7 @@ func (s *ServicesRenderer) RenderNamesOnly(snap *model.Snapshot) string {
 		lines[row] = "  " + strings.Join(rowParts, "")
 	}
 
-	title := fmt.Sprintf("Services (%d configured)", len(snap.Services))
+	title := "Services (" + strconv.Itoa(len(snap.Services)) + " configured)"
 	box := widget.NewBox(s.width).
 		SetTitle(title).
 		SetTitleColor(s.theme.Header).

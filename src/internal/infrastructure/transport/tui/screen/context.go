@@ -3,6 +3,7 @@ package screen
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
@@ -95,7 +96,7 @@ func (c *ContextRenderer) RenderLimits(snap *model.Snapshot) string {
 	// PIDs.
 	pidsStr := "-"
 	if limits.PIDsMax > 0 {
-		pidsStr = fmt.Sprintf("%d/%d", limits.PIDsCurrent, limits.PIDsMax)
+		pidsStr = strconv.FormatInt(limits.PIDsCurrent, 10) + "/" + strconv.FormatInt(limits.PIDsMax, 10)
 	}
 
 	// CPUSet.

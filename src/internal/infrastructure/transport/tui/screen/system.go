@@ -3,6 +3,7 @@ package screen
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
@@ -104,7 +105,7 @@ func (s *SystemRenderer) renderNormal(snap *model.Snapshot) string {
 			limitParts = append(limitParts, fmt.Sprintf("MEM: %s", widget.FormatBytes(limits.MemoryMax)))
 		}
 		if limits.PIDsMax > 0 {
-			limitParts = append(limitParts, fmt.Sprintf("PIDs: %d/%d", limits.PIDsCurrent, limits.PIDsMax))
+			limitParts = append(limitParts, "PIDs: "+strconv.FormatInt(limits.PIDsCurrent, 10)+"/"+strconv.FormatInt(limits.PIDsMax, 10))
 		}
 		if len(limitParts) > 0 {
 			lines = append(lines, "  "+s.theme.Muted+"Limits: "+strings.Join(limitParts, " │ ")+ansi.Reset)
@@ -164,7 +165,7 @@ func (s *SystemRenderer) renderWide(snap *model.Snapshot) string {
 				used))
 		}
 		if limits.PIDsMax > 0 {
-			limitParts = append(limitParts, fmt.Sprintf("PIDs: %d/%d", limits.PIDsCurrent, limits.PIDsMax))
+			limitParts = append(limitParts, "PIDs: "+strconv.FormatInt(limits.PIDsCurrent, 10)+"/"+strconv.FormatInt(limits.PIDsMax, 10))
 		}
 		if len(limitParts) > 0 {
 			lines = append(lines, "  "+s.theme.Muted+"Limits: "+strings.Join(limitParts, " │ ")+ansi.Reset)

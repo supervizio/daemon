@@ -2,7 +2,7 @@
 // Pure Go implementation with no external dependencies.
 package ansi
 
-import "fmt"
+import "strconv"
 
 // Reset and text attributes.
 const (
@@ -71,7 +71,7 @@ const (
 
 // MoveTo returns escape sequence to position cursor at row, col (1-indexed).
 func MoveTo(row, col int) string {
-	return fmt.Sprintf("\033[%d;%dH", row, col)
+	return "\033[" + strconv.Itoa(row) + ";" + strconv.Itoa(col) + "H"
 }
 
 // MoveUp returns escape sequence to move cursor up n lines.
@@ -79,7 +79,7 @@ func MoveUp(n int) string {
 	if n <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("\033[%dA", n)
+	return "\033[" + strconv.Itoa(n) + "A"
 }
 
 // MoveDown returns escape sequence to move cursor down n lines.
@@ -87,7 +87,7 @@ func MoveDown(n int) string {
 	if n <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("\033[%dB", n)
+	return "\033[" + strconv.Itoa(n) + "B"
 }
 
 // MoveRight returns escape sequence to move cursor right n columns.
@@ -95,7 +95,7 @@ func MoveRight(n int) string {
 	if n <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("\033[%dC", n)
+	return "\033[" + strconv.Itoa(n) + "C"
 }
 
 // MoveLeft returns escape sequence to move cursor left n columns.
@@ -103,25 +103,25 @@ func MoveLeft(n int) string {
 	if n <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("\033[%dD", n)
+	return "\033[" + strconv.Itoa(n) + "D"
 }
 
 // RGB returns 24-bit true color foreground escape sequence.
 func RGB(r, g, b uint8) string {
-	return fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)
+	return "\033[38;2;" + strconv.Itoa(int(r)) + ";" + strconv.Itoa(int(g)) + ";" + strconv.Itoa(int(b)) + "m"
 }
 
 // BgRGB returns 24-bit true color background escape sequence.
 func BgRGB(r, g, b uint8) string {
-	return fmt.Sprintf("\033[48;2;%d;%d;%dm", r, g, b)
+	return "\033[48;2;" + strconv.Itoa(int(r)) + ";" + strconv.Itoa(int(g)) + ";" + strconv.Itoa(int(b)) + "m"
 }
 
 // Color256 returns 256-color foreground escape sequence.
 func Color256(code uint8) string {
-	return fmt.Sprintf("\033[38;5;%dm", code)
+	return "\033[38;5;" + strconv.Itoa(int(code)) + "m"
 }
 
 // BgColor256 returns 256-color background escape sequence.
 func BgColor256(code uint8) string {
-	return fmt.Sprintf("\033[48;5;%dm", code)
+	return "\033[48;5;" + strconv.Itoa(int(code)) + "m"
 }

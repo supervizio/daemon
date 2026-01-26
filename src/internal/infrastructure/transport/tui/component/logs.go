@@ -4,6 +4,7 @@ package component
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -338,7 +339,7 @@ func (l LogsPanel) scrollIndicator() string {
 		max = DefaultLogBufferSize
 	}
 
-	return fmt.Sprintf("%s[ %d / %d ]%s", l.theme.Muted, count, max, ansi.Reset)
+	return l.theme.Muted + "[ " + strconv.Itoa(count) + " / " + strconv.Itoa(max) + " ]" + ansi.Reset
 }
 
 // renderVerticalScrollbar returns the scrollbar characters for each row.

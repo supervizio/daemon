@@ -3,6 +3,7 @@ package screen
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
@@ -116,10 +117,10 @@ func (l *LogsRenderer) RenderBadge(snap *model.Snapshot) string {
 	logs := snap.Logs
 
 	if logs.ErrorCount > 0 {
-		return fmt.Sprintf("%sErrors: %d%s", l.theme.Error, logs.ErrorCount, ansi.Reset)
+		return l.theme.Error + "Errors: " + strconv.Itoa(logs.ErrorCount) + ansi.Reset
 	}
 	if logs.WarnCount > 0 {
-		return fmt.Sprintf("%sWarns: %d%s", l.theme.Warning, logs.WarnCount, ansi.Reset)
+		return l.theme.Warning + "Warns: " + strconv.Itoa(logs.WarnCount) + ansi.Reset
 	}
 	return l.theme.Muted + "No errors" + ansi.Reset
 }
@@ -128,15 +129,15 @@ func (l *LogsRenderer) RenderBadge(snap *model.Snapshot) string {
 func (l *LogsRenderer) RenderInline(snap *model.Snapshot) string {
 	logs := snap.Logs
 
-	parts := []string{}
+	parts := make([]string, 0, 3)
 	if logs.ErrorCount > 0 {
-		parts = append(parts, fmt.Sprintf("%sE:%d%s", l.theme.Error, logs.ErrorCount, ansi.Reset))
+		parts = append(parts, l.theme.Error+"E:"+strconv.Itoa(logs.ErrorCount)+ansi.Reset)
 	}
 	if logs.WarnCount > 0 {
-		parts = append(parts, fmt.Sprintf("%sW:%d%s", l.theme.Warning, logs.WarnCount, ansi.Reset))
+		parts = append(parts, l.theme.Warning+"W:"+strconv.Itoa(logs.WarnCount)+ansi.Reset)
 	}
 	if logs.InfoCount > 0 {
-		parts = append(parts, fmt.Sprintf("I:%d", logs.InfoCount))
+		parts = append(parts, "I:"+strconv.Itoa(logs.InfoCount))
 	}
 
 	if len(parts) == 0 {

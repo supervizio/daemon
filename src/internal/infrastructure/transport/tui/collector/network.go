@@ -21,7 +21,7 @@ type netStats struct {
 // NewNetworkCollector creates a network collector.
 func NewNetworkCollector() *NetworkCollector {
 	return &NetworkCollector{
-		prevStats: make(map[string]netStats),
+		prevStats: make(map[string]netStats, 8), // Pre-allocate for typical interface count.
 	}
 }
 

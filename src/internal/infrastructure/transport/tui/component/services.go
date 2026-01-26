@@ -479,7 +479,7 @@ func (s ServicesPanel) countIndicator() string {
 		}
 	}
 
-	return fmt.Sprintf("%s[ %d / %d ]%s", s.theme.Muted, running, total, ansi.Reset)
+	return s.theme.Muted + "[ " + strconv.Itoa(running) + " / " + strconv.Itoa(total) + " ]" + ansi.Reset
 }
 
 // renderVerticalScrollbar returns the scrollbar characters for each row.

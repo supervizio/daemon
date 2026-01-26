@@ -197,7 +197,7 @@ func collectCgroupV1(limits *model.ResourceLimits) {
 
 // getCgroupV1Paths returns controller -> path mapping for cgroup v1.
 func getCgroupV1Paths() map[string]string {
-	paths := make(map[string]string)
+	paths := make(map[string]string, 8) // Pre-allocate for typical cgroup v1 controllers.
 
 	content, err := os.ReadFile("/proc/self/cgroup")
 	if err != nil {
