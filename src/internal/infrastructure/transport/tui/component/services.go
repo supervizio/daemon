@@ -3,6 +3,7 @@ package component
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -118,13 +119,13 @@ func (s *ServicesPanel) updateContent() {
 		// PID (right-align 6).
 		pid := "-"
 		if svc.PID > 0 {
-			pid = fmt.Sprintf("%d", svc.PID)
+			pid = strconv.Itoa(svc.PID)
 		}
 
 		// Restarts (right-align 3).
 		restarts := "-"
 		if svc.RestartCount > 0 {
-			restarts = fmt.Sprintf("%d", svc.RestartCount)
+			restarts = strconv.Itoa(svc.RestartCount)
 		}
 
 		// CPU% (right-align 5).
@@ -171,7 +172,7 @@ func (s *ServicesPanel) updateContent() {
 }
 
 // formatPorts formats a list of ports as a comma-separated string.
-// Truncates if too long.
+// Truncates if too long. Uses strconv for zero-allocation integer formatting.
 func formatPorts(ports []int) string {
 	if len(ports) == 0 {
 		return "-"
@@ -182,7 +183,7 @@ func formatPorts(ports []int) string {
 		if i > 0 {
 			sb.WriteString(",")
 		}
-		sb.WriteString(fmt.Sprintf("%d", port))
+		sb.WriteString(strconv.Itoa(port))
 		// Stop if getting too long (max 11 chars to fit in 12 with truncation).
 		if sb.Len() > 9 && i < len(ports)-1 {
 			sb.WriteString("...")
@@ -227,7 +228,8 @@ func (s *ServicesPanel) formatPortsWithStatus(svc model.ServiceSnapshot) string 
 
 		// Format: :PORT or PORT (with color).
 		sb.WriteString(color)
-		sb.WriteString(fmt.Sprintf(":%d", l.Port))
+		sb.WriteString(":")
+		sb.WriteString(strconv.Itoa(l.Port))
 		sb.WriteString(ansi.Reset)
 	}
 

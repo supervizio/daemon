@@ -99,9 +99,13 @@ func (a *SystemMetricsAdapter) SystemMetrics() model.SystemMetrics {
 }
 
 // LogBuffer is a thread-safe ring buffer for log entries.
+// Uses a proper ring buffer to avoid memory leaks from slice shifting.
 type LogBuffer struct {
 	mu         sync.RWMutex
 	entries    []model.LogEntry
+	head       int // Index of oldest entry (read position).
+	tail       int // Index for next write.
+	count      int // Number of entries in buffer.
 	maxSize    int
 	infoCount  int
 	warnCount  int
@@ -109,17 +113,22 @@ type LogBuffer struct {
 }
 
 // NewLogBuffer creates a new log buffer with the specified capacity.
+// Pre-allocates the full buffer to avoid allocations during Add.
 func NewLogBuffer(maxSize int) *LogBuffer {
 	if maxSize <= 0 {
 		maxSize = 100
 	}
 	return &LogBuffer{
-		entries: make([]model.LogEntry, 0, maxSize),
+		entries: make([]model.LogEntry, maxSize), // Pre-allocate full capacity.
 		maxSize: maxSize,
+		head:    0,
+		tail:    0,
+		count:   0,
 	}
 }
 
-// Add adds a log entry to the buffer.
+// Add adds a log entry to the buffer using ring buffer semantics.
+// This avoids memory leaks from slice shifting.
 func (b *LogBuffer) Add(entry model.LogEntry) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -134,12 +143,16 @@ func (b *LogBuffer) Add(entry model.LogEntry) {
 		b.errorCount++
 	}
 
-	// Add entry.
-	if len(b.entries) >= b.maxSize {
-		// Remove oldest entry and shift.
-		b.entries = b.entries[1:]
+	// Write to current tail position (overwrites oldest if full).
+	b.entries[b.tail] = entry
+	b.tail = (b.tail + 1) % b.maxSize
+
+	if b.count < b.maxSize {
+		b.count++
+	} else {
+		// Buffer is full, advance head (oldest entry overwritten).
+		b.head = (b.head + 1) % b.maxSize
 	}
-	b.entries = append(b.entries, entry)
 }
 
 // AddFromDomainEvent adds a domain LogEvent to the buffer.
@@ -155,17 +168,30 @@ func (b *LogBuffer) AddFromDomainEvent(event domainlogging.LogEvent) {
 	b.Add(entry)
 }
 
-// Entries returns a copy of all entries.
+// Entries returns a copy of all entries in chronological order.
 func (b *LogBuffer) Entries() []model.LogEntry {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	result := make([]model.LogEntry, len(b.entries))
-	copy(result, b.entries)
+	return b.entriesLocked()
+}
+
+// entriesLocked returns entries without acquiring lock (caller must hold lock).
+func (b *LogBuffer) entriesLocked() []model.LogEntry {
+	if b.count == 0 {
+		return nil
+	}
+
+	result := make([]model.LogEntry, b.count)
+	for i := range b.count {
+		idx := (b.head + i) % b.maxSize
+		result[i] = b.entries[idx]
+	}
 	return result
 }
 
 // Summary returns the log summary.
+// Uses entriesLocked() to avoid deadlock from re-acquiring RLock.
 func (b *LogBuffer) Summary() model.LogSummary {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -175,20 +201,28 @@ func (b *LogBuffer) Summary() model.LogSummary {
 		InfoCount:     b.infoCount,
 		WarnCount:     b.warnCount,
 		ErrorCount:    b.errorCount,
-		RecentEntries: b.Entries(),
+		RecentEntries: b.entriesLocked(), // Use internal method to avoid deadlock.
 		HasAlerts:     b.errorCount > 0,
 	}
 }
 
-// Clear resets the buffer.
+// Clear resets the buffer without deallocating memory.
 func (b *LogBuffer) Clear() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	b.entries = b.entries[:0]
+	// Reset ring buffer state (entries array stays allocated).
+	b.head = 0
+	b.tail = 0
+	b.count = 0
 	b.infoCount = 0
 	b.warnCount = 0
 	b.errorCount = 0
+
+	// Clear entry references to allow GC of log data.
+	for i := range b.entries {
+		b.entries[i] = model.LogEntry{}
+	}
 }
 
 // LogAdapter provides log summary from a log buffer.

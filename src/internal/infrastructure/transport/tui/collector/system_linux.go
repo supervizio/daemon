@@ -15,9 +15,13 @@ import (
 )
 
 // SystemCollector collects system-wide metrics.
+// Fields are reused across calls to minimize allocations.
 type SystemCollector struct {
 	prevCPU     cpuSample
 	prevSampled time.Time
+
+	// Reusable buffers to avoid allocations on every tick.
+	memValues map[string]uint64 // Reused for /proc/meminfo parsing.
 }
 
 // cpuSample holds a CPU sample from /proc/stat.
@@ -43,8 +47,11 @@ func (s cpuSample) busy() uint64 {
 }
 
 // NewSystemCollector creates a new system collector.
+// Pre-allocates buffers for zero-allocation collection.
 func NewSystemCollector() *SystemCollector {
-	return &SystemCollector{}
+	return &SystemCollector{
+		memValues: make(map[string]uint64, 16), // Pre-allocate for common meminfo keys.
+	}
 }
 
 // CollectInto gathers system metrics.
@@ -124,6 +131,7 @@ func (c *SystemCollector) collectCPU(snap *model.Snapshot) {
 }
 
 // collectMemory reads /proc/meminfo for memory usage.
+// Reuses c.memValues map to avoid allocations.
 func (c *SystemCollector) collectMemory(snap *model.Snapshot) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
@@ -131,20 +139,37 @@ func (c *SystemCollector) collectMemory(snap *model.Snapshot) {
 	}
 	defer func() { _ = f.Close() }()
 
-	mem := make(map[string]uint64)
+	// Clear and reuse the map instead of allocating new one.
+	clear(c.memValues)
+	mem := c.memValues
+
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
+
+		// Parse manually to avoid strings.Fields allocation.
+		// Format: "KeyName:     12345 kB"
+		colonIdx := strings.IndexByte(line, ':')
+		if colonIdx < 0 {
 			continue
 		}
 
-		key := strings.TrimSuffix(fields[0], ":")
-		value := parseUint64(fields[1])
+		key := line[:colonIdx]
+		rest := strings.TrimLeft(line[colonIdx+1:], " \t")
+
+		// Find the numeric value (first field after colon).
+		spaceIdx := strings.IndexByte(rest, ' ')
+		var valueStr string
+		if spaceIdx > 0 {
+			valueStr = rest[:spaceIdx]
+		} else {
+			valueStr = rest
+		}
+
+		value := parseUint64(valueStr)
 
 		// Values in meminfo are in kB.
-		if len(fields) >= 3 && fields[2] == "kB" {
+		if strings.HasSuffix(rest, " kB") {
 			value *= 1024
 		}
 

@@ -3,6 +3,7 @@ package widget
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -15,6 +16,14 @@ const (
 	AlignLeft Align = iota
 	AlignRight
 	AlignCenter
+)
+
+// Unit suffixes at package level to avoid per-call allocation.
+var (
+	byteUnitsLong  = [...]string{"KB", "MB", "GB", "TB", "PB", "EB", "ZB"}
+	byteUnitsShort = [...]string{"K", "M", "G", "T", "P", "E", "Z"}
+	speedUnitsLong = [...]string{"Kbps", "Mbps", "Gbps", "Tbps"}
+	speedUnits     = [...]string{"K", "M", "G", "T"}
 )
 
 // Pad pads text to width with specified alignment.
@@ -54,6 +63,7 @@ func Truncate(text string, maxLen int) string {
 }
 
 // FormatDuration formats duration in human-readable form.
+// Uses strconv instead of fmt.Sprintf for integer formatting.
 func FormatDuration(d time.Duration) string {
 	if d < 0 {
 		return "-"
@@ -66,17 +76,18 @@ func FormatDuration(d time.Duration) string {
 
 	switch {
 	case days > 0:
-		return fmt.Sprintf("%dd %dh", days, hours)
+		return strconv.Itoa(days) + "d " + strconv.Itoa(hours) + "h"
 	case hours > 0:
-		return fmt.Sprintf("%dh %dm", hours, minutes)
+		return strconv.Itoa(hours) + "h " + strconv.Itoa(minutes) + "m"
 	case minutes > 0:
-		return fmt.Sprintf("%dm %ds", minutes, seconds)
+		return strconv.Itoa(minutes) + "m " + strconv.Itoa(seconds) + "s"
 	default:
-		return fmt.Sprintf("%ds", seconds)
+		return strconv.Itoa(seconds) + "s"
 	}
 }
 
 // FormatDurationShort formats duration in compact form.
+// Uses strconv instead of fmt.Sprintf for integer formatting.
 func FormatDurationShort(d time.Duration) string {
 	if d < 0 {
 		return "-"
@@ -89,21 +100,22 @@ func FormatDurationShort(d time.Duration) string {
 
 	switch {
 	case days > 0:
-		return fmt.Sprintf("%dd%dh", days, hours)
+		return strconv.Itoa(days) + "d" + strconv.Itoa(hours) + "h"
 	case hours > 0:
-		return fmt.Sprintf("%dh%dm", hours, minutes)
+		return strconv.Itoa(hours) + "h" + strconv.Itoa(minutes) + "m"
 	case minutes > 0:
-		return fmt.Sprintf("%dm", minutes)
+		return strconv.Itoa(minutes) + "m"
 	default:
-		return fmt.Sprintf("%ds", seconds)
+		return strconv.Itoa(seconds) + "s"
 	}
 }
 
 // FormatBytes formats bytes in human-readable form.
+// Uses package-level unit array to avoid per-call allocation.
 func FormatBytes(bytes uint64) string {
 	const unit = 1024
 	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
+		return strconv.FormatUint(bytes, 10) + " B"
 	}
 
 	div, exp := uint64(unit), 0
@@ -112,18 +124,18 @@ func FormatBytes(bytes uint64) string {
 		exp++
 	}
 
-	units := []string{"KB", "MB", "GB", "TB", "PB", "EB", "ZB"}
-	if exp >= len(units) {
-		exp = len(units) - 1
+	if exp >= len(byteUnitsLong) {
+		exp = len(byteUnitsLong) - 1
 	}
-	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), units[exp])
+	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), byteUnitsLong[exp])
 }
 
 // FormatBytesShort formats bytes in compact form.
+// Uses package-level unit array to avoid per-call allocation.
 func FormatBytesShort(bytes uint64) string {
 	const unit = 1024
 	if bytes < unit {
-		return fmt.Sprintf("%dB", bytes)
+		return strconv.FormatUint(bytes, 10) + "B"
 	}
 
 	div, exp := uint64(unit), 0
@@ -132,19 +144,18 @@ func FormatBytesShort(bytes uint64) string {
 		exp++
 	}
 
-	units := []string{"K", "M", "G", "T", "P", "E", "Z"}
-	if exp >= len(units) {
-		exp = len(units) - 1
+	if exp >= len(byteUnitsShort) {
+		exp = len(byteUnitsShort) - 1
 	}
 	value := float64(bytes) / float64(div)
 
 	if value >= 100 {
-		return fmt.Sprintf("%.0f%s", value, units[exp])
+		return fmt.Sprintf("%.0f%s", value, byteUnitsShort[exp])
 	}
 	if value >= 10 {
-		return fmt.Sprintf("%.1f%s", value, units[exp])
+		return fmt.Sprintf("%.1f%s", value, byteUnitsShort[exp])
 	}
-	return fmt.Sprintf("%.2f%s", value, units[exp])
+	return fmt.Sprintf("%.2f%s", value, byteUnitsShort[exp])
 }
 
 // FormatBytesPerSec formats bytes per second.
@@ -153,6 +164,7 @@ func FormatBytesPerSec(bytes uint64) string {
 }
 
 // FormatPercent formats a percentage.
+// Uses strconv for integer-like values to reduce allocations.
 func FormatPercent(percent float64) string {
 	if percent < 0 {
 		return "-%"
@@ -161,12 +173,13 @@ func FormatPercent(percent float64) string {
 		return "100%"
 	}
 	if percent >= 10 {
-		return fmt.Sprintf("%.0f%%", percent)
+		return strconv.Itoa(int(percent)) + "%"
 	}
 	return fmt.Sprintf("%.1f%%", percent)
 }
 
 // FormatSpeed formats network speed in bits per second.
+// Uses package-level unit array to avoid per-call allocation.
 func FormatSpeed(bitsPerSec uint64) string {
 	if bitsPerSec == 0 {
 		return "-"
@@ -174,7 +187,7 @@ func FormatSpeed(bitsPerSec uint64) string {
 
 	const unit = 1000 // Network uses 1000, not 1024.
 	if bitsPerSec < unit {
-		return fmt.Sprintf("%d bps", bitsPerSec)
+		return strconv.FormatUint(bitsPerSec, 10) + " bps"
 	}
 
 	div, exp := uint64(unit), 0
@@ -183,19 +196,19 @@ func FormatSpeed(bitsPerSec uint64) string {
 		exp++
 	}
 
-	units := []string{"Kbps", "Mbps", "Gbps", "Tbps"}
-	if exp >= len(units) {
-		exp = len(units) - 1
+	if exp >= len(speedUnitsLong) {
+		exp = len(speedUnitsLong) - 1
 	}
 
 	value := float64(bitsPerSec) / float64(div)
 	if value >= 10 {
-		return fmt.Sprintf("%.0f %s", value, units[exp])
+		return fmt.Sprintf("%.0f %s", value, speedUnitsLong[exp])
 	}
-	return fmt.Sprintf("%.1f %s", value, units[exp])
+	return fmt.Sprintf("%.1f %s", value, speedUnitsLong[exp])
 }
 
 // FormatSpeedShort formats network speed in compact form.
+// Uses package-level unit array to avoid per-call allocation.
 func FormatSpeedShort(bitsPerSec uint64) string {
 	if bitsPerSec == 0 {
 		return "-"
@@ -203,7 +216,7 @@ func FormatSpeedShort(bitsPerSec uint64) string {
 
 	const unit = 1000
 	if bitsPerSec < unit {
-		return fmt.Sprintf("%dbps", bitsPerSec)
+		return strconv.FormatUint(bitsPerSec, 10) + "bps"
 	}
 
 	div, exp := uint64(unit), 0
@@ -212,13 +225,12 @@ func FormatSpeedShort(bitsPerSec uint64) string {
 		exp++
 	}
 
-	units := []string{"K", "M", "G", "T"}
-	if exp >= len(units) {
-		exp = len(units) - 1
+	if exp >= len(speedUnits) {
+		exp = len(speedUnits) - 1
 	}
 
 	value := float64(bitsPerSec) / float64(div)
-	suffix := units[exp]
+	suffix := speedUnits[exp]
 	if value >= 10 {
 		return fmt.Sprintf("%.0f%s", value, suffix)
 	}
