@@ -338,3 +338,34 @@ func TestNewAppWithHealth(t *testing.T) {
 		})
 	}
 }
+
+// TestProvideMetricsTracker verifies ProvideMetricsTracker behavior.
+//
+// Params:
+//   - t: testing context for assertions.
+func TestProvideMetricsTracker(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns_non_nil_tracker",
+		},
+	}
+
+	// Run all test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Call ProvideMetricsTracker with nil collector.
+			result := bootstrap.ProvideMetricsTracker(nil)
+
+			// Verify tracker is not nil.
+			if result == nil {
+				t.Error("ProvideMetricsTracker should return non-nil tracker")
+			}
+		})
+	}
+}

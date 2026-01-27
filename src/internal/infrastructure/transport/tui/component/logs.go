@@ -3,7 +3,8 @@ package component
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -16,11 +17,62 @@ import (
 
 // Scrollbar characters.
 const (
-	scrollTrack = "│"
-	scrollThumb = "┃"
+	scrollTrack string = "│"
+	scrollThumb string = "┃"
+
+	// formatFloatPrecision is the default precision for float formatting.
+	formatFloatPrecision int = -1
+
+	// formatFloatBitSize is the bit size for float formatting.
+	formatFloatBitSize int = 64
+
+	// metadataBufferSize is the estimated buffer size for metadata formatting.
+	metadataBufferSize int = 32
+
+	// decimalBase is the base for decimal number parsing.
+	decimalBase int = 10
 )
 
+const (
+	// Border and scrollbar dimensions.
+	logBorderWidth  int = 3 // left border + right border + scrollbar
+	logBorderHeight int = 2 // top + bottom borders
+
+	// Column widths for log display.
+	timeColWidth    int = 9  // "HH:MM:SS "
+	levelColWidth   int = 8  // "[LEVEL] " (7 + space)
+	serviceColWidth int = 13 // "servicename  " (12 + space)
+
+	// Text length constants.
+	minMsgWidth           int = 10 // minimum message width
+	levelTextMaxWidth     int = 5  // max length for level text (ERROR, WARN, etc)
+	serviceNameMaxWidth   int = 12 // max length for service name
+	metadataEstimatedSize int = 16 // estimated chars per metadata key-value pair
+	lineBufferGrow        int = 60 // estimated extra chars for ANSI codes in line
+
+	// titleBufferGrow is the pre-allocation size for title buffer.
+	titleBufferGrow int = 32
+
+	// titlePrefixLen is the length of "─ " + " " surrounding the title.
+	titlePrefixLen int = 3
+
+	// scrollbarColumnWidth is the width of the scrollbar column.
+	scrollbarColumnWidth int = 1
+
+	// dashCountOffset is the offset for final border character.
+	dashCountOffset int = 1
+
+	// minThumbSize is the minimum scrollbar thumb size.
+	minThumbSize int = 1
+)
+
+// DefaultLogBufferSize is the default maximum log entries to display.
+const DefaultLogBufferSize int = 100
+
 // LogsPanel is a scrollable logs viewport with vertical scrollbar.
+//
+// It displays log entries with timestamp, level, service name, and message.
+// Supports automatic truncation, color coding by level, and metadata formatting.
 type LogsPanel struct {
 	viewport viewport.Model
 	theme    ansi.Theme
@@ -32,35 +84,43 @@ type LogsPanel struct {
 	title    string
 }
 
-// DefaultLogBufferSize is the default maximum log entries to display.
-const DefaultLogBufferSize = 100
-
 // NewLogsPanel creates a new logs panel.
+//
+// Params:
+//   - width: panel width including borders
+//   - height: panel height including borders
+//
+// Returns:
+//   - LogsPanel: initialized logs panel
 func NewLogsPanel(width, height int) LogsPanel {
-	// -3 for borders (left border, right border, scrollbar).
-	vw := width - 3
-	vh := height - 2
-	if vw < 1 {
-		vw = 1
-	}
-	if vh < 1 {
-		vh = 1
-	}
+	// Calculate viewport size accounting for borders and scrollbar.
+	vw := width - logBorderWidth
+	vh := height - logBorderHeight
+
+	// Ensure minimum viewport width.
+	vw = max(vw, 1)
+	// Ensure minimum viewport height.
+	vh = max(vh, 1)
 	vp := viewport.New(vw, vh)
 
+	// Return initialized panel with default settings.
 	return LogsPanel{
 		viewport: vp,
 		theme:    ansi.DefaultTheme(),
 		width:    width,
 		height:   height,
-		entries:  make([]model.LogEntry, 0),
+		entries:  nil,
 		maxSize:  DefaultLogBufferSize,
 		title:    "Logs",
 	}
 }
 
 // SetMaxSize sets the maximum buffer size for display indicator.
+//
+// Params:
+//   - maxSize: maximum number of log entries to display
 func (l *LogsPanel) SetMaxSize(maxSize int) {
+	// Use default if invalid size provided.
 	if maxSize <= 0 {
 		maxSize = DefaultLogBufferSize
 	}
@@ -68,41 +128,57 @@ func (l *LogsPanel) SetMaxSize(maxSize int) {
 }
 
 // SetSize updates the panel dimensions.
+//
+// Params:
+//   - width: new panel width
+//   - height: new panel height
 func (l *LogsPanel) SetSize(width, height int) {
 	l.width = width
 	l.height = height
 
-	// -3 for left border, right border, scrollbar.
-	vw := width - 3
-	vh := height - 2
-	if vw < 1 {
-		vw = 1
-	}
-	if vh < 1 {
-		vh = 1
-	}
+	// Calculate viewport size accounting for borders and scrollbar.
+	vw := width - logBorderWidth
+	vh := height - logBorderHeight
+
+	// Ensure minimum viewport width.
+	vw = max(vw, 1)
+	// Ensure minimum viewport height.
+	vh = max(vh, 1)
 	l.viewport.Width = vw
 	l.viewport.Height = vh
 	l.updateContent()
 }
 
 // SetFocused sets the focus state.
+//
+// Params:
+//   - focused: true to focus the panel, false to unfocus
 func (l *LogsPanel) SetFocused(focused bool) {
 	l.focused = focused
 }
 
-// IsFocused returns whether the panel is focused.
-func (l LogsPanel) IsFocused() bool {
+// Focused returns whether the panel is focused.
+//
+// Returns:
+//   - bool: true if panel is focused
+func (l *LogsPanel) Focused() bool {
+	// Return current focus state.
 	return l.focused
 }
 
 // SetEntries updates the log entries.
+//
+// Params:
+//   - entries: slice of log entries to display
 func (l *LogsPanel) SetEntries(entries []model.LogEntry) {
 	l.entries = entries
 	l.updateContent()
 }
 
 // AddEntry adds a new log entry and scrolls to bottom.
+//
+// Params:
+//   - entry: log entry to add
 func (l *LogsPanel) AddEntry(entry model.LogEntry) {
 	l.entries = append(l.entries, entry)
 	// Enforce buffer size limit to prevent unbounded memory growth.
@@ -117,78 +193,16 @@ func (l *LogsPanel) AddEntry(entry model.LogEntry) {
 func (l *LogsPanel) updateContent() {
 	var sb strings.Builder
 
-	// Fixed column widths (no ANSI codes in width calculation).
-	const (
-		timeCol    = 9  // "HH:MM:SS "
-		levelCol   = 8  // "[LEVEL] " (7 + space)
-		serviceCol = 13 // "servicename  " (12 + space)
-	)
-
-	// Content area width (viewport width).
+	// Calculate message width based on content area.
 	contentWidth := l.viewport.Width
-	msgWidth := contentWidth - timeCol - levelCol - serviceCol
-	if msgWidth < 10 {
-		msgWidth = 10
-	}
+	msgWidth := contentWidth - timeColWidth - levelColWidth - serviceColWidth
 
+	// Ensure minimum message width.
+	msgWidth = max(msgWidth, minMsgWidth)
+
+	// Build content for each log entry.
 	for _, entry := range l.entries {
-		// Time - fixed 8 chars + space.
-		ts := entry.Timestamp.Format("15:04:05")
-
-		// Level - get display string and color separately.
-		levelStr, levelColor := l.getLevelInfo(entry.Level)
-
-		// Service - fixed 12 chars.
-		service := entry.Service
-		if service == "" {
-			service = "daemon"
-		}
-		if len([]rune(service)) > 12 {
-			service = widget.TruncateRunes(service, 12, "…")
-		}
-
-		// Message with metadata.
-		msg := entry.Message
-		if msg == "" {
-			msg = entry.EventType
-		}
-		if len(entry.Metadata) > 0 {
-			msg += " " + l.formatMetadata(entry.Metadata)
-		}
-		if len([]rune(msg)) > msgWidth {
-			msg = widget.TruncateRunes(msg, msgWidth, "…")
-		}
-
-		// Build line with proper padding (pad BEFORE adding colors).
-		// Format: "HH:MM:SS [LEVEL] service      message"
-		// Uses strings.Builder to avoid fmt.Sprintf allocation.
-		var lineBuf strings.Builder
-		lineBuf.Grow(len(ts) + len(levelStr) + len(service) + len(msg) + 60)
-		lineBuf.WriteString(l.theme.Muted)
-		lineBuf.WriteString(ts)
-		lineBuf.WriteString(ansi.Reset)
-		lineBuf.WriteByte(' ')
-		lineBuf.WriteString(levelColor)
-		lineBuf.WriteByte('[')
-		lineBuf.WriteString(ansi.Reset)
-		lineBuf.WriteString(levelStr)
-		// Pad level to 5 chars.
-		for i := len(levelStr); i < 5; i++ {
-			lineBuf.WriteByte(' ')
-		}
-		lineBuf.WriteString(levelColor)
-		lineBuf.WriteByte(']')
-		lineBuf.WriteString(ansi.Reset)
-		lineBuf.WriteByte(' ')
-		lineBuf.WriteString(service)
-		// Pad service to 12 chars.
-		for i := len([]rune(service)); i < 12; i++ {
-			lineBuf.WriteByte(' ')
-		}
-		lineBuf.WriteByte(' ')
-		lineBuf.WriteString(msg)
-		line := lineBuf.String()
-
+		line := l.formatLogLine(entry, msgWidth)
 		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
@@ -196,121 +210,350 @@ func (l *LogsPanel) updateContent() {
 	l.viewport.SetContent(sb.String())
 }
 
+// formatLogLine formats a single log entry as a display line.
+//
+// Params:
+//   - entry: log entry to format
+//   - msgWidth: maximum width for message column
+//
+// Returns:
+//   - string: formatted log line with ANSI colors
+func (l *LogsPanel) formatLogLine(entry model.LogEntry, msgWidth int) string {
+	// Format timestamp (fixed 8 chars + space).
+	ts := entry.Timestamp.Format("15:04:05")
+
+	// Get level display string and color separately.
+	levelStr, levelColor := l.getLevelInfo(entry.Level)
+
+	// Format service name (fixed 12 chars).
+	service := l.formatServiceName(entry.Service)
+
+	// Build message with metadata.
+	msg := l.buildMessage(entry, msgWidth)
+
+	// Build line with proper padding (pad BEFORE adding colors).
+	var lineBuf strings.Builder
+	lineBuf.Grow(len(ts) + len(levelStr) + len(service) + len(msg) + lineBufferGrow)
+	lineBuf.WriteString(l.theme.Muted)
+	lineBuf.WriteString(ts)
+	lineBuf.WriteString(ansi.Reset)
+	lineBuf.WriteByte(' ')
+	lineBuf.WriteString(levelColor)
+	lineBuf.WriteByte('[')
+	lineBuf.WriteString(ansi.Reset)
+	lineBuf.WriteString(levelStr)
+
+	// Pad level text to fixed width.
+	for i := len(levelStr); i < levelTextMaxWidth; i++ {
+		lineBuf.WriteByte(' ')
+	}
+	lineBuf.WriteString(levelColor)
+	lineBuf.WriteByte(']')
+	lineBuf.WriteString(ansi.Reset)
+	lineBuf.WriteByte(' ')
+	lineBuf.WriteString(service)
+
+	// Pad service name to fixed width.
+	for i := len([]rune(service)); i < serviceNameMaxWidth; i++ {
+		lineBuf.WriteByte(' ')
+	}
+	lineBuf.WriteByte(' ')
+	lineBuf.WriteString(msg)
+
+	// Return formatted line.
+	return lineBuf.String()
+}
+
+// formatServiceName formats and truncates the service name.
+//
+// Params:
+//   - service: raw service name
+//
+// Returns:
+//   - string: formatted service name
+func (l *LogsPanel) formatServiceName(service string) string {
+	// Use daemon as default service name.
+	if service == "" {
+		// Return default service name.
+		return "daemon"
+	}
+
+	// Truncate service name if too long.
+	if len([]rune(service)) > serviceNameMaxWidth {
+		// Return truncated name with ellipsis.
+		return widget.TruncateRunes(service, serviceNameMaxWidth, "…")
+	}
+
+	// Return original service name.
+	return service
+}
+
+// buildMessage builds the message string with metadata.
+//
+// Params:
+//   - entry: log entry containing message and metadata
+//   - msgWidth: maximum width for message
+//
+// Returns:
+//   - string: formatted message with metadata
+func (l *LogsPanel) buildMessage(entry model.LogEntry, msgWidth int) string {
+	msg := entry.Message
+
+	// Use event type if message is empty.
+	if msg == "" {
+		msg = entry.EventType
+	}
+
+	// Append metadata if present.
+	if len(entry.Metadata) > 0 {
+		var sb strings.Builder
+		sb.WriteString(msg)
+		sb.WriteString(" ")
+		sb.WriteString(l.formatMetadata(entry.Metadata))
+		msg = sb.String()
+	}
+
+	// Truncate message if too long.
+	if len([]rune(msg)) > msgWidth {
+		// Return truncated message with ellipsis.
+		return widget.TruncateRunes(msg, msgWidth, "…")
+	}
+
+	// Return complete message.
+	return msg
+}
+
 // getLevelInfo returns the level string and its color separately.
+//
+// Params:
+//   - level: log level string
+//
+// Returns:
+//   - string: normalized level string
+//   - string: ANSI color code for the level
 func (l *LogsPanel) getLevelInfo(level string) (string, string) {
+	// Map log level to display string and color.
 	switch strings.ToUpper(level) {
+	// Handle error level variants.
 	case "ERROR", "ERR":
+		// Return error color.
 		return "ERROR", l.theme.Error
+	// Handle warning level variants.
 	case "WARN", "WARNING":
+		// Return warning color.
 		return "WARN", l.theme.Warning
+	// Handle info level.
 	case "INFO":
+		// Return primary color.
 		return "INFO", l.theme.Primary
+	// Handle debug level.
 	case "DEBUG":
+		// Return muted color.
 		return "DEBUG", l.theme.Muted
+	// Handle unknown levels.
 	default:
+		// Return muted color with original level.
 		return level, l.theme.Muted
 	}
 }
 
-// formatMetadata formats metadata as key=value pairs.
-// Uses strings.Builder to avoid fmt.Sprintf allocations.
+// formatMetadata formats metadata as key=value pairs using strings.Builder.
+//
+// Params:
+//   - meta: metadata map to format (key to any value)
+//
+// Returns:
+//   - string: formatted metadata string
 func (l *LogsPanel) formatMetadata(meta map[string]any) string {
+	// Return empty string if no metadata.
 	if len(meta) == 0 {
+		// Return empty for nil or empty map.
 		return ""
 	}
 
-	keys := make([]string, 0, len(meta))
-	for k := range meta {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	// Collect and sort keys for consistent output.
+	keys := slices.Sorted(maps.Keys(meta))
 
 	var sb strings.Builder
-	sb.Grow(len(keys) * 16) // Estimate ~16 chars per key=value pair.
+	sb.Grow(len(keys) * metadataEstimatedSize)
+
+	// Format each key-value pair.
 	for i, k := range keys {
+		// Add separator between pairs.
 		if i > 0 {
 			sb.WriteByte(' ')
 		}
 		sb.WriteString(k)
 		sb.WriteByte('=')
-		// Format value based on type to avoid fmt.Sprintf.
-		switch v := meta[k].(type) {
-		case string:
-			sb.WriteString(v)
-		case int:
-			sb.WriteString(strconv.Itoa(v))
-		case int64:
-			sb.WriteString(strconv.FormatInt(v, 10))
-		case uint64:
-			sb.WriteString(strconv.FormatUint(v, 10))
-		case float64:
-			sb.WriteString(strconv.FormatFloat(v, 'f', -1, 64))
-		case bool:
-			sb.WriteString(strconv.FormatBool(v))
-		default:
-			// Fallback for complex types - use fmt but only when needed.
-			sb.WriteString(fmt.Sprint(v))
-		}
+		l.writeMetadataValue(&sb, meta[k])
 	}
+
+	// Return formatted metadata string.
 	return sb.String()
 }
 
+// writeMetadataValue writes a typed value to the string builder.
+//
+// Params:
+//   - sb: string builder to write to
+//   - val: value to format (any type)
+func (l *LogsPanel) writeMetadataValue(sb *strings.Builder, val any) {
+	// Handle common types efficiently.
+	switch typed := val.(type) {
+	// Handle string values.
+	case string:
+		sb.WriteString(typed)
+	// Handle int values.
+	case int:
+		sb.WriteString(strconv.Itoa(typed))
+	// Handle int64 values.
+	case int64:
+		sb.WriteString(strconv.FormatInt(typed, decimalBase))
+	// Handle uint64 values.
+	case uint64:
+		sb.WriteString(strconv.FormatUint(typed, decimalBase))
+	// Handle float64 values.
+	case float64:
+		sb.WriteString(strconv.FormatFloat(typed, 'f', formatFloatPrecision, formatFloatBitSize))
+	// Handle bool values.
+	case bool:
+		sb.WriteString(strconv.FormatBool(typed))
+	// Handle complex types.
+	default:
+		// Fallback for complex types.
+		fmt.Fprint(sb, typed)
+	}
+}
+
 // Init initializes the component.
-func (l LogsPanel) Init() tea.Cmd {
+//
+// Returns:
+//   - tea.Cmd: initialization command (nil)
+func (l *LogsPanel) Init() tea.Cmd {
+	// Return nil as no initialization needed.
 	return nil
 }
 
 // Update handles messages.
-func (l LogsPanel) Update(msg tea.Msg) (LogsPanel, tea.Cmd) {
+//
+// Params:
+//   - msg: Bubble Tea message
+//
+// Returns:
+//   - *LogsPanel: updated panel
+//   - tea.Cmd: command to execute
+func (l *LogsPanel) Update(msg tea.Msg) (*LogsPanel, tea.Cmd) {
+	// Ignore messages when not focused.
 	if !l.focused {
+		// Return unchanged panel.
 		return l, nil
 	}
 
 	var cmd tea.Cmd
 
+	// Handle keyboard and mouse input.
 	switch msg := msg.(type) {
+	// Handle keyboard messages.
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "home", "g":
-			l.viewport.GotoTop()
-		case "end", "G":
-			l.viewport.GotoBottom()
-		case "pgup", "ctrl+u":
-			l.viewport.HalfPageUp()
-		case "pgdown", "ctrl+d":
-			l.viewport.HalfPageDown()
-		case "up", "k":
-			l.viewport.ScrollUp(1)
-		case "down", "j":
-			l.viewport.ScrollDown(1)
-		default:
-			l.viewport, cmd = l.viewport.Update(msg)
-		}
+		cmd = l.handleKeyMsg(msg)
+	// Handle mouse messages.
 	case tea.MouseMsg:
 		l.viewport, cmd = l.viewport.Update(msg)
 	}
 
+	// Return updated panel.
 	return l, cmd
 }
 
+// handleKeyMsg processes keyboard input.
+//
+// Params:
+//   - msg: key message to process
+//
+// Returns:
+//   - tea.Cmd: command to execute
+func (l *LogsPanel) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	// Process keyboard shortcuts.
+	switch msg.String() {
+	// Handle home/top navigation.
+	case "home", "g":
+		l.viewport.GotoTop()
+		// Return no command.
+		return nil
+	// Handle end/bottom navigation.
+	case "end", "G":
+		l.viewport.GotoBottom()
+		// Return no command.
+		return nil
+	// Handle page up navigation.
+	case "pgup", "ctrl+u":
+		l.viewport.HalfPageUp()
+		// Return no command.
+		return nil
+	// Handle page down navigation.
+	case "pgdown", "ctrl+d":
+		l.viewport.HalfPageDown()
+		// Return no command.
+		return nil
+	// Handle line up navigation.
+	case "up", "k":
+		l.viewport.ScrollUp(1)
+		// Return no command.
+		return nil
+	// Handle line down navigation.
+	case "down", "j":
+		l.viewport.ScrollDown(1)
+		// Return no command.
+		return nil
+	// Handle other keys via viewport.
+	default:
+		var cmd tea.Cmd
+		l.viewport, cmd = l.viewport.Update(msg)
+		// Return viewport command.
+		return cmd
+	}
+}
+
 // View renders the logs panel with border and vertical scrollbar.
-func (l LogsPanel) View() string {
+//
+// Returns:
+//   - string: rendered panel
+func (l *LogsPanel) View() string {
 	var sb strings.Builder
 
-	// Border color based on focus.
+	// Set border color based on focus state.
 	borderColor := l.theme.Muted
+	// Use primary color when focused.
 	if l.focused {
 		borderColor = l.theme.Primary
 	}
 
-	// Inner width = total width - 2 borders - 1 scrollbar.
-	innerWidth := l.width - 3
+	// Calculate inner width excluding borders and scrollbar.
+	innerWidth := l.width - logBorderWidth
 
-	// === Top border ===
-	// Format: ╭─ Logs ────────────────── 50% ─╮
+	// Render top border with title and indicator.
+	l.renderTopBorder(&sb, borderColor, innerWidth)
+
+	// Render content lines with scrollbar.
+	l.renderContentLines(&sb, borderColor, innerWidth)
+
+	// Render bottom border.
+	l.renderBottomBorder(&sb, borderColor, innerWidth)
+
+	// Return complete view.
+	return sb.String()
+}
+
+// renderTopBorder renders the top border with title and scroll indicator.
+//
+// Params:
+//   - sb: string builder to write to
+//   - borderColor: ANSI color for border
+//   - innerWidth: width inside borders
+func (l *LogsPanel) renderTopBorder(sb *strings.Builder, borderColor string, innerWidth int) {
 	// Build titlePart with strings.Builder to avoid fmt.Sprintf.
 	var titleBuf strings.Builder
-	titleBuf.Grow(len(l.title) + 32)
+	titleBuf.Grow(len(l.title) + titleBufferGrow)
 	titleBuf.WriteString("─ ")
 	titleBuf.WriteString(l.theme.Header)
 	titleBuf.WriteString(l.title)
@@ -319,13 +562,13 @@ func (l LogsPanel) View() string {
 	titlePart := titleBuf.String()
 	scrollPart := l.scrollIndicator()
 
-	// Calculate dashes needed.
-	titleVisLen := 3 + len(l.title) // "─ " + title + " "
+	// Calculate dashes needed for spacing.
+	titleVisLen := titlePrefixLen + len(l.title)
 	scrollVisLen := widget.VisibleLen(scrollPart)
-	dashCount := innerWidth - titleVisLen - scrollVisLen - 1 // -1 for final "─"
-	if dashCount < 0 {
-		dashCount = 0
-	}
+	dashCount := innerWidth - titleVisLen - scrollVisLen - dashCountOffset
+
+	// Ensure non-negative dash count.
+	dashCount = max(dashCount, 0)
 
 	sb.WriteString(borderColor)
 	sb.WriteString("╭")
@@ -333,123 +576,170 @@ func (l LogsPanel) View() string {
 	sb.WriteString(strings.Repeat("─", dashCount))
 	sb.WriteString(" ")
 	sb.WriteString(scrollPart)
-	sb.WriteString(borderColor) // Re-apply border color after scrollPart reset.
+	sb.WriteString(borderColor)
 	sb.WriteString("─╮")
 	sb.WriteString(ansi.Reset)
 	sb.WriteString("\n")
+}
 
-	// === Content lines with vertical scrollbar ===
+// renderContentLines renders the content area with scrollbar.
+//
+// Params:
+//   - sb: string builder to write to
+//   - borderColor: ANSI color for border
+//   - innerWidth: width inside borders
+func (l *LogsPanel) renderContentLines(sb *strings.Builder, borderColor string, innerWidth int) {
+	// Get content lines from viewport.
 	content := l.viewport.View()
 	lines := strings.Split(content, "\n")
 
-	// Calculate scrollbar.
+	// Calculate scrollbar characters.
 	scrollbarChars := l.renderVerticalScrollbar()
 
+	// Render each content line with scrollbar.
 	for i := range l.viewport.Height {
 		sb.WriteString(borderColor)
 		sb.WriteString("│")
 		sb.WriteString(ansi.Reset)
 
-		// Content.
+		// Write content line or blank space.
 		if i < len(lines) {
 			line := lines[i]
 			visLen := widget.VisibleLen(line)
 			sb.WriteString(line)
+
+			// Pad line if needed.
 			if visLen < innerWidth {
 				sb.WriteString(strings.Repeat(" ", innerWidth-visLen))
 			}
 		} else {
+			// Write blank line.
 			sb.WriteString(strings.Repeat(" ", innerWidth))
 		}
 
-		// Scrollbar character.
+		// Write scrollbar character.
 		sb.WriteString(borderColor)
+
+		// Select appropriate scrollbar character.
 		if i < len(scrollbarChars) {
 			sb.WriteString(scrollbarChars[i])
 		} else {
+			// Use track character as fallback.
 			sb.WriteString(scrollTrack)
 		}
 		sb.WriteString("│")
 		sb.WriteString(ansi.Reset)
 		sb.WriteString("\n")
 	}
-
-	// === Bottom border ===
-	sb.WriteString(borderColor)
-	sb.WriteString("╰")
-	sb.WriteString(strings.Repeat("─", innerWidth+1)) // +1 for scrollbar column
-	sb.WriteString("╯")
-	sb.WriteString(ansi.Reset)
-
-	return sb.String()
 }
 
-// scrollIndicator returns the entry count as [ count / max ].
-// Uses strings.Builder to avoid string concatenation allocations.
-func (l LogsPanel) scrollIndicator() string {
+// renderBottomBorder renders the bottom border.
+//
+// Params:
+//   - sb: string builder to write to
+//   - borderColor: ANSI color for border
+//   - innerWidth: width inside borders
+func (l *LogsPanel) renderBottomBorder(sb *strings.Builder, borderColor string, innerWidth int) {
+	sb.WriteString(borderColor)
+	sb.WriteString("╰")
+	sb.WriteString(strings.Repeat("─", innerWidth+scrollbarColumnWidth))
+	sb.WriteString("╯")
+	sb.WriteString(ansi.Reset)
+}
+
+// scrollIndicator returns the entry count as [ count / max ] with ANSI colors.
+//
+// Returns:
+//   - string: formatted scroll indicator
+func (l *LogsPanel) scrollIndicator() string {
 	count := len(l.entries)
-	max := l.maxSize
-	if max <= 0 {
-		max = DefaultLogBufferSize
+	maxVal := l.maxSize
+
+	// Use default if max not set.
+	if maxVal <= 0 {
+		maxVal = DefaultLogBufferSize
 	}
 
 	var sb strings.Builder
-	sb.Grow(32)
+	sb.Grow(metadataBufferSize)
 	sb.WriteString(l.theme.Muted)
 	sb.WriteString("[ ")
 	sb.WriteString(strconv.Itoa(count))
 	sb.WriteString(" / ")
-	sb.WriteString(strconv.Itoa(max))
+	sb.WriteString(strconv.Itoa(maxVal))
 	sb.WriteString(" ]")
 	sb.WriteString(ansi.Reset)
+
+	// Return formatted indicator.
 	return sb.String()
 }
 
 // renderVerticalScrollbar returns the scrollbar characters for each row.
-func (l LogsPanel) renderVerticalScrollbar() []string {
+//
+// Returns:
+//   - []string: scrollbar characters for each row
+func (l *LogsPanel) renderVerticalScrollbar() []string {
 	height := l.viewport.Height
 	totalLines := len(l.entries)
 
+	// No scrolling needed if content fits.
 	if totalLines <= height {
-		// No scrolling needed - no thumb.
 		result := make([]string, height)
+
+		// Fill with track characters.
 		for i := range result {
 			result[i] = scrollTrack
 		}
+
+		// Return track-only scrollbar.
 		return result
 	}
 
 	// Calculate thumb size (minimum 1).
 	ratio := float64(height) / float64(totalLines)
 	thumbSize := int(float64(height) * ratio)
-	if thumbSize < 1 {
-		thumbSize = 1
-	}
 
-	// Calculate thumb position.
+	// Ensure minimum thumb size.
+	thumbSize = max(thumbSize, minThumbSize)
+
+	// Calculate thumb position based on scroll percentage.
 	scrollableHeight := height - thumbSize
 	scrollPercent := l.viewport.ScrollPercent()
 	thumbPos := int(float64(scrollableHeight) * scrollPercent)
 
-	// Build scrollbar.
+	// Build scrollbar with thumb.
 	result := make([]string, height)
+
+	// Assign character to each position.
 	for i := range height {
+		// Use thumb character for thumb position, track elsewhere.
 		if i >= thumbPos && i < thumbPos+thumbSize {
 			result[i] = scrollThumb
 		} else {
+			// Use track character outside thumb.
 			result[i] = scrollTrack
 		}
 	}
+
+	// Return complete scrollbar.
 	return result
 }
 
 // Height returns the panel height.
-func (l LogsPanel) Height() int {
+//
+// Returns:
+//   - int: panel height
+func (l *LogsPanel) Height() int {
+	// Return current height.
 	return l.height
 }
 
 // Width returns the panel width.
-func (l LogsPanel) Width() int {
+//
+// Returns:
+//   - int: panel width
+func (l *LogsPanel) Width() int {
+	// Return current width.
 	return l.width
 }
 

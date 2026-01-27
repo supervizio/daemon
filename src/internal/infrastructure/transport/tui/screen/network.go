@@ -10,14 +10,60 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/widget"
 )
 
+const (
+	// networkDefaultRows is the default terminal rows for layout calculation.
+	networkDefaultRows int = 24
+
+	// compactBufferSize is the pre-allocation size for compact network line.
+	compactBufferSize int = 50
+
+	// interfaceNameWidth is the padding width for interface names.
+	interfaceNameWidth int = 6
+
+	// ipAddressWidth is the padding width for IP addresses.
+	ipAddressWidth int = 15
+
+	// barCalculationOffset is the offset for calculating bar width.
+	barCalculationOffset int = 55
+
+	// barDivider is the divider for splitting bar width between rx/tx.
+	barDivider int = 2
+
+	// networkMinBarWidth is the minimum width for network progress bars.
+	networkMinBarWidth int = 8
+
+	// wideBufferSize is the pre-allocation size for wide network line.
+	wideBufferSize int = 100
+
+	// ratePaddingWidth is the padding width for rate display.
+	ratePaddingWidth int = 8
+
+	// throughputBufferSize is the pre-allocation size for throughput-only line.
+	throughputBufferSize int = 60
+
+	// percentMax is the maximum percentage value.
+	percentMax float64 = 100
+
+	// bitsPerByte is the number of bits in a byte.
+	bitsPerByte uint64 = 8
+)
+
 // NetworkRenderer renders network interface information.
+// It provides formatted network interface display with throughput bars and rate information.
 type NetworkRenderer struct {
 	theme ansi.Theme
 	width int
 }
 
 // NewNetworkRenderer creates a network renderer.
+//
+// Params:
+//   - width: terminal width in columns
+//
+// Returns:
+//   - *NetworkRenderer: configured renderer instance
 func NewNetworkRenderer(width int) *NetworkRenderer {
+	// Return configured network renderer with defaults.
 	return &NetworkRenderer{
 		theme: ansi.DefaultTheme(),
 		width: width,
@@ -25,42 +71,69 @@ func NewNetworkRenderer(width int) *NetworkRenderer {
 }
 
 // SetWidth updates the renderer width.
+//
+// Params:
+//   - width: new terminal width in columns
 func (n *NetworkRenderer) SetWidth(width int) {
 	n.width = width
 }
 
 // Render returns the network section with progress bars.
+//
+// Params:
+//   - snap: snapshot containing network interface data
+//
+// Returns:
+//   - string: rendered network section
 func (n *NetworkRenderer) Render(snap *model.Snapshot) string {
 	// Filter to interesting interfaces.
 	interfaces := n.filterInterfaces(snap.Network)
 
+	// Show empty state when no active interfaces.
 	if len(interfaces) == 0 {
+		// Return empty network box.
 		return n.renderEmpty()
 	}
 
-	layout := terminal.GetLayout(terminal.Size{Cols: n.width, Rows: 24})
+	layout := terminal.GetLayout(terminal.Size{Cols: n.width, Rows: networkDefaultRows})
 
+	// Select rendering mode based on terminal layout.
 	switch layout {
+	// Compact mode for small terminals.
 	case terminal.LayoutCompact:
+		// Return minimal network view.
 		return n.renderCompact(interfaces)
+	// Normal and wide modes with progress bars.
 	case terminal.LayoutNormal, terminal.LayoutWide, terminal.LayoutUltraWide:
+		// Return network view with throughput bars.
 		return n.renderWithBars(interfaces)
 	}
+	// Default to full network display.
 	return n.renderWithBars(interfaces)
 }
 
 // filterInterfaces removes uninteresting interfaces.
+//
+// Params:
+//   - ifaces: list of network interfaces to filter
+//
+// Returns:
+//   - []model.NetworkInterface: filtered list of active interfaces
 func (n *NetworkRenderer) filterInterfaces(ifaces []model.NetworkInterface) []model.NetworkInterface {
 	result := make([]model.NetworkInterface, 0, len(ifaces))
 
+	// Iterate through all interfaces to filter active ones.
 	for _, iface := range ifaces {
 		// Skip down interfaces.
+		// Exclude interfaces that are not up.
 		if !iface.IsUp {
 			continue
 		}
 
 		// Include loopback even without explicit IP.
+		// Handle loopback interface specially.
 		if iface.IsLoopback {
+			// Assign default loopback IP if missing.
 			if iface.IP == "" {
 				iface.IP = "127.0.0.1"
 			}
@@ -69,6 +142,7 @@ func (n *NetworkRenderer) filterInterfaces(ifaces []model.NetworkInterface) []mo
 		}
 
 		// Skip non-loopback interfaces without IP.
+		// Exclude interfaces without assigned IP address.
 		if iface.IP == "" {
 			continue
 		}
@@ -76,25 +150,38 @@ func (n *NetworkRenderer) filterInterfaces(ifaces []model.NetworkInterface) []mo
 		result = append(result, iface)
 	}
 
+	// Return filtered interface list.
 	return result
 }
 
 // renderEmpty renders when there are no interfaces.
+//
+// Returns:
+//   - string: rendered empty network box
 func (n *NetworkRenderer) renderEmpty() string {
 	box := widget.NewBox(n.width).
 		SetTitle("Network").
 		SetTitleColor(n.theme.Header).
 		AddLine("  " + n.theme.Muted + "No network interfaces" + ansi.Reset)
 
+	// Return rendered empty network box.
 	return box.Render()
 }
 
 // renderCompact renders a minimal network view.
+//
+// Params:
+//   - ifaces: list of network interfaces to render
+//
+// Returns:
+//   - string: rendered compact network view
 func (n *NetworkRenderer) renderCompact(ifaces []model.NetworkInterface) string {
 	lines := make([]string, 0, len(ifaces))
 
+	// Iterate through interfaces to format compact view.
 	for _, iface := range ifaces {
 		ip := iface.IP
+		// Show placeholder when IP is not available.
 		if ip == "" {
 			ip = "-"
 		}
@@ -103,11 +190,11 @@ func (n *NetworkRenderer) renderCompact(ifaces []model.NetworkInterface) string 
 		rx := widget.FormatBytesPerSec(iface.RxBytesPerSec)
 		tx := widget.FormatBytesPerSec(iface.TxBytesPerSec)
 		var sb strings.Builder
-		sb.Grow(50)
+		sb.Grow(compactBufferSize)
 		sb.WriteString("  ")
-		sb.WriteString(widget.PadRight(iface.Name, 6))
+		sb.WriteString(widget.PadRight(iface.Name, interfaceNameWidth))
 		sb.WriteByte(' ')
-		sb.WriteString(widget.PadRight(ip, 15))
+		sb.WriteString(widget.PadRight(ip, ipAddressWidth))
 		sb.WriteString(" ↓")
 		sb.WriteString(rx)
 		sb.WriteString(" ↑")
@@ -120,21 +207,30 @@ func (n *NetworkRenderer) renderCompact(ifaces []model.NetworkInterface) string 
 		SetTitleColor(n.theme.Header).
 		AddLines(lines)
 
+	// Return rendered compact network box.
 	return box.Render()
 }
 
 // renderWithBars renders network interfaces with progress bars like CPU/RAM.
 // For interfaces without speed info (loopback, virtual), shows throughput only.
+//
+// Params:
+//   - ifaces: list of network interfaces to render
+//
+// Returns:
+//   - string: rendered network view with throughput bars
 func (n *NetworkRenderer) renderWithBars(ifaces []model.NetworkInterface) string {
 	// Calculate bar width.
 	// Format: "  eth0   ↓[bar] 1.2 MB/s  ↑[bar] 256 KB/s  1 Gbps"
-	barWidth := (n.width - 55) / 2
-	if barWidth < 8 {
-		barWidth = 8
+	barWidth := (n.width - barCalculationOffset) / barDivider
+	// Ensure minimum bar width for readability.
+	if barWidth < networkMinBarWidth {
+		barWidth = networkMinBarWidth
 	}
 
 	lines := make([]string, 0, len(ifaces))
 
+	// Iterate through interfaces to format with progress bars.
 	for _, iface := range ifaces {
 		// Format rates.
 		rxRate := widget.FormatBytesPerSec(iface.RxBytesPerSec)
@@ -142,17 +238,20 @@ func (n *NetworkRenderer) renderWithBars(ifaces []model.NetworkInterface) string
 
 		var line string
 
+		// Show progress bars when interface has speed info.
 		if iface.Speed > 0 {
 			// Has speed - show progress bars with percentage.
-			rxBps := iface.RxBytesPerSec * 8
-			txBps := iface.TxBytesPerSec * 8
-			rxPercent := float64(rxBps) / float64(iface.Speed) * 100
-			txPercent := float64(txBps) / float64(iface.Speed) * 100
-			if rxPercent > 100 {
-				rxPercent = 100
+			rxBps := iface.RxBytesPerSec * bitsPerByte
+			txBps := iface.TxBytesPerSec * bitsPerByte
+			rxPercent := float64(rxBps) / float64(iface.Speed) * percentMax
+			txPercent := float64(txBps) / float64(iface.Speed) * percentMax
+			// Cap RX percentage at 100%.
+			if rxPercent > percentMax {
+				rxPercent = percentMax
 			}
-			if txPercent > 100 {
-				txPercent = 100
+			// Cap TX percentage at 100%.
+			if txPercent > percentMax {
+				txPercent = percentMax
 			}
 
 			// Create progress bars.
@@ -172,17 +271,17 @@ func (n *NetworkRenderer) renderWithBars(ifaces []model.NetworkInterface) string
 			// Format: "  eth0   ↓[bar] 1.2 MB/s  ↑[bar] 256 KB/s  1 Gbps"
 			// Use strings.Builder to avoid fmt.Sprintf allocation.
 			var sb strings.Builder
-			sb.Grow(100)
+			sb.Grow(wideBufferSize)
 			sb.WriteString("  ")
-			sb.WriteString(widget.PadRight(iface.Name, 6))
+			sb.WriteString(widget.PadRight(iface.Name, interfaceNameWidth))
 			sb.WriteString(" ↓")
 			sb.WriteString(rxBar.Render())
 			sb.WriteByte(' ')
-			sb.WriteString(widget.PadLeft(rxRate, 8))
+			sb.WriteString(widget.PadLeft(rxRate, ratePaddingWidth))
 			sb.WriteString("  ↑")
 			sb.WriteString(txBar.Render())
 			sb.WriteByte(' ')
-			sb.WriteString(widget.PadLeft(txRate, 8))
+			sb.WriteString(widget.PadLeft(txRate, ratePaddingWidth))
 			sb.WriteString("  ")
 			sb.WriteString(speed)
 			line = sb.String()
@@ -191,13 +290,13 @@ func (n *NetworkRenderer) renderWithBars(ifaces []model.NetworkInterface) string
 			// Format: "  lo     ↓ 1.2 MB/s  ↑ 256 KB/s  (no limit)"
 			// Use strings.Builder to avoid fmt.Sprintf allocation.
 			var sb strings.Builder
-			sb.Grow(60)
+			sb.Grow(throughputBufferSize)
 			sb.WriteString("  ")
-			sb.WriteString(widget.PadRight(iface.Name, 6))
+			sb.WriteString(widget.PadRight(iface.Name, interfaceNameWidth))
 			sb.WriteString(" ↓ ")
-			sb.WriteString(widget.PadLeft(rxRate, 8))
+			sb.WriteString(widget.PadLeft(rxRate, ratePaddingWidth))
 			sb.WriteString("  ↑ ")
-			sb.WriteString(widget.PadLeft(txRate, 8))
+			sb.WriteString(widget.PadLeft(txRate, ratePaddingWidth))
 			sb.WriteString("  ")
 			sb.WriteString(n.theme.Muted)
 			sb.WriteString("(no limit)")
@@ -213,19 +312,30 @@ func (n *NetworkRenderer) renderWithBars(ifaces []model.NetworkInterface) string
 		SetTitleColor(n.theme.Header).
 		AddLines(lines)
 
+	// Return rendered network box with bars.
 	return box.Render()
 }
 
 // RenderInline returns a single-line summary.
 // Uses string concatenation to avoid fmt.Sprintf allocation.
+//
+// Params:
+//   - snap: snapshot containing network interface data
+//
+// Returns:
+//   - string: single-line network summary
 func (n *NetworkRenderer) RenderInline(snap *model.Snapshot) string {
 	// Find primary interface (non-loopback, has IP).
+	// Search for first non-loopback interface with IP.
 	for _, iface := range snap.Network {
+		// Use first valid non-loopback interface.
 		if !iface.IsLoopback && iface.IP != "" {
+			// Return formatted interface summary.
 			return iface.Name + " " + iface.IP +
 				" ↓" + widget.FormatBytesPerSec(iface.RxBytesPerSec) +
 				" ↑" + widget.FormatBytesPerSec(iface.TxBytesPerSec)
 		}
 	}
+	// Return placeholder when no network available.
 	return "No network"
 }

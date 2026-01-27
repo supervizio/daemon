@@ -1,3 +1,4 @@
+// Package daemon provides daemon event logging infrastructure.
 package daemon
 
 import (
@@ -11,11 +12,11 @@ import (
 
 // ANSI color codes for log levels.
 const (
-	colorReset = "\033[0m"
-	colorDebug = "\033[36m" // Cyan
-	colorInfo  = "\033[32m" // Green
-	colorWarn  = "\033[33m" // Yellow
-	colorError = "\033[31m" // Red
+	colorReset string = "\033[0m"
+	colorDebug string = "\033[36m" // Cyan
+	colorInfo  string = "\033[32m" // Green
+	colorWarn  string = "\033[33m" // Yellow
+	colorError string = "\033[31m" // Red
 )
 
 // ConsoleWriter writes log events to stdout/stderr based on level.
@@ -39,6 +40,7 @@ type ConsoleWriter struct {
 // Returns:
 //   - *ConsoleWriter: the created console writer.
 func NewConsoleWriter() *ConsoleWriter {
+	// Create console writer with OS defaults and auto-detected color.
 	return NewConsoleWriterWithOptions(os.Stdout, os.Stderr, isTerminal(os.Stdout))
 }
 
@@ -52,6 +54,7 @@ func NewConsoleWriter() *ConsoleWriter {
 // Returns:
 //   - *ConsoleWriter: the created console writer.
 func NewConsoleWriterWithOptions(stdout, stderr io.Writer, color bool) *ConsoleWriter {
+	// Create console writer with custom options.
 	return &ConsoleWriter{
 		stdout: stdout,
 		stderr: stderr,
@@ -74,9 +77,11 @@ func (w *ConsoleWriter) Write(event logging.LogEvent) error {
 
 	// Choose output based on level.
 	var out io.Writer
+	// WARN and ERROR go to stderr.
 	if event.Level >= logging.LevelWarn {
 		out = w.stderr
 	} else {
+		// DEBUG and INFO go to stdout.
 		out = w.stdout
 	}
 
@@ -90,24 +95,40 @@ func (w *ConsoleWriter) Write(event logging.LogEvent) error {
 
 	// Write with newline.
 	_, err := out.Write([]byte(line + "\n"))
+	// Return write result.
 	return err
 }
 
 // colorize adds ANSI color codes to the log line.
+//
+// Params:
+//   - level: the log level to colorize.
+//   - line: the log line to colorize.
+//
+// Returns:
+//   - string: the colorized log line.
 func (w *ConsoleWriter) colorize(level logging.Level, line string) string {
 	var color string
+	// Select color based on log level.
 	switch level {
+	// Debug level uses cyan.
 	case logging.LevelDebug:
 		color = colorDebug
+	// Info level uses green.
 	case logging.LevelInfo:
 		color = colorInfo
+	// Warn level uses yellow.
 	case logging.LevelWarn:
 		color = colorWarn
+	// Error level uses red.
 	case logging.LevelError:
 		color = colorError
+	// Unknown level, no color.
 	default:
+		// No color for unknown level.
 		return line
 	}
+	// Wrap line with color codes.
 	return color + line + colorReset
 }
 
@@ -116,14 +137,24 @@ func (w *ConsoleWriter) colorize(level logging.Level, line string) string {
 // Returns:
 //   - error: always nil.
 func (w *ConsoleWriter) Close() error {
+	// No-op, we don't own stdout/stderr.
 	return nil
 }
 
 // isTerminal checks if the given writer is a terminal.
+//
+// Params:
+//   - w: the writer to check.
+//
+// Returns:
+//   - bool: true if the writer is a terminal, false otherwise.
 func isTerminal(w io.Writer) bool {
+	// Check if writer is a file and supports terminal detection.
 	if f, ok := w.(*os.File); ok {
+		// Check if file descriptor is a terminal.
 		return term.IsTerminal(int(f.Fd()))
 	}
+	// Not a file, not a terminal.
 	return false
 }
 

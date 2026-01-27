@@ -142,8 +142,8 @@ func TestServiceStats_Snapshot(t *testing.T) {
 //   - t: the testing context.
 func TestServiceStats_concurrent_increments(t *testing.T) {
 	stats := supervisor.NewServiceStats()
-	const numGoroutines = 100
-	const incrementsPerGoroutine = 100
+	const numGoroutines int = 100
+	const incrementsPerGoroutine int = 100
 
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines * 4) // 4 counters

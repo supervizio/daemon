@@ -1,5 +1,6 @@
 //go:build linux
 
+// Package collector provides system metrics collection.
 package collector
 
 import (
@@ -9,75 +10,111 @@ import (
 	"time"
 )
 
+const (
+	// unameReleaseBufferSize is the buffer size for uname Release field.
+	unameReleaseBufferSize int = 65
+)
+
 // getKernelVersion returns the kernel version on Linux.
+//
+// Returns:
+//   - string: kernel version string or "unknown" on error
 func getKernelVersion() string {
 	var uname syscall.Utsname
+	// Try to get uname info.
 	if err := syscall.Uname(&uname); err != nil {
+		// Syscall failed.
 		return unknownValue
 	}
 
 	// Convert [65]int8 to string.
-	release := make([]byte, 0, 65)
+	release := make([]byte, 0, unameReleaseBufferSize)
+	// Iterate through release bytes.
 	for _, b := range uname.Release {
+		// Check for null terminator.
 		if b == 0 {
+			// End of string.
 			break
 		}
 		release = append(release, byte(b))
 	}
 
+	// Return kernel version string.
 	return string(release)
 }
 
 // getPrimaryIP returns the primary non-loopback IP address.
+//
+// Returns:
+//   - string: primary IP address or "unknown" if not found
 func getPrimaryIP() string {
 	// Try to get the IP used for outbound connections.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "udp", "8.8.8.8:80")
+	var dialer net.Dialer
+	conn, err := dialer.DialContext(ctx, "udp", "8.8.8.8:80")
+	// Check if connection succeeded.
 	if err == nil {
 		defer func() { _ = conn.Close() }()
+		// Try to get local address.
 		if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+			// Return outbound IP.
 			return addr.IP.String()
 		}
 	}
 
 	// Fallback: iterate interfaces.
 	interfaces, err := net.Interfaces()
+	// Handle interface listing error.
 	if err != nil {
+		// Cannot list interfaces.
 		return unknownValue
 	}
 
+	// Process each interface.
 	for _, iface := range interfaces {
 		// Skip loopback and down interfaces.
+		// Check for loopback flag.
 		if iface.Flags&net.FlagLoopback != 0 {
+			// Skip loopback.
 			continue
 		}
+		// Check for up flag.
 		if iface.Flags&net.FlagUp == 0 {
+			// Skip down interface.
 			continue
 		}
 
 		addrs, err := iface.Addrs()
+		// Handle address retrieval error.
 		if err != nil {
+			// Skip interface on error.
 			continue
 		}
 
+		// Process each address.
 		for _, addr := range addrs {
 			var ip net.IP
-			switch v := addr.(type) {
+			// Extract IP from address type.
+			switch val := addr.(type) {
+			// Handle IPNet type.
 			case *net.IPNet:
-				ip = v.IP
+				ip = val.IP
+			// Handle IPAddr type.
 			case *net.IPAddr:
-				ip = v.IP
+				ip = val.IP
 			}
 
 			// Prefer IPv4.
+			// Check for valid non-loopback IPv4.
 			if ip != nil && ip.To4() != nil && !ip.IsLoopback() {
+				// Found valid IPv4.
 				return ip.String()
 			}
 		}
 	}
 
+	// No suitable IP found.
 	return unknownValue
 }

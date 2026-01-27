@@ -38,29 +38,43 @@ type MemoryStat struct {
 // Returns:
 //   - bool: true if key was recognized and field was set
 func (m *MemoryStat) setField(key string, value uint64) bool {
+	// Match key to corresponding struct field
 	switch key {
+	// Anonymous memory pages
 	case "anon":
 		m.Anon = value
+	// File-backed memory pages
 	case "file":
 		m.File = value
+	// Kernel memory usage
 	case "kernel":
 		m.Kernel = value
+	// Slab allocator memory
 	case "slab":
 		m.Slab = value
+	// Socket buffer memory
 	case "sock":
 		m.Sock = value
+	// Shared memory
 	case "shmem":
 		m.Shmem = value
+	// Memory-mapped files
 	case "mapped":
 		m.Mapped = value
+	// Dirty page cache
 	case "dirty":
 		m.Dirty = value
+	// Page fault count
 	case "pgfault":
 		m.Pgfault = value
+	// Major page fault count
 	case "pgmajfault":
 		m.Pgmajfault = value
+	// Unknown or unsupported field
 	default:
+		// Field not recognized
 		return false
 	}
+	// Field was set successfully
 	return true
 }

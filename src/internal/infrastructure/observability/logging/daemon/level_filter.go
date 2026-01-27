@@ -1,3 +1,4 @@
+// Package daemon provides daemon event logging infrastructure.
 package daemon
 
 import (
@@ -5,6 +6,7 @@ import (
 )
 
 // LevelFilter wraps a writer and filters events below a minimum level.
+// Events below the threshold are silently discarded without error.
 type LevelFilter struct {
 	// writer is the underlying writer.
 	writer logging.Writer
@@ -21,6 +23,7 @@ type LevelFilter struct {
 // Returns:
 //   - *LevelFilter: the level-filtered writer.
 func WithLevelFilter(w logging.Writer, minLevel logging.Level) *LevelFilter {
+	// Create level filter wrapper.
 	return &LevelFilter{
 		writer:   w,
 		minLevel: minLevel,
@@ -37,8 +40,10 @@ func WithLevelFilter(w logging.Writer, minLevel logging.Level) *LevelFilter {
 func (f *LevelFilter) Write(event logging.LogEvent) error {
 	// Skip events below the minimum level.
 	if event.Level < f.minLevel {
+		// Filter out events below threshold.
 		return nil
 	}
+	// Pass through events at or above threshold.
 	return f.writer.Write(event)
 }
 
@@ -47,6 +52,7 @@ func (f *LevelFilter) Write(event logging.LogEvent) error {
 // Returns:
 //   - error: nil on success, error on failure.
 func (f *LevelFilter) Close() error {
+	// Delegate close to underlying writer.
 	return f.writer.Close()
 }
 

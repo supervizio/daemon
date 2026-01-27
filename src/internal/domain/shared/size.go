@@ -113,18 +113,18 @@ func FormatSize(bytes int64) string {
 	// Format as gigabytes for sizes >= 1GB.
 	case bytes >= Gigabyte:
 		// Return gigabyte formatted string.
-		return strconv.FormatInt(bytes/Gigabyte, 10) + "GB"
+		return strconv.FormatInt(bytes/Gigabyte, Base10) + "GB"
 	// Format as megabytes for sizes >= 1MB.
 	case bytes >= Megabyte:
 		// Return megabyte formatted string.
-		return strconv.FormatInt(bytes/Megabyte, 10) + "MB"
+		return strconv.FormatInt(bytes/Megabyte, Base10) + "MB"
 	// Format as kilobytes for sizes >= 1KB.
 	case bytes >= Kilobyte:
 		// Return kilobyte formatted string.
-		return strconv.FormatInt(bytes/Kilobyte, 10) + "KB"
+		return strconv.FormatInt(bytes/Kilobyte, Base10) + "KB"
 	// Format as bytes for smaller sizes.
 	default:
 		// Return byte formatted string.
-		return strconv.FormatInt(bytes, 10) + "B"
+		return strconv.FormatInt(bytes, Base10) + "B"
 	}
 }

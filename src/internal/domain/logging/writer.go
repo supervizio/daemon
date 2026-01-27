@@ -1,3 +1,4 @@
+// Package logging provides domain types for daemon event logging.
 package logging
 
 // Writer is the port interface for log event writers.

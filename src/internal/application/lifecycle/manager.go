@@ -75,6 +75,8 @@ func (m *Manager) Events() <-chan domain.Event {
 //
 // Returns:
 //   - string: the service name from configuration.
+//
+// TODO(test): Add test coverage for Name method.
 func (m *Manager) Name() string {
 	// Return the service name from config.
 	return m.config.Name
@@ -325,57 +327,16 @@ func (m *Manager) waitForProcessOrShutdown() bool {
 // Returns:
 //   - bool: true if no restart should occur, false to continue restart loop.
 func (m *Manager) handleProcessExit(result domain.ExitResult) bool {
-	m.mu.Lock()
-	m.exitCode = result.Code
-	m.pid = 0
-	// Calculate uptime before resetting state.
-	uptime := time.Since(m.startTime)
-	// Check if process exited successfully.
-	if result.Code == 0 {
-		m.state = domain.StateStopped
-	} else {
-		// Set failed state for non-zero exit.
-		m.state = domain.StateFailed
-	}
-	m.mu.Unlock()
-
-	// Check exit code for event type.
-	if result.Code == 0 {
-		m.sendEvent(domain.EventStopped, nil)
-	} else {
-		// Send failed event with exit code error.
-		m.sendEvent(domain.EventFailed, fmt.Errorf("exit code %d: %w", result.Code, domain.ErrProcessFailed))
-	}
+	m.updateStateAfterExit(result)
+	m.sendExitEvent(result)
 
 	// Reset backoff counter if process ran stably for the configured window.
+	uptime := m.calculateUptime()
 	m.tracker.MaybeReset(uptime)
 
 	// Check if restart policy allows restart.
 	if !m.tracker.ShouldRestart(result.Code) {
-		// Check if restarts were exhausted.
-		// For RestartAlways: exhausted if attempts >= max (regardless of exit code).
-		// For RestartOnFailure: exhausted only if exit code != 0 and attempts >= max.
-		if m.tracker.IsExhausted() {
-			policy := m.config.Restart.Policy
-			shouldEmitExhausted := false
-			switch policy {
-			case config.RestartAlways:
-				// Always emit when exhausted, even for clean exits (e.g., killed by health check).
-				shouldEmitExhausted = true
-			case config.RestartOnFailure:
-				// Only emit if the process actually failed.
-				shouldEmitExhausted = result.Code != 0
-			case config.RestartNever:
-				// Never restarts, so exhausted doesn't apply.
-				shouldEmitExhausted = false
-			case config.RestartUnless:
-				// Always restarts (no max), so exhausted doesn't apply.
-				shouldEmitExhausted = false
-			}
-			if shouldEmitExhausted {
-				m.sendEvent(domain.EventExhausted, fmt.Errorf("max restarts (%d) exceeded: %w", m.tracker.Attempts(), domain.ErrMaxRetriesExceeded))
-			}
-		}
+		m.handleExhaustedRestarts(result)
 		// Return true to stop restart loop.
 		return true
 	}
@@ -386,6 +347,104 @@ func (m *Manager) handleProcessExit(result domain.ExitResult) bool {
 		return true
 	}
 	// Return false to continue restart loop.
+	return false
+}
+
+// updateStateAfterExit updates the manager state after process exit.
+//
+// Params:
+//   - result: the exit result containing exit code.
+func (m *Manager) updateStateAfterExit(result domain.ExitResult) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.exitCode = result.Code
+	m.pid = 0
+
+	// Check if process exited successfully.
+	if result.Code == 0 {
+		m.state = domain.StateStopped
+	} else {
+		// Set failed state for non-zero exit.
+		m.state = domain.StateFailed
+	}
+}
+
+// sendExitEvent sends the appropriate event based on exit code.
+//
+// Params:
+//   - result: the exit result containing exit code.
+func (m *Manager) sendExitEvent(result domain.ExitResult) {
+	// Check exit code for event type.
+	if result.Code == 0 {
+		m.sendEvent(domain.EventStopped, nil)
+	} else {
+		// Send failed event with exit code error.
+		m.sendEvent(domain.EventFailed, fmt.Errorf("exit code %d: %w", result.Code, domain.ErrProcessFailed))
+	}
+}
+
+// calculateUptime returns the process uptime before exit.
+//
+// Returns:
+//   - time.Duration: the process uptime.
+func (m *Manager) calculateUptime() time.Duration {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	// Calculate uptime based on start time.
+	return time.Since(m.startTime)
+}
+
+// handleExhaustedRestarts checks if restarts are exhausted and emits event if needed.
+//
+// Params:
+//   - result: the exit result containing exit code.
+func (m *Manager) handleExhaustedRestarts(result domain.ExitResult) {
+	// Check if restarts were exhausted.
+	// For RestartAlways: exhausted if attempts >= max (regardless of exit code).
+	// For RestartOnFailure: exhausted only if exit code != 0 and attempts >= max.
+	if !m.tracker.IsExhausted() {
+		// Return early when not exhausted.
+		return
+	}
+
+	// Determine if exhausted event should be emitted based on restart policy.
+	if m.shouldEmitExhaustedEvent(result.Code) {
+		m.sendEvent(domain.EventExhausted, fmt.Errorf("max restarts (%d) exceeded: %w", m.tracker.Attempts(), domain.ErrMaxRetriesExceeded))
+	}
+}
+
+// shouldEmitExhaustedEvent determines if exhausted event should be emitted.
+//
+// Params:
+//   - exitCode: the process exit code.
+//
+// Returns:
+//   - bool: true if exhausted event should be emitted, false otherwise.
+func (m *Manager) shouldEmitExhaustedEvent(exitCode int) bool {
+	policy := m.config.Restart.Policy
+
+	// Determine exhausted event emission based on restart policy.
+	switch policy {
+	// Always emit exhausted event for RestartAlways policy.
+	case config.RestartAlways:
+		// Always emit when exhausted, even for clean exits (e.g., killed by health check).
+		return true
+	// Only emit exhausted event if process failed for RestartOnFailure policy.
+	case config.RestartOnFailure:
+		// Only emit if the process actually failed.
+		return exitCode != 0
+	// Never emit exhausted event for RestartNever policy.
+	case config.RestartNever:
+		// Never restarts, so exhausted doesn't apply.
+		return false
+	// Never emit exhausted event for RestartUnless policy.
+	case config.RestartUnless:
+		// Always restarts (no max), so exhausted doesn't apply.
+		return false
+	}
+
+	// Return false for unknown policies.
 	return false
 }
 
@@ -515,6 +574,8 @@ func (m *Manager) Status() domain.Status {
 //
 // Returns:
 //   - error: ErrNotRunning if no process, error from executor on stop failure.
+//
+// TODO(test): Add test coverage for RestartOnHealthFailure method.
 func (m *Manager) RestartOnHealthFailure(reason string) error {
 	m.mu.Lock()
 	pid := m.pid

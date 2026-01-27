@@ -4,4 +4,4 @@ package terminal
 
 import "syscall"
 
-const ioctlReadTermios = syscall.TIOCGETA
+const ioctlReadTermios uintptr = syscall.TIOCGETA

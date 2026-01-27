@@ -40,6 +40,7 @@ type BufferedWriter struct {
 // Returns:
 //   - *BufferedWriter: the created buffered writer.
 func NewBufferedWriter(inner logging.Writer) *BufferedWriter {
+	// Create buffered writer with default capacity.
 	return &BufferedWriter{
 		inner:  inner,
 		buffer: make([]logging.LogEvent, 0, defaultBufferCap),
@@ -61,9 +62,11 @@ func (w *BufferedWriter) Write(event logging.LogEvent) error {
 
 	// Closed writer discards events (no error to avoid cascading failures).
 	if w.closed {
+		// Silently discard events after close.
 		return nil
 	}
 
+	// After flush, write directly to inner writer.
 	if w.flushed {
 		// After flush, write directly to inner writer.
 		return w.inner.Write(event)
@@ -76,6 +79,7 @@ func (w *BufferedWriter) Write(event logging.LogEvent) error {
 		w.buffer = w.buffer[1:]
 	}
 	w.buffer = append(w.buffer, event)
+	// Buffered successfully.
 	return nil
 }
 
@@ -88,6 +92,7 @@ func (w *BufferedWriter) Flush() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// Already flushed, nothing to do.
 	if w.flushed {
 		// Already flushed.
 		return nil
@@ -95,7 +100,9 @@ func (w *BufferedWriter) Flush() error {
 
 	// Write all buffered events.
 	var firstErr error
+	// Write each buffered event to inner writer.
 	for _, event := range w.buffer {
+		// Record first error encountered.
 		if err := w.inner.Write(event); err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -105,6 +112,7 @@ func (w *BufferedWriter) Flush() error {
 	w.buffer = nil
 	w.flushed = true
 
+	// Return first error or nil.
 	return firstErr
 }
 
@@ -115,8 +123,10 @@ func (w *BufferedWriter) Flush() error {
 //   - error: error from flushing or closing, or nil.
 func (w *BufferedWriter) Close() error {
 	w.mu.Lock()
+	// Already closed, nothing to do.
 	if w.closed {
 		w.mu.Unlock()
+		// Already closed.
 		return nil
 	}
 	w.closed = true

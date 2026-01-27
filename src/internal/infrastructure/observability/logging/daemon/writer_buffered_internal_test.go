@@ -104,8 +104,8 @@ func TestBufferedWriter_ConcurrentWrites(t *testing.T) {
 	cw := NewConsoleWriterWithOptions(&buf, &buf, false)
 	bw := NewBufferedWriter(cw)
 
-	const numGoroutines = 50
-	const writesPerGoroutine = 10
+	const numGoroutines int = 50
+	const writesPerGoroutine int = 10
 
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)

@@ -19,9 +19,9 @@ import (
 
 const (
 	// defaultStartupTimeout is the maximum time to wait for container startup.
-	defaultStartupTimeout = 30 * time.Second
+	defaultStartupTimeout time.Duration = 30 * time.Second
 	// defaultPollInterval is the interval between status checks.
-	defaultPollInterval = 100 * time.Millisecond
+	defaultPollInterval time.Duration = 100 * time.Millisecond
 )
 
 // testContainer wraps a testcontainers container with helper methods.

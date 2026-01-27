@@ -169,6 +169,7 @@ type DaemonLoggingDTO struct {
 }
 
 // WriterConfigDTO is the YAML representation of a log writer configuration.
+// It defines the type, level, and specific writer settings for file or JSON output.
 type WriterConfigDTO struct {
 	Type  string              `yaml:"type"`
 	Level string              `yaml:"level,omitempty"`
@@ -177,12 +178,14 @@ type WriterConfigDTO struct {
 }
 
 // FileWriterConfigDTO is the YAML representation of file writer configuration.
+// It specifies the output file path and rotation policy for file-based logging.
 type FileWriterConfigDTO struct {
 	Path     string            `yaml:"path,omitempty"`
 	Rotation RotationConfigDTO `yaml:"rotation,omitempty"`
 }
 
 // JSONWriterConfigDTO is the YAML representation of JSON writer configuration.
+// It specifies the output file path and rotation policy for JSON-formatted logging.
 type JSONWriterConfigDTO struct {
 	Path     string            `yaml:"path,omitempty"`
 	Rotation RotationConfigDTO `yaml:"rotation,omitempty"`
@@ -472,9 +475,13 @@ func (l *LoggingConfigDTO) ToDomain() config.LoggingConfig {
 //   - config.DaemonLogging: the converted domain daemon logging configuration
 func (d *DaemonLoggingDTO) ToDomain() config.DaemonLogging {
 	writers := make([]config.WriterConfig, 0, len(d.Writers))
+
+	// Convert each writer configuration to domain model
 	for i := range d.Writers {
 		writers = append(writers, d.Writers[i].ToDomain())
 	}
+
+	// Return daemon logging with converted writers
 	return config.DaemonLogging{
 		Writers: writers,
 	}
@@ -486,6 +493,7 @@ func (d *DaemonLoggingDTO) ToDomain() config.DaemonLogging {
 // Returns:
 //   - config.WriterConfig: the converted domain writer configuration
 func (w *WriterConfigDTO) ToDomain() config.WriterConfig {
+	// Return writer config with type, level, and output settings
 	return config.WriterConfig{
 		Type:  w.Type,
 		Level: w.Level,
@@ -500,6 +508,7 @@ func (w *WriterConfigDTO) ToDomain() config.WriterConfig {
 // Returns:
 //   - config.FileWriterConfig: the converted domain file writer configuration
 func (f *FileWriterConfigDTO) ToDomain() config.FileWriterConfig {
+	// Return file writer config with path and rotation settings
 	return config.FileWriterConfig{
 		Path:     f.Path,
 		Rotation: f.Rotation.ToDomain(),
@@ -512,6 +521,7 @@ func (f *FileWriterConfigDTO) ToDomain() config.FileWriterConfig {
 // Returns:
 //   - config.JSONWriterConfig: the converted domain JSON writer configuration
 func (j *JSONWriterConfigDTO) ToDomain() config.JSONWriterConfig {
+	// Return JSON writer config with path and rotation settings
 	return config.JSONWriterConfig{
 		Path:     j.Path,
 		Rotation: j.Rotation.ToDomain(),

@@ -9,6 +9,7 @@ type DaemonLogging struct {
 }
 
 // WriterConfig defines configuration for a single log writer.
+// It supports multiple writer types (console, file, json) with individual level filtering.
 type WriterConfig struct {
 	// Type specifies the writer type: "console", "file", "json".
 	Type string
@@ -21,6 +22,7 @@ type WriterConfig struct {
 }
 
 // FileWriterConfig defines configuration for file writers.
+// It specifies the output path and rotation settings for plain text log files.
 type FileWriterConfig struct {
 	// Path specifies the log file path (relative to BaseDir or absolute).
 	Path string
@@ -29,6 +31,7 @@ type FileWriterConfig struct {
 }
 
 // JSONWriterConfig defines configuration for JSON writers.
+// It specifies the output path and rotation settings for structured JSON log files.
 type JSONWriterConfig struct {
 	// Path specifies the JSON log file path (relative to BaseDir or absolute).
 	Path string
@@ -42,6 +45,7 @@ type JSONWriterConfig struct {
 // Returns:
 //   - DaemonLogging: default daemon logging configuration.
 func DefaultDaemonLogging() DaemonLogging {
+	// Return default configuration with console writer at INFO level.
 	return DaemonLogging{
 		Writers: []WriterConfig{
 			{Type: "console", Level: "info"},

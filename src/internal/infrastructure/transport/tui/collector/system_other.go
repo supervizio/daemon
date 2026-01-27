@@ -23,5 +23,6 @@ func (c *SystemCollector) CollectInto(snap *model.Snapshot) error {
 	// implementations (sysctl on BSD/Darwin, etc.).
 	// For now, return zeros - the TUI will display "-" for missing data.
 	snap.System.DiskPath = "/"
+	// Return nil for graceful degradation.
 	return nil
 }

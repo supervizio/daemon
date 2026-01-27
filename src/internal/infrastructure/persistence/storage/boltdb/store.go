@@ -21,40 +21,27 @@ import (
 	"github.com/kodflow/daemon/internal/domain/storage"
 )
 
-// bufferPool provides reusable bytes.Buffer instances to reduce allocations
-// during gob encoding operations.
-var bufferPool = sync.Pool{
-	New: func() any {
-		return new(bytes.Buffer)
-	},
-}
-
-// File permissions and timeouts for database operations.
 const (
-	dbFileMode      os.FileMode = 0o600
-	dbOpenTimeout   int64       = 5
-	int64ByteLength int         = 8
+	// dbFileMode is the file permission mode for the BoltDB database file.
+	dbFileMode os.FileMode = 0o600
+	// dbOpenTimeout is the timeout in seconds for opening the database.
+	dbOpenTimeout int64 = 5
+	// int64ByteLength is the byte length of an int64 for binary encoding.
+	int64ByteLength int = 8
 )
 
-// Current schema version for database migrations.
+// schemaVersion is the current schema version for database migrations.
 const schemaVersion int64 = 1
 
-// bucketReader defines the interface for reading from a bucket.
-// Used to decouple pruning logic from concrete bbolt.Bucket type.
-type bucketReader interface {
-	Bucket(name []byte) *bolt.Bucket
-	ForEach(fn func(k []byte, v []byte) error) error
-}
-
-// bucketPruner defines the interface for pruning entries from a bucket.
-// Used to decouple pruning logic from concrete bbolt.Bucket type.
-type bucketPruner interface {
-	Cursor() *bolt.Cursor
-	Delete(key []byte) error
-}
-
-// Database organization: bucket names and metadata keys.
 var (
+	// bufferPool provides reusable bytes.Buffer instances to reduce allocations
+	// during gob encoding operations.
+	bufferPool *sync.Pool = &sync.Pool{
+		New: func() any {
+			return new(bytes.Buffer)
+		},
+	}
+
 	// Bucket names for organizing data
 	bucketSystemCPU      []byte = []byte("system_cpu")
 	bucketSystemMemory   []byte = []byte("system_memory")
@@ -69,6 +56,20 @@ var (
 	// errNotFound indicates that no metrics were found in the database
 	errNotFound error = errors.New("metrics not found")
 )
+
+// bucketReader defines the interface for reading from a bucket.
+// Used to decouple pruning logic from concrete bbolt.Bucket type.
+type bucketReader interface {
+	Bucket(name []byte) *bolt.Bucket
+	ForEach(fn func(k []byte, v []byte) error) error
+}
+
+// bucketPruner defines the interface for pruning entries from a bucket.
+// Used to decouple pruning logic from concrete bbolt.Bucket type.
+type bucketPruner interface {
+	Cursor() *bolt.Cursor
+	Delete(key []byte) error
+}
 
 // Store implements MetricsStore using BoltDB.
 //
@@ -806,7 +807,13 @@ func int64ToBytes(n int64) []byte {
 // Coverage gap on error branch is accepted as theoretically unreachable with current types.
 func encodeSystemCPU(data *metrics.SystemCPU) ([]byte, error) {
 	// Get pooled buffer to reduce allocations
-	buf := bufferPool.Get().(*bytes.Buffer)
+	buf, ok := bufferPool.Get().(*bytes.Buffer)
+
+	// Validate type assertion from pool
+	if !ok {
+		// Type assertion failed, create new buffer
+		buf = new(bytes.Buffer)
+	}
 	buf.Reset()
 	defer bufferPool.Put(buf)
 
@@ -815,9 +822,12 @@ func encodeSystemCPU(data *metrics.SystemCPU) ([]byte, error) {
 		// Encoding failed
 		return nil, fmt.Errorf("gob encode: %w", err)
 	}
+
 	// Copy bytes since buffer will be reused
 	result := make([]byte, buf.Len())
 	copy(result, buf.Bytes())
+
+	// Return encoded bytes
 	return result, nil
 }
 
@@ -848,7 +858,13 @@ func decodeSystemCPU(data []byte, dest *metrics.SystemCPU) error {
 // Coverage gap on error branch is accepted as theoretically unreachable with current types.
 func encodeSystemMemory(data *metrics.SystemMemory) ([]byte, error) {
 	// Get pooled buffer to reduce allocations
-	buf := bufferPool.Get().(*bytes.Buffer)
+	buf, ok := bufferPool.Get().(*bytes.Buffer)
+
+	// Validate type assertion from pool
+	if !ok {
+		// Type assertion failed, create new buffer
+		buf = new(bytes.Buffer)
+	}
 	buf.Reset()
 	defer bufferPool.Put(buf)
 
@@ -857,9 +873,12 @@ func encodeSystemMemory(data *metrics.SystemMemory) ([]byte, error) {
 		// Encoding failed
 		return nil, fmt.Errorf("gob encode: %w", err)
 	}
+
 	// Copy bytes since buffer will be reused
 	result := make([]byte, buf.Len())
 	copy(result, buf.Bytes())
+
+	// Return encoded bytes
 	return result, nil
 }
 
@@ -890,7 +909,13 @@ func decodeSystemMemory(data []byte, dest *metrics.SystemMemory) error {
 // Coverage gap on error branch is accepted as theoretically unreachable with current types.
 func encodeProcessMetrics(data *metrics.ProcessMetrics) ([]byte, error) {
 	// Get pooled buffer to reduce allocations
-	buf := bufferPool.Get().(*bytes.Buffer)
+	buf, ok := bufferPool.Get().(*bytes.Buffer)
+
+	// Validate type assertion from pool
+	if !ok {
+		// Type assertion failed, create new buffer
+		buf = new(bytes.Buffer)
+	}
 	buf.Reset()
 	defer bufferPool.Put(buf)
 
@@ -899,9 +924,12 @@ func encodeProcessMetrics(data *metrics.ProcessMetrics) ([]byte, error) {
 		// Encoding failed
 		return nil, fmt.Errorf("gob encode: %w", err)
 	}
+
 	// Copy bytes since buffer will be reused
 	result := make([]byte, buf.Len())
 	copy(result, buf.Bytes())
+
+	// Return encoded bytes
 	return result, nil
 }
 

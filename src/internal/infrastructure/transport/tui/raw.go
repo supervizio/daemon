@@ -14,10 +14,28 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/widget"
 )
 
-// Standard terminal width (80 cols baseline).
-const standardWidth = 80
+// Layout constants for terminal rendering.
+const (
+	standardWidth       int = 80 // Standard terminal width (80 cols baseline).
+	wideModeMultiplier  int = 2  // Multiplier for side-by-side layout detection.
+	borderWidth         int = 2  // Box border width (left + right).
+	headerPadding       int = 3  // Padding on each side of header.
+	logoVisibleLength   int = 11 // Visible length of "superviz.io" logo.
+	minSeparatorLength  int = 3  // Minimum separator length in header.
+	minBarWidth         int = 10 // Minimum progress bar width.
+	barReservedSpace    int = 40 // Space reserved for labels/values in system section.
+	endpointReserved    int = 20 // Space reserved for sandbox endpoint prefix.
+	sandboxNameWidth    int = 12 // Fixed width for sandbox name column.
+	ellipsisLength      int = 3  // Length of "..." for truncation.
+	maxLimitParts       int = 3  // Maximum number of limit parts (CPU, CPUSet, MEM).
+	stringBuilderGrowth int = 32 // Initial capacity for strings.Builder.
+	floatPrecision      int = 2  // Decimal precision for load average.
+	floatBitSize        int = 64 // Bit size for float formatting.
+	cpuQuotaPrecision   int = 1  // Decimal precision for CPU quota.
+)
 
 // RawRenderer renders a static MOTD snapshot.
+// It provides a non-interactive terminal UI for displaying system information at startup.
 type RawRenderer struct {
 	width  int
 	height int
@@ -26,8 +44,15 @@ type RawRenderer struct {
 }
 
 // NewRawRenderer creates a raw renderer.
+//
+// Params:
+//   - out: writer for output.
+//
+// Returns:
+//   - *RawRenderer: new raw renderer instance.
 func NewRawRenderer(out io.Writer) *RawRenderer {
 	size := terminal.GetSize()
+	// Return renderer with detected terminal size.
 	return &RawRenderer{
 		width:  size.Cols,
 		height: size.Rows,
@@ -37,6 +62,10 @@ func NewRawRenderer(out io.Writer) *RawRenderer {
 }
 
 // SetSize updates the renderer dimensions.
+//
+// Params:
+//   - width: new width in columns
+//   - height: new height in rows
 func (r *RawRenderer) SetSize(width, height int) {
 	r.width = width
 	r.height = height
@@ -44,6 +73,12 @@ func (r *RawRenderer) SetSize(width, height int) {
 
 // Render outputs a complete MOTD snapshot for raw mode.
 // Shows only startup-time static information, no dynamic data.
+//
+// Params:
+//   - snap: snapshot containing system and service data.
+//
+// Returns:
+//   - error: write error if output fails.
 func (r *RawRenderer) Render(snap *model.Snapshot) error {
 	var sb strings.Builder
 
@@ -51,13 +86,14 @@ func (r *RawRenderer) Render(snap *model.Snapshot) error {
 	sb.WriteString(r.renderHeader(snap))
 	sb.WriteString("\n")
 
-	// For wide terminals (>= 2x standard width), use side-by-side layout.
-	if r.width >= standardWidth*2 {
+	// Check if terminal is wide enough for side-by-side layout.
+	if r.width >= standardWidth*wideModeMultiplier {
 		sb.WriteString(r.renderSystemAndSandboxesSideBySide(snap))
 	} else {
 		// Stack vertically for narrower terminals.
 		sb.WriteString(r.renderSystemSection(snap))
 		sb.WriteString("\n")
+		// Only show sandboxes section if any sandboxes exist.
 		if r.hasAnySandboxes(snap) {
 			sb.WriteString(r.renderSandboxes(snap))
 			sb.WriteString("\n")
@@ -69,12 +105,20 @@ func (r *RawRenderer) Render(snap *model.Snapshot) error {
 	sb.WriteString(services.RenderNamesOnly(snap))
 	sb.WriteString("\n")
 
-	// Output.
+	// Write final output to writer.
 	_, err := fmt.Fprint(r.out, sb.String())
+
+	// Return write error if any.
 	return err
 }
 
 // RenderCompact outputs a condensed MOTD for small terminals.
+//
+// Params:
+//   - snap: snapshot containing system and service data.
+//
+// Returns:
+//   - error: write error if output fails.
 func (r *RawRenderer) RenderCompact(snap *model.Snapshot) error {
 	var sb strings.Builder
 
@@ -87,17 +131,26 @@ func (r *RawRenderer) RenderCompact(snap *model.Snapshot) error {
 	sb.WriteString(services.RenderNamesOnly(snap))
 	sb.WriteString("\n")
 
-	// Output.
+	// Write final output to writer.
 	_, err := fmt.Fprint(r.out, sb.String())
+
+	// Return write error if any.
 	return err
 }
 
 // renderHeader renders the simplified header for raw mode.
+//
+// Params:
+//   - snap: snapshot containing context data.
+//
+// Returns:
+//   - string: rendered header content.
 func (r *RawRenderer) renderHeader(snap *model.Snapshot) string {
 	ctx := snap.Context
 
 	// Version string (remove leading 'v' if present to avoid "vv").
 	version := ctx.Version
+	// Ensure version starts with 'v' prefix.
 	if len(version) > 0 && version[0] != 'v' {
 		version = "v" + version
 	}
@@ -107,9 +160,9 @@ func (r *RawRenderer) renderHeader(snap *model.Snapshot) string {
 	versionStr := r.theme.Accent + version + ansi.Reset
 
 	// Calculate dimensions for symmetric layout.
-	innerWidth := r.width - 2 // Box inner width (excluding borders)
-	pad := 3                  // Padding on each side
-	logoLen := 11             // "superviz.io" = 8 + 3 = 11 visible chars
+	innerWidth := r.width - borderWidth // Box inner width (excluding borders)
+	pad := headerPadding                // Padding on each side
+	logoLen := logoVisibleLength        // "superviz.io" = 8 + 3 = 11 visible chars
 	versionLen := len(version)
 
 	// Calculate separator to fill space between logo and version.
@@ -119,10 +172,9 @@ func (r *RawRenderer) renderHeader(snap *model.Snapshot) string {
 	// We want box to add exactly 'pad' spaces on the right.
 	// So: content visible = innerWidth - pad
 	// sepLen = innerWidth - pad - pad - logoLen - 1 - 1 - versionLen
-	separatorLen := innerWidth - (2 * pad) - logoLen - 2 - versionLen
-	if separatorLen < 3 {
-		separatorLen = 3
-	}
+	separatorLen := innerWidth - (wideModeMultiplier * pad) - logoLen - wideModeMultiplier - versionLen
+	// Ensure minimum separator length for visual consistency.
+	separatorLen = max(separatorLen, minSeparatorLength)
 	separator := r.theme.Muted + strings.Repeat("─", separatorLen) + ansi.Reset
 
 	// Build title line (box will auto-pad to add right padding).
@@ -130,6 +182,7 @@ func (r *RawRenderer) renderHeader(snap *model.Snapshot) string {
 
 	// Runtime mode.
 	runtime := ctx.Mode.String()
+	// Include container runtime if available.
 	if ctx.ContainerRuntime != "" {
 		runtime = ctx.Mode.String() + " (" + ctx.ContainerRuntime + ")"
 	}
@@ -139,6 +192,7 @@ func (r *RawRenderer) renderHeader(snap *model.Snapshot) string {
 
 	// Config path.
 	configPath := ctx.ConfigPath
+	// Use default path if not specified.
 	if configPath == "" {
 		configPath = "/etc/supervizio/config.yaml"
 	}
@@ -158,10 +212,17 @@ func (r *RawRenderer) renderHeader(snap *model.Snapshot) string {
 		AddLine("   " + bullet + " " + r.theme.Muted + "Started" + ansi.Reset + "    " + ctx.StartTime.Format("2006-01-02T15:04:05Z")).
 		AddLine("")
 
+	// Render box to string and return.
 	return box.Render()
 }
 
 // renderHeaderCompact renders a minimal header.
+//
+// Params:
+//   - snap: snapshot containing context data.
+//
+// Returns:
+//   - string: rendered compact header content.
 func (r *RawRenderer) renderHeaderCompact(snap *model.Snapshot) string {
 	ctx := snap.Context
 
@@ -170,6 +231,7 @@ func (r *RawRenderer) renderHeaderCompact(snap *model.Snapshot) string {
 		" " + r.theme.Accent + "v" + ctx.Version + ansi.Reset
 
 	mode := ctx.Mode.String()
+	// Use container runtime name if available.
 	if ctx.ContainerRuntime != "" {
 		mode = ctx.ContainerRuntime
 	}
@@ -181,32 +243,45 @@ func (r *RawRenderer) renderHeaderCompact(snap *model.Snapshot) string {
 		AddLine("  " + logo).
 		AddLine("  " + line)
 
+	// Render box to string and return.
 	return box.Render()
 }
 
 // renderSystemSection renders the System (at start) section.
+//
+// Params:
+//   - snap: snapshot containing system data.
+//
+// Returns:
+//   - string: rendered system section content.
 func (r *RawRenderer) renderSystemSection(snap *model.Snapshot) string {
 	system := screen.NewSystemRenderer(r.width)
+	// Delegate rendering to system renderer and return.
 	return system.RenderForRaw(snap)
 }
 
 // renderSystemAndSandboxesSideBySide renders System and Sandboxes side by side.
+//
+// Params:
+//   - snap: snapshot containing system and sandbox data.
+//
+// Returns:
+//   - string: rendered side-by-side layout content.
 func (r *RawRenderer) renderSystemAndSandboxesSideBySide(snap *model.Snapshot) string {
 	// Calculate widths: each panel gets half minus 1 for gap.
-	halfWidth := (r.width - 1) / 2
+	halfWidth := (r.width - 1) / wideModeMultiplier
 
 	// Build content for both boxes to determine heights.
 	systemLines := r.buildSystemContentLines(snap, halfWidth)
 	sandboxLines := r.buildSandboxContentLines(snap, halfWidth)
 
 	// Equalize heights by padding shorter content.
-	maxContent := len(systemLines)
-	if len(sandboxLines) > maxContent {
-		maxContent = len(sandboxLines)
-	}
+	maxContent := max(len(systemLines), len(sandboxLines))
+	// Pad system lines to match maximum height.
 	for len(systemLines) < maxContent {
 		systemLines = append(systemLines, "")
 	}
+	// Pad sandbox lines to match maximum height.
 	for len(sandboxLines) < maxContent {
 		sandboxLines = append(sandboxLines, "")
 	}
@@ -222,24 +297,37 @@ func (r *RawRenderer) renderSystemAndSandboxesSideBySide(snap *model.Snapshot) s
 		SetTitleColor(r.theme.Header).
 		AddLines(sandboxLines)
 
-	// Merge side by side.
+	// Merge side by side and return.
 	return mergeSideBySide(systemBox.Render(), sandboxBox.Render(), " ")
 }
 
 // hasAnySandboxes checks if there are any sandboxes to display.
+//
+// Params:
+//   - snap: snapshot containing sandbox data.
+//
+// Returns:
+//   - bool: true if sandboxes exist, false otherwise.
 func (r *RawRenderer) hasAnySandboxes(snap *model.Snapshot) bool {
+	// Check if sandboxes slice is non-empty and return result.
 	return len(snap.Sandboxes) > 0
 }
 
 // buildSystemContentLines builds the content lines for system section.
+//
+// Params:
+//   - snap: snapshot containing system data.
+//   - width: available width for rendering.
+//
+// Returns:
+//   - []string: system content lines for display.
 func (r *RawRenderer) buildSystemContentLines(snap *model.Snapshot, width int) []string {
 	sys := snap.System
 	limits := snap.Limits
 
-	barWidth := width - 40
-	if barWidth < 10 {
-		barWidth = 10
-	}
+	barWidth := width - barReservedSpace
+	// Ensure minimum bar width for visibility.
+	barWidth = max(barWidth, minBarWidth)
 
 	// CPU bar.
 	cpuBar := widget.NewProgressBar(barWidth, sys.CPUPercent).
@@ -262,7 +350,7 @@ func (r *RawRenderer) buildSystemContentLines(snap *model.Snapshot, width int) [
 		SetColorByPercent()
 
 	// Build load average string without fmt.Sprintf.
-	loadAvgStr := "  Load: " + strconv.FormatFloat(sys.LoadAvg1, 'f', 2, 64) + " " + strconv.FormatFloat(sys.LoadAvg5, 'f', 2, 64)
+	loadAvgStr := "  Load: " + strconv.FormatFloat(sys.LoadAvg1, 'f', floatPrecision, floatBitSize) + " " + strconv.FormatFloat(sys.LoadAvg5, 'f', floatPrecision, floatBitSize)
 
 	lines := []string{
 		"  " + cpuBar.Render() + loadAvgStr,
@@ -274,41 +362,57 @@ func (r *RawRenderer) buildSystemContentLines(snap *model.Snapshot, width int) [
 	// Limits if present.
 	if limits.HasLimits {
 		// Pre-allocate for max 3 limit parts.
-		limitParts := make([]string, 0, 3)
+		limitParts := make([]string, 0, maxLimitParts)
+		// Add CPUSet limit if configured.
 		if limits.CPUSet != "" {
 			limitParts = append(limitParts, "CPUSet: "+limits.CPUSet)
 		}
+		// Add CPU quota limit if configured.
 		if limits.CPUQuota > 0 {
-			limitParts = append(limitParts, "CPU: "+strconv.FormatFloat(limits.CPUQuota, 'f', 1, 64)+" cores")
+			limitParts = append(limitParts, "CPU: "+strconv.FormatFloat(limits.CPUQuota, 'f', cpuQuotaPrecision, floatBitSize)+" cores")
 		}
+		// Add memory limit if configured.
 		if limits.MemoryMax > 0 {
 			limitParts = append(limitParts, "MEM: "+widget.FormatBytes(limits.MemoryMax))
 		}
+		// Append limits line if any limits are set.
 		if len(limitParts) > 0 {
 			lines = append(lines, "  "+r.theme.Muted+"Limits: "+strings.Join(limitParts, " │ ")+ansi.Reset)
 		}
 	}
 
+	// Return assembled system content lines.
 	return lines
 }
 
 // buildSandboxContentLines builds the content lines for sandboxes section.
 // Pre-allocates slice capacity for efficiency.
+//
+// Params:
+//   - snap: snapshot containing sandbox data.
+//   - width: available width for rendering.
+//
+// Returns:
+//   - []string: sandbox content lines for display.
+//
+// NOTE: Tests needed (KTN-TEST-SPLIT).
 func (r *RawRenderer) buildSandboxContentLines(snap *model.Snapshot, width int) []string {
 	status := widget.NewStatusIndicator()
 	// Pre-allocate for all sandboxes.
 	lines := make([]string, 0, len(snap.Sandboxes))
 
-	maxEndpoint := width - 20
+	maxEndpoint := width - endpointReserved
 	detectedIcon := status.Detected(true)
 	notDetectedIcon := status.Detected(false)
 
 	// Show detected sandboxes first.
 	for _, sb := range snap.Sandboxes {
+		// Only show detected sandboxes in first pass.
 		if sb.Detected {
 			endpoint := sb.Endpoint
-			if len(endpoint) > maxEndpoint && maxEndpoint > 3 {
-				endpoint = endpoint[:maxEndpoint-3] + "..."
+			// Truncate endpoint if too long.
+			if len(endpoint) > maxEndpoint && maxEndpoint > ellipsisLength {
+				endpoint = endpoint[:maxEndpoint-ellipsisLength] + "..."
 			}
 			lines = append(lines, r.formatSandboxLine(detectedIcon, sb.Name, endpoint))
 		}
@@ -316,38 +420,64 @@ func (r *RawRenderer) buildSandboxContentLines(snap *model.Snapshot, width int) 
 
 	// Then show not detected ones.
 	notDetectedText := r.theme.Muted + "not detected" + ansi.Reset
+	// Show not detected sandboxes in second pass.
 	for _, sb := range snap.Sandboxes {
+		// Only show not detected sandboxes in second pass.
 		if !sb.Detected {
 			lines = append(lines, r.formatSandboxLine(notDetectedIcon, sb.Name, notDetectedText))
 		}
 	}
 
+	// Return assembled sandbox content lines.
 	return lines
 }
 
 // formatSandboxLine formats a sandbox line with strings.Builder.
+//
+// Params:
+//   - icon: status indicator icon.
+//   - name: sandbox name.
+//   - endpoint: sandbox endpoint or status text.
+//
+// Returns:
+//   - string: formatted sandbox line.
 func (r *RawRenderer) formatSandboxLine(icon, name, endpoint string) string {
 	var sb strings.Builder
-	sb.Grow(32 + len(endpoint))
+	sb.Grow(stringBuilderGrowth + len(endpoint))
 	sb.WriteString("  ")
 	sb.WriteString(icon)
 	sb.WriteByte(' ')
 	sb.WriteString(name)
 	// Pad name to 12 chars.
-	for i := len(name); i < 12; i++ {
+	for i := len(name); i < sandboxNameWidth; i++ {
 		sb.WriteByte(' ')
 	}
 	sb.WriteByte(' ')
 	sb.WriteString(endpoint)
+	// Return formatted sandbox line.
 	return sb.String()
 }
 
 // renderSandboxes renders the sandboxes section.
+//
+// Params:
+//   - snap: snapshot containing sandbox data.
+//
+// Returns:
+//   - string: rendered sandboxes section content.
 func (r *RawRenderer) renderSandboxes(snap *model.Snapshot) string {
+	// Delegate to width-specific renderer and return.
 	return r.renderSandboxesWithWidth(snap, r.width)
 }
 
 // renderSandboxesWithWidth renders sandboxes with a specific width.
+//
+// Params:
+//   - snap: snapshot containing sandbox data.
+//   - width: available width for rendering.
+//
+// Returns:
+//   - string: rendered sandboxes content.
 func (r *RawRenderer) renderSandboxesWithWidth(snap *model.Snapshot, width int) string {
 	// Reuse buildSandboxContentLines for consistency and efficiency.
 	lines := r.buildSandboxContentLines(snap, width)
@@ -357,52 +487,66 @@ func (r *RawRenderer) renderSandboxesWithWidth(snap *model.Snapshot, width int) 
 		SetTitleColor(r.theme.Header).
 		AddLines(lines)
 
+	// Render box to string and return.
 	return box.Render()
 }
 
 // mergeSideBySide merges two rendered boxes horizontally.
+//
+// Params:
+//   - left: left panel rendered content.
+//   - right: right panel rendered content.
+//   - separator: string to place between panels.
+//
+// Returns:
+//   - string: merged side-by-side content.
 func mergeSideBySide(left, right, separator string) string {
 	leftLines := strings.Split(left, "\n")
 	rightLines := strings.Split(right, "\n")
 
 	// Determine the width of the left panel (from visible characters).
 	leftWidth := 0
+	// Find maximum visible width of left panel.
 	for _, line := range leftLines {
 		w := widget.VisibleLen(line)
+		// Track maximum width.
 		if w > leftWidth {
 			leftWidth = w
 		}
 	}
 
-	// Remove trailing empty lines.
+	// Remove trailing empty lines from left panel.
 	for len(leftLines) > 0 && strings.TrimSpace(leftLines[len(leftLines)-1]) == "" {
 		leftLines = leftLines[:len(leftLines)-1]
 	}
+	// Remove trailing empty lines from right panel.
 	for len(rightLines) > 0 && strings.TrimSpace(rightLines[len(rightLines)-1]) == "" {
 		rightLines = rightLines[:len(rightLines)-1]
 	}
 
-	maxLines := len(leftLines)
-	if len(rightLines) > maxLines {
-		maxLines = len(rightLines)
-	}
+	// Find maximum line count between panels.
+	maxLines := max(len(leftLines), len(rightLines))
 
 	var result strings.Builder
+	// Merge lines side by side.
 	for i := range maxLines {
-		// Get left line, pad to width.
 		leftLine := ""
+		// Get left line if available within bounds.
 		if i < len(leftLines) {
 			leftLine = leftLines[i]
 		}
 
-		// Pad left line to consistent width.
 		visLen := widget.VisibleLen(leftLine)
+		// Pad left line to consistent width using builder.
 		if visLen < leftWidth {
-			leftLine += strings.Repeat(" ", leftWidth-visLen)
+			var padded strings.Builder
+			padded.WriteString(leftLine)
+			padded.WriteString(strings.Repeat(" ", leftWidth-visLen))
+			leftLine = padded.String()
 		}
 
-		// Get right line.
 		rightLine := ""
+		// Get right line if available within bounds.
 		if i < len(rightLines) {
 			rightLine = rightLines[i]
 		}
@@ -410,10 +554,12 @@ func mergeSideBySide(left, right, separator string) string {
 		result.WriteString(leftLine)
 		result.WriteString(separator)
 		result.WriteString(rightLine)
+		// Add newline between lines (but not after last line).
 		if i < maxLines-1 {
 			result.WriteString("\n")
 		}
 	}
 
+	// Return merged content.
 	return result.String()
 }

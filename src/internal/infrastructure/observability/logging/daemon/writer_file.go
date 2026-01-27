@@ -1,3 +1,4 @@
+// Package daemon provides daemon event logging infrastructure.
 package daemon
 
 import (
@@ -10,7 +11,16 @@ import (
 	"github.com/kodflow/daemon/internal/domain/logging"
 )
 
+// File permissions constants.
+const (
+	// dirPermissions defines the permission mode for log directories (rwxr-x---).
+	dirPermissions os.FileMode = 0o750
+	// filePermissions defines the permission mode for log files (rw-------).
+	filePermissions os.FileMode = 0o600
+)
+
 // FileWriter writes log events to a file with rotation support.
+// Writes are protected by a mutex for concurrent access safety.
 type FileWriter struct {
 	// mu protects concurrent writes.
 	mu sync.Mutex
@@ -23,12 +33,6 @@ type FileWriter struct {
 	// rotation is the rotation configuration.
 	rotation config.RotationConfig
 }
-
-// dirPermissions defines the permission mode for log directories (rwxr-x---).
-const dirPermissions os.FileMode = 0o750
-
-// filePermissions defines the permission mode for log files (rw-------).
-const filePermissions os.FileMode = 0o600
 
 // NewFileWriter creates a new file writer with rotation support.
 //
@@ -43,16 +47,20 @@ func NewFileWriter(path string, rotation config.RotationConfig) (*FileWriter, er
 	// Create directory if it doesn't exist.
 	// nosemgrep: go.lang.correctness.permissions.file_permission.incorrect-default-permission
 	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
+		// Failed to create directory.
 		return nil, fmt.Errorf("creating log directory: %w", err)
 	}
 
 	// Open or create the log file.
 	// nosemgrep: go.lang.correctness.permissions.file_permission.incorrect-default-permission
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, filePermissions)
+	// Failed to open file.
 	if err != nil {
+		// Failed to open log file.
 		return nil, fmt.Errorf("opening log file: %w", err)
 	}
 
+	// Return file writer with rotation config.
 	return &FileWriter{
 		file:     file,
 		path:     path,
@@ -77,6 +85,7 @@ func (w *FileWriter) Write(event logging.LogEvent) error {
 
 	// Write with newline.
 	_, err := w.file.WriteString(line + "\n")
+	// Return write result.
 	return err
 }
 
@@ -88,6 +97,7 @@ func (w *FileWriter) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// Close the file handle.
 	return w.file.Close()
 }
 

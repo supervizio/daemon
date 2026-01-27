@@ -37,6 +37,7 @@ type Snapshot struct {
 }
 
 // RuntimeContext provides environment detection.
+// It contains information about the host, OS, kernel, runtime mode, and daemon state.
 type RuntimeContext struct {
 	// Hostname of the machine.
 	Hostname string
@@ -80,21 +81,36 @@ const (
 )
 
 // String returns the string representation of RuntimeMode.
+//
+// Returns:
+//   - string: human-readable name of the runtime mode
 func (m RuntimeMode) String() string {
+	// Match the mode to its string representation.
 	switch m {
+	// Unknown mode returns "unknown".
 	case ModeUnknown:
+		// Return unknown string.
 		return "unknown"
+	// Host mode returns "host".
 	case ModeHost:
+		// Return host string.
 		return "host"
+	// Container mode returns "container".
 	case ModeContainer:
+		// Return container string.
 		return "container"
+	// VM mode returns "vm".
 	case ModeVM:
+		// Return vm string.
 		return "vm"
 	}
+
+	// Default fallback for any unrecognized mode.
 	return "unknown"
 }
 
 // ResourceLimits contains cgroup and ulimit information.
+// It tracks CPU quotas, memory limits, and process limits from cgroups v2.
 type ResourceLimits struct {
 	// CPUQuota as a fraction (e.g., 2.0 = 2 cores).
 	CPUQuota float64
@@ -117,6 +133,7 @@ type ResourceLimits struct {
 }
 
 // ServiceSnapshot contains per-service state for display.
+// It includes process state, health status, resource usage, and listener information.
 type ServiceSnapshot struct {
 	// Name of the service.
 	Name string
@@ -166,6 +183,7 @@ const (
 )
 
 // ListenerSnapshot contains listener state for display.
+// It tracks whether ports are listening, reachable, and match their configuration.
 type ListenerSnapshot struct {
 	// Name of the listener.
 	Name string
@@ -192,6 +210,7 @@ type ListenerSnapshot struct {
 }
 
 // SystemMetrics contains host-level resource usage.
+// It includes CPU, memory, swap, disk, and load average metrics.
 type SystemMetrics struct {
 	// CPUPercent usage (0-100).
 	CPUPercent float64
@@ -240,6 +259,7 @@ type SystemMetrics struct {
 }
 
 // NetworkInterface contains per-interface statistics.
+// It tracks IP address, bandwidth (Rx/Tx bytes per second), and interface status.
 type NetworkInterface struct {
 	// Name of the interface (eth0, lo).
 	Name string
@@ -258,6 +278,7 @@ type NetworkInterface struct {
 }
 
 // LogSummary contains aggregated log information.
+// It provides log counts by level and recent entries for the TUI display.
 type LogSummary struct {
 	// Period over which logs are summarized.
 	Period time.Duration
@@ -274,6 +295,7 @@ type LogSummary struct {
 }
 
 // LogEntry represents a single log line.
+// It contains timestamp, level, service, event type, message, and optional metadata.
 type LogEntry struct {
 	// Timestamp of the log.
 	Timestamp time.Time
@@ -290,6 +312,7 @@ type LogEntry struct {
 }
 
 // SandboxInfo contains detected container runtime information.
+// It indicates whether a runtime (Docker, Podman, Kubernetes, etc.) was detected.
 type SandboxInfo struct {
 	// Name of the runtime (docker, podman, kubernetes, lxc).
 	Name string
@@ -303,16 +326,20 @@ type SandboxInfo struct {
 
 // Default capacities for pre-allocation to reduce allocations.
 const (
-	defaultNetworkCap   = 6   // Typical system has 2-5 interfaces.
-	defaultSandboxCap   = 5   // 4-5 sandbox types (docker, podman, k8s, lxc, systemd).
-	defaultLogEntryCap  = 100 // Default log buffer size.
-	defaultServicesCap  = 16  // Typical setup has 5-15 services.
-	defaultListenersCap = 4   // Typical service has 1-3 listeners.
+	defaultNetworkCap   int = 6   // Typical system has 2-5 interfaces.
+	defaultSandboxCap   int = 5   // 4-5 sandbox types (docker, podman, k8s, lxc, systemd).
+	defaultLogEntryCap  int = 100 // Default log buffer size.
+	defaultServicesCap  int = 16  // Typical setup has 5-15 services.
+	defaultListenersCap int = 4   // Typical service has 1-3 listeners.
 )
 
 // NewSnapshot creates an empty snapshot with current timestamp.
 // Uses pre-allocated capacities for typical workloads.
+//
+// Returns:
+//   - *Snapshot: new snapshot instance with pre-allocated slices
 func NewSnapshot() *Snapshot {
+	// Return a new snapshot with default capacities.
 	return &Snapshot{
 		Timestamp: time.Now(),
 		Services:  make([]ServiceSnapshot, 0, defaultServicesCap),
@@ -326,7 +353,14 @@ func NewSnapshot() *Snapshot {
 
 // NewSnapshotWithCapacity creates a snapshot with specified service capacity.
 // Use this when the number of services is known ahead of time.
+//
+// Params:
+//   - serviceCount: number of services to pre-allocate capacity for
+//
+// Returns:
+//   - *Snapshot: new snapshot instance with custom service capacity
 func NewSnapshotWithCapacity(serviceCount int) *Snapshot {
+	// Return a new snapshot with the specified service capacity.
 	return &Snapshot{
 		Timestamp: time.Now(),
 		Services:  make([]ServiceSnapshot, 0, serviceCount),
@@ -339,39 +373,67 @@ func NewSnapshotWithCapacity(serviceCount int) *Snapshot {
 }
 
 // ServiceCount returns total number of services.
+//
+// Returns:
+//   - int: total count of services in the snapshot
 func (s *Snapshot) ServiceCount() int {
+	// Return the length of the services slice.
 	return len(s.Services)
 }
 
 // RunningCount returns number of running services.
+//
+// Returns:
+//   - int: count of services in running state
 func (s *Snapshot) RunningCount() int {
 	count := 0
+
+	// Iterate through all services to count running ones.
 	for _, svc := range s.Services {
+		// Check if the service is in running state.
 		if svc.State == process.StateRunning {
 			count++
 		}
 	}
+
+	// Return the final running count.
 	return count
 }
 
 // FailedCount returns number of failed services.
+//
+// Returns:
+//   - int: count of services in failed state
 func (s *Snapshot) FailedCount() int {
 	count := 0
+
+	// Iterate through all services to count failed ones.
 	for _, svc := range s.Services {
+		// Check if the service is in failed state.
 		if svc.State == process.StateFailed {
 			count++
 		}
 	}
+
+	// Return the final failed count.
 	return count
 }
 
 // HealthyCount returns number of healthy services.
+//
+// Returns:
+//   - int: count of services with healthy status
 func (s *Snapshot) HealthyCount() int {
 	count := 0
+
+	// Iterate through all services to count healthy ones.
 	for _, svc := range s.Services {
+		// Check if the service has healthy status.
 		if svc.Health == health.StatusHealthy {
 			count++
 		}
 	}
+
+	// Return the final healthy count.
 	return count
 }

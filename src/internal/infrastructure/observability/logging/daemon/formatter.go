@@ -1,3 +1,4 @@
+// Package daemon provides daemon event logging infrastructure.
 package daemon
 
 import (
@@ -10,20 +11,42 @@ import (
 	"github.com/kodflow/daemon/internal/domain/logging"
 )
 
-// builderPool provides reusable strings.Builder instances to reduce allocations.
-// This is safe for concurrent use as sync.Pool handles synchronization.
-var builderPool = sync.Pool{
-	New: func() any {
-		return &strings.Builder{}
-	},
-}
+// Buffer size and format constants.
+const (
+	// typicalLogLineLength is the initial capacity for log line building.
+	typicalLogLineLength int = 128
+	// decimalBase is the base for decimal number formatting.
+	decimalBase int = 10
+	// floatPrecision64 is the bit size for 64-bit float formatting.
+	floatPrecision64 int = 64
+)
+
+var (
+	// builderPool provides reusable strings.Builder instances to reduce allocations.
+	// This is safe for concurrent use as sync.Pool handles synchronization.
+	builderPool sync.Pool = sync.Pool{
+		New: func() any {
+			return &strings.Builder{}
+		},
+	}
+
+	// Ensure TextFormatter implements Formatter.
+	_ Formatter = (*TextFormatter)(nil)
+)
 
 // getBuilder retrieves a strings.Builder from the pool.
+//
+// Returns:
+//   - *strings.Builder: a builder from the pool.
 func getBuilder() *strings.Builder {
+	// Get builder from pool (safe cast from pool).
 	return builderPool.Get().(*strings.Builder)
 }
 
 // putBuilder returns a strings.Builder to the pool after resetting it.
+//
+// Params:
+//   - sb: the builder to return to the pool.
 func putBuilder(sb *strings.Builder) {
 	sb.Reset()
 	builderPool.Put(sb)
@@ -42,6 +65,7 @@ type Formatter interface {
 }
 
 // TextFormatter formats log events as human-readable text.
+// It uses a sync.Pool for strings.Builder instances to minimize allocations.
 type TextFormatter struct {
 	// timestampFormat is the Go time format string.
 	timestampFormat string
@@ -55,9 +79,11 @@ type TextFormatter struct {
 // Returns:
 //   - *TextFormatter: the created formatter.
 func NewTextFormatter(timestampFormat string) *TextFormatter {
+	// Use RFC3339 if no format specified.
 	if timestampFormat == "" {
 		timestampFormat = "2006-01-02T15:04:05Z07:00"
 	}
+	// Return formatter with timestamp format.
 	return &TextFormatter{timestampFormat: timestampFormat}
 }
 
@@ -74,7 +100,7 @@ func (f *TextFormatter) Format(event logging.LogEvent) string {
 	defer putBuilder(sb)
 
 	// Pre-grow for typical log line length.
-	sb.Grow(128)
+	sb.Grow(typicalLogLineLength)
 
 	// Timestamp.
 	sb.WriteString(event.Timestamp.Format(f.timestampFormat))
@@ -95,6 +121,7 @@ func (f *TextFormatter) Format(event logging.LogEvent) string {
 	if event.Message != "" {
 		sb.WriteString(event.Message)
 	} else {
+		// Use event type as fallback.
 		sb.WriteString(event.EventType)
 	}
 
@@ -104,20 +131,28 @@ func (f *TextFormatter) Format(event logging.LogEvent) string {
 		formatMetadataToBuilder(sb, event.Metadata)
 	}
 
+	// Return formatted log line.
 	return sb.String()
 }
 
 // formatMetadataToBuilder formats metadata directly to a builder.
 // Avoids intermediate string allocation by writing directly.
+//
+// Params:
+//   - sb: the string builder to write to.
+//   - meta: the metadata map to format.
 func formatMetadataToBuilder(sb *strings.Builder, meta map[string]any) {
 	// Sort keys for consistent output.
 	keys := make([]string, 0, len(meta))
+	// Collect all keys from metadata.
 	for k := range meta {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
+	// Format each key-value pair.
 	for i, k := range keys {
+		// Add space separator between pairs.
 		if i > 0 {
 			sb.WriteByte(' ')
 		}
@@ -128,25 +163,34 @@ func formatMetadataToBuilder(sb *strings.Builder, meta map[string]any) {
 }
 
 // formatValue formats a value to the builder using type switch for efficiency.
+//
+// Params:
+//   - sb: the string builder to write to.
+//   - v: the value to format.
 func formatValue(sb *strings.Builder, v any) {
+	// Type switch for efficient formatting.
 	switch val := v.(type) {
+	// String values are written directly.
 	case string:
 		sb.WriteString(val)
+	// Integer types use optimized formatting.
 	case int:
 		sb.WriteString(strconv.Itoa(val))
+	// Int64 types use base 10 formatting.
 	case int64:
-		sb.WriteString(strconv.FormatInt(val, 10))
+		sb.WriteString(strconv.FormatInt(val, decimalBase))
+	// Uint64 types use base 10 formatting.
 	case uint64:
-		sb.WriteString(strconv.FormatUint(val, 10))
+		sb.WriteString(strconv.FormatUint(val, decimalBase))
+	// Float64 types use 64-bit precision.
 	case float64:
-		sb.WriteString(strconv.FormatFloat(val, 'f', -1, 64))
+		sb.WriteString(strconv.FormatFloat(val, 'f', -1, floatPrecision64))
+	// Boolean values use Go formatting.
 	case bool:
 		sb.WriteString(strconv.FormatBool(val))
+	// Complex types fall back to fmt.
 	default:
 		// Fallback for complex types.
 		fmt.Fprintf(sb, "%v", val)
 	}
 }
-
-// Ensure TextFormatter implements Formatter.
-var _ Formatter = (*TextFormatter)(nil)

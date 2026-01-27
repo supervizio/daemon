@@ -19,6 +19,16 @@ import (
 	domain "github.com/kodflow/daemon/internal/domain/process"
 )
 
+// Listener status codes for TUI display.
+const (
+	// ListenerStatusOK indicates the listener is healthy (green).
+	ListenerStatusOK int = 0
+	// ListenerStatusWarning indicates a warning state (yellow).
+	ListenerStatusWarning int = 1
+	// ListenerStatusError indicates an error state (red).
+	ListenerStatusError int = 2
+)
+
 // State represents the supervisor state.
 // It defines the current operational status of the supervisor.
 type State int
@@ -501,8 +511,9 @@ func (s *Supervisor) handleEvent(name string, event *domain.Event) {
 		// Health events are tracked by the health monitor, not stats.
 	}
 
-	// Update health monitor process state based on event type.
+	// Update health monitor process state if monitor exists.
 	if monitor, ok := s.healthMonitors[name]; ok {
+		// Update monitor state based on event type.
 		switch event.Type {
 		// Started: process is now running.
 		case domain.EventStarted:
@@ -516,11 +527,13 @@ func (s *Supervisor) handleEvent(name string, event *domain.Event) {
 		}
 	}
 
-	// Update metrics tracker based on event type.
+	// Update metrics tracker if configured and event is relevant.
 	if s.metricsTracker != nil {
+		// Update tracker based on event type.
 		switch event.Type {
 		// Started: begin tracking process metrics.
 		case domain.EventStarted:
+			// Track process if PID is valid.
 			if event.PID > 0 {
 				_ = s.metricsTracker.Track(name, event.PID)
 			}
@@ -535,6 +548,7 @@ func (s *Supervisor) handleEvent(name string, event *domain.Event) {
 	// Get atomic snapshot for the callback (lock-free, no copy needed).
 	// Use SnapshotPtr to avoid escape analysis issue from &Snapshot().
 	var statsSnap *ServiceStatsSnapshot
+	// Get snapshot if stats exist.
 	if stats != nil {
 		statsSnap = stats.SnapshotPtr()
 	}
@@ -586,6 +600,8 @@ func (s *Supervisor) SetProberFactory(factory apphealth.Creator) {
 //
 // Params:
 //   - tracker: the metrics tracker to use.
+//
+// TODO(test): Add test coverage for SetMetricsTracker.
 func (s *Supervisor) SetMetricsTracker(tracker appmetrics.ProcessTracker) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -659,6 +675,7 @@ func (s *Supervisor) createProbeMonitorConfig(serviceName string) apphealth.Prob
 			// Trigger restart on health failure (event emitted by restart logic).
 			_ = listenerName
 			_ = reason
+			// Attempt to restart the service on health failure.
 			if err := s.RestartOnHealthFailure(serviceName, reason); err != nil {
 				s.handleRecoveryError("health-restart", serviceName, err)
 			}
@@ -666,10 +683,12 @@ func (s *Supervisor) createProbeMonitorConfig(serviceName string) apphealth.Prob
 		OnHealthy: func(listenerName string) {
 			// Emit healthy event when service becomes healthy.
 			_ = listenerName
+			// Call event handler if registered.
 			if s.eventHandler != nil {
 				s.mu.RLock()
 				stats, ok := s.stats[serviceName]
 				var statsSnap *ServiceStatsSnapshot
+				// Get stats snapshot if available.
 				if ok && stats != nil {
 					snap := stats.Snapshot()
 					statsSnap = &snap
@@ -813,9 +832,10 @@ func (s *Supervisor) handleRecoveryError(operation, serviceName string, err erro
 func (s *Supervisor) Stats(name string) *ServiceStatsSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	// Return atomic snapshot (lock-free read).
+	// Return atomic snapshot if service found.
 	if stats, ok := s.stats[name]; ok {
 		snap := stats.Snapshot()
+		// Return pointer to snapshot.
 		return &snap
 	}
 	// Service not found, return nil.
@@ -832,9 +852,11 @@ func (s *Supervisor) AllStats() map[string]*ServiceStatsSnapshot {
 	// Return atomic snapshots (lock-free reads).
 	// Use SnapshotPtr to avoid escape analysis issue from &Snapshot().
 	result := make(map[string]*ServiceStatsSnapshot, len(s.stats))
+	// Iterate through stats and collect snapshots.
 	for name, stats := range s.stats {
 		result[name] = stats.SnapshotPtr()
 	}
+	// Return the complete map of snapshots.
 	return result
 }
 
@@ -904,6 +926,8 @@ func (s *Supervisor) Services() map[string]ServiceInfo {
 }
 
 // ListenerSnapshotForTUI contains listener info for TUI display.
+// This struct uses basic types to avoid import cycles with TUI packages.
+// Each listener tracks its configuration and runtime status for visualization.
 type ListenerSnapshotForTUI struct {
 	Name      string
 	Port      int
@@ -935,12 +959,15 @@ type ServiceSnapshotForTUI struct {
 //
 // Returns:
 //   - []ServiceSnapshotForTUI: a slice of service snapshots sorted by name.
+//
+// TODO(test): Add test coverage for ServiceSnapshotsForTUI.
 func (s *Supervisor) ServiceSnapshotsForTUI() []ServiceSnapshotForTUI {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	// Collect all services.
 	result := make([]ServiceSnapshotForTUI, 0, len(s.managers))
+	// Iterate through managers and build snapshots.
 	for name, mgr := range s.managers {
 		state := mgr.State()
 		snap := ServiceSnapshotForTUI{
@@ -952,7 +979,9 @@ func (s *Supervisor) ServiceSnapshotsForTUI() []ServiceSnapshotForTUI {
 		}
 
 		// Check if health probes are configured.
+		// Find service configuration to check for probes.
 		for i := range s.config.Services {
+			// Match service by name.
 			if s.config.Services[i].Name == name {
 				snap.HasHealthChecks = s.hasConfiguredProbes(&s.config.Services[i])
 				break
@@ -975,7 +1004,9 @@ func (s *Supervisor) ServiceSnapshotsForTUI() []ServiceSnapshotForTUI {
 		}
 
 		// Build listener snapshots with status from config.
+		// Find service configuration to build listener snapshots.
 		for i := range s.config.Services {
+			// Match service by name.
 			if s.config.Services[i].Name == name {
 				snap.Listeners = s.buildListenerSnapshots(&s.config.Services[i], snap.Ports)
 				break
@@ -983,7 +1014,9 @@ func (s *Supervisor) ServiceSnapshotsForTUI() []ServiceSnapshotForTUI {
 		}
 
 		// Get CPU and memory metrics from tracker.
+		// Retrieve metrics if tracker is configured.
 		if s.metricsTracker != nil {
+			// Extract metrics for this service.
 			if metrics, ok := s.metricsTracker.Get(name); ok {
 				snap.CPUPercent = metrics.CPU.UsagePercent
 				snap.MemoryRSS = metrics.Memory.RSS
@@ -995,9 +1028,11 @@ func (s *Supervisor) ServiceSnapshotsForTUI() []ServiceSnapshotForTUI {
 
 	// Sort alphabetically by name for stable display.
 	sort.Slice(result, func(i, j int) bool {
+		// Sort by name alphabetically.
 		return result[i].Name < result[j].Name
 	})
 
+	// Return the sorted service snapshots.
 	return result
 }
 
@@ -1006,14 +1041,25 @@ func (s *Supervisor) ServiceSnapshotsForTUI() []ServiceSnapshotForTUI {
 //   - 0 (OK/Green): port listening and state matches config
 //   - 1 (Warning/Yellow): mismatch (exposed but not reachable, or vice versa)
 //   - 2 (Error/Red): expected port but nothing listening
+//
+// Params:
+//   - svc: the service configuration with listener definitions.
+//   - listeningPorts: the list of actually listening ports from the process.
+//
+// Returns:
+//   - []ListenerSnapshotForTUI: listener snapshots with status indicators.
+//
+// TODO(test): Add test coverage for buildListenerSnapshots.
 func (s *Supervisor) buildListenerSnapshots(svc *domainconfig.ServiceConfig, listeningPorts []int) []ListenerSnapshotForTUI {
 	// Create map of listening ports for quick lookup.
 	listening := make(map[int]bool)
+	// Build map from listening ports slice.
 	for _, p := range listeningPorts {
 		listening[p] = true
 	}
 
 	result := make([]ListenerSnapshotForTUI, 0, len(svc.Listeners))
+	// Build snapshot for each configured listener.
 	for _, lc := range svc.Listeners {
 		ls := ListenerSnapshotForTUI{
 			Name:      lc.Name,
@@ -1027,15 +1073,16 @@ func (s *Supervisor) buildListenerSnapshots(svc *domainconfig.ServiceConfig, lis
 		// StatusInt: 0=OK, 2=Error
 		if ls.Listening {
 			// Listening → OK (green), whether exposed or internal.
-			ls.StatusInt = 0
+			ls.StatusInt = ListenerStatusOK
 		} else {
 			// Expected port but nothing listening → Error (red).
-			ls.StatusInt = 2
+			ls.StatusInt = ListenerStatusError
 		}
 
 		result = append(result, ls)
 	}
 
+	// Return the complete listener snapshots.
 	return result
 }
 

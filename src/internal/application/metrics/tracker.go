@@ -21,6 +21,12 @@ const (
 	maxSubscribers            int           = 64
 )
 
+// Metric calculation constants.
+const (
+	// percentMultiplier converts a ratio to a percentage (0.5 -> 50%).
+	percentMultiplier float64 = 100.0
+)
+
 // Tracker implements ProcessTracker using infrastructure collectors.
 //
 // It periodically collects CPU and memory metrics for tracked processes,
@@ -262,12 +268,14 @@ func (t *Tracker) Subscribe() <-chan domainmetrics.ProcessMetrics {
 	// Enforce max subscribers limit to prevent resource exhaustion.
 	if len(t.subscribers) >= maxSubscribers {
 		t.subsMu.Unlock()
+		// Reject subscription if limit reached.
 		return nil
 	}
 	ch := make(chan domainmetrics.ProcessMetrics, defaultSubscriberBuffer)
 	t.subscribers[ch] = struct{}{}
 	t.subsMu.Unlock()
 
+	// Return subscription channel.
 	return ch
 }
 
@@ -381,6 +389,7 @@ func (t *Tracker) collectAll() {
 	// Collect process snapshots to avoid holding lock during collection.
 	// Preallocate slice to avoid allocation in slices.Collect.
 	processes := make([]*trackedProcess, 0, len(t.processes))
+	// Collect all tracked processes.
 	for _, p := range t.processes {
 		processes = append(processes, p)
 	}
@@ -420,6 +429,7 @@ func (t *Tracker) collectProcess(proc *trackedProcess) {
 
 	// Calculate CPU percentage using delta between snapshots.
 	now := time.Now()
+	// Calculate CPU percentage if previous snapshot exists.
 	if cpuErr == nil && !proc.prevCPUTime.IsZero() {
 		cpu.UsagePercent = t.calculateCPUPercent(proc.prevCPU, cpu, proc.prevCPUTime, now)
 	}
@@ -447,7 +457,9 @@ func (t *Tracker) collectProcess(proc *trackedProcess) {
 func (t *Tracker) calculateCPUPercent(prev, curr domainmetrics.ProcessCPU, prevTime, currTime time.Time) float64 {
 	// Calculate elapsed time in seconds.
 	elapsed := currTime.Sub(prevTime).Seconds()
+	// Avoid division by zero for invalid time delta.
 	if elapsed <= 0 {
+		// Invalid time delta, cannot calculate.
 		return 0
 	}
 
@@ -457,6 +469,7 @@ func (t *Tracker) calculateCPUPercent(prev, curr domainmetrics.ProcessCPU, prevT
 
 	// Avoid underflow if counters wrapped or process restarted.
 	if currTotal < prevTotal {
+		// Counters wrapped or process restarted, invalid delta.
 		return 0
 	}
 
@@ -470,13 +483,15 @@ func (t *Tracker) calculateCPUPercent(prev, curr domainmetrics.ProcessCPU, prevT
 
 	// Calculate percentage relative to elapsed wall time.
 	// Result can exceed 100% for multi-threaded processes using multiple cores.
-	percent := (cpuSeconds / elapsed) * 100.0
+	percent := (cpuSeconds / elapsed) * percentMultiplier
 
 	// Clamp negative values to zero.
 	if percent < 0 {
+		// Negative percentage is invalid.
 		return 0
 	}
 
+	// Return calculated CPU percentage.
 	return percent
 }
 

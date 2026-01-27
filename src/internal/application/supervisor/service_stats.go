@@ -28,6 +28,7 @@ type ServiceStats struct {
 // Returns:
 //   - *ServiceStats: a new ServiceStats instance initialized to zero.
 func NewServiceStats() *ServiceStats {
+	// Return zero-initialized stats
 	return &ServiceStats{}
 }
 
@@ -52,22 +53,38 @@ func (s *ServiceStats) IncrementRestart() {
 }
 
 // StartCount returns the current start count.
+//
+// Returns:
+//   - int: the number of times the service has been started.
 func (s *ServiceStats) StartCount() int {
+	// Load and convert atomic counter to int
 	return int(s.startCount.Load())
 }
 
 // StopCount returns the current stop count.
+//
+// Returns:
+//   - int: the number of times the service has stopped normally.
 func (s *ServiceStats) StopCount() int {
+	// Load and convert atomic counter to int
 	return int(s.stopCount.Load())
 }
 
 // FailCount returns the current fail count.
+//
+// Returns:
+//   - int: the number of times the service has failed.
 func (s *ServiceStats) FailCount() int {
+	// Load and convert atomic counter to int
 	return int(s.failCount.Load())
 }
 
 // RestartCount returns the current restart count.
+//
+// Returns:
+//   - int: the number of times the service has been automatically restarted.
 func (s *ServiceStats) RestartCount() int {
+	// Load and convert atomic counter to int
 	return int(s.restartCount.Load())
 }
 
@@ -77,6 +94,7 @@ func (s *ServiceStats) RestartCount() int {
 // Returns:
 //   - ServiceStatsSnapshot: a copy of all counter values.
 func (s *ServiceStats) Snapshot() ServiceStatsSnapshot {
+	// Return snapshot with all current counter values
 	return ServiceStatsSnapshot{
 		StartCount:   int(s.startCount.Load()),
 		StopCount:    int(s.stopCount.Load()),
@@ -101,6 +119,7 @@ type ServiceStatsSnapshot struct {
 // Returns:
 //   - *ServiceStatsSnapshot: a pointer to a copy of all counter values.
 func (s *ServiceStats) SnapshotPtr() *ServiceStatsSnapshot {
+	// Return pointer to snapshot with all current counter values
 	return &ServiceStatsSnapshot{
 		StartCount:   int(s.startCount.Load()),
 		StopCount:    int(s.stopCount.Load()),

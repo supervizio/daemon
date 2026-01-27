@@ -15,6 +15,8 @@ const (
 	indexNotFound int = -1
 	// zeroBytes is the return value when no bytes were written due to an error.
 	zeroBytes int = 0
+	// defaultWriteBufCapacity is the default capacity for the write buffer to handle typical line lengths.
+	defaultWriteBufCapacity int = 256
 )
 
 // LineWriter writes lines with optional prefix.
@@ -49,7 +51,7 @@ func NewLineWriter(w io.Writer, prefix string) *LineWriter {
 		writer:      w,
 		prefix:      prefix,
 		prefixBytes: []byte(prefix),
-		writeBuf:    make([]byte, 0, 256), // Pre-allocate for typical line length.
+		writeBuf:    make([]byte, 0, defaultWriteBufCapacity), // Pre-allocate for typical line length.
 	}
 }
 
@@ -85,12 +87,16 @@ func (lw *LineWriter) Write(p []byte) (n int, err error) {
 			lw.writeBuf = lw.writeBuf[:0]
 			lw.writeBuf = append(lw.writeBuf, lw.prefixBytes...)
 			lw.writeBuf = append(lw.writeBuf, line...)
+			// Check if write operation succeeded for prefixed line.
 			if _, err := lw.writer.Write(lw.writeBuf); err != nil {
+				// Write failed - return zero bytes and propagate error.
 				return zeroBytes, err
 			}
 		} else {
 			// No prefix, write line directly.
+			// Check if write operation succeeded for plain line.
 			if _, err := lw.writer.Write(line); err != nil {
+				// Write failed - return zero bytes and propagate error.
 				return zeroBytes, err
 			}
 		}
@@ -111,13 +117,16 @@ func (lw *LineWriter) Flush() error {
 	if len(lw.buf) > zeroBytes {
 		// Batch prefix + content + newline into single write.
 		lw.writeBuf = lw.writeBuf[:0]
+		// Check if prefix should be prepended to the flushed content.
 		if len(lw.prefixBytes) > 0 {
 			lw.writeBuf = append(lw.writeBuf, lw.prefixBytes...)
 		}
 		lw.writeBuf = append(lw.writeBuf, lw.buf...)
 		lw.writeBuf = append(lw.writeBuf, newlineChar)
 
+		// Check if write operation succeeded for the flushed content.
 		if _, err := lw.writer.Write(lw.writeBuf); err != nil {
+			// Write failed - return error to caller.
 			return err
 		}
 		lw.buf = nil

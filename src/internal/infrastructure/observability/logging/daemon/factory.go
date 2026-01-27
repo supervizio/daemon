@@ -1,3 +1,4 @@
+// Package daemon provides daemon event logging infrastructure.
 package daemon
 
 import (
@@ -12,9 +13,9 @@ import (
 
 // Writer type constants.
 const (
-	writerTypeConsole = "console"
-	writerTypeFile    = "file"
-	writerTypeJSON    = "json"
+	writerTypeConsole string = "console"
+	writerTypeFile    string = "file"
+	writerTypeJSON    string = "json"
 )
 
 // BuildLogger creates a MultiLogger from configuration.
@@ -35,18 +36,23 @@ func BuildLogger(cfg config.DaemonLogging, baseDir string) (logging.Logger, erro
 
 	var writers []logging.Writer
 
+	// Create and configure each writer from config.
 	for _, wcfg := range cfg.Writers {
+		// Build the writer based on type.
 		w, err := buildWriter(wcfg, baseDir)
+		// Handle writer creation errors.
 		if err != nil {
 			// Close any already created writers.
 			for _, created := range writers {
 				_ = created.Close()
 			}
+			// Return error with writer type context.
 			return nil, fmt.Errorf("building writer %s: %w", wcfg.Type, err)
 		}
 
 		// Parse level for filtering.
 		level, err := logging.ParseLevel(wcfg.Level)
+		// Use default level if parsing fails.
 		if err != nil {
 			// Default to INFO if level parsing fails.
 			level = logging.LevelInfo
@@ -56,48 +62,88 @@ func BuildLogger(cfg config.DaemonLogging, baseDir string) (logging.Logger, erro
 		writers = append(writers, WithLevelFilter(w, level))
 	}
 
+	// Return logger with all configured writers.
 	return New(writers...), nil
 }
 
 // buildWriter creates a writer based on configuration type.
+//
+// Params:
+//   - wcfg: the writer configuration.
+//   - baseDir: the base directory for log files.
+//
+// Returns:
+//   - logging.Writer: the created writer.
+//   - error: nil on success, error on failure.
 func buildWriter(wcfg config.WriterConfig, baseDir string) (logging.Writer, error) {
+	// Route to appropriate writer constructor based on type.
 	switch wcfg.Type {
+	// Console writer for stdout/stderr.
 	case writerTypeConsole:
+		// Create console writer with defaults.
 		return NewConsoleWriter(), nil
 
+	// File writer with rotation support.
 	case writerTypeFile:
 		path := wcfg.File.Path
+		// Validate path is configured.
 		if path == "" {
+			// Missing required path configuration.
 			return nil, fmt.Errorf("file writer requires File.Path configuration")
 		}
+		// Resolve path relative to base directory.
 		resolvedPath, err := resolvePath(path, baseDir)
+		// Handle path resolution errors.
 		if err != nil {
+			// Path resolution failed.
 			return nil, fmt.Errorf("file writer: %w", err)
 		}
+		// Create file writer with rotation.
 		return NewFileWriter(resolvedPath, wcfg.File.Rotation)
 
+	// JSON writer for structured logging.
 	case writerTypeJSON:
 		path := wcfg.JSON.Path
+		// Validate path is configured.
 		if path == "" {
+			// Missing required path configuration.
 			return nil, fmt.Errorf("json writer requires JSON.Path configuration")
 		}
+		// Resolve path relative to base directory.
 		resolvedPath, err := resolvePath(path, baseDir)
+		// Handle path resolution errors.
 		if err != nil {
+			// Path resolution failed.
 			return nil, fmt.Errorf("json writer: %w", err)
 		}
+		// Create JSON writer with rotation.
 		return NewJSONWriter(resolvedPath, wcfg.JSON.Rotation)
 
+	// Unknown writer type.
 	default:
+		// Invalid writer type in configuration.
 		return nil, fmt.Errorf("unknown writer type: %s", wcfg.Type)
 	}
 }
 
 // resolvePath resolves a path relative to baseDir and validates it doesn't escape.
+//
+// Params:
+//   - path: the path to resolve.
+//   - baseDir: the base directory.
+//
+// Returns:
+//   - string: the resolved path.
+//   - error: nil on success, error if path escapes baseDir.
 func resolvePath(path, baseDir string) (string, error) {
+	// Absolute paths are used as-is.
 	if filepath.IsAbs(path) {
+		// Return absolute path unchanged.
 		return path, nil
 	}
+	// No base directory means relative paths are used as-is.
 	if baseDir == "" {
+		// Return relative path unchanged.
 		return path, nil
 	}
 
@@ -107,9 +153,11 @@ func resolvePath(path, baseDir string) (string, error) {
 
 	// Check that resolved path is within base directory.
 	if !strings.HasPrefix(resolvedPath, cleanBase+string(os.PathSeparator)) && resolvedPath != cleanBase {
+		// Path escapes base directory (security violation).
 		return "", fmt.Errorf("path %q escapes base directory %q", path, baseDir)
 	}
 
+	// Return validated path.
 	return resolvedPath, nil
 }
 
@@ -127,21 +175,28 @@ func resolvePath(path, baseDir string) (string, error) {
 func BuildLoggerWithoutConsole(cfg config.DaemonLogging, baseDir string) (logging.Logger, error) {
 	var writers []logging.Writer
 
+	// Create writers excluding console type.
 	for _, wcfg := range cfg.Writers {
 		// Skip console writers in interactive mode.
 		if wcfg.Type == writerTypeConsole {
 			continue
 		}
 
+		// Build non-console writer.
 		w, err := buildWriter(wcfg, baseDir)
+		// Handle writer creation errors.
 		if err != nil {
+			// Clean up on error.
 			for _, created := range writers {
 				_ = created.Close()
 			}
+			// Return error with context.
 			return nil, fmt.Errorf("building writer %s: %w", wcfg.Type, err)
 		}
 
+		// Parse level for filtering.
 		level, err := logging.ParseLevel(wcfg.Level)
+		// Use default level if parsing fails.
 		if err != nil {
 			level = logging.LevelInfo
 		}
@@ -160,6 +215,7 @@ func BuildLoggerWithoutConsole(cfg config.DaemonLogging, baseDir string) (loggin
 //   - logging.Logger: the default console logger.
 func DefaultLogger() logging.Logger {
 	writer := WithLevelFilter(NewConsoleWriter(), logging.LevelInfo)
+	// Return logger with default console writer.
 	return New(writer)
 }
 
@@ -193,10 +249,12 @@ func BuildLoggerWithBufferedConsole(cfg config.DaemonLogging, baseDir string) (l
 	var writers []logging.Writer
 	var bufferedConsole *BufferedWriter
 
+	// Create writers with buffered console.
 	for _, wcfg := range cfg.Writers {
 		var w logging.Writer
 		var err error
 
+		// Handle console writer specially.
 		if wcfg.Type == writerTypeConsole {
 			// Reuse buffered console if already created (handles multiple console entries).
 			if bufferedConsole == nil {
@@ -205,18 +263,22 @@ func BuildLoggerWithBufferedConsole(cfg config.DaemonLogging, baseDir string) (l
 			}
 			w = bufferedConsole
 		} else {
+			// Create non-console writer.
 			w, err = buildWriter(wcfg, baseDir)
+			// Handle writer creation errors.
 			if err != nil {
 				// Close any already created writers.
 				for _, created := range writers {
 					_ = created.Close()
 				}
+				// Return error with context.
 				return nil, nil, fmt.Errorf("building writer %s: %w", wcfg.Type, err)
 			}
 		}
 
 		// Parse level for filtering.
 		level, err := logging.ParseLevel(wcfg.Level)
+		// Use default level if parsing fails.
 		if err != nil {
 			// Default to INFO if level parsing fails.
 			level = logging.LevelInfo
@@ -226,5 +288,6 @@ func BuildLoggerWithBufferedConsole(cfg config.DaemonLogging, baseDir string) (l
 		writers = append(writers, WithLevelFilter(w, level))
 	}
 
+	// Return logger with buffered console.
 	return New(writers...), bufferedConsole, nil
 }
