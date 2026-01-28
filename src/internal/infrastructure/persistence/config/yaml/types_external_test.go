@@ -3,6 +3,7 @@
 package yaml_test
 
 import (
+	"github.com/kodflow/daemon/internal/infrastructure/persistence/config/yaml"
 	"testing"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	yamlv3 "gopkg.in/yaml.v3"
 
-	"github.com/kodflow/daemon/internal/infrastructure/persistence/config/yaml"
 )
 
 // MarshalTexter defines the interface for types that can marshal to text.
@@ -38,7 +38,7 @@ func marshalDurationText(d MarshalTexter) (string, error) {
 	return string(bytes), nil
 }
 
-// TestDuration_UnmarshalYAML tests Duration unmarshaling from YAML.
+// TestDuration_UnmarshalYAML tests yaml.Duration unmarshaling from YAML.
 // It verifies that duration strings are correctly parsed.
 //
 // Params:
@@ -110,7 +110,7 @@ func TestDuration_UnmarshalYAML(t *testing.T) {
 	}
 }
 
-// TestDuration_UnmarshalYAML_NonStringValue tests Duration unmarshaling when
+// TestDuration_UnmarshalYAML_NonStringValue tests yaml.Duration unmarshaling when
 // the YAML value is not a string (e.g., array, map, or number).
 // This tests the error path when unmarshal(&s) fails.
 //
@@ -152,8 +152,8 @@ func TestDuration_UnmarshalYAML_NonStringValue(t *testing.T) {
 	}
 }
 
-// TestDuration_MarshalText tests Duration marshaling via TextMarshaler.
-// It verifies that Duration values are correctly serialized to strings.
+// TestDuration_MarshalText tests yaml.Duration marshaling via TextMarshaler.
+// It verifies that yaml.Duration values are correctly serialized to strings.
 //
 // Params:
 //   - t: testing context
@@ -201,7 +201,7 @@ func TestDuration_MarshalText(t *testing.T) {
 	}
 }
 
-// TestConfigDTO_ToDomain tests ConfigDTO to domain conversion.
+// TestConfigDTO_ToDomain tests yaml.ConfigDTO to domain conversion.
 // It verifies that all fields are correctly mapped to the domain model.
 //
 // Params:
@@ -289,7 +289,7 @@ func TestConfigDTO_ToDomain(t *testing.T) {
 	}
 }
 
-// TestServiceConfigDTO_ToDomain tests ServiceConfigDTO to domain conversion.
+// TestServiceConfigDTO_ToDomain tests yaml.ServiceConfigDTO to domain conversion.
 // It verifies that service configuration fields are correctly mapped.
 //
 // Params:
@@ -453,7 +453,7 @@ func TestServiceConfigDTO_ToDomain(t *testing.T) {
 	}
 }
 
-// TestRestartConfigDTO_ToDomain tests RestartConfigDTO to domain conversion.
+// TestRestartConfigDTO_ToDomain tests yaml.RestartConfigDTO to domain conversion.
 // It verifies that restart policy settings are correctly mapped.
 //
 // Params:
@@ -517,7 +517,7 @@ func TestRestartConfigDTO_ToDomain(t *testing.T) {
 	}
 }
 
-// TestHealthCheckDTO_ToDomain tests HealthCheckDTO to domain conversion.
+// TestHealthCheckDTO_ToDomain tests yaml.HealthCheckDTO to domain conversion.
 // It verifies that health check parameters are correctly mapped.
 //
 // Params:
@@ -606,7 +606,7 @@ func TestHealthCheckDTO_ToDomain(t *testing.T) {
 	}
 }
 
-// TestLoggingConfigDTO_ToDomain tests LoggingConfigDTO to domain conversion.
+// TestLoggingConfigDTO_ToDomain tests yaml.LoggingConfigDTO to domain conversion.
 // It verifies that logging configuration fields are correctly mapped.
 //
 // Params:
@@ -683,7 +683,7 @@ func TestLoggingConfigDTO_ToDomain(t *testing.T) {
 	}
 }
 
-// TestRotationConfigDTO_ToDomain tests RotationConfigDTO to domain conversion.
+// TestRotationConfigDTO_ToDomain tests yaml.RotationConfigDTO to domain conversion.
 // It verifies that rotation parameters are correctly mapped.
 //
 // Params:
@@ -744,7 +744,7 @@ func TestRotationConfigDTO_ToDomain(t *testing.T) {
 	}
 }
 
-// TestServiceLoggingDTO_ToDomain tests ServiceLoggingDTO to domain conversion.
+// TestServiceLoggingDTO_ToDomain tests yaml.ServiceLoggingDTO to domain conversion.
 // It verifies that service logging streams are correctly mapped.
 //
 // Params:
@@ -805,7 +805,7 @@ func TestServiceLoggingDTO_ToDomain(t *testing.T) {
 	}
 }
 
-// TestLogStreamConfigDTO_ToDomain tests LogStreamConfigDTO to domain conversion.
+// TestLogStreamConfigDTO_ToDomain tests yaml.LogStreamConfigDTO to domain conversion.
 // It verifies that log stream configuration fields are correctly mapped.
 //
 // Params:
@@ -878,7 +878,7 @@ func TestLogStreamConfigDTO_ToDomain(t *testing.T) {
 	}
 }
 
-// TestLogDefaultsDTO_ToDomain tests LogDefaultsDTO to domain conversion.
+// TestLogDefaultsDTO_ToDomain tests yaml.LogDefaultsDTO to domain conversion.
 // It verifies that log defaults are correctly mapped.
 //
 // Params:
@@ -949,7 +949,7 @@ func TestLogDefaultsDTO_ToDomain(t *testing.T) {
 	}
 }
 
-// TestListenerDTO_ToDomain tests ListenerDTO to domain conversion.
+// TestListenerDTO_ToDomain tests yaml.ListenerDTO to domain conversion.
 // It verifies that listener configuration fields are correctly mapped.
 //
 // Params:
@@ -1059,7 +1059,7 @@ func TestListenerDTO_ToDomain(t *testing.T) {
 	}
 }
 
-// TestProbeDTO_ToDomain tests ProbeDTO to domain conversion.
+// TestProbeDTO_ToDomain tests yaml.ProbeDTO to domain conversion.
 // It verifies that probe configuration fields are correctly mapped with defaults.
 //
 // Params:
@@ -1188,6 +1188,250 @@ func TestProbeDTO_ToDomain(t *testing.T) {
 			assert.Equal(t, testCase.expectedStatusCode, result.StatusCode)
 			assert.Equal(t, testCase.expectedService, result.Service)
 			assert.Equal(t, testCase.expectedCommand, result.Command)
+		})
+	}
+}
+
+// TestDaemonLoggingDTO_ToDomain tests yaml.DaemonLoggingDTO to domain conversion.
+// It verifies that daemon logging writers are correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestDaemonLoggingDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for table-driven testing.
+	tests := []struct {
+		name                string
+		dto                 *yaml.DaemonLoggingDTO
+		expectedWriterCount int
+		expectedWriterType  string
+		expectedWriterLevel string
+	}{
+		{
+			name: "daemon logging with console writer",
+			dto: &yaml.DaemonLoggingDTO{
+				Writers: []yaml.WriterConfigDTO{
+					{
+						Type:  "console",
+						Level: "info",
+					},
+				},
+			},
+			expectedWriterCount: 1,
+			expectedWriterType:  "console",
+			expectedWriterLevel: "info",
+		},
+		{
+			name: "daemon logging with multiple writers",
+			dto: &yaml.DaemonLoggingDTO{
+				Writers: []yaml.WriterConfigDTO{
+					{
+						Type:  "console",
+						Level: "debug",
+					},
+					{
+						Type:  "file",
+						Level: "warn",
+					},
+				},
+			},
+			expectedWriterCount: 2,
+			expectedWriterType:  "console",
+			expectedWriterLevel: "debug",
+		},
+		{
+			name:                "daemon logging with empty writers",
+			dto:                 &yaml.DaemonLoggingDTO{Writers: []yaml.WriterConfigDTO{}},
+			expectedWriterCount: 0,
+		},
+	}
+
+	// Run all test cases.
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := testCase.dto.ToDomain()
+
+			// Verify writer count.
+			assert.Len(t, result.Writers, testCase.expectedWriterCount)
+
+			// Verify first writer if present.
+			if testCase.expectedWriterCount > 0 {
+				assert.Equal(t, testCase.expectedWriterType, result.Writers[0].Type)
+				assert.Equal(t, testCase.expectedWriterLevel, result.Writers[0].Level)
+			}
+		})
+	}
+}
+
+// TestWriterConfigDTO_ToDomain tests yaml.WriterConfigDTO to domain conversion.
+// It verifies that writer configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestWriterConfigDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for table-driven testing.
+	tests := []struct {
+		name          string
+		dto           *yaml.WriterConfigDTO
+		expectedType  string
+		expectedLevel string
+		expectedPath  string
+	}{
+		{
+			name: "console writer configuration",
+			dto: &yaml.WriterConfigDTO{
+				Type:  "console",
+				Level: "info",
+			},
+			expectedType:  "console",
+			expectedLevel: "info",
+		},
+		{
+			name: "file writer configuration",
+			dto: &yaml.WriterConfigDTO{
+				Type:  "file",
+				Level: "debug",
+				File: yaml.FileWriterConfigDTO{
+					Path: "/var/log/daemon.log",
+				},
+			},
+			expectedType:  "file",
+			expectedLevel: "debug",
+			expectedPath:  "/var/log/daemon.log",
+		},
+		{
+			name: "json writer configuration",
+			dto: &yaml.WriterConfigDTO{
+				Type:  "json",
+				Level: "warn",
+				JSON: yaml.JSONWriterConfigDTO{
+					Path: "/var/log/daemon.json",
+				},
+			},
+			expectedType:  "json",
+			expectedLevel: "warn",
+			expectedPath:  "/var/log/daemon.json",
+		},
+	}
+
+	// Run all test cases.
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := testCase.dto.ToDomain()
+
+			// Verify writer type and level.
+			assert.Equal(t, testCase.expectedType, result.Type)
+			assert.Equal(t, testCase.expectedLevel, result.Level)
+
+			// Verify file or JSON path if configured.
+			if testCase.expectedPath != "" {
+				if testCase.dto.Type == "file" {
+					assert.Equal(t, testCase.expectedPath, result.File.Path)
+				} else if testCase.dto.Type == "json" {
+					assert.Equal(t, testCase.expectedPath, result.JSON.Path)
+				}
+			}
+		})
+	}
+}
+
+// TestFileWriterConfigDTO_ToDomain tests yaml.FileWriterConfigDTO to domain conversion.
+// It verifies that file writer configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestFileWriterConfigDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for table-driven testing.
+	tests := []struct {
+		name         string
+		dto          *yaml.FileWriterConfigDTO
+		expectedPath string
+	}{
+		{
+			name: "file writer with path",
+			dto: &yaml.FileWriterConfigDTO{
+				Path: "/var/log/daemon.log",
+			},
+			expectedPath: "/var/log/daemon.log",
+		},
+		{
+			name: "file writer with rotation",
+			dto: &yaml.FileWriterConfigDTO{
+				Path: "/var/log/app.log",
+				Rotation: yaml.RotationConfigDTO{
+					MaxSize:  "100MB",
+					MaxFiles: 5,
+				},
+			},
+			expectedPath: "/var/log/app.log",
+		},
+	}
+
+	// Run all test cases.
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := testCase.dto.ToDomain()
+
+			// Verify file path is correctly mapped.
+			assert.Equal(t, testCase.expectedPath, result.Path)
+		})
+	}
+}
+
+// TestJSONWriterConfigDTO_ToDomain tests yaml.JSONWriterConfigDTO to domain conversion.
+// It verifies that JSON writer configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestJSONWriterConfigDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	// Define test cases for table-driven testing.
+	tests := []struct {
+		name         string
+		dto          *yaml.JSONWriterConfigDTO
+		expectedPath string
+	}{
+		{
+			name: "json writer with path",
+			dto: &yaml.JSONWriterConfigDTO{
+				Path: "/var/log/daemon.json",
+			},
+			expectedPath: "/var/log/daemon.json",
+		},
+		{
+			name: "json writer with rotation",
+			dto: &yaml.JSONWriterConfigDTO{
+				Path: "/var/log/app.json",
+				Rotation: yaml.RotationConfigDTO{
+					MaxSize:  "50MB",
+					MaxFiles: 10,
+				},
+			},
+			expectedPath: "/var/log/app.json",
+		},
+	}
+
+	// Run all test cases.
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := testCase.dto.ToDomain()
+
+			// Verify JSON path is correctly mapped.
+			assert.Equal(t, testCase.expectedPath, result.Path)
 		})
 	}
 }

@@ -29,7 +29,6 @@ type SubjectStatus struct {
 // Returns:
 //   - SubjectStatus: a new subject status.
 func NewSubjectStatus(snapshot SubjectSnapshot) SubjectStatus {
-	// Return new subject status from snapshot.
 	return SubjectStatus{
 		Name:  snapshot.Name,
 		State: snapshot.State,
@@ -45,7 +44,6 @@ func NewSubjectStatus(snapshot SubjectSnapshot) SubjectStatus {
 // Returns:
 //   - SubjectStatus: a new subject status.
 func NewSubjectStatusFromState(name string, state SubjectState) SubjectStatus {
-	// Return new subject status with name and state.
 	return SubjectStatus{
 		Name:  name,
 		State: state,
@@ -57,23 +55,18 @@ func NewSubjectStatusFromState(name string, state SubjectState) SubjectStatus {
 // Params:
 //   - result: the probe result.
 func (ss *SubjectStatus) SetLastProbeResult(result *Result) {
-	// Set last probe result.
 	ss.LastProbeResult = result
 }
 
 // IncrementSuccesses increments the consecutive success count and resets failures.
 func (ss *SubjectStatus) IncrementSuccesses() {
-	// Increment consecutive successes.
 	ss.ConsecutiveSuccesses++
-	// Reset consecutive failures.
 	ss.ConsecutiveFailures = 0
 }
 
 // IncrementFailures increments the consecutive failure count and resets successes.
 func (ss *SubjectStatus) IncrementFailures() {
-	// Increment consecutive failures.
 	ss.ConsecutiveFailures++
-	// Reset consecutive successes.
 	ss.ConsecutiveSuccesses = 0
 }
 
@@ -82,7 +75,6 @@ func (ss *SubjectStatus) IncrementFailures() {
 // Params:
 //   - state: the new state.
 func (ss *SubjectStatus) SetState(state SubjectState) {
-	// Update the state.
 	ss.State = state
 }
 
@@ -91,7 +83,6 @@ func (ss *SubjectStatus) SetState(state SubjectState) {
 // Returns:
 //   - bool: true if subject is ready, false otherwise.
 func (ss *SubjectStatus) IsReady() bool {
-	// Delegate to SubjectState method.
 	return ss.State.IsReady()
 }
 
@@ -100,7 +91,6 @@ func (ss *SubjectStatus) IsReady() bool {
 // Returns:
 //   - bool: true if subject is listening, false otherwise.
 func (ss *SubjectStatus) IsListening() bool {
-	// Delegate to SubjectState method.
 	return ss.State.IsListening()
 }
 
@@ -117,16 +107,12 @@ func (ss *SubjectStatus) IsListening() bool {
 // Returns:
 //   - ProbeEvaluation: computed next state and counters.
 func (ss *SubjectStatus) EvaluateProbeResult(success bool, successThreshold, failureThreshold int) ProbeEvaluation {
-	// Get current counter values.
 	currentSuccesses := ss.ConsecutiveSuccesses
 	currentFailures := ss.ConsecutiveFailures
 
-	// Handle success case.
 	if success {
 		newSuccesses := currentSuccesses + 1
-		// Check if threshold met for Ready transition.
 		if newSuccesses >= successThreshold {
-			// Return evaluation with transition to Ready state.
 			return ProbeEvaluation{
 				ShouldTransition: true,
 				TargetState:      SubjectReady,
@@ -134,7 +120,6 @@ func (ss *SubjectStatus) EvaluateProbeResult(success bool, successThreshold, fai
 				NewFailureCount:  0,
 			}
 		}
-		// Return evaluation without transition, just update counters.
 		return ProbeEvaluation{
 			ShouldTransition: false,
 			TargetState:      ss.State,
@@ -143,11 +128,8 @@ func (ss *SubjectStatus) EvaluateProbeResult(success bool, successThreshold, fai
 		}
 	}
 
-	// Handle failure case.
 	newFailures := currentFailures + 1
-	// Check if threshold met for Listening transition.
 	if newFailures >= failureThreshold {
-		// Return evaluation with transition to Listening state.
 		return ProbeEvaluation{
 			ShouldTransition: true,
 			TargetState:      SubjectListening,
@@ -155,7 +137,6 @@ func (ss *SubjectStatus) EvaluateProbeResult(success bool, successThreshold, fai
 			NewFailureCount:  newFailures,
 		}
 	}
-	// Return evaluation without transition, just update counters.
 	return ProbeEvaluation{
 		ShouldTransition: false,
 		TargetState:      ss.State,
@@ -171,10 +152,8 @@ func (ss *SubjectStatus) EvaluateProbeResult(success bool, successThreshold, fai
 // Params:
 //   - eval: the evaluation result from EvaluateProbeResult.
 func (ss *SubjectStatus) ApplyProbeEvaluation(eval ProbeEvaluation) {
-	// Update counters from evaluation.
 	ss.ConsecutiveSuccesses = eval.NewSuccessCount
 	ss.ConsecutiveFailures = eval.NewFailureCount
-	// Apply state transition if warranted.
 	if eval.ShouldTransition {
 		ss.State = eval.TargetState
 	}
@@ -203,6 +182,5 @@ type ListenerStatus = SubjectStatus
 //
 // Deprecated: Use NewSubjectStatusFromState instead.
 func NewListenerStatus(name string, state SubjectState) SubjectStatus {
-	// Delegate to new function.
 	return NewSubjectStatusFromState(name, state)
 }

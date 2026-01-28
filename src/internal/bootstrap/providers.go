@@ -48,12 +48,9 @@ type supervisorConfigurer interface {
 // Returns:
 //   - lifecycle.Reaper: the reaper if PID 1, nil otherwise.
 func ProvideReaper(r ReaperMinimal) lifecycle.Reaper {
-	// Check if the process is running as PID 1.
 	if r.IsPID1() {
-		// Return the reaper for zombie cleanup.
 		return r
 	}
-	// Return nil when not PID 1 (reaping not needed).
 	return nil
 }
 
@@ -67,7 +64,6 @@ func ProvideReaper(r ReaperMinimal) lifecycle.Reaper {
 //   - *domainconfig.Config: the loaded configuration.
 //   - error: any error during loading.
 func LoadConfig(loader appconfig.Loader, configPath string) (*domainconfig.Config, error) {
-	// Load and return the configuration from the specified path.
 	return loader.Load(configPath)
 }
 
@@ -82,10 +78,9 @@ func LoadConfig(loader appconfig.Loader, configPath string) (*domainconfig.Confi
 //
 // Deprecated: Use NewAppWithHealth instead.
 func NewApp(sup AppSupervisor) *App {
-	// Return the App with supervisor and optional cleanup.
 	return &App{
 		Supervisor: sup,
-		Cleanup:    nil, // No cleanup needed currently; add if resources require it.
+		Cleanup:    nil,
 	}
 }
 
@@ -94,7 +89,6 @@ func NewApp(sup AppSupervisor) *App {
 // Returns:
 //   - *infrahealthcheck.Factory: the prober factory instance.
 func ProvideProberFactory() *infrahealthcheck.Factory {
-	// Return factory with default timeout.
 	return infrahealthcheck.NewFactory(defaultProbeTimeout)
 }
 
@@ -106,7 +100,6 @@ func ProvideProberFactory() *infrahealthcheck.Factory {
 // Returns:
 //   - *appmetrics.Tracker: the metrics tracker instance.
 func ProvideMetricsTracker(collector appmetrics.Collector) *appmetrics.Tracker {
-	// Return tracker with default collection interval.
 	return appmetrics.NewTracker(collector)
 }
 
@@ -124,17 +117,13 @@ func ProvideMetricsTracker(collector appmetrics.Collector) *appmetrics.Tracker {
 // Returns:
 //   - *App: the application container with health monitoring and metrics enabled.
 func NewAppWithHealth(sup supervisorConfigurer, factory apphealth.Creator, tracker *appmetrics.Tracker, cfg *domainconfig.Config) *App {
-	// Wire the prober factory to enable health monitoring.
 	sup.SetProberFactory(factory)
-
-	// Wire the metrics tracker to enable CPU/memory monitoring.
 	sup.SetMetricsTracker(tracker)
 
-	// Return the App with supervisor, config, tracker, and cleanup function.
 	return &App{
 		Supervisor:     sup,
 		Config:         cfg,
 		MetricsTracker: tracker,
-		Cleanup:        nil, // Cleanup added via MetricsTracker.Stop() in app.go
+		Cleanup:        nil,
 	}
 }

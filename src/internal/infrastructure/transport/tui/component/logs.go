@@ -17,7 +17,9 @@ import (
 
 // Scrollbar characters.
 const (
+	// scrollTrack is the character for the scrollbar track.
 	scrollTrack string = "│"
+	// scrollThumb is the character for the scrollbar thumb.
 	scrollThumb string = "┃"
 
 	// formatFloatPrecision is the default precision for float formatting.
@@ -33,27 +35,35 @@ const (
 	decimalBase int = 10
 )
 
+// Border and scrollbar dimensions.
 const (
-	// Border and scrollbar dimensions.
-	logBorderWidth  int = 3 // left border + right border + scrollbar
-	logBorderHeight int = 2 // top + bottom borders
+	// logBorderWidth is the total horizontal border width (left + right + scrollbar).
+	logBorderWidth int = 3
+	// logBorderHeight is the total vertical border height (top + bottom).
+	logBorderHeight int = 2
 
-	// Column widths for log display.
-	timeColWidth    int = 9  // "HH:MM:SS "
-	levelColWidth   int = 8  // "[LEVEL] " (7 + space)
-	serviceColWidth int = 13 // "servicename  " (12 + space)
+	// timeColWidth is the width of the timestamp column.
+	timeColWidth int = 9
+	// levelColWidth is the width of the log level column.
+	levelColWidth int = 8
+	// serviceColWidth is the width of the service name column.
+	serviceColWidth int = 13
 
-	// Text length constants.
-	minMsgWidth           int = 10 // minimum message width
-	levelTextMaxWidth     int = 5  // max length for level text (ERROR, WARN, etc)
-	serviceNameMaxWidth   int = 12 // max length for service name
-	metadataEstimatedSize int = 16 // estimated chars per metadata key-value pair
-	lineBufferGrow        int = 60 // estimated extra chars for ANSI codes in line
+	// minMsgWidth is the minimum message column width.
+	minMsgWidth int = 10
+	// levelTextMaxWidth is the maximum width for level text.
+	levelTextMaxWidth int = 5
+	// serviceNameMaxWidth is the maximum width for service name.
+	serviceNameMaxWidth int = 12
+	// metadataEstimatedSize is the estimated chars per metadata key-value pair.
+	metadataEstimatedSize int = 16
+	// lineBufferGrow is the estimated extra chars for ANSI codes in line.
+	lineBufferGrow int = 60
 
 	// titleBufferGrow is the pre-allocation size for title buffer.
 	titleBufferGrow int = 32
 
-	// titlePrefixLen is the length of "─ " + " " surrounding the title.
+	// titlePrefixLen is the length of "- " + " " surrounding the title.
 	titlePrefixLen int = 3
 
 	// scrollbarColumnWidth is the width of the scrollbar column.
@@ -68,6 +78,11 @@ const (
 
 // DefaultLogBufferSize is the default maximum log entries to display.
 const DefaultLogBufferSize int = 100
+
+// Stringer defines the minimal interface for key message handling (KTN-API-MINIF).
+type Stringer interface {
+	String() string
+}
 
 // LogsPanel is a scrollable logs viewport with vertical scrollbar.
 //
@@ -281,7 +296,7 @@ func (l *LogsPanel) formatServiceName(service string) string {
 	// Truncate service name if too long.
 	if len([]rune(service)) > serviceNameMaxWidth {
 		// Return truncated name with ellipsis.
-		return widget.TruncateRunes(service, serviceNameMaxWidth, "…")
+		return widget.TruncateRunes(service, serviceNameMaxWidth, "...")
 	}
 
 	// Return original service name.
@@ -316,7 +331,7 @@ func (l *LogsPanel) buildMessage(entry model.LogEntry, msgWidth int) string {
 	// Truncate message if too long.
 	if len([]rune(msg)) > msgWidth {
 		// Return truncated message with ellipsis.
-		return widget.TruncateRunes(msg, msgWidth, "…")
+		return widget.TruncateRunes(msg, msgWidth, "...")
 	}
 
 	// Return complete message.
@@ -331,7 +346,7 @@ func (l *LogsPanel) buildMessage(entry model.LogEntry, msgWidth int) string {
 // Returns:
 //   - string: normalized level string
 //   - string: ANSI color code for the level
-func (l *LogsPanel) getLevelInfo(level string) (string, string) {
+func (l *LogsPanel) getLevelInfo(level string) (levelStr, color string) {
 	// Map log level to display string and color.
 	switch strings.ToUpper(level) {
 	// Handle error level variants.
@@ -396,7 +411,9 @@ func (l *LogsPanel) formatMetadata(meta map[string]any) string {
 //
 // Params:
 //   - sb: string builder to write to
-//   - val: value to format (any type)
+//   - val: value to format (any type for metadata flexibility)
+//
+//nolint:ktn-interface-anyuse // any required: log metadata is runtime-determined, type switch for efficient handling
 func (l *LogsPanel) writeMetadataValue(sb *strings.Builder, val any) {
 	// Handle common types efficiently.
 	switch typed := val.(type) {
@@ -468,11 +485,11 @@ func (l *LogsPanel) Update(msg tea.Msg) (*LogsPanel, tea.Cmd) {
 // handleKeyMsg processes keyboard input.
 //
 // Params:
-//   - msg: key message to process
+//   - msg: key message to process (uses Stringer interface)
 //
 // Returns:
 //   - tea.Cmd: command to execute
-func (l *LogsPanel) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
+func (l *LogsPanel) handleKeyMsg(msg Stringer) tea.Cmd {
 	// Process keyboard shortcuts.
 	switch msg.String() {
 	// Handle home/top navigation.
@@ -554,7 +571,7 @@ func (l *LogsPanel) renderTopBorder(sb *strings.Builder, borderColor string, inn
 	// Build titlePart with strings.Builder to avoid fmt.Sprintf.
 	var titleBuf strings.Builder
 	titleBuf.Grow(len(l.title) + titleBufferGrow)
-	titleBuf.WriteString("─ ")
+	titleBuf.WriteString("- ")
 	titleBuf.WriteString(l.theme.Header)
 	titleBuf.WriteString(l.title)
 	titleBuf.WriteString(borderColor)
@@ -571,13 +588,13 @@ func (l *LogsPanel) renderTopBorder(sb *strings.Builder, borderColor string, inn
 	dashCount = max(dashCount, 0)
 
 	sb.WriteString(borderColor)
-	sb.WriteString("╭")
+	sb.WriteString("+")
 	sb.WriteString(titlePart)
-	sb.WriteString(strings.Repeat("─", dashCount))
+	sb.WriteString(strings.Repeat("-", dashCount))
 	sb.WriteString(" ")
 	sb.WriteString(scrollPart)
 	sb.WriteString(borderColor)
-	sb.WriteString("─╮")
+	sb.WriteString("-+")
 	sb.WriteString(ansi.Reset)
 	sb.WriteString("\n")
 }
@@ -599,7 +616,7 @@ func (l *LogsPanel) renderContentLines(sb *strings.Builder, borderColor string, 
 	// Render each content line with scrollbar.
 	for i := range l.viewport.Height {
 		sb.WriteString(borderColor)
-		sb.WriteString("│")
+		sb.WriteString("|")
 		sb.WriteString(ansi.Reset)
 
 		// Write content line or blank space.
@@ -627,7 +644,7 @@ func (l *LogsPanel) renderContentLines(sb *strings.Builder, borderColor string, 
 			// Use track character as fallback.
 			sb.WriteString(scrollTrack)
 		}
-		sb.WriteString("│")
+		sb.WriteString("|")
 		sb.WriteString(ansi.Reset)
 		sb.WriteString("\n")
 	}
@@ -641,9 +658,9 @@ func (l *LogsPanel) renderContentLines(sb *strings.Builder, borderColor string, 
 //   - innerWidth: width inside borders
 func (l *LogsPanel) renderBottomBorder(sb *strings.Builder, borderColor string, innerWidth int) {
 	sb.WriteString(borderColor)
-	sb.WriteString("╰")
-	sb.WriteString(strings.Repeat("─", innerWidth+scrollbarColumnWidth))
-	sb.WriteString("╯")
+	sb.WriteString("+")
+	sb.WriteString(strings.Repeat("-", innerWidth+scrollbarColumnWidth))
+	sb.WriteString("+")
 	sb.WriteString(ansi.Reset)
 }
 
@@ -684,11 +701,12 @@ func (l *LogsPanel) renderVerticalScrollbar() []string {
 
 	// No scrolling needed if content fits.
 	if totalLines <= height {
-		result := make([]string, height)
+		// Pre-allocate with capacity using append pattern per VAR-MAKEAPPEND.
+		result := make([]string, 0, height)
 
 		// Fill with track characters.
-		for i := range result {
-			result[i] = scrollTrack
+		for range height {
+			result = append(result, scrollTrack)
 		}
 
 		// Return track-only scrollbar.
@@ -708,16 +726,17 @@ func (l *LogsPanel) renderVerticalScrollbar() []string {
 	thumbPos := int(float64(scrollableHeight) * scrollPercent)
 
 	// Build scrollbar with thumb.
-	result := make([]string, height)
+	// Pre-allocate with capacity using append pattern per VAR-MAKEAPPEND.
+	result := make([]string, 0, height)
 
 	// Assign character to each position.
 	for i := range height {
 		// Use thumb character for thumb position, track elsewhere.
 		if i >= thumbPos && i < thumbPos+thumbSize {
-			result[i] = scrollThumb
+			result = append(result, scrollThumb)
 		} else {
 			// Use track character outside thumb.
-			result[i] = scrollTrack
+			result = append(result, scrollTrack)
 		}
 	}
 

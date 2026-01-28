@@ -62,7 +62,6 @@ func TestNewProbeBinding(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Create new probe binding.
 			binding := health.NewProbeBinding(tt.listenerName, tt.probeType, tt.target)
 
 			// Verify binding properties.

@@ -4,11 +4,11 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/domain/logging"
 )
 
@@ -31,17 +31,6 @@ var (
 	_ logging.Writer = (*JSONWriter)(nil)
 )
 
-// JSONLogEntry is the JSON structure for log events.
-// Metadata fields are inlined into the root of the JSON object.
-type JSONLogEntry struct {
-	Timestamp string         `json:"ts"`
-	Level     string         `json:"level"`
-	Service   string         `json:"service,omitempty"`
-	Event     string         `json:"event"`
-	Message   string         `json:"message,omitempty"`
-	Metadata  map[string]any `json:",inline"`
-}
-
 // JSONWriter writes log events as JSON lines to a file.
 // Writes are protected by a mutex for concurrent access safety.
 type JSONWriter struct {
@@ -59,12 +48,14 @@ type JSONWriter struct {
 //
 // Params:
 //   - path: the file path.
-//   - rotation: the rotation configuration (unused for now, future support).
 //
 // Returns:
 //   - *JSONWriter: the created JSON writer.
 //   - error: nil on success, error on failure.
-func NewJSONWriter(path string, _ config.RotationConfig) (*JSONWriter, error) {
+//
+// Goroutine lifecycle: File handle is owned by JSONWriter struct.
+// Cleanup: Caller must call Close() to release the file handle.
+func NewJSONWriter(path string) (*JSONWriter, error) {
 	// Create directory if it doesn't exist.
 	// nosemgrep: go.lang.correctness.permissions.file_permission.incorrect-default-permission
 	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
@@ -74,6 +65,8 @@ func NewJSONWriter(path string, _ config.RotationConfig) (*JSONWriter, error) {
 
 	// Open or create the log file.
 	// nosemgrep: go.lang.correctness.permissions.file_permission.incorrect-default-permission
+	// File lifecycle: Opened here, ownership transferred to JSONWriter on success.
+	// Cleanup via defer: On error, file is closed. On success, defer is disabled via nil assignment.
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, filePermissions)
 	// Failed to open file.
 	if err != nil {
@@ -81,12 +74,25 @@ func NewJSONWriter(path string, _ config.RotationConfig) (*JSONWriter, error) {
 		return nil, fmt.Errorf("opening log file: %w", err)
 	}
 
-	// Return JSON writer with encoder.
-	return &JSONWriter{
+	// Defer cleanup for error paths - disabled on success by nil assignment.
+	defer func() {
+		if file != nil {
+			_ = file.Close()
+		}
+	}()
+
+	// Build JSONWriter - file ownership transfers here.
+	writer := &JSONWriter{
 		file:    file,
 		path:    path,
 		encoder: json.NewEncoder(file),
-	}, nil
+	}
+
+	// Disable deferred close - ownership successfully transferred.
+	file = nil
+
+	// Return JSON writer with encoder.
+	return writer, nil
 }
 
 // Write writes a log event as a JSON line.
@@ -101,7 +107,13 @@ func (w *JSONWriter) Write(event logging.LogEvent) error {
 	defer w.mu.Unlock()
 
 	// Get a pooled map to reduce allocations in hot path.
-	entry := jsonMapPool.Get().(map[string]any)
+	pooled := jsonMapPool.Get()
+	entry, ok := pooled.(map[string]any)
+	// Handle type assertion failure gracefully.
+	if !ok {
+		// Type assertion failed - should never happen but handle gracefully.
+		entry = make(map[string]any, jsonMapInitialCapacity)
+	}
 
 	// Build the JSON entry with metadata flattened.
 	entry["ts"] = event.Timestamp.Format("2006-01-02T15:04:05Z07:00")
@@ -117,16 +129,12 @@ func (w *JSONWriter) Write(event logging.LogEvent) error {
 	}
 
 	// Flatten metadata into the entry.
-	for k, v := range event.Metadata {
-		entry[k] = v
-	}
+	maps.Copy(entry, event.Metadata)
 
 	err := w.encoder.Encode(entry)
 
 	// Clear and return map to pool.
-	for k := range entry {
-		delete(entry, k)
-	}
+	clear(entry)
 	jsonMapPool.Put(entry)
 
 	// Return encode result.

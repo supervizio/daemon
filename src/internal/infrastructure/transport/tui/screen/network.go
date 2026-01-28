@@ -220,90 +220,12 @@ func (n *NetworkRenderer) renderCompact(ifaces []model.NetworkInterface) string 
 // Returns:
 //   - string: rendered network view with throughput bars
 func (n *NetworkRenderer) renderWithBars(ifaces []model.NetworkInterface) string {
-	// Calculate bar width.
-	// Format: "  eth0   ↓[bar] 1.2 MB/s  ↑[bar] 256 KB/s  1 Gbps"
-	barWidth := (n.width - barCalculationOffset) / barDivider
-	// Ensure minimum bar width for readability.
-	if barWidth < networkMinBarWidth {
-		barWidth = networkMinBarWidth
-	}
-
+	barWidth := n.calculateBarWidth()
 	lines := make([]string, 0, len(ifaces))
 
 	// Iterate through interfaces to format with progress bars.
 	for _, iface := range ifaces {
-		// Format rates.
-		rxRate := widget.FormatBytesPerSec(iface.RxBytesPerSec)
-		txRate := widget.FormatBytesPerSec(iface.TxBytesPerSec)
-
-		var line string
-
-		// Show progress bars when interface has speed info.
-		if iface.Speed > 0 {
-			// Has speed - show progress bars with percentage.
-			rxBps := iface.RxBytesPerSec * bitsPerByte
-			txBps := iface.TxBytesPerSec * bitsPerByte
-			rxPercent := float64(rxBps) / float64(iface.Speed) * percentMax
-			txPercent := float64(txBps) / float64(iface.Speed) * percentMax
-			// Cap RX percentage at 100%.
-			if rxPercent > percentMax {
-				rxPercent = percentMax
-			}
-			// Cap TX percentage at 100%.
-			if txPercent > percentMax {
-				txPercent = percentMax
-			}
-
-			// Create progress bars.
-			rxBar := widget.NewProgressBar(barWidth, rxPercent).
-				SetLabel("").
-				SetColorByPercent()
-			rxBar.ShowValue = false
-
-			txBar := widget.NewProgressBar(barWidth, txPercent).
-				SetLabel("").
-				SetColorByPercent()
-			txBar.ShowValue = false
-
-			// Format speed.
-			speed := widget.FormatSpeedShort(iface.Speed)
-
-			// Format: "  eth0   ↓[bar] 1.2 MB/s  ↑[bar] 256 KB/s  1 Gbps"
-			// Use strings.Builder to avoid fmt.Sprintf allocation.
-			var sb strings.Builder
-			sb.Grow(wideBufferSize)
-			sb.WriteString("  ")
-			sb.WriteString(widget.PadRight(iface.Name, interfaceNameWidth))
-			sb.WriteString(" ↓")
-			sb.WriteString(rxBar.Render())
-			sb.WriteByte(' ')
-			sb.WriteString(widget.PadLeft(rxRate, ratePaddingWidth))
-			sb.WriteString("  ↑")
-			sb.WriteString(txBar.Render())
-			sb.WriteByte(' ')
-			sb.WriteString(widget.PadLeft(txRate, ratePaddingWidth))
-			sb.WriteString("  ")
-			sb.WriteString(speed)
-			line = sb.String()
-		} else {
-			// No speed info (non-Linux platforms) - show throughput only.
-			// Format: "  lo     ↓ 1.2 MB/s  ↑ 256 KB/s  (no limit)"
-			// Use strings.Builder to avoid fmt.Sprintf allocation.
-			var sb strings.Builder
-			sb.Grow(throughputBufferSize)
-			sb.WriteString("  ")
-			sb.WriteString(widget.PadRight(iface.Name, interfaceNameWidth))
-			sb.WriteString(" ↓ ")
-			sb.WriteString(widget.PadLeft(rxRate, ratePaddingWidth))
-			sb.WriteString("  ↑ ")
-			sb.WriteString(widget.PadLeft(txRate, ratePaddingWidth))
-			sb.WriteString("  ")
-			sb.WriteString(n.theme.Muted)
-			sb.WriteString("(no limit)")
-			sb.WriteString(ansi.Reset)
-			line = sb.String()
-		}
-
+		line := n.formatInterfaceLine(iface, barWidth)
 		lines = append(lines, line)
 	}
 
@@ -314,6 +236,135 @@ func (n *NetworkRenderer) renderWithBars(ifaces []model.NetworkInterface) string
 
 	// Return rendered network box with bars.
 	return box.Render()
+}
+
+// calculateBarWidth computes the progress bar width based on terminal width.
+//
+// Returns:
+//   - int: width for progress bars
+func (n *NetworkRenderer) calculateBarWidth() int {
+	barWidth := (n.width - barCalculationOffset) / barDivider
+	// Ensure minimum bar width for readability.
+	if barWidth < networkMinBarWidth {
+		return networkMinBarWidth
+	}
+	return barWidth
+}
+
+// formatInterfaceLine formats a single interface line with or without bars.
+//
+// Params:
+//   - iface: network interface to format
+//   - barWidth: width for progress bars
+//
+// Returns:
+//   - string: formatted interface line
+func (n *NetworkRenderer) formatInterfaceLine(iface model.NetworkInterface, barWidth int) string {
+	rxRate := widget.FormatBytesPerSec(iface.RxBytesPerSec)
+	txRate := widget.FormatBytesPerSec(iface.TxBytesPerSec)
+
+	// Show progress bars when interface has speed info.
+	if iface.Speed > 0 {
+		return n.formatInterfaceWithSpeed(iface, barWidth, rxRate, txRate)
+	}
+	return n.formatInterfaceNoSpeed(iface, rxRate, txRate)
+}
+
+// formatInterfaceWithSpeed formats interface line with progress bars.
+//
+// Params:
+//   - iface: network interface with speed info
+//   - barWidth: width for progress bars
+//   - rxRate: formatted receive rate string
+//   - txRate: formatted transmit rate string
+//
+// Returns:
+//   - string: formatted interface line with bars
+func (n *NetworkRenderer) formatInterfaceWithSpeed(iface model.NetworkInterface, barWidth int, rxRate, txRate string) string {
+	rxPercent, txPercent := n.calculatePercentages(iface)
+	rxBar := n.createProgressBar(barWidth, rxPercent)
+	txBar := n.createProgressBar(barWidth, txPercent)
+	speed := widget.FormatSpeedShort(iface.Speed)
+
+	var sb strings.Builder
+	sb.Grow(wideBufferSize)
+	sb.WriteString("  ")
+	sb.WriteString(widget.PadRight(iface.Name, interfaceNameWidth))
+	sb.WriteString(" ↓")
+	sb.WriteString(rxBar.Render())
+	sb.WriteByte(' ')
+	sb.WriteString(widget.PadLeft(rxRate, ratePaddingWidth))
+	sb.WriteString("  ↑")
+	sb.WriteString(txBar.Render())
+	sb.WriteByte(' ')
+	sb.WriteString(widget.PadLeft(txRate, ratePaddingWidth))
+	sb.WriteString("  ")
+	sb.WriteString(speed)
+	return sb.String()
+}
+
+// calculatePercentages computes RX/TX percentages capped at 100%.
+//
+// Params:
+//   - iface: network interface with speed info
+//
+// Returns:
+//   - float64: RX percentage (0-100)
+//   - float64: TX percentage (0-100)
+func (n *NetworkRenderer) calculatePercentages(iface model.NetworkInterface) (rxPercent, txPercent float64) {
+	rxBps := iface.RxBytesPerSec * bitsPerByte
+	txBps := iface.TxBytesPerSec * bitsPerByte
+	rxPercent = float64(rxBps) / float64(iface.Speed) * percentMax
+	txPercent = float64(txBps) / float64(iface.Speed) * percentMax
+	// Cap percentages at 100%.
+	if rxPercent > percentMax {
+		rxPercent = percentMax
+	}
+	if txPercent > percentMax {
+		txPercent = percentMax
+	}
+	return rxPercent, txPercent
+}
+
+// createProgressBar creates a progress bar without label or value display.
+//
+// Params:
+//   - width: bar width
+//   - percent: fill percentage
+//
+// Returns:
+//   - *widget.ProgressBar: configured progress bar
+func (n *NetworkRenderer) createProgressBar(width int, percent float64) *widget.ProgressBar {
+	bar := widget.NewProgressBar(width, percent).
+		SetLabel("").
+		SetColorByPercent()
+	bar.ShowValue = false
+	return bar
+}
+
+// formatInterfaceNoSpeed formats interface line without progress bars.
+//
+// Params:
+//   - iface: network interface without speed info
+//   - rxRate: formatted receive rate string
+//   - txRate: formatted transmit rate string
+//
+// Returns:
+//   - string: formatted interface line with throughput only
+func (n *NetworkRenderer) formatInterfaceNoSpeed(iface model.NetworkInterface, rxRate, txRate string) string {
+	var sb strings.Builder
+	sb.Grow(throughputBufferSize)
+	sb.WriteString("  ")
+	sb.WriteString(widget.PadRight(iface.Name, interfaceNameWidth))
+	sb.WriteString(" ↓ ")
+	sb.WriteString(widget.PadLeft(rxRate, ratePaddingWidth))
+	sb.WriteString("  ↑ ")
+	sb.WriteString(widget.PadLeft(txRate, ratePaddingWidth))
+	sb.WriteString("  ")
+	sb.WriteString(n.theme.Muted)
+	sb.WriteString("(no limit)")
+	sb.WriteString(ansi.Reset)
+	return sb.String()
 }
 
 // RenderInline returns a single-line summary.

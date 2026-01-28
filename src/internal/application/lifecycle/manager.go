@@ -75,10 +75,7 @@ func (m *Manager) Events() <-chan domain.Event {
 //
 // Returns:
 //   - string: the service name from configuration.
-//
-// TODO(test): Add test coverage for Name method.
 func (m *Manager) Name() string {
-	// Return the service name from config.
 	return m.config.Name
 }
 
@@ -277,7 +274,6 @@ func (m *Manager) startProcess() error {
 		m.mu.Lock()
 		m.state = domain.StateFailed
 		m.mu.Unlock()
-		// Return the start error.
 		return err
 	}
 
@@ -501,10 +497,8 @@ func (m *Manager) Stop() error {
 
 	// Stop the process if PID is valid.
 	if pid > 0 {
-		// Return the result of executor stop.
 		return m.executor.Stop(pid, defaultStopTimeout)
 	}
-	// Return nil when no process to stop.
 	return nil
 }
 
@@ -553,7 +547,6 @@ func (m *Manager) Status() domain.Status {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Return the current status snapshot.
 	return domain.Status{
 		Name:     m.config.Name,
 		State:    m.state,
@@ -574,8 +567,6 @@ func (m *Manager) Status() domain.Status {
 //
 // Returns:
 //   - error: ErrNotRunning if no process, error from executor on stop failure.
-//
-// TODO(test): Add test coverage for RestartOnHealthFailure method.
 func (m *Manager) RestartOnHealthFailure(reason string) error {
 	m.mu.Lock()
 	pid := m.pid

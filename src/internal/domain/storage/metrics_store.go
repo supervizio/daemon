@@ -77,7 +77,6 @@ type StoreConfig struct {
 // Returns:
 //   - StoreConfig: configuration with default database path, 24-hour retention, and hourly pruning
 func DefaultStoreConfig() StoreConfig {
-	// Returns standard defaults for production use.
 	return StoreConfig{
 		Path:          "/var/lib/supervizio/metrics.db",
 		Retention:     time.Duration(DefaultRetentionHours) * time.Hour,

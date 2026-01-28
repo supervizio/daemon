@@ -3,6 +3,8 @@
 package supervisor_test
 
 import (
+	"github.com/kodflow/daemon/internal/application/metrics"
+	"fmt"
 	"context"
 	"errors"
 	"os"
@@ -36,7 +38,6 @@ type mockLoader struct {
 //   - *config.Config: the mock configuration.
 //   - error: the mock error.
 func (ml *mockLoader) Load(_ string) (*config.Config, error) {
-	// Return the configured mock values.
 	return ml.cfg, ml.err
 }
 
@@ -67,16 +68,12 @@ type mockExecutor struct {
 func (m *mockExecutor) Start(_ context.Context, _ domain.Spec) (pid int, wait <-chan domain.ExitResult, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// Check if start error is configured.
 	if m.startErr != nil {
-		// Return error when start fails.
 		return 0, nil, m.startErr
 	}
-	// Check if exitCh is provided.
 	if m.exitCh == nil {
 		m.exitCh = make(chan domain.ExitResult, 1)
 	}
-	// Return mock PID and exit channel.
 	return 1234, m.exitCh, nil
 }
 
@@ -89,7 +86,6 @@ func (m *mockExecutor) Start(_ context.Context, _ domain.Spec) (pid int, wait <-
 // Returns:
 //   - error: the mock stop error.
 func (m *mockExecutor) Stop(_ int, _ time.Duration) error {
-	// Return the configured stop error.
 	return m.stopErr
 }
 
@@ -102,7 +98,6 @@ func (m *mockExecutor) Stop(_ int, _ time.Duration) error {
 // Returns:
 //   - error: the mock signal error.
 func (m *mockExecutor) Signal(_ int, _ os.Signal) error {
-	// Return the configured signal error.
 	return m.signalErr
 }
 
@@ -1151,6 +1146,96 @@ func TestSupervisor_RestartOnHealthFailure(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+		})
+	}
+}
+
+// TestSupervisor_SetMetricsTracker tests the SetMetricsTracker method.
+//
+// Params:
+//   - t: the testing context.
+func TestSupervisor_SetMetricsTracker(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+	}{
+		{
+			name: "sets_metrics_tracker",
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createValidConfig()
+			loader := &mockLoader{}
+			executor := &mockExecutor{}
+
+			s, err := supervisor.NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			tracker := metrics.NewTracker(nil)
+			s.SetMetricsTracker(tracker)
+
+			// Verify method completed.
+			assert.NotNil(t, s)
+		})
+	}
+}
+
+// TestSupervisor_ServiceSnapshotsForTUI tests the ServiceSnapshotsForTUI method.
+//
+// Params:
+//   - t: the testing context.
+func TestSupervisor_ServiceSnapshotsForTUI(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// numServices is the number of services to configure.
+		numServices int
+	}{
+		{
+			name:        "returns_snapshots_for_single_service",
+			numServices: 1,
+		},
+		{
+			name:        "returns_snapshots_for_multiple_services",
+			numServices: 3,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{
+				ConfigPath: "/tmp/test-config.yaml",
+				Services:   make([]config.ServiceConfig, tt.numServices),
+			}
+
+			// Create services.
+			for i := range tt.numServices {
+				cfg.Services[i] = config.ServiceConfig{
+					Name:    fmt.Sprintf("service-%d", i),
+					Command: "/bin/echo",
+					Restart: config.RestartConfig{
+						Policy:     config.RestartNever,
+						MaxRetries: 0,
+					},
+				}
+			}
+
+			loader := &mockLoader{}
+			executor := &mockExecutor{}
+
+			s, err := supervisor.NewSupervisor(cfg, loader, executor, nil)
+			require.NoError(t, err)
+
+			result := s.ServiceSnapshotsForTUI()
+
+			assert.NotNil(t, result)
+			assert.Len(t, result, tt.numServices)
 		})
 	}
 }

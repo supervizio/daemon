@@ -12,7 +12,6 @@ type Duration time.Duration
 // Returns:
 //   - time.Duration: the wrapped duration value
 func (d Duration) Duration() time.Duration {
-	// Convert and return the underlying time.Duration
 	return time.Duration(d)
 }
 
@@ -21,7 +20,6 @@ func (d Duration) Duration() time.Duration {
 // Returns:
 //   - float64: the duration expressed in seconds
 func (d Duration) Seconds() float64 {
-	// Convert to time.Duration and get seconds
 	return time.Duration(d).Seconds()
 }
 
@@ -30,7 +28,6 @@ func (d Duration) Seconds() float64 {
 // Returns:
 //   - int64: the duration expressed in milliseconds
 func (d Duration) Milliseconds() int64 {
-	// Convert to time.Duration and get milliseconds
 	return time.Duration(d).Milliseconds()
 }
 
@@ -39,7 +36,6 @@ func (d Duration) Milliseconds() int64 {
 // Returns:
 //   - string: human-readable duration format
 func (d Duration) String() string {
-	// Convert to time.Duration and format as string
 	return time.Duration(d).String()
 }
 
@@ -53,7 +49,6 @@ func (d Duration) String() string {
 // Returns:
 //   - Duration: the duration value
 func Seconds(s int) Duration {
-	// Multiply seconds by time.Second and wrap as Duration
 	return Duration(time.Duration(s) * time.Second)
 }
 
@@ -65,7 +60,6 @@ func Seconds(s int) Duration {
 // Returns:
 //   - Duration: the duration value
 func Minutes(m int) Duration {
-	// Multiply minutes by time.Minute and wrap as Duration
 	return Duration(time.Duration(m) * time.Minute)
 }
 
@@ -77,6 +71,5 @@ func Minutes(m int) Duration {
 // Returns:
 //   - Duration: the wrapped duration value
 func FromTimeDuration(d time.Duration) Duration {
-	// Wrap the time.Duration as shared.Duration
 	return Duration(d)
 }

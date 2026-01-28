@@ -67,36 +67,6 @@ type SystemCollector struct {
 	memValues map[string]uint64 // Reused for /proc/meminfo parsing.
 }
 
-// cpuSample holds a CPU sample from /proc/stat.
-type cpuSample struct {
-	user    uint64
-	nice    uint64
-	system  uint64
-	idle    uint64
-	iowait  uint64
-	irq     uint64
-	softirq uint64
-	steal   uint64
-}
-
-// total returns the total CPU time.
-//
-// Returns:
-//   - uint64: sum of all CPU time fields
-func (s cpuSample) total() uint64 {
-	// Sum all CPU time categories.
-	return s.user + s.nice + s.system + s.idle + s.iowait + s.irq + s.softirq + s.steal
-}
-
-// busy returns the busy CPU time (non-idle).
-//
-// Returns:
-//   - uint64: sum of non-idle CPU time fields
-func (s cpuSample) busy() uint64 {
-	// Sum non-idle CPU time categories.
-	return s.user + s.nice + s.system + s.irq + s.softirq + s.steal
-}
-
 // NewSystemCollector creates a new system collector.
 // Pre-allocates buffers for zero-allocation collection.
 //
@@ -110,14 +80,14 @@ func NewSystemCollector() *SystemCollector {
 	}
 }
 
-// CollectInto gathers system metrics.
+// Gather collects system metrics.
 //
 // Params:
 //   - snap: target snapshot to populate with system metrics
 //
 // Returns:
 //   - error: always returns nil as collection errors are handled internally
-func (c *SystemCollector) CollectInto(snap *model.Snapshot) error {
+func (c *SystemCollector) Gather(snap *model.Snapshot) error {
 	// Collect CPU.
 	c.collectCPU(snap)
 
@@ -157,52 +127,86 @@ func (c *SystemCollector) collectCPU(snap *model.Snapshot) {
 			continue
 		}
 
-		fields := strings.Fields(line)
-		// Validate field count.
-		if len(fields) < minCPUStatFields {
-			// Insufficient fields.
-			return
-		}
-
-		sample := cpuSample{
-			user:    parseUint64(fields[cpuFieldUser]),
-			nice:    parseUint64(fields[cpuFieldNice]),
-			system:  parseUint64(fields[cpuFieldSystem]),
-			idle:    parseUint64(fields[cpuFieldIdle]),
-			iowait:  parseUint64(fields[cpuFieldIOWait]),
-			irq:     parseUint64(fields[cpuFieldIRQ]),
-			softirq: parseUint64(fields[cpuFieldSoftIRQ]),
-		}
-		// Check if steal field is available.
-		if len(fields) >= minFieldsForSteal {
-			sample.steal = parseUint64(fields[cpuFieldSteal])
-		}
-
-		now := time.Now()
-
-		// Calculate delta if we have a previous sample.
-		if !c.prevSampled.IsZero() {
-			totalDelta := sample.total() - c.prevCPU.total()
-			// Ensure positive delta to avoid division issues.
-			if totalDelta > 0 {
-				busyDelta := sample.busy() - c.prevCPU.busy()
-				idleDelta := sample.idle - c.prevCPU.idle
-				userDelta := sample.user + sample.nice - c.prevCPU.user - c.prevCPU.nice
-				systemDelta := sample.system + sample.irq + sample.softirq - c.prevCPU.system - c.prevCPU.irq - c.prevCPU.softirq
-				iowaitDelta := sample.iowait - c.prevCPU.iowait
-
-				snap.System.CPUPercent = float64(busyDelta) / float64(totalDelta) * percentageScale
-				snap.System.CPUIdle = float64(idleDelta) / float64(totalDelta) * percentageScale
-				snap.System.CPUUser = float64(userDelta) / float64(totalDelta) * percentageScale
-				snap.System.CPUSystem = float64(systemDelta) / float64(totalDelta) * percentageScale
-				snap.System.CPUIOWait = float64(iowaitDelta) / float64(totalDelta) * percentageScale
-			}
-		}
-
-		c.prevCPU = sample
-		c.prevSampled = now
+		// Parse and process CPU sample.
+		c.processCPULine(line, snap)
 		break
 	}
+}
+
+// processCPULine parses a CPU stat line and calculates metrics.
+//
+// Params:
+//   - line: raw line from /proc/stat
+//   - snap: target snapshot to populate
+func (c *SystemCollector) processCPULine(line string, snap *model.Snapshot) {
+	fields := strings.Fields(line)
+	// Validate field count.
+	if len(fields) < minCPUStatFields {
+		// Insufficient fields.
+		return
+	}
+
+	sample := parseCPUSample(fields)
+	now := time.Now()
+
+	// Calculate delta if we have a previous sample.
+	if !c.prevSampled.IsZero() {
+		c.calculateCPUMetrics(sample, snap)
+	}
+
+	c.prevCPU = sample
+	c.prevSampled = now
+}
+
+// parseCPUSample parses CPU fields into a sample.
+//
+// Params:
+//   - fields: fields from /proc/stat CPU line
+//
+// Returns:
+//   - cpuSample: parsed CPU sample
+func parseCPUSample(fields []string) cpuSample {
+	sample := cpuSample{
+		user:    parseUint64(fields[cpuFieldUser]),
+		nice:    parseUint64(fields[cpuFieldNice]),
+		system:  parseUint64(fields[cpuFieldSystem]),
+		idle:    parseUint64(fields[cpuFieldIdle]),
+		iowait:  parseUint64(fields[cpuFieldIOWait]),
+		irq:     parseUint64(fields[cpuFieldIRQ]),
+		softirq: parseUint64(fields[cpuFieldSoftIRQ]),
+	}
+	// Check if steal field is available.
+	if len(fields) >= minFieldsForSteal {
+		sample.steal = parseUint64(fields[cpuFieldSteal])
+	}
+	// Return parsed sample.
+	return sample
+}
+
+// calculateCPUMetrics calculates CPU percentages from sample delta.
+//
+// Params:
+//   - sample: current CPU sample
+//   - snap: target snapshot to populate
+func (c *SystemCollector) calculateCPUMetrics(sample cpuSample, snap *model.Snapshot) {
+	totalDelta := sample.total() - c.prevCPU.total()
+	// Ensure positive delta to avoid division issues.
+	if totalDelta == 0 {
+		// No delta, skip calculation.
+		return
+	}
+
+	busyDelta := sample.busy() - c.prevCPU.busy()
+	idleDelta := sample.idle - c.prevCPU.idle
+	userDelta := sample.user + sample.nice - c.prevCPU.user - c.prevCPU.nice
+	systemDelta := sample.system + sample.irq + sample.softirq - c.prevCPU.system - c.prevCPU.irq - c.prevCPU.softirq
+	iowaitDelta := sample.iowait - c.prevCPU.iowait
+
+	snap.System.CPUPercent = float64(busyDelta) / float64(totalDelta) * percentageScale
+	snap.System.CPUIdle = float64(idleDelta) / float64(totalDelta) * percentageScale
+	snap.System.CPUUser = float64(userDelta) / float64(totalDelta) * percentageScale
+	snap.System.CPUSystem = float64(systemDelta) / float64(totalDelta) * percentageScale
+	snap.System.CPUIOWait = float64(iowaitDelta) / float64(totalDelta) * percentageScale
 }
 
 // collectMemory reads /proc/meminfo for memory usage.
@@ -221,45 +225,78 @@ func (c *SystemCollector) collectMemory(snap *model.Snapshot) {
 
 	// Clear and reuse the map instead of allocating new one.
 	clear(c.memValues)
-	mem := c.memValues
 
+	// Parse meminfo into map.
+	c.parseMemInfo(f)
+
+	// Populate snapshot from parsed values.
+	c.populateMemoryMetrics(snap)
+}
+
+// parseMemInfo reads and parses /proc/meminfo into c.memValues.
+//
+// Params:
+//   - f: file handle for /proc/meminfo
+func (c *SystemCollector) parseMemInfo(f *os.File) {
 	scanner := bufio.NewScanner(f)
 	// Parse each line of meminfo.
 	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Parse manually to avoid strings.Fields allocation.
-		// Format: "KeyName:     12345 kB"
-		colonIdx := strings.IndexByte(line, ':')
-		// Skip lines without colon.
-		if colonIdx < 0 {
-			// Invalid line format.
-			continue
+		key, value := parseMemInfoLine(scanner.Text())
+		// Store value if key is valid.
+		if key != "" {
+			c.memValues[key] = value
 		}
-
-		key := line[:colonIdx]
-		rest := strings.TrimLeft(line[colonIdx+1:], " \t")
-
-		// Find the numeric value (first field after colon).
-		spaceIdx := strings.IndexByte(rest, ' ')
-		var valueStr string
-		// Extract value string based on space position.
-		if spaceIdx > 0 {
-			valueStr = rest[:spaceIdx]
-		} else {
-			// No space found, use entire rest.
-			valueStr = rest
-		}
-
-		value := parseUint64(valueStr)
-
-		// Values in meminfo are in kB.
-		if strings.HasSuffix(rest, " kB") {
-			value *= bytesPerKB
-		}
-
-		mem[key] = value
 	}
+}
+
+// parseMemInfoLine parses a single meminfo line.
+//
+// Params:
+//   - line: raw line from /proc/meminfo
+//
+// Returns:
+//   - string: key name or empty on error
+//   - uint64: parsed value in bytes
+func parseMemInfoLine(line string) (string, uint64) {
+	// Parse manually to avoid strings.Fields allocation.
+	// Format: "KeyName:     12345 kB"
+	key, rest, found := strings.Cut(line, ":")
+	// Skip lines without colon.
+	if !found {
+		// Invalid line format.
+		return "", 0
+	}
+
+	rest = strings.TrimLeft(rest, " \t")
+
+	// Find the numeric value (first field after colon).
+	spaceIdx := strings.IndexByte(rest, ' ')
+	var valueStr string
+	// Extract value string based on space position.
+	if spaceIdx > 0 {
+		valueStr = rest[:spaceIdx]
+	} else {
+		// No space found, use entire rest.
+		valueStr = rest
+	}
+
+	value := parseUint64(valueStr)
+
+	// Values in meminfo are in kB.
+	if strings.HasSuffix(rest, " kB") {
+		value *= bytesPerKB
+	}
+
+	// Return parsed key and value.
+	return key, value
+}
+
+// populateMemoryMetrics populates snapshot with memory metrics.
+//
+// Params:
+//   - snap: target snapshot to populate
+func (c *SystemCollector) populateMemoryMetrics(snap *model.Snapshot) {
+	mem := c.memValues
 
 	snap.System.MemoryTotal = mem["MemTotal"]
 	snap.System.MemoryAvailable = mem["MemAvailable"]

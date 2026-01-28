@@ -14,24 +14,11 @@ const (
 	tableHeaderRowCount int = 2
 	// tableCompactExtraSize is extra size for compact table pre-allocation.
 	tableCompactExtraSize int = 10
+	// defaultColumnCapacity is the default capacity for table columns.
+	defaultColumnCapacity int = 8
+	// defaultRowCapacity is the default capacity for table rows.
+	defaultRowCapacity int = 16
 )
-
-// Column defines a table column.
-// It specifies header text, width constraints, alignment, and flexibility.
-type Column struct {
-	// Header is the column header text.
-	Header string
-	// Width is the column width (0 = auto).
-	Width int
-	// MinWidth is the minimum width.
-	MinWidth int
-	// MaxWidth is the maximum width (0 = no limit).
-	MaxWidth int
-	// Align is the text alignment.
-	Align Align
-	// Flex allows the column to expand to fill space.
-	Flex bool
-}
 
 // Table renders a data table.
 // It supports headers, column alignment, flexible widths, and optional separators.
@@ -56,8 +43,8 @@ type Table struct {
 func NewTable(width int) *Table {
 	// Build and return table with default colors and separator.
 	return &Table{
-		Columns:     make([]Column, 0),
-		Rows:        make([][]string, 0),
+		Columns:     make([]Column, 0, defaultColumnCapacity),
+		Rows:        make([][]string, 0, defaultRowCapacity),
 		Width:       width,
 		ShowHeader:  true,
 		HeaderColor: ansi.Bold + ansi.FgWhite,
@@ -76,18 +63,17 @@ func NewTable(width int) *Table {
 // Returns:
 //   - *Table: the table instance for method chaining.
 func (t *Table) AddColumn(header string, width int, align Align) *Table {
+	// Append column with alignment to columns slice.
 	t.Columns = append(t.Columns, Column{
-		Header:   header,
-		Width:    width,
-		MinWidth: len(header),
-		Align:    align,
+		Header: header,
+		Width:  width,
+		Align:  align,
 	})
-
-	// Return table for chaining.
+	// Return self for fluent interface.
 	return t
 }
 
-// AddFlexColumn adds a flexible-width column that expands to fill available space.
+// AddFlexColumn adds a flexible column that expands to fill available space.
 //
 // Params:
 //   - header: the column header text to display.
@@ -97,289 +83,369 @@ func (t *Table) AddColumn(header string, width int, align Align) *Table {
 // Returns:
 //   - *Table: the table instance for method chaining.
 func (t *Table) AddFlexColumn(header string, minWidth int, align Align) *Table {
+	// Append flexible column to columns slice.
 	t.Columns = append(t.Columns, Column{
 		Header:   header,
 		MinWidth: minWidth,
 		Align:    align,
 		Flex:     true,
 	})
-
-	// Return table for chaining.
+	// Return self for fluent interface.
 	return t
 }
 
 // AddRow adds a data row to the table.
 //
 // Params:
-//   - cells: the cell values for the row, one per column.
+//   - cells: the cell values for the row.
 //
 // Returns:
 //   - *Table: the table instance for method chaining.
 func (t *Table) AddRow(cells ...string) *Table {
+	// Append row to rows slice.
 	t.Rows = append(t.Rows, cells)
-
-	// Return table for chaining.
+	// Return self for fluent interface.
 	return t
 }
 
-// Render returns the table as a formatted string with header and separator.
+// SetHeader enables or disables the header row.
+//
+// Params:
+//   - show: whether to display the header.
 //
 // Returns:
-//   - string: the rendered table with ANSI formatting.
+//   - *Table: the table instance for method chaining.
+func (t *Table) SetHeader(show bool) *Table {
+	// Set header visibility flag.
+	t.ShowHeader = show
+	// Return self for fluent interface.
+	return t
+}
+
+// SetHeaderColor sets the color for header text.
+//
+// Params:
+//   - color: ANSI color code for the header.
+//
+// Returns:
+//   - *Table: the table instance for method chaining.
+func (t *Table) SetHeaderColor(color string) *Table {
+	// Set header color.
+	t.HeaderColor = color
+	// Return self for fluent interface.
+	return t
+}
+
+// Render returns the complete table as a multi-line string.
+//
+// Returns:
+//   - string: the rendered table with header, rows, and borders.
 func (t *Table) Render() string {
-	// Check if table has columns defined.
+	// Handle empty table case.
 	if len(t.Columns) == 0 {
-		// Return empty string for empty table.
+		// Return empty string for no columns.
 		return ""
 	}
 
+	// Calculate column widths.
 	widths := t.calculateWidths()
 
+	// Pre-allocate string builder with estimated capacity.
+	estimatedSize := len(t.Rows)*tableEstimatedRowSize + tableHeaderRowCount
 	var sb strings.Builder
-	estimatedSize := (t.Width + tableEstimatedRowSize) * (len(t.Rows) + tableHeaderRowCount)
 	sb.Grow(estimatedSize)
 
-	// Check if header should be rendered.
+	// Render header if enabled.
 	if t.ShowHeader {
-		t.renderHeader(&sb, widths)
+		sb.WriteString(t.renderHeader(widths))
+		sb.WriteByte('\n')
 	}
 
-	t.renderRows(&sb, widths)
+	// Render all data rows.
+	sb.WriteString(t.renderRows(widths))
 
-	// Return trimmed output without trailing newline.
-	return strings.TrimSuffix(sb.String(), "\n")
+	// Convert to string and return.
+	return sb.String()
 }
 
-// renderHeader writes the header row and separator to the builder.
+// renderHeader formats the header row with column names.
 //
 // Params:
-//   - sb: the string builder to write to.
-//   - widths: the calculated column widths.
-func (t *Table) renderHeader(sb *strings.Builder, widths []int) {
-	sb.WriteString(t.HeaderColor)
-
-	// Iterate over columns to render header cells.
-	for i, col := range t.Columns {
-		// Add separator between columns.
-		if i > 0 {
-			sb.WriteString(t.Separator)
-		}
-		sb.WriteString(Pad(col.Header, widths[i], col.Align))
-	}
-	sb.WriteString(ansi.Reset)
-	sb.WriteString("\n")
-
-	sb.WriteString(t.BorderColor)
-
-	// Iterate over widths to render separator line.
-	for i, w := range widths {
-		// Add separator between columns.
-		if i > 0 {
-			sb.WriteString(t.Separator)
-		}
-		sb.WriteString(HorizontalBar(w))
-	}
-	sb.WriteString(ansi.Reset)
-	sb.WriteString("\n")
-}
-
-// renderRows writes all data rows to the builder.
-//
-// Params:
-//   - sb: the string builder to write to.
-//   - widths: the calculated column widths.
-func (t *Table) renderRows(sb *strings.Builder, widths []int) {
-	// Iterate over each data row.
-	for _, row := range t.Rows {
-		// Iterate over columns in the row.
-		for i := range t.Columns {
-			// Add separator between columns.
-			if i > 0 {
-				sb.WriteString(t.Separator)
-			}
-
-			cell := ""
-
-			// Check if cell value exists in row.
-			if i < len(row) {
-				cell = row[i]
-			}
-
-			sb.WriteString(Pad(cell, widths[i], t.Columns[i].Align))
-		}
-		sb.WriteString("\n")
-	}
-}
-
-// RenderCompact returns the table without header separator line.
+//   - widths: calculated width for each column.
 //
 // Returns:
-//   - string: the rendered table with ANSI formatting but no separator.
-func (t *Table) RenderCompact() string {
-	// Check if table has columns defined.
-	if len(t.Columns) == 0 {
-		// Return empty string for empty table.
+//   - string: the formatted header row.
+func (t *Table) renderHeader(widths []int) string {
+	// Pre-allocate string builder with estimated capacity.
+	var sb strings.Builder
+	sb.Grow(t.Width)
+
+	// Iterate through columns to build header.
+	for i, col := range t.Columns {
+		// Add separator before all columns except the first.
+		if i > 0 {
+			sb.WriteString(t.Separator)
+		}
+
+		// Format header with alignment and color.
+		sb.WriteString(t.HeaderColor)
+		sb.WriteString(Pad(col.Header, widths[i], col.Align))
+		sb.WriteString(ansi.Reset)
+	}
+
+	// Convert to string and return.
+	return sb.String()
+}
+
+// renderRows formats all data rows.
+//
+// Params:
+//   - widths: calculated width for each column.
+//
+// Returns:
+//   - string: all formatted rows joined with newlines.
+func (t *Table) renderRows(widths []int) string {
+	// Handle empty rows case.
+	if len(t.Rows) == 0 {
+		// Return empty string for no rows.
 		return ""
 	}
 
-	widths := t.calculateWidths()
+	// Pre-allocate string builder with estimated capacity.
+	estimatedSize := len(t.Rows) * tableEstimatedRowSize
 	var sb strings.Builder
-	sb.Grow((t.Width + tableCompactExtraSize) * (len(t.Rows) + 1))
+	sb.Grow(estimatedSize)
 
-	// Check if header should be rendered.
-	if t.ShowHeader {
-		t.renderCompactHeader(&sb, widths)
+	// Iterate through rows and format each.
+	for rowIdx, row := range t.Rows {
+		// Add newline before all rows except the first.
+		if rowIdx > 0 {
+			sb.WriteByte('\n')
+		}
+
+		// Render single row with colors and cells.
+		t.renderSingleRow(&sb, row, rowIdx, widths)
 	}
 
-	t.renderRows(&sb, widths)
-
-	// Return trimmed output without trailing newline.
-	return strings.TrimSuffix(sb.String(), "\n")
+	// Convert to string and return.
+	return sb.String()
 }
 
-// renderCompactHeader writes only the header row without separator to the builder.
+// renderSingleRow formats a single data row.
 //
 // Params:
-//   - sb: the string builder to write to.
-//   - widths: the calculated column widths.
-func (t *Table) renderCompactHeader(sb *strings.Builder, widths []int) {
-	sb.WriteString(t.HeaderColor)
-
-	// Iterate over columns to render header cells.
-	for i, col := range t.Columns {
-		// Add separator between columns.
-		if i > 0 {
-			sb.WriteString(t.Separator)
-		}
-		sb.WriteString(Pad(col.Header, widths[i], col.Align))
+//   - sb: string builder to write to.
+//   - row: cell values for this row.
+//   - rowIdx: row index for color alternation.
+//   - widths: calculated column widths.
+func (t *Table) renderSingleRow(sb *strings.Builder, row []string, rowIdx int, widths []int) {
+	// Apply row color if configured.
+	if len(t.RowColors) > 0 {
+		color := t.RowColors[rowIdx%len(t.RowColors)]
+		sb.WriteString(color)
 	}
-	sb.WriteString(ansi.Reset)
-	sb.WriteString("\n")
+
+	// Format each cell in the row.
+	t.renderRowCells(sb, row, widths)
+
+	// Reset color if row colors are used.
+	if len(t.RowColors) > 0 {
+		sb.WriteString(ansi.Reset)
+	}
 }
 
-// calculateWidths determines the width for each column based on content and constraints.
+// renderRowCells formats all cells in a row.
+//
+// Params:
+//   - sb: string builder to write to.
+//   - row: cell values for this row.
+//   - widths: calculated column widths.
+func (t *Table) renderRowCells(sb *strings.Builder, row []string, widths []int) {
+	// Format each cell in the row.
+	for colIdx, cell := range row {
+		// Add separator before all columns except the first.
+		if colIdx > 0 {
+			sb.WriteString(t.Separator)
+		}
+
+		// Ensure column index is valid.
+		if colIdx < len(t.Columns) {
+			col := t.Columns[colIdx]
+			sb.WriteString(Pad(cell, widths[colIdx], col.Align))
+		}
+	}
+}
+
+// RenderCompact returns a compact table without header.
 //
 // Returns:
-//   - []int: the calculated width for each column.
-func (t *Table) calculateWidths() []int {
-	widths := make([]int, len(t.Columns))
-	sepWidth := len(t.Separator) * (len(t.Columns) - 1)
-	availableWidth := t.Width - sepWidth
+//   - string: the rendered table rows only.
+func (t *Table) RenderCompact() string {
+	// Handle empty table case.
+	if len(t.Columns) == 0 {
+		// Return empty string for no columns.
+		return ""
+	}
 
-	flexCount, usedWidth := t.calculateInitialWidths(widths)
-	t.distributeFlexWidth(widths, flexCount, usedWidth, availableWidth)
+	// Calculate column widths.
+	widths := t.calculateWidths()
+
+	// Pre-allocate string builder with estimated capacity.
+	estimatedSize := len(t.Rows)*tableEstimatedRowSize + tableCompactExtraSize
+	var sb strings.Builder
+	sb.Grow(estimatedSize)
+
+	// Render rows only (skip header).
+	sb.WriteString(t.renderRows(widths))
+
+	// Convert to string and return.
+	return sb.String()
+}
+
+// calculateWidths determines the width of each column.
+//
+// Returns:
+//   - []int: width for each column.
+func (t *Table) calculateWidths() []int {
+	// Initialize widths slice.
+	widths := t.calculateInitialWidths()
+
+	// Calculate total used width.
+	totalUsed := 0
+	for _, w := range widths {
+		totalUsed += w
+	}
+
+	// Add separator widths to total.
+	separatorWidth := len(t.Separator) * (len(t.Columns) - 1)
+	totalUsed += separatorWidth
+
+	// Distribute remaining space to flex columns.
+	if totalUsed < t.Width {
+		remaining := t.Width - totalUsed
+		widths = t.distributeFlexWidth(widths, remaining)
+	}
 
 	// Return calculated widths.
 	return widths
 }
 
-// calculateInitialWidths computes initial width for each column.
-//
-// Params:
-//   - widths: slice to store calculated widths.
+// calculateInitialWidths calculates initial column widths.
 //
 // Returns:
-//   - int: number of flex columns.
-//   - int: total width used by all columns.
-func (t *Table) calculateInitialWidths(widths []int) (int, int) {
-	flexCount := 0
-	usedWidth := 0
+//   - []int: initial width for each column.
+func (t *Table) calculateInitialWidths() []int {
+	// Pre-allocate widths slice with capacity.
+	widths := make([]int, 0, len(t.Columns))
 
-	// Iterate over columns to calculate initial widths.
-	for i, col := range t.Columns {
-		widths[i] = t.calculateColumnWidth(i, col)
-
-		// Track flex columns for distribution.
-		if col.Flex {
-			flexCount++
-		}
-		usedWidth += widths[i]
+	// Calculate width for each column.
+	for _, col := range t.Columns {
+		widths = append(widths, t.calculateColumnWidth(col))
 	}
 
-	// Return flex count and used width.
-	return flexCount, usedWidth
+	// Return initial widths.
+	return widths
 }
 
-// calculateColumnWidth computes the width for a single column.
+// calculateColumnWidth calculates the width for a single column.
 //
 // Params:
-//   - idx: column index in the table.
-//   - col: column definition.
+//   - col: the column to calculate width for.
 //
 // Returns:
-//   - int: calculated width for the column.
-func (t *Table) calculateColumnWidth(idx int, col Column) int {
-	// Handle fixed width columns.
+//   - int: the calculated width.
+func (t *Table) calculateColumnWidth(col Column) int {
+	// Use fixed width if specified.
 	if col.Width > 0 {
 		// Return fixed width.
 		return col.Width
 	}
 
-	// Handle flexible width columns.
-	if col.Flex {
-		// Return minimum width for flex.
+	// Use minimum width if specified.
+	if col.MinWidth > 0 {
+		// Return minimum width.
 		return col.MinWidth
 	}
 
-	// Handle auto-width columns.
-	return t.calculateAutoWidth(idx, col)
+	// Calculate automatic width.
+	return t.calculateAutoWidth(col)
 }
 
-// calculateAutoWidth computes width based on content for auto columns.
+// calculateAutoWidth calculates automatic width for a column.
 //
 // Params:
-//   - idx: column index in the table.
-//   - col: column definition.
+//   - col: the column to calculate width for.
 //
 // Returns:
-//   - int: calculated width based on header and content.
-func (t *Table) calculateAutoWidth(idx int, col Column) int {
-	width := max(col.MinWidth, VisibleLen(col.Header))
+//   - int: the calculated automatic width.
+func (t *Table) calculateAutoWidth(col Column) int {
+	// Start with header width.
+	maxWidth := len(col.Header)
 
-	// Iterate over rows to find max content width.
-	for _, row := range t.Rows {
-		// Check if row has value for this column.
-		if idx < len(row) {
-			width = max(width, VisibleLen(row[idx]))
+	// Find the index of this column.
+	colIdx := -1
+	for i, c := range t.Columns {
+		// Compare column pointers.
+		if c.Header == col.Header {
+			colIdx = i
+			// Stop after finding the column.
+			break
 		}
 	}
 
-	// Apply max width constraint if specified.
-	if col.MaxWidth > 0 && width > col.MaxWidth {
-		// Return constrained width.
-		return col.MaxWidth
-	}
-
-	// Return calculated width.
-	return width
-}
-
-// distributeFlexWidth distributes remaining space to flex columns.
-//
-// Params:
-//   - widths: slice of column widths to update.
-//   - flexCount: number of flex columns.
-//   - usedWidth: total width already used.
-//   - availableWidth: total available width.
-func (t *Table) distributeFlexWidth(widths []int, flexCount, usedWidth, availableWidth int) {
-	// Check if flex columns need extra space.
-	if flexCount == 0 || usedWidth >= availableWidth {
-		// Exit early when no flex columns or no remaining space.
-		return
-	}
-
-	extra := (availableWidth - usedWidth) / flexCount
-
-	// Iterate over columns to distribute extra width.
-	for i, col := range t.Columns {
-		// Check if column is flexible.
-		if col.Flex {
-			widths[i] += extra
-
-			// Apply max width constraint if specified.
-			if col.MaxWidth > 0 && widths[i] > col.MaxWidth {
-				widths[i] = col.MaxWidth
+	// If column found, check row cell widths.
+	if colIdx >= 0 {
+		for _, row := range t.Rows {
+			// Ensure row has this column.
+			if colIdx < len(row) {
+				cellWidth := len(row[colIdx])
+				// Update max width if larger.
+				if cellWidth > maxWidth {
+					maxWidth = cellWidth
+				}
 			}
 		}
 	}
+
+	// Return maximum width found.
+	return maxWidth
+}
+
+// distributeFlexWidth distributes remaining width among flex columns.
+//
+// Params:
+//   - widths: current column widths.
+//   - remaining: remaining width to distribute.
+//
+// Returns:
+//   - []int: updated widths with flex distribution.
+func (t *Table) distributeFlexWidth(widths []int, remaining int) []int {
+	// Count flex columns.
+	flexCount := 0
+	for _, col := range t.Columns {
+		// Count flex columns.
+		if col.Flex {
+			flexCount++
+		}
+	}
+
+	// If no flex columns, return original widths.
+	if flexCount == 0 {
+		// No flex columns to distribute to.
+		return widths
+	}
+
+	// Calculate extra width per flex column.
+	extraPerFlex := remaining / flexCount
+
+	// Distribute extra width to flex columns.
+	for i, col := range t.Columns {
+		// Only distribute to flex columns.
+		if col.Flex {
+			widths[i] += extraPerFlex
+		}
+	}
+
+	// Return updated widths.
+	return widths
 }

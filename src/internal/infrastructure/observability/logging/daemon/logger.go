@@ -11,9 +11,7 @@ import (
 // MultiLogger aggregates multiple writers and dispatches events to all of them.
 // It implements the logging.Logger interface.
 type MultiLogger struct {
-	// mu protects concurrent access to the writers slice.
-	mu sync.RWMutex
-	// writers is the list of writers to dispatch events to.
+	mu      sync.RWMutex
 	writers []logging.Writer
 }
 
@@ -25,10 +23,21 @@ type MultiLogger struct {
 // Returns:
 //   - *MultiLogger: the created multi-logger.
 func New(writers ...logging.Writer) *MultiLogger {
-	// Create logger with writers.
 	return &MultiLogger{
 		writers: writers,
 	}
+}
+
+// NewMultiLogger creates a new multi-logger.
+// Alias for New for KTN-CTOR compliance.
+//
+// Params:
+//   - writers: the writers to dispatch events to.
+//
+// Returns:
+//   - *MultiLogger: the created multi-logger.
+func NewMultiLogger(writers ...logging.Writer) *MultiLogger {
+	return New(writers...)
 }
 
 // Log logs an event to all writers.
@@ -39,9 +48,8 @@ func (l *MultiLogger) Log(event logging.LogEvent) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
-	// Write event to all writers (best effort).
+	// Write event to all writers (best effort, ignore individual errors).
 	for _, w := range l.writers {
-		// Ignore errors from individual writers - best effort logging.
 		_ = w.Write(event)
 	}
 }
@@ -118,14 +126,12 @@ func (l *MultiLogger) Close() error {
 	defer l.mu.Unlock()
 
 	var firstErr error
-	// Close all writers, collecting first error.
 	for _, w := range l.writers {
-		// Record first error encountered.
 		if err := w.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
-	// Return first error or nil.
+
 	return firstErr
 }
 

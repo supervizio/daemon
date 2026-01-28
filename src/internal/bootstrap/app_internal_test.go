@@ -553,50 +553,50 @@ func Test_handleSignal(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		signal         syscall.Signal
-		reloadErr      error
-		stopErr        error
-		wantErr        bool
-		expectReload   bool
-		expectStop     bool
+		name         string
+		signal       syscall.Signal
+		reloadErr    error
+		stopErr      error
+		wantErr      bool
+		expectReload bool
+		expectStop   bool
 	}{
 		{
-			name:       "SIGHUP_triggers_reload",
-			signal:     syscall.SIGHUP,
-			wantErr:    false,
+			name:         "SIGHUP_triggers_reload",
+			signal:       syscall.SIGHUP,
+			wantErr:      false,
 			expectReload: true,
-			expectStop: false,
+			expectStop:   false,
 		},
 		{
-			name:       "SIGINT_triggers_stop",
-			signal:     syscall.SIGINT,
-			wantErr:    false,
+			name:         "SIGINT_triggers_stop",
+			signal:       syscall.SIGINT,
+			wantErr:      false,
 			expectReload: false,
-			expectStop: true,
+			expectStop:   true,
 		},
 		{
-			name:       "SIGTERM_triggers_stop",
-			signal:     syscall.SIGTERM,
-			wantErr:    false,
+			name:         "SIGTERM_triggers_stop",
+			signal:       syscall.SIGTERM,
+			wantErr:      false,
 			expectReload: false,
-			expectStop: true,
+			expectStop:   true,
 		},
 		{
-			name:       "SIGHUP_with_error",
-			signal:     syscall.SIGHUP,
-			reloadErr:  errors.New("reload failed"),
-			wantErr:    false,
+			name:         "SIGHUP_with_error",
+			signal:       syscall.SIGHUP,
+			reloadErr:    errors.New("reload failed"),
+			wantErr:      false,
 			expectReload: true,
-			expectStop: false,
+			expectStop:   false,
 		},
 		{
-			name:       "SIGINT_with_stop_error",
-			signal:     syscall.SIGINT,
-			stopErr:    errors.New("stop failed"),
-			wantErr:    true,
+			name:         "SIGINT_with_stop_error",
+			signal:       syscall.SIGINT,
+			stopErr:      errors.New("stop failed"),
+			wantErr:      true,
 			expectReload: false,
-			expectStop: true,
+			expectStop:   true,
 		},
 	}
 
@@ -704,9 +704,9 @@ func Test_buildStartedMessage(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		stats   *appsupervisor.ServiceStatsSnapshot
-		want    string
+		name  string
+		stats *appsupervisor.ServiceStatsSnapshot
+		want  string
 	}{
 		{
 			name:  "nil_stats",
@@ -909,9 +909,9 @@ func Test_buildEventMessage(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		eventType domainprocess.EventType
-		stats     *appsupervisor.ServiceStatsSnapshot
+		name         string
+		eventType    domainprocess.EventType
+		stats        *appsupervisor.ServiceStatsSnapshot
 		wantContains string
 	}{
 		{
@@ -969,8 +969,8 @@ func Test_findLogFilePath(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name   string
-		cfg    *domainconfig.Config
+		name      string
+		cfg       *domainconfig.Config
 		wantEmpty bool
 	}{
 		{
@@ -1163,10 +1163,10 @@ func Test_runTUIMode(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		tuiMode   tui.Mode
-		tuiErr    error
-		wantErr   bool
+		name    string
+		tuiMode tui.Mode
+		tuiErr  error
+		wantErr bool
 	}{
 		{
 			name:    "raw_mode_success",
@@ -1651,4 +1651,238 @@ func (m *mockAppSupervisorWithErr) Reload() error {
 //   - handler: the event handler (unused).
 func (m *mockAppSupervisorWithErr) SetEventHandler(_ appsupervisor.EventHandler) {
 	// Do nothing.
+}
+
+
+// Test_addPIDMetadata verifies PID metadata enrichment.
+//
+// Params:
+//   - t: testing context for assertions.
+func Test_addPIDMetadata(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		pid         int
+		expectPID   bool
+		expectedPID int
+	}{
+		{
+			name:        "adds_pid_when_greater_than_zero",
+			pid:         12345,
+			expectPID:   true,
+			expectedPID: 12345,
+		},
+		{
+			name:      "does_not_add_pid_when_zero",
+			pid:       0,
+			expectPID: false,
+		},
+		{
+			name:      "does_not_add_pid_when_negative",
+			pid:       -1,
+			expectPID: false,
+		},
+	}
+
+	// Run all test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			event := &domainprocess.Event{
+				PID: tt.pid,
+			}
+
+			logEvent := domainlogging.NewLogEvent(domainlogging.LevelInfo, "test", "test_event", "test message")
+			result := addPIDMetadata(logEvent, event)
+
+			// Verify PID metadata presence.
+			if tt.expectPID {
+				if result.Metadata["pid"] != tt.expectedPID {
+					t.Errorf("addPIDMetadata() PID = %v, want %v", result.Metadata["pid"], tt.expectedPID)
+				}
+			} else {
+				if _, exists := result.Metadata["pid"]; exists {
+					t.Error("addPIDMetadata() should not add PID metadata")
+				}
+			}
+		})
+	}
+}
+
+// Test_addExitMetadata verifies exit code and error metadata enrichment.
+//
+// Params:
+//   - t: testing context for assertions.
+func Test_addExitMetadata(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		eventType        domainprocess.EventType
+		exitCode         int
+		err              error
+		expectExitCode   bool
+		expectedExitCode int
+		expectError      bool
+		expectedError    string
+	}{
+		{
+			name:             "adds_exit_code_for_stopped_event",
+			eventType:        domainprocess.EventStopped,
+			exitCode:         0,
+			expectExitCode:   true,
+			expectedExitCode: 0,
+			expectError:      false,
+		},
+		{
+			name:             "adds_exit_code_for_failed_event",
+			eventType:        domainprocess.EventFailed,
+			exitCode:         1,
+			expectExitCode:   true,
+			expectedExitCode: 1,
+			expectError:      false,
+		},
+		{
+			name:           "adds_error_when_present",
+			eventType:      domainprocess.EventStarted,
+			err:            errors.New("test error"),
+			expectExitCode: false,
+			expectError:    true,
+			expectedError:  "test error",
+		},
+		{
+			name:             "adds_both_exit_code_and_error",
+			eventType:        domainprocess.EventFailed,
+			exitCode:         127,
+			err:              errors.New("command not found"),
+			expectExitCode:   true,
+			expectedExitCode: 127,
+			expectError:      true,
+			expectedError:    "command not found",
+		},
+		{
+			name:           "does_not_add_exit_code_for_started_event",
+			eventType:      domainprocess.EventStarted,
+			expectExitCode: false,
+			expectError:    false,
+		},
+	}
+
+	// Run all test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			event := &domainprocess.Event{
+				Type:     tt.eventType,
+				ExitCode: tt.exitCode,
+				Error:    tt.err,
+			}
+
+			logEvent := domainlogging.NewLogEvent(domainlogging.LevelInfo, "test", "test_event", "test message")
+			result := addExitMetadata(logEvent, event)
+
+			// Verify exit code metadata.
+			if tt.expectExitCode {
+				if result.Metadata["exit_code"] != tt.expectedExitCode {
+					t.Errorf("addExitMetadata() exit_code = %v, want %v", result.Metadata["exit_code"], tt.expectedExitCode)
+				}
+			} else {
+				if _, exists := result.Metadata["exit_code"]; exists {
+					t.Error("addExitMetadata() should not add exit_code metadata")
+				}
+			}
+
+			// Verify error metadata.
+			if tt.expectError {
+				if result.Metadata["error"] != tt.expectedError {
+					t.Errorf("addExitMetadata() error = %v, want %v", result.Metadata["error"], tt.expectedError)
+				}
+			} else {
+				if _, exists := result.Metadata["error"]; exists {
+					t.Error("addExitMetadata() should not add error metadata")
+				}
+			}
+		})
+	}
+}
+
+// Test_addRestartMetadata verifies restart count metadata enrichment.
+//
+// Params:
+//   - t: testing context for assertions.
+func Test_addRestartMetadata(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                 string
+		eventType            domainprocess.EventType
+		stats                *appsupervisor.ServiceStatsSnapshot
+		expectRestarts       bool
+		expectedRestartCount int
+	}{
+		{
+			name:      "adds_restart_count_for_restarting_event",
+			eventType: domainprocess.EventRestarting,
+			stats: &appsupervisor.ServiceStatsSnapshot{
+				RestartCount: 3,
+			},
+			expectRestarts:       true,
+			expectedRestartCount: 3,
+		},
+		{
+			name:      "adds_restart_count_for_exhausted_event",
+			eventType: domainprocess.EventExhausted,
+			stats: &appsupervisor.ServiceStatsSnapshot{
+				RestartCount: 10,
+			},
+			expectRestarts:       true,
+			expectedRestartCount: 10,
+		},
+		{
+			name:           "does_not_add_restart_count_for_started_event",
+			eventType:      domainprocess.EventStarted,
+			stats:          &appsupervisor.ServiceStatsSnapshot{RestartCount: 5},
+			expectRestarts: false,
+		},
+		{
+			name:           "does_not_add_restart_count_when_stats_nil",
+			eventType:      domainprocess.EventRestarting,
+			stats:          nil,
+			expectRestarts: false,
+		},
+		{
+			name:           "does_not_add_restart_count_for_stopped_event",
+			eventType:      domainprocess.EventStopped,
+			stats:          &appsupervisor.ServiceStatsSnapshot{RestartCount: 2},
+			expectRestarts: false,
+		},
+	}
+
+	// Run all test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			event := &domainprocess.Event{
+				Type: tt.eventType,
+			}
+
+			logEvent := domainlogging.NewLogEvent(domainlogging.LevelInfo, "test", "test_event", "test message")
+			result := addRestartMetadata(logEvent, event, tt.stats)
+
+			// Verify restart count metadata.
+			if tt.expectRestarts {
+				if result.Metadata["restarts"] != tt.expectedRestartCount {
+					t.Errorf("addRestartMetadata() restarts = %v, want %v", result.Metadata["restarts"], tt.expectedRestartCount)
+				}
+			} else {
+				if _, exists := result.Metadata["restarts"]; exists {
+					t.Error("addRestartMetadata() should not add restarts metadata")
+				}
+			}
+		})
+	}
 }

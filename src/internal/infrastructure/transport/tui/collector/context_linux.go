@@ -49,22 +49,47 @@ func getKernelVersion() string {
 //   - string: primary IP address or "unknown" if not found
 func getPrimaryIP() string {
 	// Try to get the IP used for outbound connections.
+	if ip := getOutboundIP(); ip != "" {
+		// Outbound IP found.
+		return ip
+	}
+
+	// Fallback: iterate interfaces.
+	return getIPFromInterfaces()
+}
+
+// getOutboundIP returns the local IP used for outbound connections.
+//
+// Returns:
+//   - string: outbound IP address or empty string if not found
+func getOutboundIP() string {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	var dialer net.Dialer
 	conn, err := dialer.DialContext(ctx, "udp", "8.8.8.8:80")
 	// Check if connection succeeded.
-	if err == nil {
-		defer func() { _ = conn.Close() }()
-		// Try to get local address.
-		if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
-			// Return outbound IP.
-			return addr.IP.String()
-		}
+	if err != nil {
+		// Cannot establish outbound connection.
+		return ""
+	}
+	defer func() { _ = conn.Close() }()
+
+	// Try to get local address.
+	if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+		// Return outbound IP.
+		return addr.IP.String()
 	}
 
-	// Fallback: iterate interfaces.
+	// Could not determine outbound IP.
+	return ""
+}
+
+// getIPFromInterfaces returns the first non-loopback IPv4 from interfaces.
+//
+// Returns:
+//   - string: IP address or "unknown" if not found
+func getIPFromInterfaces() string {
 	interfaces, err := net.Interfaces()
 	// Handle interface listing error.
 	if err != nil {
@@ -75,46 +100,80 @@ func getPrimaryIP() string {
 	// Process each interface.
 	for _, iface := range interfaces {
 		// Skip loopback and down interfaces.
-		// Check for loopback flag.
-		if iface.Flags&net.FlagLoopback != 0 {
-			// Skip loopback.
-			continue
-		}
-		// Check for up flag.
-		if iface.Flags&net.FlagUp == 0 {
-			// Skip down interface.
+		if !isValidInterface(iface) {
+			// Skip invalid interface.
 			continue
 		}
 
-		addrs, err := iface.Addrs()
-		// Handle address retrieval error.
-		if err != nil {
-			// Skip interface on error.
-			continue
-		}
-
-		// Process each address.
-		for _, addr := range addrs {
-			var ip net.IP
-			// Extract IP from address type.
-			switch val := addr.(type) {
-			// Handle IPNet type.
-			case *net.IPNet:
-				ip = val.IP
-			// Handle IPAddr type.
-			case *net.IPAddr:
-				ip = val.IP
-			}
-
-			// Prefer IPv4.
-			// Check for valid non-loopback IPv4.
-			if ip != nil && ip.To4() != nil && !ip.IsLoopback() {
-				// Found valid IPv4.
-				return ip.String()
-			}
+		// Try to get IPv4 from this interface.
+		if ip := getIPv4FromInterface(&iface); ip != "" {
+			// Found valid IPv4.
+			return ip
 		}
 	}
 
 	// No suitable IP found.
 	return unknownValue
+}
+
+// isValidInterface checks if interface is suitable for IP discovery.
+//
+// Params:
+//   - iface: network interface to check
+//
+// Returns:
+//   - bool: true if interface is up and not loopback
+func isValidInterface(iface net.Interface) bool {
+	// Check for loopback flag.
+	if iface.Flags&net.FlagLoopback != 0 {
+		// Skip loopback.
+		return false
+	}
+	// Check for up flag.
+	if iface.Flags&net.FlagUp == 0 {
+		// Skip down interface.
+		return false
+	}
+	// Interface is valid.
+	return true
+}
+
+// getIPv4FromInterface extracts the first IPv4 address from an interface.
+//
+// Params:
+//   - iface: network interface to scan (uses Addrser interface)
+//
+// Returns:
+//   - string: IPv4 address or empty string if not found
+func getIPv4FromInterface(iface Addrser) string {
+	addrs, err := iface.Addrs()
+	// Handle address retrieval error.
+	if err != nil {
+		// Skip interface on error.
+		return ""
+	}
+
+	// Process each address.
+	for _, addr := range addrs {
+		var ip net.IP
+		// Extract IP from address type.
+		switch val := addr.(type) {
+		// Handle IPNet type.
+		case *net.IPNet:
+			ip = val.IP
+		// Handle IPAddr type.
+		case *net.IPAddr:
+			ip = val.IP
+		}
+
+		// Prefer IPv4.
+		// Check for valid non-loopback IPv4.
+		if ip != nil && ip.To4() != nil && !ip.IsLoopback() {
+			// Found valid IPv4.
+			return ip.String()
+		}
+	}
+
+	// No IPv4 found on this interface.
+	return ""
 }

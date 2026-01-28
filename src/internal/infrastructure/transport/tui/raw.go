@@ -148,38 +148,58 @@ func (r *RawRenderer) RenderCompact(snap *model.Snapshot) error {
 func (r *RawRenderer) renderHeader(snap *model.Snapshot) string {
 	ctx := snap.Context
 
-	// Version string (remove leading 'v' if present to avoid "vv").
-	version := ctx.Version
+	// Build title line.
+	titleLine := r.buildTitleLine(ctx.Version)
+
+	// Build content lines.
+	contentLines := r.buildHeaderContentLines(ctx)
+
+	// Build content lines with visual hierarchy.
+	box := widget.NewBox(r.width).
+		AddLine("").
+		AddLine(titleLine).
+		AddLine("").
+		AddLines(contentLines).
+		AddLine("")
+
+	// Render box to string and return.
+	return box.Render()
+}
+
+// buildTitleLine builds the header title line with logo and version.
+//
+// Params:
+//   - version: application version string.
+//
+// Returns:
+//   - string: formatted title line.
+func (r *RawRenderer) buildTitleLine(version string) string {
 	// Ensure version starts with 'v' prefix.
 	if len(version) > 0 && version[0] != 'v' {
 		version = "v" + version
 	}
 
-	// Title line: "   superviz.io ─────────────────────────── v0.2.0   "
 	logo := r.theme.Primary + "superviz" + ansi.Reset + r.theme.Accent + ".io" + ansi.Reset
 	versionStr := r.theme.Accent + version + ansi.Reset
 
-	// Calculate dimensions for symmetric layout.
-	innerWidth := r.width - borderWidth // Box inner width (excluding borders)
-	pad := headerPadding                // Padding on each side
-	logoLen := logoVisibleLength        // "superviz.io" = 8 + 3 = 11 visible chars
-	versionLen := len(version)
-
-	// Calculate separator to fill space between logo and version.
-	// We want: [pad] logo [sp] separator [sp] version [pad]
-	// Content visible length should be < innerWidth to let box pad the right side.
-	// Content = pad + logoLen + 1 + sepLen + 1 + versionLen (no right pad, box adds it)
-	// We want box to add exactly 'pad' spaces on the right.
-	// So: content visible = innerWidth - pad
-	// sepLen = innerWidth - pad - pad - logoLen - 1 - 1 - versionLen
-	separatorLen := innerWidth - (wideModeMultiplier * pad) - logoLen - wideModeMultiplier - versionLen
-	// Ensure minimum separator length for visual consistency.
+	// Calculate separator length.
+	innerWidth := r.width - borderWidth
+	separatorLen := innerWidth - (wideModeMultiplier * headerPadding) - logoVisibleLength - wideModeMultiplier - len(version)
 	separatorLen = max(separatorLen, minSeparatorLength)
 	separator := r.theme.Muted + strings.Repeat("─", separatorLen) + ansi.Reset
 
-	// Build title line (box will auto-pad to add right padding).
-	titleLine := strings.Repeat(" ", pad) + logo + " " + separator + " " + versionStr
+	// Return formatted title line.
+	return strings.Repeat(" ", headerPadding) + logo + " " + separator + " " + versionStr
+}
 
+// buildHeaderContentLines builds the header content lines.
+//
+// Params:
+//   - ctx: context data for the header.
+//
+// Returns:
+//   - []string: content lines for the header.
+func (r *RawRenderer) buildHeaderContentLines(ctx model.RuntimeContext) []string {
 	// Runtime mode.
 	runtime := ctx.Mode.String()
 	// Include container runtime if available.
@@ -187,10 +207,8 @@ func (r *RawRenderer) renderHeader(snap *model.Snapshot) string {
 		runtime = ctx.Mode.String() + " (" + ctx.ContainerRuntime + ")"
 	}
 
-	// Platform.
+	// Platform and config.
 	platform := ctx.OS + "/" + ctx.Arch
-
-	// Config path.
 	configPath := ctx.ConfigPath
 	// Use default path if not specified.
 	if configPath == "" {
@@ -200,20 +218,14 @@ func (r *RawRenderer) renderHeader(snap *model.Snapshot) string {
 	// Bullet point style.
 	bullet := r.theme.Accent + "▸" + ansi.Reset
 
-	// Build content lines with visual hierarchy.
-	box := widget.NewBox(r.width).
-		AddLine("").
-		AddLine(titleLine).
-		AddLine("").
-		AddLine("   " + bullet + " " + r.theme.Muted + "Host" + ansi.Reset + "       " + ctx.Hostname).
-		AddLine("   " + bullet + " " + r.theme.Muted + "Platform" + ansi.Reset + "   " + platform).
-		AddLine("   " + bullet + " " + r.theme.Muted + "Runtime" + ansi.Reset + "    " + runtime).
-		AddLine("   " + bullet + " " + r.theme.Muted + "Config" + ansi.Reset + "     " + configPath).
-		AddLine("   " + bullet + " " + r.theme.Muted + "Started" + ansi.Reset + "    " + ctx.StartTime.Format("2006-01-02T15:04:05Z")).
-		AddLine("")
-
-	// Render box to string and return.
-	return box.Render()
+	// Return formatted content lines.
+	return []string{
+		"   " + bullet + " " + r.theme.Muted + "Host" + ansi.Reset + "       " + ctx.Hostname,
+		"   " + bullet + " " + r.theme.Muted + "Platform" + ansi.Reset + "   " + platform,
+		"   " + bullet + " " + r.theme.Muted + "Runtime" + ansi.Reset + "    " + runtime,
+		"   " + bullet + " " + r.theme.Muted + "Config" + ansi.Reset + "     " + configPath,
+		"   " + bullet + " " + r.theme.Muted + "Started" + ansi.Reset + "    " + ctx.StartTime.Format("2006-01-02T15:04:05Z"),
+	}
 }
 
 // renderHeaderCompact renders a minimal header.
@@ -323,12 +335,34 @@ func (r *RawRenderer) hasAnySandboxes(snap *model.Snapshot) bool {
 //   - []string: system content lines for display.
 func (r *RawRenderer) buildSystemContentLines(snap *model.Snapshot, width int) []string {
 	sys := snap.System
-	limits := snap.Limits
 
-	barWidth := width - barReservedSpace
-	// Ensure minimum bar width for visibility.
-	barWidth = max(barWidth, minBarWidth)
+	barWidth := max(width-barReservedSpace, minBarWidth)
 
+	// Build metric lines with progress bars.
+	lines := r.buildSystemMetricLines(sys, barWidth)
+
+	// Add limits if present.
+	if snap.Limits.HasLimits {
+		limitsLine := r.buildLimitsLine(snap.Limits)
+		// Append limits line if not empty.
+		if limitsLine != "" {
+			lines = append(lines, limitsLine)
+		}
+	}
+
+	// Return assembled system content lines.
+	return lines
+}
+
+// buildSystemMetricLines builds the system metric progress bar lines.
+//
+// Params:
+//   - sys: system metrics data.
+//   - barWidth: width for progress bars.
+//
+// Returns:
+//   - []string: metric lines with progress bars.
+func (r *RawRenderer) buildSystemMetricLines(sys model.SystemMetrics, barWidth int) []string {
 	// CPU bar.
 	cpuBar := widget.NewProgressBar(barWidth, sys.CPUPercent).
 		SetLabel("CPU ").
@@ -349,40 +383,51 @@ func (r *RawRenderer) buildSystemContentLines(snap *model.Snapshot, width int) [
 		SetLabel("Disk").
 		SetColorByPercent()
 
-	// Build load average string without fmt.Sprintf.
-	loadAvgStr := "  Load: " + strconv.FormatFloat(sys.LoadAvg1, 'f', floatPrecision, floatBitSize) + " " + strconv.FormatFloat(sys.LoadAvg5, 'f', floatPrecision, floatBitSize)
+	// Build load average string.
+	loadAvgStr := "  Load: " + strconv.FormatFloat(sys.LoadAvg1, 'f', floatPrecision, floatBitSize) +
+		" " + strconv.FormatFloat(sys.LoadAvg5, 'f', floatPrecision, floatBitSize)
 
-	lines := []string{
+	// Return metric lines.
+	return []string{
 		"  " + cpuBar.Render() + loadAvgStr,
 		"  " + ramBar.Render() + "  " + widget.FormatBytes(sys.MemoryUsed) + " / " + widget.FormatBytes(sys.MemoryTotal),
 		"  " + swapBar.Render() + "  " + widget.FormatBytes(sys.SwapUsed) + " / " + widget.FormatBytes(sys.SwapTotal),
 		"  " + diskBar.Render() + "  " + widget.FormatBytes(sys.DiskUsed) + " / " + widget.FormatBytes(sys.DiskTotal),
 	}
+}
 
-	// Limits if present.
-	if limits.HasLimits {
-		// Pre-allocate for max 3 limit parts.
-		limitParts := make([]string, 0, maxLimitParts)
-		// Add CPUSet limit if configured.
-		if limits.CPUSet != "" {
-			limitParts = append(limitParts, "CPUSet: "+limits.CPUSet)
-		}
-		// Add CPU quota limit if configured.
-		if limits.CPUQuota > 0 {
-			limitParts = append(limitParts, "CPU: "+strconv.FormatFloat(limits.CPUQuota, 'f', cpuQuotaPrecision, floatBitSize)+" cores")
-		}
-		// Add memory limit if configured.
-		if limits.MemoryMax > 0 {
-			limitParts = append(limitParts, "MEM: "+widget.FormatBytes(limits.MemoryMax))
-		}
-		// Append limits line if any limits are set.
-		if len(limitParts) > 0 {
-			lines = append(lines, "  "+r.theme.Muted+"Limits: "+strings.Join(limitParts, " │ ")+ansi.Reset)
-		}
+// buildLimitsLine builds the limits line if any limits are set.
+//
+// Params:
+//   - limits: resource limits data.
+//
+// Returns:
+//   - string: formatted limits line or empty string.
+func (r *RawRenderer) buildLimitsLine(limits model.ResourceLimits) string {
+	// Pre-allocate for max 3 limit parts.
+	limitParts := make([]string, 0, maxLimitParts)
+
+	// Add CPUSet limit if configured.
+	if limits.CPUSet != "" {
+		limitParts = append(limitParts, "CPUSet: "+limits.CPUSet)
+	}
+	// Add CPU quota limit if configured.
+	if limits.CPUQuota > 0 {
+		limitParts = append(limitParts, "CPU: "+strconv.FormatFloat(limits.CPUQuota, 'f', cpuQuotaPrecision, floatBitSize)+" cores")
+	}
+	// Add memory limit if configured.
+	if limits.MemoryMax > 0 {
+		limitParts = append(limitParts, "MEM: "+widget.FormatBytes(limits.MemoryMax))
 	}
 
-	// Return assembled system content lines.
-	return lines
+	// Return empty if no limits.
+	if len(limitParts) == 0 {
+		// No limits to display.
+		return ""
+	}
+
+	// Return formatted limits line.
+	return "  " + r.theme.Muted + "Limits: " + strings.Join(limitParts, " │ ") + ansi.Reset
 }
 
 // buildSandboxContentLines builds the content lines for sandboxes section.
@@ -504,56 +549,78 @@ func mergeSideBySide(left, right, separator string) string {
 	leftLines := strings.Split(left, "\n")
 	rightLines := strings.Split(right, "\n")
 
-	// Determine the width of the left panel (from visible characters).
-	leftWidth := 0
-	// Find maximum visible width of left panel.
-	for _, line := range leftLines {
+	// Calculate left panel width.
+	leftWidth := calculateMaxVisibleWidth(leftLines)
+
+	// Remove trailing empty lines.
+	leftLines = removeTrailingEmptyLines(leftLines)
+	rightLines = removeTrailingEmptyLines(rightLines)
+
+	// Merge lines side by side.
+	return mergeLines(leftLines, rightLines, leftWidth, separator)
+}
+
+// calculateMaxVisibleWidth calculates the maximum visible width of lines.
+//
+// Params:
+//   - lines: lines to measure.
+//
+// Returns:
+//   - int: maximum visible width.
+func calculateMaxVisibleWidth(lines []string) int {
+	maxWidth := 0
+	// Find maximum visible width.
+	for _, line := range lines {
 		w := widget.VisibleLen(line)
 		// Track maximum width.
-		if w > leftWidth {
-			leftWidth = w
+		if w > maxWidth {
+			maxWidth = w
 		}
 	}
+	// Return maximum width.
+	return maxWidth
+}
 
-	// Remove trailing empty lines from left panel.
-	for len(leftLines) > 0 && strings.TrimSpace(leftLines[len(leftLines)-1]) == "" {
-		leftLines = leftLines[:len(leftLines)-1]
+// removeTrailingEmptyLines removes empty lines from the end.
+//
+// Params:
+//   - lines: input lines.
+//
+// Returns:
+//   - []string: lines without trailing empty lines.
+func removeTrailingEmptyLines(lines []string) []string {
+	// Remove trailing empty lines.
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
 	}
-	// Remove trailing empty lines from right panel.
-	for len(rightLines) > 0 && strings.TrimSpace(rightLines[len(rightLines)-1]) == "" {
-		rightLines = rightLines[:len(rightLines)-1]
-	}
+	// Return trimmed lines.
+	return lines
+}
 
-	// Find maximum line count between panels.
+// mergeLines merges two line slices side by side.
+//
+// Params:
+//   - leftLines: left column lines.
+//   - rightLines: right column lines.
+//   - leftWidth: width to pad left column to.
+//   - separator: string to place between columns.
+//
+// Returns:
+//   - string: merged content.
+func mergeLines(leftLines, rightLines []string, leftWidth int, separator string) string {
 	maxLines := max(len(leftLines), len(rightLines))
-
 	var result strings.Builder
+
 	// Merge lines side by side.
 	for i := range maxLines {
-		leftLine := ""
-		// Get left line if available within bounds.
-		if i < len(leftLines) {
-			leftLine = leftLines[i]
-		}
-
-		visLen := widget.VisibleLen(leftLine)
-		// Pad left line to consistent width using builder.
-		if visLen < leftWidth {
-			var padded strings.Builder
-			padded.WriteString(leftLine)
-			padded.WriteString(strings.Repeat(" ", leftWidth-visLen))
-			leftLine = padded.String()
-		}
-
-		rightLine := ""
-		// Get right line if available within bounds.
-		if i < len(rightLines) {
-			rightLine = rightLines[i]
-		}
+		leftLine := getLineOrEmpty(leftLines, i)
+		leftLine = padLineToWidth(leftLine, leftWidth)
+		rightLine := getLineOrEmpty(rightLines, i)
 
 		result.WriteString(leftLine)
 		result.WriteString(separator)
 		result.WriteString(rightLine)
+
 		// Add newline between lines (but not after last line).
 		if i < maxLines-1 {
 			result.WriteString("\n")
@@ -562,4 +629,41 @@ func mergeSideBySide(left, right, separator string) string {
 
 	// Return merged content.
 	return result.String()
+}
+
+// getLineOrEmpty returns the line at index or empty string.
+//
+// Params:
+//   - lines: slice of lines.
+//   - idx: index to retrieve.
+//
+// Returns:
+//   - string: line at index or empty string.
+func getLineOrEmpty(lines []string, idx int) string {
+	// Return line if within bounds.
+	if idx < len(lines) {
+		// Line exists.
+		return lines[idx]
+	}
+	// Return empty for out of bounds.
+	return ""
+}
+
+// padLineToWidth pads a line to the specified visible width.
+//
+// Params:
+//   - line: line to pad.
+//   - width: target visible width.
+//
+// Returns:
+//   - string: padded line.
+func padLineToWidth(line string, width int) string {
+	visLen := widget.VisibleLen(line)
+	// Return unchanged if already wide enough.
+	if visLen >= width {
+		// No padding needed.
+		return line
+	}
+	// Pad with spaces.
+	return line + strings.Repeat(" ", width-visLen)
 }

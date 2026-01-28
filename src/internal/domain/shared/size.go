@@ -40,9 +40,7 @@ var (
 func ParseSize(s string) (int64, error) {
 	s = strings.TrimSpace(strings.ToUpper(s))
 
-	// Check for empty input string.
 	if s == "" {
-		// Return error for empty size string.
 		return 0, ErrEmptySize
 	}
 
@@ -50,19 +48,14 @@ func ParseSize(s string) (int64, error) {
 	numStr = strings.TrimSpace(numStr)
 	num, err := strconv.ParseInt(numStr, Base10, BitSize64)
 
-	// Check for parsing errors.
 	if err != nil {
-		// Return wrapped error for invalid size number.
 		return 0, fmt.Errorf("invalid size number %q: %w", numStr, err)
 	}
 
-	// Check for negative size values.
 	if num < 0 {
-		// Return error for negative size.
 		return 0, fmt.Errorf("%w: %d", ErrNegativeSize, num)
 	}
 
-	// Return the calculated size in bytes.
 	return num * multiplier, nil
 }
 
@@ -75,27 +68,16 @@ func ParseSize(s string) (int64, error) {
 //   - multiplier: the multiplier based on the unit suffix
 //   - numericPart: the numeric portion of the string
 func extractSizeComponents(s string) (multiplier int64, numericPart string) {
-	// Determine the size unit suffix and extract the numeric part.
 	switch {
-	// Handle gigabyte suffix.
 	case strings.HasSuffix(s, "GB"):
-		// Return gigabyte multiplier and numeric part.
 		return Gigabyte, strings.TrimSuffix(s, "GB")
-	// Handle megabyte suffix.
 	case strings.HasSuffix(s, "MB"):
-		// Return megabyte multiplier and numeric part.
 		return Megabyte, strings.TrimSuffix(s, "MB")
-	// Handle kilobyte suffix.
 	case strings.HasSuffix(s, "KB"):
-		// Return kilobyte multiplier and numeric part.
 		return Kilobyte, strings.TrimSuffix(s, "KB")
-	// Handle byte suffix.
 	case strings.HasSuffix(s, "B"):
-		// Return byte multiplier and numeric part.
 		return Byte, strings.TrimSuffix(s, "B")
-	// Handle no suffix (default to bytes).
 	default:
-		// Return byte multiplier and original string.
 		return Byte, s
 	}
 }
@@ -108,23 +90,14 @@ func extractSizeComponents(s string) (multiplier int64, numericPart string) {
 // Returns:
 //   - string: human-readable size string
 func FormatSize(bytes int64) string {
-	// Determine the appropriate unit based on size magnitude.
 	switch {
-	// Format as gigabytes for sizes >= 1GB.
 	case bytes >= Gigabyte:
-		// Return gigabyte formatted string.
 		return strconv.FormatInt(bytes/Gigabyte, Base10) + "GB"
-	// Format as megabytes for sizes >= 1MB.
 	case bytes >= Megabyte:
-		// Return megabyte formatted string.
 		return strconv.FormatInt(bytes/Megabyte, Base10) + "MB"
-	// Format as kilobytes for sizes >= 1KB.
 	case bytes >= Kilobyte:
-		// Return kilobyte formatted string.
 		return strconv.FormatInt(bytes/Kilobyte, Base10) + "KB"
-	// Format as bytes for smaller sizes.
 	default:
-		// Return byte formatted string.
 		return strconv.FormatInt(bytes, Base10) + "B"
 	}
 }

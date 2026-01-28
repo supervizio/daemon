@@ -60,7 +60,6 @@ const (
 // Returns:
 //   - string: the health check type as a string value.
 func (t HealthCheckType) String() string {
-	// Convert the type to its underlying string value.
 	return string(t)
 }
 
@@ -69,7 +68,6 @@ func (t HealthCheckType) String() string {
 // Returns:
 //   - bool: true if the type equals HealthCheckHTTP, false otherwise.
 func (t HealthCheckType) IsHTTP() bool {
-	// Compare against the HTTP constant.
 	return t == HealthCheckHTTP
 }
 
@@ -78,7 +76,6 @@ func (t HealthCheckType) IsHTTP() bool {
 // Returns:
 //   - bool: true if the type equals HealthCheckTCP, false otherwise.
 func (t HealthCheckType) IsTCP() bool {
-	// Compare against the TCP constant.
 	return t == HealthCheckTCP
 }
 
@@ -87,7 +84,6 @@ func (t HealthCheckType) IsTCP() bool {
 // Returns:
 //   - bool: true if the type equals HealthCheckCommand, false otherwise.
 func (t HealthCheckType) IsCommand() bool {
-	// Compare against the command constant.
 	return t == HealthCheckCommand
 }
 
@@ -99,7 +95,6 @@ func (t HealthCheckType) IsCommand() bool {
 // Returns:
 //   - HealthCheckConfig: a configuration struct with default values applied.
 func DefaultHealthCheckConfig(checkType HealthCheckType) HealthCheckConfig {
-	// Return a new config with default values for interval, timeout, retries, and HTTP settings.
 	return HealthCheckConfig{
 		Type:       checkType,
 		Interval:   shared.Seconds(defaultCheckInterval),

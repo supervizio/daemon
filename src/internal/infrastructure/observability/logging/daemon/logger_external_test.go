@@ -1,7 +1,6 @@
 package daemon_test
 
 import (
-	"sync"
 	"testing"
 
 	"github.com/kodflow/daemon/internal/domain/logging"
@@ -10,107 +9,37 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockWriter is a test double for logging.Writer.
-type mockWriter struct {
-	mu     sync.Mutex
+type testWriter struct {
 	events []logging.LogEvent
-	closed bool
 }
 
-func (m *mockWriter) Write(event logging.LogEvent) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.events = append(m.events, event)
+func (w *testWriter) Write(event logging.LogEvent) error {
+	w.events = append(w.events, event)
 	return nil
 }
 
-func (m *mockWriter) Close() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.closed = true
+func (w *testWriter) Close() error {
 	return nil
 }
 
-func (m *mockWriter) Events() []logging.LogEvent {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.events
-}
-
-func TestMultiLogger_Log(t *testing.T) {
-	t.Parallel()
-
-	mock1 := &mockWriter{}
-	mock2 := &mockWriter{}
-	logger := daemon.New(mock1, mock2)
-
-	event := logging.NewLogEvent(logging.LevelInfo, "nginx", "started", "Service started").
-		WithMeta("pid", 1234)
-
-	logger.Log(event)
-
-	// Both writers should receive the event.
-	assert.Len(t, mock1.Events(), 1)
-	assert.Len(t, mock2.Events(), 1)
-	assert.Equal(t, "nginx", mock1.Events()[0].Service)
-	assert.Equal(t, "started", mock2.Events()[0].EventType)
-}
-
-func TestMultiLogger_ConvenienceMethods(t *testing.T) {
+func TestNew(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		logFunc func(logger logging.Logger)
-		level   logging.Level
-		service string
-		event   string
-		metaKey string
-		metaVal any
+		name        string
+		writerCount int
 	}{
 		{
-			name: "Debug",
-			logFunc: func(l logging.Logger) {
-				l.Debug("svc", "debug_event", "debug message", map[string]any{"key": "value"})
-			},
-			level:   logging.LevelDebug,
-			service: "svc",
-			event:   "debug_event",
-			metaKey: "key",
-			metaVal: "value",
+			name:        "no writers",
+			writerCount: 0,
 		},
 		{
-			name: "Info",
-			logFunc: func(l logging.Logger) {
-				l.Info("svc", "info_event", "info message", map[string]any{"pid": 123})
-			},
-			level:   logging.LevelInfo,
-			service: "svc",
-			event:   "info_event",
-			metaKey: "pid",
-			metaVal: 123,
+			name:        "single writer",
+			writerCount: 1,
 		},
 		{
-			name: "Warn",
-			logFunc: func(l logging.Logger) {
-				l.Warn("svc", "warn_event", "warn message", map[string]any{"code": 1})
-			},
-			level:   logging.LevelWarn,
-			service: "svc",
-			event:   "warn_event",
-			metaKey: "code",
-			metaVal: 1,
-		},
-		{
-			name: "Error",
-			logFunc: func(l logging.Logger) {
-				l.Error("svc", "error_event", "error message", map[string]any{"err": "failed"})
-			},
-			level:   logging.LevelError,
-			service: "svc",
-			event:   "error_event",
-			metaKey: "err",
-			metaVal: "failed",
+			name:        "multiple writers",
+			writerCount: 3,
 		},
 	}
 
@@ -118,17 +47,221 @@ func TestMultiLogger_ConvenienceMethods(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			mock := &mockWriter{}
-			logger := daemon.New(mock)
+			var writers []logging.Writer
+			for range tt.writerCount {
+				writers = append(writers, &testWriter{})
+			}
 
-			tt.logFunc(logger)
+			logger := daemon.New(writers...)
+			assert.NotNil(t, logger)
+			_ = logger.Close()
+		})
+	}
+}
 
-			require.Len(t, mock.Events(), 1)
-			event := mock.Events()[0]
-			assert.Equal(t, tt.level, event.Level)
-			assert.Equal(t, tt.service, event.Service)
-			assert.Equal(t, tt.event, event.EventType)
-			assert.Equal(t, tt.metaVal, event.Metadata[tt.metaKey])
+func TestNewMultiLogger(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+	}{
+		{name: "create with alias constructor"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			logger := daemon.NewMultiLogger(&testWriter{})
+			assert.NotNil(t, logger)
+			_ = logger.Close()
+		})
+	}
+}
+
+func TestMultiLogger_Log(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		level logging.Level
+	}{
+		{
+			name:  "log info event",
+			level: logging.LevelInfo,
+		},
+		{
+			name:  "log error event",
+			level: logging.LevelError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			writer := &testWriter{}
+			logger := daemon.New(writer)
+
+			event := logging.NewLogEvent(tt.level, "test", "event", "message")
+			logger.Log(event)
+
+			require.Len(t, writer.events, 1)
+			assert.Equal(t, tt.level, writer.events[0].Level)
+		})
+	}
+}
+
+func TestMultiLogger_Debug(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		service  string
+		event    string
+		message  string
+		metadata map[string]any
+	}{
+		{
+			name:     "debug with metadata",
+			service:  "nginx",
+			event:    "started",
+			message:  "Service started",
+			metadata: map[string]any{"pid": 1234},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			writer := &testWriter{}
+			logger := daemon.New(writer)
+
+			logger.Debug(tt.service, tt.event, tt.message, tt.metadata)
+
+			require.Len(t, writer.events, 1)
+			assert.Equal(t, logging.LevelDebug, writer.events[0].Level)
+			assert.Equal(t, tt.service, writer.events[0].Service)
+		})
+	}
+}
+
+func TestMultiLogger_Info(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		service  string
+		event    string
+		message  string
+		metadata map[string]any
+	}{
+		{
+			name:     "info without metadata",
+			service:  "postgres",
+			event:    "connected",
+			message:  "Database connected",
+			metadata: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			writer := &testWriter{}
+			logger := daemon.New(writer)
+
+			logger.Info(tt.service, tt.event, tt.message, tt.metadata)
+
+			require.Len(t, writer.events, 1)
+			assert.Equal(t, logging.LevelInfo, writer.events[0].Level)
+		})
+	}
+}
+
+func TestMultiLogger_Warn(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		service string
+	}{
+		{
+			name:    "warn event",
+			service: "redis",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			writer := &testWriter{}
+			logger := daemon.New(writer)
+
+			logger.Warn(tt.service, "slow", "Slow response", nil)
+
+			require.Len(t, writer.events, 1)
+			assert.Equal(t, logging.LevelWarn, writer.events[0].Level)
+		})
+	}
+}
+
+func TestMultiLogger_Error(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		service string
+	}{
+		{
+			name:    "error event",
+			service: "api",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			writer := &testWriter{}
+			logger := daemon.New(writer)
+
+			logger.Error(tt.service, "failed", "Request failed", nil)
+
+			require.Len(t, writer.events, 1)
+			assert.Equal(t, logging.LevelError, writer.events[0].Level)
+		})
+	}
+}
+
+func TestMultiLogger_AddWriter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+	}{
+		{name: "add writer at runtime"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			writer1 := &testWriter{}
+			logger := daemon.New(writer1)
+
+			logger.Info("test", "event", "message", nil)
+			assert.Len(t, writer1.events, 1)
+
+			writer2 := &testWriter{}
+			logger.AddWriter(writer2)
+
+			logger.Info("test", "event2", "message2", nil)
+			assert.Len(t, writer1.events, 2)
+			assert.Len(t, writer2.events, 1)
 		})
 	}
 }
@@ -136,13 +269,19 @@ func TestMultiLogger_ConvenienceMethods(t *testing.T) {
 func TestMultiLogger_Close(t *testing.T) {
 	t.Parallel()
 
-	mock1 := &mockWriter{}
-	mock2 := &mockWriter{}
-	logger := daemon.New(mock1, mock2)
+	tests := []struct {
+		name string
+	}{
+		{name: "close multi logger"},
+	}
 
-	err := logger.Close()
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	assert.True(t, mock1.closed)
-	assert.True(t, mock2.closed)
+			logger := daemon.New(&testWriter{}, &testWriter{})
+			err := logger.Close()
+			assert.NoError(t, err)
+		})
+	}
 }

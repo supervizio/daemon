@@ -30,6 +30,13 @@ const (
 	statusBarBadgeSpacing int = 2 // Badge spacing for status bar.
 )
 
+// Stringer is the minimal interface for keyboard messages.
+// Satisfied by tea.KeyMsg; concrete type preserved through interface assignment
+// so Bubble Tea type switches in panel Update methods still match tea.KeyMsg.
+type Stringer interface {
+	String() string
+}
+
 // FocusPanel represents which panel has focus.
 type FocusPanel int
 
@@ -53,6 +60,26 @@ type Model struct {
 	theme         ansi.Theme
 }
 
+// NewModel creates a new Model with the given configuration.
+// Note: Init, Update, View use value receivers as required by tea.Model interface.
+//
+// Params:
+//   - cfg: model configuration containing TUI, dimensions, theme, and panels.
+//
+// Returns:
+//   - Model: configured model instance.
+func NewModel(cfg ModelConfig) Model {
+	return Model{
+		tui:           cfg.TUI,
+		width:         cfg.Width,
+		height:        cfg.Height,
+		theme:         cfg.Theme,
+		focus:         FocusServices,
+		logsPanel:     cfg.LogsPanel,
+		servicesPanel: cfg.ServicesPanel,
+	}
+}
+
 // tickMsg is sent on each refresh interval.
 type tickMsg time.Time
 
@@ -64,7 +91,6 @@ type logMsg model.LogEntry
 // Returns:
 //   - tea.Cmd: batch of initialization commands.
 func (m Model) Init() tea.Cmd {
-	// Initialize with tick command and enter alt screen.
 	return tea.Batch(
 		m.tick(),
 		tea.EnterAltScreen,
@@ -76,9 +102,7 @@ func (m Model) Init() tea.Cmd {
 // Returns:
 //   - tea.Cmd: tick command.
 func (m Model) tick() tea.Cmd {
-	// Schedule next refresh tick.
 	return tea.Tick(m.tui.config.RefreshInterval, func(t time.Time) tea.Msg {
-		// Convert time to tick message.
 		return tickMsg(t)
 	})
 }
@@ -92,166 +116,200 @@ func (m Model) tick() tea.Cmd {
 //   - tea.Model: updated model.
 //   - tea.Cmd: command to execute.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-
-	// Process message by type.
 	switch msg := msg.(type) {
-	// Handle keyboard input.
 	case tea.KeyMsg:
-		// Process keyboard shortcuts.
-		switch msg.String() {
-		// Quit shortcuts.
-		case "q", "ctrl+c":
-			m.quitting = true
-			// Exit immediately.
-			return m, tea.Quit
+		return m.handleKeyMsg(msg)
 
-		// Toggle focus between panels.
-		case "tab":
-			// Toggle focus between panels.
-			if m.focus == FocusServices {
-				m.focus = FocusLogs
-				m.servicesPanel.SetFocused(false)
-				m.logsPanel.SetFocused(true)
-				// Switch to services.
-			} else {
-				m.focus = FocusServices
-				m.logsPanel.SetFocused(false)
-				m.servicesPanel.SetFocused(true)
-			}
-			// Return with no command.
-			return m, nil
-
-		// Quick switch to logs.
-		case "l":
-			// Quick switch to logs.
-			m.focus = FocusLogs
-			m.servicesPanel.SetFocused(false)
-			m.logsPanel.SetFocused(true)
-			// Return with no command.
-			return m, nil
-
-		// Quick switch to services.
-		case "s":
-			// Quick switch to services.
-			m.focus = FocusServices
-			m.logsPanel.SetFocused(false)
-			m.servicesPanel.SetFocused(true)
-			// Return with no command.
-			return m, nil
-
-		// Handle escape key (context-dependent).
-		case "esc":
-			// Return to services if in logs.
-			if m.focus == FocusLogs {
-				m.focus = FocusServices
-				m.logsPanel.SetFocused(false)
-				m.servicesPanel.SetFocused(true)
-				// Return with no command.
-				return m, nil
-			}
-			// Otherwise quit.
-			m.quitting = true
-			// Exit immediately.
-			return m, tea.Quit
-
-		// Jump to bottom (Vim-style).
-		case "G":
-			// Go to bottom of focused panel.
-			switch m.focus {
-			// Scroll logs to bottom.
-			case FocusLogs:
-				m.logsPanel.ScrollToBottom()
-			// Scroll services to bottom.
-			case FocusServices:
-				m.servicesPanel.ScrollToBottom()
-			}
-			// Return with no command.
-			return m, nil
-
-		// Jump to top (Vim-style).
-		case "g":
-			// Go to top of focused panel.
-			switch m.focus {
-			// Scroll logs to top.
-			case FocusLogs:
-				m.logsPanel.ScrollToTop()
-			// Scroll services to top.
-			case FocusServices:
-				m.servicesPanel.ScrollToTop()
-			}
-			// Return with no command.
-			return m, nil
-		}
-
-		// Forward to focused panel.
-		switch m.focus {
-		// Forward key to logs panel.
-		case FocusLogs:
-			lp, cmd := m.logsPanel.Update(msg)
-			m.logsPanel = *lp
-			// Append command if not nil.
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		// Forward key to services panel.
-		case FocusServices:
-			sp, cmd := m.servicesPanel.Update(msg)
-			m.servicesPanel = *sp
-			// Append command if not nil.
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-
-	// Handle window resize.
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.updatePanelSizes()
-		// Return with no command.
+		m = m.updatePanelSizes()
 		return m, nil
 
-	// Handle mouse events.
 	case tea.MouseMsg:
-		// Forward mouse events to logs panel if focused.
-		if m.focus == FocusLogs {
-			lp, cmd := m.logsPanel.Update(msg)
-			m.logsPanel = *lp
-			// Append command if not nil.
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
+		return m.handleMouseMsg(msg)
 
-	// Handle periodic refresh tick.
 	case tickMsg:
-		// Refresh data.
-		m.tui.collectData()
-		// Update panels with new data.
-		if m.tui.snapshot != nil {
-			m.logsPanel.SetEntries(m.tui.snapshot.Logs.RecentEntries)
-			m.servicesPanel.SetServices(m.tui.snapshot.Services)
-		}
-		cmds = append(cmds, m.tick())
+		return m.handleTickMsg()
 
-	// Handle new log entry.
 	case logMsg:
-		// Add new log entry.
 		m.logsPanel.AddEntry(model.LogEntry(msg))
 	}
 
-	// Execute all batched commands.
-	if len(cmds) > 0 {
-		// Return with batched commands.
-		return m, tea.Batch(cmds...)
-	}
-	// Return with no commands.
 	return m, nil
 }
 
+// handleKeyMsg handles keyboard input messages.
+//
+// Params:
+//   - msg: key message to process.
+//
+// Returns:
+//   - tea.Model: updated model.
+//   - tea.Cmd: command to execute.
+func (m Model) handleKeyMsg(msg Stringer) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	case "tab":
+		return m.toggleFocus(), nil
+	case "l":
+		return m.focusLogs(), nil
+	case "s":
+		return m.focusServices(), nil
+	case "esc":
+		return m.handleEscKey()
+	case "G":
+		return m.scrollToBottom(), nil
+	case "g":
+		return m.scrollToTop(), nil
+	}
+	return m.forwardKeyToPanel(msg)
+}
+
+// handleEscKey handles the escape key press.
+//
+// Returns:
+//   - tea.Model: updated model.
+//   - tea.Cmd: command to execute.
+func (m Model) handleEscKey() (tea.Model, tea.Cmd) {
+	if m.focus == FocusLogs {
+		return m.focusServices(), nil
+	}
+	m.quitting = true
+	return m, tea.Quit
+}
+
+// toggleFocus switches focus between panels.
+//
+// Returns:
+//   - Model: updated model with toggled focus.
+func (m Model) toggleFocus() Model {
+	if m.focus == FocusServices {
+		m.focus = FocusLogs
+		m.servicesPanel.SetFocused(false)
+		m.logsPanel.SetFocused(true)
+	} else {
+		m.focus = FocusServices
+		m.logsPanel.SetFocused(false)
+		m.servicesPanel.SetFocused(true)
+	}
+	return m
+}
+
+// focusLogs switches focus to logs panel.
+//
+// Returns:
+//   - Model: updated model with logs focused.
+func (m Model) focusLogs() Model {
+	m.focus = FocusLogs
+	m.servicesPanel.SetFocused(false)
+	m.logsPanel.SetFocused(true)
+	return m
+}
+
+// focusServices switches focus to services panel.
+//
+// Returns:
+//   - Model: updated model with services focused.
+func (m Model) focusServices() Model {
+	m.focus = FocusServices
+	m.logsPanel.SetFocused(false)
+	m.servicesPanel.SetFocused(true)
+	return m
+}
+
+// scrollToBottom scrolls focused panel to bottom.
+//
+// Returns:
+//   - Model: updated model.
+func (m Model) scrollToBottom() Model {
+	switch m.focus {
+	case FocusLogs:
+		m.logsPanel.ScrollToBottom()
+	case FocusServices:
+		m.servicesPanel.ScrollToBottom()
+	}
+	return m
+}
+
+// scrollToTop scrolls focused panel to top.
+//
+// Returns:
+//   - Model: updated model.
+func (m Model) scrollToTop() Model {
+	switch m.focus {
+	case FocusLogs:
+		m.logsPanel.ScrollToTop()
+	case FocusServices:
+		m.servicesPanel.ScrollToTop()
+	}
+	return m
+}
+
+// forwardKeyToPanel forwards key to focused panel.
+//
+// Params:
+//   - msg: key message to forward.
+//
+// Returns:
+//   - tea.Model: updated model.
+//   - tea.Cmd: command from panel.
+func (m Model) forwardKeyToPanel(msg Stringer) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch m.focus {
+	case FocusLogs:
+		lp, c := m.logsPanel.Update(msg)
+		m.logsPanel = *lp
+		cmd = c
+	case FocusServices:
+		sp, c := m.servicesPanel.Update(msg)
+		m.servicesPanel = *sp
+		cmd = c
+	}
+
+	return m, cmd
+}
+
+// handleMouseMsg handles mouse input messages.
+//
+// Params:
+//   - msg: mouse message to process.
+//
+// Returns:
+//   - tea.Model: updated model.
+//   - tea.Cmd: command to execute.
+func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if m.focus == FocusLogs {
+		lp, cmd := m.logsPanel.Update(msg)
+		m.logsPanel = *lp
+		return m, cmd
+	}
+	return m, nil
+}
+
+// handleTickMsg handles periodic refresh tick.
+//
+// Returns:
+//   - tea.Model: updated model.
+//   - tea.Cmd: next tick command.
+func (m Model) handleTickMsg() (tea.Model, tea.Cmd) {
+	m.tui.collectData()
+	if m.tui.snapshot != nil {
+		m.logsPanel.SetEntries(m.tui.snapshot.Logs.RecentEntries)
+		m.servicesPanel.SetServices(m.tui.snapshot.Services)
+	}
+	return m, m.tick()
+}
+
 // updatePanelSizes recalculates panel sizes based on available space.
-func (m *Model) updatePanelSizes() {
+// Returns updated model to maintain value receiver consistency with tea.Model interface.
+//
+// Returns:
+//   - Model: updated model with recalculated panel sizes
+func (m Model) updatePanelSizes() Model {
 	// Layout: Header (11 lines) | Services + System/Network | Logs | Status (1 line)
 	// Standard terminal: 80x24.
 	headerHeight := layoutHeaderHeight
@@ -269,6 +327,8 @@ func (m *Model) updatePanelSizes() {
 
 	m.logsPanel.SetSize(m.width, logsHeight)
 	m.servicesPanel.SetSize(m.width, servicesHeight)
+
+	return m
 }
 
 // View renders the UI.
@@ -276,16 +336,12 @@ func (m *Model) updatePanelSizes() {
 // Returns:
 //   - string: rendered UI.
 func (m Model) View() string {
-	// Return empty view if quitting.
 	if m.quitting {
-		// Return empty string when quitting.
 		return ""
 	}
 
 	snap := m.tui.snapshot
-	// Show loading message if no snapshot.
 	if snap == nil {
-		// Return loading message.
 		return "Loading..."
 	}
 
@@ -301,48 +357,38 @@ func (m Model) View() string {
 
 	// Header.
 	header := screen.NewHeaderRenderer(m.width)
-	sb.WriteString(header.Render(snap, true))
+	sb.WriteString(header.Render(snap))
 	sb.WriteString("\n")
 
-	// Content based on layout.
 	switch layout {
-	// Compact layout for small terminals.
 	case terminal.LayoutCompact:
-		sb.WriteString(m.renderCompact(snap))
-	// Normal layout for standard terminals.
+		sb.WriteString(m.renderCompact())
 	case terminal.LayoutNormal:
 		sb.WriteString(m.renderNormal(snap))
-	// Wide/ultra-wide layout for large terminals.
 	case terminal.LayoutWide, terminal.LayoutUltraWide:
 		sb.WriteString(m.renderWide(snap))
 	}
 
-	// Status bar.
 	sb.WriteString(m.renderStatusBar(snap))
 
-	// Return rendered UI.
 	return sb.String()
 }
 
 // renderCompact renders for small terminals (80x24).
 // Shows only: Services panel (scrollable) + Logs panel.
-//
-// Params:
-//   - _: snapshot (unused for compact layout).
+// Note: snap parameter exists for API consistency with other render methods
+// but is unused in compact mode since panels contain their own data.
 //
 // Returns:
 //   - string: rendered compact layout.
-func (m Model) renderCompact(_ *model.Snapshot) string {
+func (m Model) renderCompact() string {
 	var sb strings.Builder
 
-	// Services panel (scrollable).
 	sb.WriteString(m.servicesPanel.View())
 	sb.WriteString("\n")
 
-	// Logs panel (scrollable).
 	sb.WriteString(m.logsPanel.View())
 
-	// Return rendered compact layout.
 	return sb.String()
 }
 
@@ -357,19 +403,15 @@ func (m Model) renderCompact(_ *model.Snapshot) string {
 func (m Model) renderNormal(snap *model.Snapshot) string {
 	var sb strings.Builder
 
-	// System section with progress bars.
 	system := screen.NewSystemRenderer(m.width)
 	sb.WriteString(system.RenderForInteractive(snap))
 	sb.WriteString("\n")
 
-	// Services panel (scrollable).
 	sb.WriteString(m.servicesPanel.View())
 	sb.WriteString("\n")
 
-	// Logs panel (scrollable).
 	sb.WriteString(m.logsPanel.View())
 
-	// Return rendered normal layout.
 	return sb.String()
 }
 
@@ -386,69 +428,99 @@ func (m Model) renderNormal(snap *model.Snapshot) string {
 func (m Model) renderWide(snap *model.Snapshot) string {
 	var sb strings.Builder
 
-	// Calculate column width for system/network (half screen each).
+	sb.WriteString(m.renderSystemNetworkSideBySide(snap))
+	sb.WriteString("\n")
+
+	sb.WriteString(m.servicesPanel.View())
+	sb.WriteString("\n")
+
+	sb.WriteString(m.logsPanel.View())
+
+	return sb.String()
+}
+
+// renderSystemNetworkSideBySide renders system and network panels side by side.
+//
+// Params:
+//   - snap: current snapshot.
+//
+// Returns:
+//   - string: merged side-by-side content.
+func (m Model) renderSystemNetworkSideBySide(snap *model.Snapshot) string {
 	halfWidth := m.width / panelHalfWidthDivisor
 
-	// Left: System, Right: Network (side by side).
 	system := screen.NewSystemRenderer(halfWidth)
 	network := screen.NewNetworkRenderer(halfWidth)
 	systemContent := system.RenderForInteractive(snap)
 	networkContent := network.Render(snap)
 
-	// Merge side by side.
-	systemLines := strings.Split(systemContent, "\n")
-	networkLines := strings.Split(networkContent, "\n")
+	systemLines := trimTrailingEmptyLines(strings.Split(systemContent, "\n"))
+	networkLines := trimTrailingEmptyLines(strings.Split(networkContent, "\n"))
 
-	// Remove trailing empty lines from system.
-	for len(systemLines) > 0 && strings.TrimSpace(systemLines[len(systemLines)-1]) == "" {
-		systemLines = systemLines[:len(systemLines)-1]
+	return mergeLinesSideBySide(systemLines, networkLines, halfWidth)
+}
+
+// trimTrailingEmptyLines removes empty lines from the end of a slice.
+//
+// Params:
+//   - lines: input lines.
+//
+// Returns:
+//   - []string: lines without trailing empty lines.
+func trimTrailingEmptyLines(lines []string) []string {
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
 	}
-	// Remove trailing empty lines from network.
-	for len(networkLines) > 0 && strings.TrimSpace(networkLines[len(networkLines)-1]) == "" {
-		networkLines = networkLines[:len(networkLines)-1]
-	}
+	return lines
+}
 
-	// Find maximum number of lines between panels.
-	maxLines := max(len(systemLines), len(networkLines))
+// mergeLinesSideBySide merges two line slices side by side.
+//
+// Params:
+//   - left: left column lines.
+//   - right: right column lines.
+//   - leftWidth: width to pad left column to.
+//
+// Returns:
+//   - string: merged side-by-side content.
+func mergeLinesSideBySide(left, right []string, leftWidth int) string {
+	var sb strings.Builder
+	maxLines := max(len(left), len(right))
 
-	// Combine lines side by side.
 	for i := range maxLines {
-		left := ""
-		right := ""
-		// Get left line if available.
-		if i < len(systemLines) {
-			left = systemLines[i]
+		leftLine := ""
+		rightLine := ""
+		if i < len(left) {
+			leftLine = left[i]
 		}
-		// Get right line if available.
-		if i < len(networkLines) {
-			right = networkLines[i]
+		if i < len(right) {
+			rightLine = right[i]
 		}
 
-		leftVisible := widget.VisibleLen(left)
-		// Pad left to halfWidth using builder if needed.
-		if leftVisible < halfWidth {
-			var padded strings.Builder
-			padded.WriteString(left)
-			padded.WriteString(strings.Repeat(" ", halfWidth-leftVisible))
-			left = padded.String()
-		}
+		leftLine = padToWidth(leftLine, leftWidth)
 
-		sb.WriteString(left)
-		sb.WriteString(right)
+		sb.WriteString(leftLine)
+		sb.WriteString(rightLine)
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("\n")
-
-	// Services panel (full width, scrollable).
-	sb.WriteString(m.servicesPanel.View())
-	sb.WriteString("\n")
-
-	// Logs panel (full width, scrollable).
-	sb.WriteString(m.logsPanel.View())
-
-	// Return rendered wide layout.
 	return sb.String()
+}
+
+// padToWidth pads a string to the specified visible width.
+//
+// Params:
+//   - s: string to pad.
+//   - width: target visible width.
+//
+// Returns:
+//   - string: padded string.
+func padToWidth(s string, width int) string {
+	visible := widget.VisibleLen(s)
+	if visible >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-visible)
 }
 
 // renderStatusBar renders the bottom status bar.
@@ -459,38 +531,28 @@ func (m Model) renderWide(snap *model.Snapshot) string {
 // Returns:
 //   - string: rendered status bar.
 func (m Model) renderStatusBar(snap *model.Snapshot) string {
-	// Focus indicator.
 	var focusIndicator string
-	// Show logs focus indicator.
 	if m.focus == FocusLogs {
 		focusIndicator = m.theme.Primary + "[LOGS]" + ansi.Reset
-		// Show services focus indicator.
 	} else {
 		focusIndicator = m.theme.Primary + "[SERVICES]" + ansi.Reset
 	}
 
-	// Keybindings based on focus.
 	var keys string
-	// Show logs keybindings.
 	if m.focus == FocusLogs {
 		keys = m.theme.Muted + "[↑↓] Scroll  [g/G] Top/Bottom  [s] Services  [Tab] Switch  [q] Quit" + ansi.Reset
-		// Show services keybindings.
 	} else {
 		keys = m.theme.Muted + "[↑↓] Scroll  [g/G] Top/Bottom  [l] Logs  [Tab] Switch  [q] Quit" + ansi.Reset
 	}
 
-	// Error badge.
 	logs := screen.NewLogsRenderer(m.width)
 	badge := logs.RenderBadge(snap)
 
-	// Combine.
 	statusContent := "  " + focusIndicator + "  " + keys
 	contentLen := widget.VisibleLen(statusContent)
 	badgeLen := widget.VisibleLen(badge)
-	// Ensure non-negative padding for badge placement.
 	padding := max(0, m.width-contentLen-badgeLen-statusBarBadgeSpacing)
 
-	// Return status bar with badge.
 	return statusContent + strings.Repeat(" ", padding) + badge + "  "
 }
 
@@ -502,71 +564,98 @@ func (m Model) renderStatusBar(snap *model.Snapshot) string {
 // Returns:
 //   - error: any error during execution.
 func (t *TUI) runBubbleTea(ctx context.Context) error {
-	// Initial data collection.
 	t.collectData()
 
-	// Get initial size.
+	m := t.createInitialModel()
+
+	return t.runTeaProgram(ctx, m)
+}
+
+// createInitialModel creates the initial Bubble Tea model.
+//
+// Returns:
+//   - Model: configured model with panels.
+func (t *TUI) createInitialModel() Model {
 	size := terminal.GetSize()
 
-	// Create services panel first to calculate optimal height.
-	servicesPanel := component.NewServicesPanel(size.Cols, panelInitialServicesHeight) // Temporary height.
-	if t.snapshot != nil {
-		servicesPanel.SetServices(t.snapshot.Services)
-	}
+	servicesPanel, logsPanel := t.createInitialPanels(size)
 
-	// Calculate initial panel sizes dynamically.
-	headerHeight := layoutHeaderHeight
-	statusHeight := layoutStatusBarHeight
-	systemHeight := layoutSystemSectionLines
-	availableHeight := size.Rows - headerHeight - statusHeight - systemHeight
+	m := NewModel(ModelConfig{
+		TUI:           t,
+		Width:         size.Cols,
+		Height:        size.Rows,
+		Theme:         ansi.DefaultTheme(),
+		LogsPanel:     logsPanel,
+		ServicesPanel: servicesPanel,
+	})
 
-	// Services panel adapts to number of services.
-	servicesHeight := servicesPanel.OptimalHeight()
-
-	// Remaining space goes to logs, enforcing minimum.
-	logsHeight := max(availableHeight-servicesHeight, layoutMinLogHeight)
-
-	// Update services panel with correct height.
-	servicesPanel.SetSize(size.Cols, servicesHeight)
-
-	m := Model{
-		tui:           t,
-		width:         size.Cols,
-		height:        size.Rows,
-		theme:         ansi.DefaultTheme(),
-		focus:         FocusServices, // Start with services focused.
-		logsPanel:     component.NewLogsPanel(size.Cols, logsHeight),
-		servicesPanel: servicesPanel,
-	}
-
-	// Services panel starts focused.
 	m.servicesPanel.SetFocused(true)
 
-	// Initialize panels with current data.
 	if t.snapshot != nil {
 		m.logsPanel.SetEntries(t.snapshot.Logs.RecentEntries)
 	}
 
+	return m
+}
+
+// createInitialPanels creates services and logs panels with calculated sizes.
+//
+// Params:
+//   - size: terminal size.
+//
+// Returns:
+//   - component.ServicesPanel: configured services panel.
+//   - component.LogsPanel: configured logs panel.
+func (t *TUI) createInitialPanels(size terminal.Size) (component.ServicesPanel, component.LogsPanel) {
+	servicesPanel := component.NewServicesPanel(size.Cols, panelInitialServicesHeight)
+	if t.snapshot != nil {
+		servicesPanel.SetServices(t.snapshot.Services)
+	}
+
+	availableHeight := size.Rows - layoutHeaderHeight - layoutStatusBarHeight - layoutSystemSectionLines
+
+	servicesHeight := servicesPanel.OptimalHeight()
+
+	logsHeight := max(availableHeight-servicesHeight, layoutMinLogHeight)
+
+	servicesPanel.SetSize(size.Cols, servicesHeight)
+
+	return servicesPanel, component.NewLogsPanel(size.Cols, logsHeight)
+}
+
+// runTeaProgram runs the Bubble Tea program with context support.
+// Spawns goroutine for Bubble Tea, handles context cancellation.
+//
+// Params:
+//   - ctx: context for cancellation
+//   - m: initial model
+//
+// Returns:
+//   - error: any error during execution
+func (t *TUI) runTeaProgram(ctx context.Context, m Model) error {
 	prg := tea.NewProgram(m,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
 
 	// Run in goroutine to support context cancellation.
+	// Goroutine lifecycle:
+	//   - Starts: When this function is called, goroutine is spawned immediately
+	//   - Runs: Until prg.Run() returns (user quits or error)
+	//   - Ends: Sends result to done channel, then exits
+	// Cleanup: Select below handles context cancellation or completion
 	done := make(chan error, 1)
 	go func() {
+		// Goroutine exits when prg.Run() completes.
 		_, err := prg.Run()
 		done <- err
 	}()
 
-	// Wait for context or program completion.
 	select {
 	case <-ctx.Done():
 		prg.Quit()
-		// Return context error.
 		return ctx.Err()
 	case err := <-done:
-		// Return program error.
 		return err
 	}
 }

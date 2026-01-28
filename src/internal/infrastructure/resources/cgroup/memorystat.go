@@ -28,53 +28,35 @@ type MemoryStat struct {
 	Pgmajfault uint64
 }
 
-// setField sets the appropriate field based on the key.
-// Uses switch instead of map to avoid heap allocations on every call.
+// fieldSetters maps field names to setter functions.
+// Using a map avoids deep switch/case complexity.
+var fieldSetters map[string]func(*MemoryStat, uint64) = map[string]func(*MemoryStat, uint64){
+	"anon":       func(m *MemoryStat, v uint64) { m.Anon = v },
+	"file":       func(m *MemoryStat, v uint64) { m.File = v },
+	"kernel":     func(m *MemoryStat, v uint64) { m.Kernel = v },
+	"slab":       func(m *MemoryStat, v uint64) { m.Slab = v },
+	"sock":       func(m *MemoryStat, v uint64) { m.Sock = v },
+	"shmem":      func(m *MemoryStat, v uint64) { m.Shmem = v },
+	"mapped":     func(m *MemoryStat, v uint64) { m.Mapped = v },
+	"dirty":      func(m *MemoryStat, v uint64) { m.Dirty = v },
+	"pgfault":    func(m *MemoryStat, v uint64) { m.Pgfault = v },
+	"pgmajfault": func(m *MemoryStat, v uint64) { m.Pgmajfault = v },
+}
+
+// setField applies a value to the field matching key via map lookup.
 //
 // Params:
-//   - key: field name from memory.stat
-//   - value: parsed uint64 value
+//   - key: field name from memory.stat (e.g., "anon", "file", "kernel")
+//   - value: parsed numeric value in bytes
 //
 // Returns:
-//   - bool: true if key was recognized and field was set
+//   - bool: true if key matched a known field, false for unrecognized keys
 func (m *MemoryStat) setField(key string, value uint64) bool {
-	// Match key to corresponding struct field
-	switch key {
-	// Anonymous memory pages
-	case "anon":
-		m.Anon = value
-	// File-backed memory pages
-	case "file":
-		m.File = value
-	// Kernel memory usage
-	case "kernel":
-		m.Kernel = value
-	// Slab allocator memory
-	case "slab":
-		m.Slab = value
-	// Socket buffer memory
-	case "sock":
-		m.Sock = value
-	// Shared memory
-	case "shmem":
-		m.Shmem = value
-	// Memory-mapped files
-	case "mapped":
-		m.Mapped = value
-	// Dirty page cache
-	case "dirty":
-		m.Dirty = value
-	// Page fault count
-	case "pgfault":
-		m.Pgfault = value
-	// Major page fault count
-	case "pgmajfault":
-		m.Pgmajfault = value
-	// Unknown or unsupported field
-	default:
-		// Field not recognized
+	setter, ok := fieldSetters[key]
+	// Unknown field; skip silently for forward compatibility.
+	if !ok {
 		return false
 	}
-	// Field was set successfully
+	setter(m, value)
 	return true
 }

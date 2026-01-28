@@ -44,7 +44,6 @@ type ProcessMetrics struct {
 // Returns:
 //   - *ProcessMetrics: the created ProcessMetrics instance
 func NewProcessMetrics(params *ProcessMetricsParams) *ProcessMetrics {
-	// Create ProcessMetrics from parameter struct.
 	return &ProcessMetrics{
 		ServiceName:  params.ServiceName,
 		PID:          params.PID,
@@ -65,7 +64,6 @@ func NewProcessMetrics(params *ProcessMetricsParams) *ProcessMetrics {
 // Returns:
 //   - bool: true if the process is in a running state.
 func (m *ProcessMetrics) IsRunning() bool {
-	// Delegate to state's IsRunning method.
 	return m.State.IsRunning()
 }
 
@@ -74,6 +72,5 @@ func (m *ProcessMetrics) IsRunning() bool {
 // Returns:
 //   - bool: true if the process is stopped or failed.
 func (m *ProcessMetrics) IsTerminal() bool {
-	// Delegate to state's IsTerminal method.
 	return m.State.IsTerminal()
 }

@@ -15,24 +15,11 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/widget"
 )
 
-// maxServicesVisible is the maximum number of services to show before scrolling.
-const maxServicesVisible int = 10
-
-// ServicesPanel is a scrollable services list with vertical scrollbar.
-//
-// It displays service status including state, health, uptime, PID, restarts,
-// CPU, memory usage, and listening ports with color-coded status indicators.
-type ServicesPanel struct {
-	viewport viewport.Model
-	theme    ansi.Theme
-	width    int
-	height   int
-	services []model.ServiceSnapshot
-	focused  bool
-	title    string
-}
-
 const (
+	// maxServicesVisible is the maximum number of services to show before scrolling.
+	maxServicesVisible int = 10
+
+	// ServicesPanel constants below.
 	// Border and scrollbar dimensions.
 	borderWidth     int = 3 // left border + right border + scrollbar
 	borderHeight    int = 2 // top + bottom borders
@@ -79,6 +66,20 @@ const (
 	// minThumbSizeSvc is the minimum scrollbar thumb size.
 	minThumbSizeSvc int = 1
 )
+
+// ServicesPanel is a scrollable services list with vertical scrollbar.
+//
+// It displays service status including state, health, uptime, PID, restarts,
+// CPU, memory usage, and listening ports with color-coded status indicators.
+type ServicesPanel struct {
+	viewport viewport.Model
+	theme    ansi.Theme
+	width    int
+	height   int
+	services []model.ServiceSnapshot
+	focused  bool
+	title    string
+}
 
 // NewServicesPanel creates a new services panel.
 //
@@ -197,19 +198,6 @@ func (s *ServicesPanel) formatServiceLine(svc model.ServiceSnapshot) string {
 
 	// Build the final line string.
 	return s.buildServiceLineString(name, &cols)
-}
-
-// serviceColumns holds pre-formatted column values for a service line.
-type serviceColumns struct {
-	stateIcon  string
-	stateText  string
-	healthText string
-	uptime     string
-	pid        string
-	restarts   string
-	cpu        string
-	mem        string
-	ports      string
 }
 
 // formatServiceName truncates and formats a service name.
@@ -646,11 +634,11 @@ func (s *ServicesPanel) Update(msg tea.Msg) (*ServicesPanel, tea.Cmd) {
 // handleKeyMsg processes keyboard input.
 //
 // Params:
-//   - msg: key message to process
+//   - msg: key message to process (uses Stringer interface)
 //
 // Returns:
 //   - tea.Cmd: command to execute
-func (s *ServicesPanel) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
+func (s *ServicesPanel) handleKeyMsg(msg Stringer) tea.Cmd {
 	// Process keyboard shortcuts.
 	switch msg.String() {
 	// Handle home/top navigation.
@@ -916,11 +904,12 @@ func (s *ServicesPanel) renderVerticalScrollbar() []string {
 
 	// No scrolling needed if content fits.
 	if totalLines <= height {
-		result := make([]string, height)
+		// Pre-allocate with capacity using append pattern per VAR-MAKEAPPEND.
+		result := make([]string, 0, height)
 
 		// Fill with track characters.
-		for i := range result {
-			result[i] = scrollTrack
+		for range height {
+			result = append(result, scrollTrack)
 		}
 
 		// Return track-only scrollbar.
@@ -940,16 +929,17 @@ func (s *ServicesPanel) renderVerticalScrollbar() []string {
 	thumbPos := int(float64(scrollableHeight) * scrollPercent)
 
 	// Build scrollbar with thumb.
-	result := make([]string, height)
+	// Pre-allocate with capacity using append pattern per VAR-MAKEAPPEND.
+	result := make([]string, 0, height)
 
 	// Assign character to each position.
 	for i := range height {
 		// Use thumb character for thumb position, track elsewhere.
 		if i >= thumbPos && i < thumbPos+thumbSize {
-			result[i] = scrollThumb
+			result = append(result, scrollThumb)
 		} else {
 			// Use track character outside thumb.
-			result[i] = scrollTrack
+			result = append(result, scrollTrack)
 		}
 	}
 

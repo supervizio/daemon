@@ -25,56 +25,49 @@ type OperationError struct {
 	Err error
 }
 
-// NewOperationError creates a new OperationError with the given operation and error.
+// NewOperationError wraps an error with operation context for debugging.
 //
 // Params:
-//   - op: the name of the operation that failed
-//   - err: the underlying error that caused the failure
+//   - op: operation name that failed (e.g., "lookup user", "start process")
+//   - err: underlying error to wrap
 //
 // Returns:
-//   - *OperationError: a new OperationError instance with the provided values
+//   - *OperationError: wrapped error with operation context
 func NewOperationError(op string, err error) *OperationError {
-	// Create and return new OperationError with provided values.
 	return &OperationError{Op: op, Err: err}
 }
 
-// Error returns the string representation of the operation error.
+// Error formats the error with operation prefix for context.
 //
 // Returns:
-//   - string: formatted error message with operation context
+//   - string: formatted error message "op: err" or just "op" if no underlying error
 func (e *OperationError) Error() string {
-	// Check if underlying error is non-nil to format message.
+	// Include underlying error when present.
 	if e.Err != nil {
-		// Return formatted message with operation and error.
 		return fmt.Sprintf("%s: %v", e.Op, e.Err)
 	}
-	// Return operation name when no underlying error exists.
+	// Operation-only message when no underlying error.
 	return e.Op
 }
 
-// Unwrap returns the underlying error for errors.Is and errors.As support.
+// Unwrap enables errors.Is and errors.As to work with wrapped errors.
 //
 // Returns:
-//   - error: the underlying error
-func (e *OperationError) Unwrap() error {
-	// Return the underlying error for error chain support.
-	return e.Err
-}
+//   - error: the underlying error for error chain traversal
+func (e *OperationError) Unwrap() error { return e.Err }
 
-// WrapError wraps an error with operation context.
+// WrapError adds operation context to an error, returning nil for nil input.
 //
 // Params:
-//   - op: the name of the operation that failed
-//   - err: the underlying error to wrap
+//   - op: operation name that failed
+//   - err: underlying error (may be nil)
 //
 // Returns:
-//   - error: a wrapped OperationError or nil if err is nil
+//   - error: wrapped error or nil if input was nil
 func WrapError(op string, err error) error {
-	// Check if error is nil to avoid wrapping nil errors.
+	// Preserve nil to allow clean conditional error handling.
 	if err == nil {
-		// Return nil when no error to wrap.
 		return nil
 	}
-	// Return wrapped error with operation context.
 	return &OperationError{Op: op, Err: err}
 }

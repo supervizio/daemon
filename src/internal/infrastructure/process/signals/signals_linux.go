@@ -37,58 +37,47 @@ func init() {
 	sm.AddSignal("SIGSTKFLT", syscall.SIGSTKFLT)
 }
 
-// SetSubreaper sets the current process as a child subreaper.
-// This allows orphaned child processes to be reparented to this process
-// instead of init (PID 1). Available on Linux >= 3.4.
+// SetSubreaper enables orphan adoption via prctl (Linux >= 3.4).
 //
 // Returns:
-//   - error: an error if the prctl syscall fails
-func (m *Manager) SetSubreaper() error {
-	// Return the result of enabling subreaper mode.
-	return prctlSubreaper(1)
-}
+//   - error: syscall error if prctl fails
+func (m *Manager) SetSubreaper() error { return prctlSubreaper(1) }
 
-// ClearSubreaper clears the child subreaper flag.
+// ClearSubreaper disables orphan adoption.
 //
 // Returns:
-//   - error: an error if the prctl syscall fails
-func (m *Manager) ClearSubreaper() error {
-	// Return the result of disabling subreaper mode.
-	return prctlSubreaper(0)
-}
+//   - error: syscall error if prctl fails
+func (m *Manager) ClearSubreaper() error { return prctlSubreaper(0) }
 
-// IsSubreaper returns true if the current process is a child subreaper.
+// IsSubreaper queries the subreaper flag via prctl.
 //
 // Returns:
-//   - bool: true if the current process is a child subreaper
-//   - error: an error if the prctl syscall fails
+//   - bool: true if process is currently a subreaper for orphaned children
+//   - error: syscall error if prctl fails
 func (m *Manager) IsSubreaper() (bool, error) {
 	var flag int
 	// #nosec G103 - unsafe.Pointer required for prctl syscall interface
 	_, _, errno := prctlSyscall(syscall.SYS_PRCTL, prGetChildSubreaper, uintptr(unsafe.Pointer(&flag)), 0)
-	// Check if the syscall returned an error.
+	// prctl failed (unlikely on modern kernels).
 	if errno != 0 {
-		// Return false and wrap the syscall error.
 		return false, os.NewSyscallError("prctl", errno)
 	}
-	// Return whether the subreaper flag is set.
+	// Flag is non-zero when subreaper is enabled.
 	return flag != 0, nil
 }
 
-// prctlSubreaper sets or clears the child subreaper flag using prctl.
+// prctlSubreaper modifies the subreaper flag via prctl syscall.
 //
 // Params:
 //   - flag: 1 to enable subreaper, 0 to disable
 //
 // Returns:
-//   - error: an error if the prctl syscall fails
+//   - error: syscall error if prctl fails
 func prctlSubreaper(flag int) error {
 	_, _, errno := prctlSyscall(syscall.SYS_PRCTL, prSetChildSubreaper, uintptr(flag), 0)
-	// Check if the syscall returned an error.
+	// prctl failed (unlikely on modern kernels).
 	if errno != 0 {
-		// Return the wrapped syscall error.
 		return os.NewSyscallError("prctl", errno)
 	}
-	// Return nil indicating success.
 	return nil
 }

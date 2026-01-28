@@ -4,6 +4,7 @@ package screen
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kodflow/daemon/internal/domain/process"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
@@ -11,6 +12,16 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/terminal"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/widget"
 )
+
+// AddRower defines the minimal interface for adding rows to a table (KTN-API-MINIF).
+type AddRower interface {
+	AddRow(cells ...string) *widget.Table
+}
+
+// Renderer defines the minimal interface for rendering a table (KTN-API-MINIF).
+type Renderer interface {
+	Render() string
+}
 
 // ServicesRenderer renders the services section.
 // Displays service list with state, metrics, and health information.
@@ -166,70 +177,119 @@ func (s *ServicesRenderer) renderCompact(snap *model.Snapshot) string {
 // Returns:
 //   - string: standard service table
 func (s *ServicesRenderer) renderNormal(snap *model.Snapshot) string {
+	table := s.createNormalTable()
+	s.populateNormalRows(table, snap.Services)
+	return s.renderTableInBox(table, snap)
+}
+
+// createNormalTable creates a table with normal mode columns.
+//
+// Returns:
+//   - *widget.Table: configured table with standard columns
+func (s *ServicesRenderer) createNormalTable() *widget.Table {
 	const (
-		// boxBorderWidth is the total width consumed by box borders.
+		// boxBorderWidth is the total width of box borders.
 		boxBorderWidth int = 4
-		// minTableWidth is the minimum width for the service table.
+		// minTableWidth is the minimum table width.
 		minTableWidth int = 10
-		// iconWidth is the width allocated for status icons.
+		// iconWidth is the width of the status icon column.
 		iconWidth int = 2
-		// nameMinWidth is the minimum width for service names.
+		// nameMinWidth is the minimum width for service name column.
 		nameMinWidth int = 8
-		// stateWidth is the width allocated for process state display.
+		// stateWidth is the width of the state column.
 		stateWidth int = 8
-		// pidWidth is the width allocated for PID display.
+		// pidWidth is the width of the PID column.
 		pidWidth int = 6
-		// uptimeWidth is the width allocated for uptime display.
+		// uptimeWidth is the width of the uptime column.
 		uptimeWidth int = 8
-		// cpuWidth is the width allocated for CPU usage display.
+		// cpuWidth is the width of the CPU column.
 		cpuWidth int = 5
-		// memWidth is the width allocated for memory usage display.
+		// memWidth is the width of the memory column.
 		memWidth int = 6
 	)
 
-	// Build table (clamp width to prevent negative on tiny terminals).
 	tableWidth := max(s.width-boxBorderWidth, minTableWidth)
-	table := widget.NewTable(tableWidth).
-		AddColumn("", iconWidth, widget.AlignLeft).            // Icon
-		AddFlexColumn("NAME", nameMinWidth, widget.AlignLeft). // Name
-		AddColumn("STATE", stateWidth, widget.AlignLeft).      // State
-		AddColumn("PID", pidWidth, widget.AlignRight).         // PID
-		AddColumn("UPTIME", uptimeWidth, widget.AlignRight).   // Uptime
-		AddColumn("CPU", cpuWidth, widget.AlignRight).         // CPU
-		AddColumn("MEM", memWidth, widget.AlignRight)          // Memory
+	return widget.NewTable(tableWidth).
+		AddColumn("", iconWidth, widget.AlignLeft).
+		AddFlexColumn("NAME", nameMinWidth, widget.AlignLeft).
+		AddColumn("STATE", stateWidth, widget.AlignLeft).
+		AddColumn("PID", pidWidth, widget.AlignRight).
+		AddColumn("UPTIME", uptimeWidth, widget.AlignRight).
+		AddColumn("CPU", cpuWidth, widget.AlignRight).
+		AddColumn("MEM", memWidth, widget.AlignRight)
+}
 
-	// Add row for each service.
-	for _, svc := range snap.Services {
+// populateNormalRows adds service rows to a normal mode table.
+//
+// Params:
+//   - table: target table to populate (uses AddRower interface)
+//   - services: services to add as rows
+func (s *ServicesRenderer) populateNormalRows(table AddRower, services []model.ServiceSnapshot) {
+	for _, svc := range services {
 		icon := s.status.ProcessState(svc.State)
 		state := s.status.ProcessStateText(svc.State)
-
-		// Format PID or placeholder.
-		pid := "-"
-		// Convert PID to string when valid.
-		if svc.PID > 0 {
-			pid = strconv.Itoa(svc.PID)
-		}
-
-		// Format uptime for running/starting services.
-		uptime := "-"
-		// Show uptime for active services.
-		if svc.State == process.StateRunning || svc.State == process.StateStarting {
-			uptime = widget.FormatDurationShort(svc.Uptime)
-		}
-
-		// Format metrics for running services.
-		cpu := "-"
-		mem := "-"
-		// Show metrics only for running services.
-		if svc.State == process.StateRunning {
-			cpu = widget.FormatPercent(svc.CPUPercent)
-			mem = widget.FormatBytesShort(svc.MemoryRSS)
-		}
-
+		pid := s.formatPID(svc.PID)
+		uptime := s.formatUptimeShort(svc.State, svc.Uptime)
+		cpu, mem := s.formatMetrics(svc.State, svc.CPUPercent, svc.MemoryRSS)
 		table.AddRow(icon, svc.Name, state, pid, uptime, cpu, mem)
 	}
+}
 
-	// Split table into lines and add summary.
+// formatPID formats a PID value or returns placeholder.
+//
+// Params:
+//   - pid: process ID to format
+//
+// Returns:
+//   - string: formatted PID or "-"
+func (s *ServicesRenderer) formatPID(pid int) string {
+	if pid > 0 {
+		return strconv.Itoa(pid)
+	}
+	return "-"
+}
+
+// formatUptimeShort formats uptime for running/starting services (short format).
+//
+// Params:
+//   - state: current process state
+//   - uptime: duration since start
+//
+// Returns:
+//   - string: formatted uptime or "-"
+func (s *ServicesRenderer) formatUptimeShort(state process.State, uptime time.Duration) string {
+	if state == process.StateRunning || state == process.StateStarting {
+		return widget.FormatDurationShort(uptime)
+	}
+	return "-"
+}
+
+// formatMetrics formats CPU and memory for running services.
+//
+// Params:
+//   - state: current process state
+//   - cpuPercent: CPU usage percentage
+//   - memoryRSS: memory usage in bytes
+//
+// Returns:
+//   - string: formatted CPU percentage or "-"
+//   - string: formatted memory or "-"
+func (s *ServicesRenderer) formatMetrics(state process.State, cpuPercent float64, memoryRSS uint64) (cpu, mem string) {
+	if state == process.StateRunning {
+		return widget.FormatPercent(cpuPercent), widget.FormatBytesShort(memoryRSS)
+	}
+	return "-", "-"
+}
+
+// renderTableInBox wraps table output in a services box with summary.
+//
+// Params:
+//   - table: rendered table (uses Renderer interface)
+//   - snap: snapshot for summary
+//
+// Returns:
+//   - string: rendered box containing table
+func (s *ServicesRenderer) renderTableInBox(table Renderer, snap *model.Snapshot) string {
 	lines := strings.Split(table.Render(), "\n")
 	lines = append(lines, "")
 	lines = append(lines, "  "+s.theme.Muted+s.renderSummary(snap)+ansi.Reset)
@@ -239,7 +299,6 @@ func (s *ServicesRenderer) renderNormal(snap *model.Snapshot) string {
 		SetTitleColor(s.theme.Header).
 		AddLines(prefixLines(lines, "  "))
 
-	// Return rendered normal services box.
 	return box.Render()
 }
 
@@ -251,103 +310,103 @@ func (s *ServicesRenderer) renderNormal(snap *model.Snapshot) string {
 // Returns:
 //   - string: expanded service table with additional columns
 func (s *ServicesRenderer) renderWide(snap *model.Snapshot) string {
+	table := s.createWideTable()
+	s.populateWideRows(table, snap.Services)
+	return s.renderTableInBox(table, snap)
+}
+
+// createWideTable creates a table with wide mode columns.
+//
+// Returns:
+//   - *widget.Table: configured table with extended columns
+func (s *ServicesRenderer) createWideTable() *widget.Table {
 	const (
-		// boxBorderWidth is the total width consumed by box borders.
+		// boxBorderWidth is the total width of box borders.
 		boxBorderWidth int = 4
-		// minTableWidth is the minimum width for the service table.
+		// minTableWidth is the minimum table width.
 		minTableWidth int = 10
-		// iconWidth is the width allocated for status icons.
+		// iconWidth is the width of the status icon column.
 		iconWidth int = 2
-		// nameMinWidth is the minimum width for service names.
+		// nameMinWidth is the minimum width for service name column.
 		nameMinWidth int = 10
-		// stateWidth is the width allocated for process state display.
+		// stateWidth is the width of the state column.
 		stateWidth int = 8
-		// pidWidth is the width allocated for PID display.
+		// pidWidth is the width of the PID column.
 		pidWidth int = 7
-		// uptimeWidth is the width allocated for uptime display.
+		// uptimeWidth is the width of the uptime column.
 		uptimeWidth int = 10
-		// restartsWidth is the width allocated for restart count display.
+		// restartsWidth is the width of the restarts column.
 		restartsWidth int = 8
-		// healthWidth is the width allocated for health status display.
+		// healthWidth is the width of the health column.
 		healthWidth int = 8
-		// cpuWidth is the width allocated for CPU usage display.
+		// cpuWidth is the width of the CPU column.
 		cpuWidth int = 6
-		// memWidth is the width allocated for memory usage display.
+		// memWidth is the width of the memory column.
 		memWidth int = 7
-		// portsWidth is the width allocated for port listener display.
+		// portsWidth is the width of the ports column.
 		portsWidth int = 12
 	)
 
-	// Build table with more columns (clamp width to prevent negative).
 	tableWidth := max(s.width-boxBorderWidth, minTableWidth)
-	table := widget.NewTable(tableWidth).
-		AddColumn("", iconWidth, widget.AlignLeft).              // Icon
-		AddFlexColumn("NAME", nameMinWidth, widget.AlignLeft).   // Name
-		AddColumn("STATE", stateWidth, widget.AlignLeft).        // State
-		AddColumn("PID", pidWidth, widget.AlignRight).           // PID
-		AddColumn("UPTIME", uptimeWidth, widget.AlignRight).     // Uptime
-		AddColumn("RESTARTS", restartsWidth, widget.AlignRight). // Restarts
-		AddColumn("HEALTH", healthWidth, widget.AlignLeft).      // Health
-		AddColumn("CPU", cpuWidth, widget.AlignRight).           // CPU
-		AddColumn("MEM", memWidth, widget.AlignRight).           // Memory
-		AddColumn("PORTS", portsWidth, widget.AlignLeft)         // Ports
+	return widget.NewTable(tableWidth).
+		AddColumn("", iconWidth, widget.AlignLeft).
+		AddFlexColumn("NAME", nameMinWidth, widget.AlignLeft).
+		AddColumn("STATE", stateWidth, widget.AlignLeft).
+		AddColumn("PID", pidWidth, widget.AlignRight).
+		AddColumn("UPTIME", uptimeWidth, widget.AlignRight).
+		AddColumn("RESTARTS", restartsWidth, widget.AlignRight).
+		AddColumn("HEALTH", healthWidth, widget.AlignLeft).
+		AddColumn("CPU", cpuWidth, widget.AlignRight).
+		AddColumn("MEM", memWidth, widget.AlignRight).
+		AddColumn("PORTS", portsWidth, widget.AlignLeft)
+}
 
-	// Add row for each service.
-	for _, svc := range snap.Services {
+// populateWideRows adds service rows to a wide mode table.
+//
+// Params:
+//   - table: target table to populate (uses AddRower interface)
+//   - services: services to add as rows
+func (s *ServicesRenderer) populateWideRows(table AddRower, services []model.ServiceSnapshot) {
+	for _, svc := range services {
 		icon := s.status.ProcessState(svc.State)
 		state := s.status.ProcessStateText(svc.State)
-
-		// Format PID or placeholder.
-		pid := "-"
-		// Convert PID to string when valid.
-		if svc.PID > 0 {
-			pid = strconv.Itoa(svc.PID)
-		}
-
-		// Format uptime for running/starting services.
-		uptime := "-"
-		// Show uptime for active services.
-		if svc.State == process.StateRunning || svc.State == process.StateStarting {
-			uptime = widget.FormatDuration(svc.Uptime)
-		}
-
-		// Format restart count.
-		restarts := "-"
-		// Show restart count when service has restarted.
-		if svc.RestartCount > 0 {
-			restarts = strconv.Itoa(svc.RestartCount)
-		}
-
-		// Format health status.
+		pid := s.formatPID(svc.PID)
+		uptime := s.formatUptimeLong(svc.State, svc.Uptime)
+		restarts := s.formatRestarts(svc.RestartCount)
 		healthStr := s.status.HealthStatusText(svc.Health)
-
-		// Format metrics for running services.
-		cpu := "-"
-		mem := "-"
-		// Show metrics only for running services.
-		if svc.State == process.StateRunning {
-			cpu = widget.FormatPercent(svc.CPUPercent)
-			mem = widget.FormatBytesShort(svc.MemoryRSS)
-		}
-
-		// Format port listeners.
+		cpu, mem := s.formatMetrics(svc.State, svc.CPUPercent, svc.MemoryRSS)
 		ports := s.formatPorts(svc.Listeners)
-
 		table.AddRow(icon, svc.Name, state, pid, uptime, restarts, healthStr, cpu, mem, ports)
 	}
+}
 
-	// Split table into lines and add summary.
-	lines := strings.Split(table.Render(), "\n")
-	lines = append(lines, "")
-	lines = append(lines, "  "+s.theme.Muted+s.renderSummary(snap)+ansi.Reset)
+// formatUptimeLong formats uptime for running/starting services (long format).
+//
+// Params:
+//   - state: current process state
+//   - uptime: duration since start
+//
+// Returns:
+//   - string: formatted uptime or "-"
+func (s *ServicesRenderer) formatUptimeLong(state process.State, uptime time.Duration) string {
+	if state == process.StateRunning || state == process.StateStarting {
+		return widget.FormatDuration(uptime)
+	}
+	return "-"
+}
 
-	box := widget.NewBox(s.width).
-		SetTitle("Services").
-		SetTitleColor(s.theme.Header).
-		AddLines(prefixLines(lines, "  "))
-
-	// Return rendered wide services box.
-	return box.Render()
+// formatRestarts formats restart count or returns placeholder.
+//
+// Params:
+//   - count: number of restarts
+//
+// Returns:
+//   - string: formatted count or "-"
+func (s *ServicesRenderer) formatRestarts(count int) string {
+	if count > 0 {
+		return strconv.Itoa(count)
+	}
+	return "-"
 }
 
 // renderSummary returns a summary line.
@@ -454,11 +513,11 @@ func (s *ServicesRenderer) formatPorts(listeners []model.ListenerSnapshot) strin
 // Returns:
 //   - []string: prefixed lines
 func prefixLines(lines []string, prefix string) []string {
-	result := make([]string, len(lines))
-	// Add prefix to each line.
-	// Iterate through lines to add prefix.
-	for i, line := range lines {
-		result[i] = prefix + line
+	// Pre-allocate with capacity using append pattern per VAR-MAKEAPPEND.
+	result := make([]string, 0, len(lines))
+	// Add prefix to each line using append.
+	for _, line := range lines {
+		result = append(result, prefix+line)
 	}
 	// Return prefixed lines array.
 	return result
@@ -466,7 +525,6 @@ func prefixLines(lines []string, prefix string) []string {
 
 // RenderNamesOnly renders service names with ports in columns (for raw mode startup banner).
 // Shows service name followed by port numbers from config (no colors, no status checking).
-// Column width is dynamically calculated based on content.
 //
 // Params:
 //   - snap: system snapshot with service data
@@ -474,104 +532,140 @@ func prefixLines(lines []string, prefix string) []string {
 // Returns:
 //   - string: service names with ports in column layout
 func (s *ServicesRenderer) RenderNamesOnly(snap *model.Snapshot) string {
+	if len(snap.Services) == 0 {
+		return s.renderEmptyServices()
+	}
+	entries := s.buildServiceEntries(snap.Services)
+	lines := s.layoutEntriesInColumns(entries)
+	return s.renderNamesOnlyBox(snap, lines)
+}
+
+// renderEmptyServices renders the empty state box.
+//
+// Returns:
+//   - string: rendered empty services box
+func (s *ServicesRenderer) renderEmptyServices() string {
+	box := widget.NewBox(s.width).
+		SetTitle("Services (0 configured)").
+		SetTitleColor(s.theme.Header).
+		AddLine("  " + s.theme.Muted + "No services configured" + ansi.Reset)
+	return box.Render()
+}
+
+// buildServiceEntries creates display entries for all services.
+//
+// Params:
+//   - services: services to format
+//
+// Returns:
+//   - []serviceEntry: formatted entries with visible lengths
+func (s *ServicesRenderer) buildServiceEntries(services []model.ServiceSnapshot) []serviceEntry {
+	entries := make([]serviceEntry, 0, len(services))
+	for _, svc := range services {
+		display := s.formatServiceEntry(svc)
+		entries = append(entries, serviceEntry{display: display, visibleLen: len(display)})
+	}
+	return entries
+}
+
+// formatServiceEntry formats a single service with its ports.
+//
+// Params:
+//   - svc: service snapshot to format
+//
+// Returns:
+//   - string: formatted service name with ports
+func (s *ServicesRenderer) formatServiceEntry(svc model.ServiceSnapshot) string {
+	var sb strings.Builder
+	sb.WriteString(svc.Name)
+	if len(svc.Listeners) > 0 {
+		sb.WriteByte(' ')
+		for i, l := range svc.Listeners {
+			if i > 0 {
+				sb.WriteByte(',')
+			}
+			sb.WriteByte(':')
+			sb.WriteString(strconv.Itoa(l.Port))
+		}
+	}
+	return sb.String()
+}
+
+// layoutEntriesInColumns arranges entries in a column layout.
+//
+// Params:
+//   - entries: entries to layout
+//
+// Returns:
+//   - []string: lines with entries arranged in columns
+func (s *ServicesRenderer) layoutEntriesInColumns(entries []serviceEntry) []string {
 	const (
-		// boxBorderWidth is the total width consumed by box borders.
+		// boxBorderWidth is the total width of box borders.
 		boxBorderWidth int = 6
-		// minColumnWidth is the minimum width for service columns.
+		// minColumnWidth is the minimum width for a column.
 		minColumnWidth int = 10
 		// columnPadding is the padding between columns.
 		columnPadding int = 2
 	)
 
-	// Show empty state if no services.
-	if len(snap.Services) == 0 {
-		box := widget.NewBox(s.width).
-			SetTitle("Services (0 configured)").
-			SetTitleColor(s.theme.Header).
-			AddLine("  " + s.theme.Muted + "No services configured" + ansi.Reset)
-		// Return empty services box for raw mode.
-		return box.Render()
-	}
-
-	// Build service entries with name and ports (plain text, no colors).
-	type serviceEntry struct {
-		display    string // Full display string.
-		visibleLen int    // Length of display string.
-	}
-	entries := make([]serviceEntry, 0, len(snap.Services))
-
-	// Format each service entry.
-	for _, svc := range snap.Services {
-		var sb strings.Builder
-		sb.WriteString(svc.Name)
-
-		// Add ports if available (plain text from config, no status colors).
-		// Append port list when listeners exist.
-		if len(svc.Listeners) > 0 {
-			sb.WriteByte(' ')
-			// Iterate through listeners to format ports.
-			for i, l := range svc.Listeners {
-				// Add comma separator between ports.
-				if i > 0 {
-					sb.WriteByte(',')
-				}
-				sb.WriteByte(':')
-				sb.WriteString(strconv.Itoa(l.Port))
-			}
-		}
-
-		display := sb.String()
-		// In raw mode, display has no ANSI codes, so visibleLen = len(display).
-		entries = append(entries, serviceEntry{display: display, visibleLen: len(display)})
-	}
-
-	// Find longest entry for column width.
-	maxLen := 0
-	// Iterate to find maximum entry length.
-	for _, e := range entries {
-		// Update max if entry is longer.
-		if e.visibleLen > maxLen {
-			maxLen = e.visibleLen
-		}
-	}
-
-	// Calculate column width with padding.
-	colWidth := max(maxLen+columnPadding, minColumnWidth)
-
-	// Calculate number of columns that fit.
-	usableWidth := s.width - boxBorderWidth
-	cols := max(usableWidth/colWidth, 1)
-
-	// Build rows of services.
+	colWidth, cols := s.calculateColumnLayout(entries, boxBorderWidth, minColumnWidth, columnPadding)
 	rows := (len(entries) + cols - 1) / cols
-	lines := make([]string, rows)
+	lines := make([]string, 0, rows)
+	rowParts := make([]string, 0, cols)
 
-	// Format each row.
-	// Iterate through rows to build column layout.
 	for row := range rows {
-		var rowParts []string
-		// Add entries for this row.
-		// Iterate through columns.
+		rowParts = rowParts[:0]
 		for col := range cols {
 			idx := row*cols + col
-			// Add entry if index is valid.
 			if idx < len(entries) {
 				entry := entries[idx]
-				// Pad to column width using visible length.
 				padding := max(colWidth-entry.visibleLen, 0)
 				rowParts = append(rowParts, entry.display+strings.Repeat(" ", padding))
 			}
 		}
-		lines[row] = "  " + strings.Join(rowParts, "")
+		lines = append(lines, "  "+strings.Join(rowParts, ""))
 	}
+	return lines
+}
 
+// calculateColumnLayout computes column width and count.
+//
+// Params:
+//   - entries: entries to calculate layout for
+//   - borderWidth: box border width
+//   - minWidth: minimum column width
+//   - padding: padding between columns
+//
+// Returns:
+//   - int: calculated column width
+//   - int: number of columns
+func (s *ServicesRenderer) calculateColumnLayout(entries []serviceEntry, borderWidth, minWidth, padding int) (colWidth, cols int) {
+	maxLen := 0
+	for _, e := range entries {
+		if e.visibleLen > maxLen {
+			maxLen = e.visibleLen
+		}
+	}
+	colWidth = max(maxLen+padding, minWidth)
+	usableWidth := s.width - borderWidth
+	cols = max(usableWidth/colWidth, 1)
+	return colWidth, cols
+}
+
+// renderNamesOnlyBox creates the final box for names-only rendering.
+//
+// Params:
+//   - snap: snapshot for title
+//   - lines: content lines
+//
+// Returns:
+//   - string: rendered box
+func (s *ServicesRenderer) renderNamesOnlyBox(snap *model.Snapshot, lines []string) string {
 	title := "Services (" + strconv.Itoa(len(snap.Services)) + " configured)"
 	box := widget.NewBox(s.width).
 		SetTitle(title).
 		SetTitleColor(s.theme.Header).
 		AddLines(lines)
-
-	// Return rendered services box for raw mode.
 	return box.Render()
 }
 

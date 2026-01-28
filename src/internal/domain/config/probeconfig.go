@@ -73,7 +73,6 @@ type ProbeConfig struct {
 // Returns:
 //   - ProbeConfig: a new probe configuration with defaults applied.
 func NewProbeConfig(probeType string) ProbeConfig {
-	// Return probe config with sensible defaults for all probe types.
 	return ProbeConfig{
 		Type:             probeType,
 		Interval:         shared.Seconds(defaultProbeInterval),
@@ -93,6 +92,5 @@ func NewProbeConfig(probeType string) ProbeConfig {
 // Returns:
 //   - ProbeConfig: a configuration with default values.
 func DefaultProbeConfig(probeType string) ProbeConfig {
-	// Delegate to NewProbeConfig for consistent default handling.
 	return NewProbeConfig(probeType)
 }

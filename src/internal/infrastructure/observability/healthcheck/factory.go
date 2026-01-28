@@ -41,10 +41,7 @@ type Factory struct {
 // Returns:
 //   - *Factory: a factory for creating probers.
 func NewFactory(defaultTimeout time.Duration) *Factory {
-	// Return configured factory.
-	return &Factory{
-		defaultTimeout: defaultTimeout,
-	}
+	return &Factory{defaultTimeout: defaultTimeout}
 }
 
 // Create creates a prober of the specified type.
@@ -57,18 +54,11 @@ func NewFactory(defaultTimeout time.Duration) *Factory {
 //   - health.Prober: the created prober.
 //   - error: ErrUnknownProberType if the type is not recognized.
 func (f *Factory) Create(proberType string, timeout time.Duration) (health.Prober, error) {
-	// Normalize timeout using helper.
 	timeout = f.normalizeTimeout(timeout)
-
-	// Look up constructor in map.
 	constructor, exists := proberConstructors[proberType]
-	// Check if prober type is recognized.
 	if !exists {
-		// Return error for unrecognized prober type.
 		return nil, ErrUnknownProberType
 	}
-
-	// Create prober using constructor.
 	return constructor(timeout), nil
 }
 
@@ -80,12 +70,9 @@ func (f *Factory) Create(proberType string, timeout time.Duration) (health.Probe
 // Returns:
 //   - time.Duration: the input timeout or factory default if zero/negative.
 func (f *Factory) normalizeTimeout(timeout time.Duration) time.Duration {
-	// Use factory default timeout if not specified or invalid.
 	if timeout <= 0 {
-		// Return factory default.
 		return f.defaultTimeout
 	}
-	// Return input timeout.
 	return timeout
 }
 
@@ -97,7 +84,6 @@ func (f *Factory) normalizeTimeout(timeout time.Duration) time.Duration {
 // Returns:
 //   - *TCPProber: the created TCP prober.
 func (f *Factory) CreateTCP(timeout time.Duration) *TCPProber {
-	// Return TCP prober with normalized timeout.
 	return NewTCPProber(f.normalizeTimeout(timeout))
 }
 
@@ -109,7 +95,6 @@ func (f *Factory) CreateTCP(timeout time.Duration) *TCPProber {
 // Returns:
 //   - *UDPProber: the created UDP prober.
 func (f *Factory) CreateUDP(timeout time.Duration) *UDPProber {
-	// Return UDP prober with normalized timeout.
 	return NewUDPProber(f.normalizeTimeout(timeout))
 }
 
@@ -121,7 +106,6 @@ func (f *Factory) CreateUDP(timeout time.Duration) *UDPProber {
 // Returns:
 //   - *HTTPProber: the created HTTP prober.
 func (f *Factory) CreateHTTP(timeout time.Duration) *HTTPProber {
-	// Return HTTP prober with normalized timeout.
 	return NewHTTPProber(f.normalizeTimeout(timeout))
 }
 
@@ -133,7 +117,6 @@ func (f *Factory) CreateHTTP(timeout time.Duration) *HTTPProber {
 // Returns:
 //   - *GRPCProber: the created gRPC prober.
 func (f *Factory) CreateGRPC(timeout time.Duration) *GRPCProber {
-	// Return gRPC prober with normalized timeout.
 	return NewGRPCProber(f.normalizeTimeout(timeout))
 }
 
@@ -145,7 +128,6 @@ func (f *Factory) CreateGRPC(timeout time.Duration) *GRPCProber {
 // Returns:
 //   - *ExecProber: the created exec prober.
 func (f *Factory) CreateExec(timeout time.Duration) *ExecProber {
-	// Return exec prober with normalized timeout.
 	return NewExecProber(f.normalizeTimeout(timeout))
 }
 
@@ -157,6 +139,5 @@ func (f *Factory) CreateExec(timeout time.Duration) *ExecProber {
 // Returns:
 //   - *ICMPProber: the created ICMP prober.
 func (f *Factory) CreateICMP(timeout time.Duration) *ICMPProber {
-	// Return ICMP prober with normalized timeout.
 	return NewICMPProber(f.normalizeTimeout(timeout))
 }

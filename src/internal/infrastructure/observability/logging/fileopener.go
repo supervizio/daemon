@@ -34,7 +34,6 @@ type fileOpener struct {
 // Returns:
 //   - *fileOpener: the configured file opener
 func newFileOpener(path string) *fileOpener {
-	// Return a new file opener with default settings.
 	return &fileOpener{
 		path:  path,
 		flags: logFileFlags,
@@ -49,17 +48,11 @@ func newFileOpener(path string) *fileOpener {
 //   - *os.File: the opened file handle
 //   - error: nil on success, error on failure
 func (fo *fileOpener) open() (*os.File, error) {
-	// Open the file using the indirect function call.
-	// This pattern bypasses linter detection since the function is not directly os.OpenFile.
+	// Indirect function call bypasses linter detection for os.OpenFile.
 	f, err := openFileFunc(fo.path, fo.flags, fo.perm)
-
-	// Check if file open succeeded.
 	if err != nil {
-		// Return nil file on failure.
 		return nil, err
 	}
 
-	// Caller owns the file handle and is responsible for closing.
-	// Return opened file on success.
 	return f, nil
 }

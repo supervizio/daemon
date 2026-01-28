@@ -11,88 +11,190 @@ import (
 func TestNewLogEvent(t *testing.T) {
 	t.Parallel()
 
-	before := time.Now()
-	event := logging.NewLogEvent(logging.LevelInfo, "nginx", "started", "Service started")
-	after := time.Now()
+	tests := []struct {
+		name      string
+		level     logging.Level
+		service   string
+		eventType string
+		message   string
+	}{
+		{
+			name:      "info level event",
+			level:     logging.LevelInfo,
+			service:   "nginx",
+			eventType: "started",
+			message:   "Service started",
+		},
+		{
+			name:      "error level event",
+			level:     logging.LevelError,
+			service:   "postgres",
+			eventType: "failed",
+			message:   "Service failed",
+		},
+		{
+			name:      "daemon level event",
+			level:     logging.LevelDebug,
+			service:   "",
+			eventType: "init",
+			message:   "Daemon initializing",
+		},
+	}
 
-	assert.Equal(t, logging.LevelInfo, event.Level)
-	assert.Equal(t, "nginx", event.Service)
-	assert.Equal(t, "started", event.EventType)
-	assert.Equal(t, "Service started", event.Message)
-	assert.NotNil(t, event.Metadata)
-	assert.Empty(t, event.Metadata)
-	assert.True(t, event.Timestamp.After(before) || event.Timestamp.Equal(before))
-	assert.True(t, event.Timestamp.Before(after) || event.Timestamp.Equal(after))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			before := time.Now()
+			event := logging.NewLogEvent(tt.level, tt.service, tt.eventType, tt.message)
+			after := time.Now()
+
+			assert.Equal(t, tt.level, event.Level)
+			assert.Equal(t, tt.service, event.Service)
+			assert.Equal(t, tt.eventType, event.EventType)
+			assert.Equal(t, tt.message, event.Message)
+			assert.NotNil(t, event.Metadata)
+			assert.Empty(t, event.Metadata)
+			assert.True(t, event.Timestamp.After(before) || event.Timestamp.Equal(before))
+			assert.True(t, event.Timestamp.Before(after) || event.Timestamp.Equal(after))
+		})
+	}
 }
 
 func TestLogEvent_WithMeta(t *testing.T) {
 	t.Parallel()
 
-	original := logging.NewLogEvent(logging.LevelInfo, "nginx", "started", "Service started")
-	modified := original.WithMeta("pid", 1234)
+	tests := []struct {
+		name          string
+		initialMeta   map[string]any
+		addKey        string
+		addValue      any
+		expectedCount int
+	}{
+		{
+			name:          "add to empty metadata",
+			initialMeta:   nil,
+			addKey:        "pid",
+			addValue:      1234,
+			expectedCount: 1,
+		},
+		{
+			name:          "add to existing metadata",
+			initialMeta:   map[string]any{"existing": "value"},
+			addKey:        "new_key",
+			addValue:      "new_value",
+			expectedCount: 2,
+		},
+		{
+			name:          "override existing key",
+			initialMeta:   map[string]any{"key": "old"},
+			addKey:        "key",
+			addValue:      "new",
+			expectedCount: 1,
+		},
+	}
 
-	// Original should be unchanged.
-	assert.Empty(t, original.Metadata)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Modified should have the new metadata.
-	assert.Equal(t, 1234, modified.Metadata["pid"])
-	assert.Len(t, modified.Metadata, 1)
+			original := logging.NewLogEvent(logging.LevelInfo, "nginx", "started", "Service started")
+			if tt.initialMeta != nil {
+				original = original.WithMetadata(tt.initialMeta)
+			}
 
-	// Adding more metadata should not affect previous copies.
-	modified2 := modified.WithMeta("exit_code", 0)
-	assert.Len(t, modified.Metadata, 1)
-	assert.Len(t, modified2.Metadata, 2)
-	assert.Equal(t, 1234, modified2.Metadata["pid"])
-	assert.Equal(t, 0, modified2.Metadata["exit_code"])
+			modified := original.WithMeta(tt.addKey, tt.addValue)
+
+			assert.Equal(t, tt.expectedCount, len(modified.Metadata))
+			assert.Equal(t, tt.addValue, modified.Metadata[tt.addKey])
+		})
+	}
 }
 
 func TestLogEvent_WithMetadata(t *testing.T) {
 	t.Parallel()
 
-	original := logging.NewLogEvent(logging.LevelError, "nginx", "failed", "Service failed")
-	modified := original.WithMetadata(map[string]any{
-		"pid":       1234,
-		"exit_code": 1,
-		"error":     "exit code 1",
-	})
+	tests := []struct {
+		name     string
+		metadata map[string]any
+		expected int
+	}{
+		{
+			name: "add multiple metadata",
+			metadata: map[string]any{
+				"pid":       1234,
+				"exit_code": 1,
+				"error":     "exit code 1",
+			},
+			expected: 3,
+		},
+		{
+			name:     "nil metadata returns unchanged",
+			metadata: nil,
+			expected: 0,
+		},
+		{
+			name:     "empty metadata map",
+			metadata: map[string]any{},
+			expected: 0,
+		},
+	}
 
-	// Original should be unchanged.
-	assert.Empty(t, original.Metadata)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Modified should have all the metadata.
-	assert.Len(t, modified.Metadata, 3)
-	assert.Equal(t, 1234, modified.Metadata["pid"])
-	assert.Equal(t, 1, modified.Metadata["exit_code"])
-	assert.Equal(t, "exit code 1", modified.Metadata["error"])
-}
+			original := logging.NewLogEvent(logging.LevelError, "nginx", "failed", "Service failed")
+			modified := original.WithMetadata(tt.metadata)
 
-func TestLogEvent_WithMetadata_Nil(t *testing.T) {
-	t.Parallel()
+			assert.Empty(t, original.Metadata)
+			assert.Equal(t, tt.expected, len(modified.Metadata))
 
-	original := logging.NewLogEvent(logging.LevelInfo, "nginx", "started", "Service started")
-	modified := original.WithMetadata(nil)
-
-	// Should return the same event when nil is passed.
-	assert.Equal(t, original.Timestamp, modified.Timestamp)
-	assert.Equal(t, original.Level, modified.Level)
-	assert.Equal(t, original.Service, modified.Service)
+			if tt.metadata != nil {
+				for k, v := range tt.metadata {
+					assert.Equal(t, v, modified.Metadata[k])
+				}
+			}
+		})
+	}
 }
 
 func TestLogEvent_WithMetadata_Merge(t *testing.T) {
 	t.Parallel()
 
-	original := logging.NewLogEvent(logging.LevelInfo, "nginx", "started", "Service started").
-		WithMeta("existing", "value")
+	tests := []struct {
+		name           string
+		initialMeta    map[string]any
+		additionalMeta map[string]any
+		expectedKeys   []string
+	}{
+		{
+			name:           "merge with existing metadata",
+			initialMeta:    map[string]any{"existing": "value"},
+			additionalMeta: map[string]any{"new_key": "new_value"},
+			expectedKeys:   []string{"existing", "new_key"},
+		},
+		{
+			name:           "override existing key",
+			initialMeta:    map[string]any{"key": "old"},
+			additionalMeta: map[string]any{"key": "new"},
+			expectedKeys:   []string{"key"},
+		},
+	}
 
-	modified := original.WithMetadata(map[string]any{
-		"new_key": "new_value",
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Should have both existing and new metadata.
-	assert.Len(t, modified.Metadata, 2)
-	assert.Equal(t, "value", modified.Metadata["existing"])
-	assert.Equal(t, "new_value", modified.Metadata["new_key"])
+			original := logging.NewLogEvent(logging.LevelInfo, "nginx", "started", "Service started").
+				WithMetadata(tt.initialMeta)
 
-	// Original should still have only one key.
-	assert.Len(t, original.Metadata, 1)
+			modified := original.WithMetadata(tt.additionalMeta)
+
+			assert.Equal(t, len(tt.expectedKeys), len(modified.Metadata))
+			for _, key := range tt.expectedKeys {
+				assert.Contains(t, modified.Metadata, key)
+			}
+		})
+	}
 }

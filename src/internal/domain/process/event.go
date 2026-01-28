@@ -32,39 +32,22 @@ const (
 // Returns:
 //   - string: event type name
 func (e EventType) String() string {
-	// Switch on event type to return appropriate string representation.
 	switch e {
-	// Handle started event type.
 	case EventStarted:
-		// Return "started" for EventStarted.
 		return "started"
-	// Handle stopped event type.
 	case EventStopped:
-		// Return "stopped" for EventStopped.
 		return "stopped"
-	// Handle failed event type.
 	case EventFailed:
-		// Return "failed" for EventFailed.
 		return "failed"
-	// Handle restarting event type.
 	case EventRestarting:
-		// Return "restarting" for EventRestarting.
 		return "restarting"
-	// Handle healthy event type.
 	case EventHealthy:
-		// Return "healthy" for EventHealthy.
 		return "healthy"
-	// Handle unhealthy event type.
 	case EventUnhealthy:
-		// Return "unhealthy" for EventUnhealthy.
 		return "unhealthy"
-	// Handle exhausted event type.
 	case EventExhausted:
-		// Return "exhausted" for EventExhausted.
 		return "exhausted"
-	// Handle unknown or unrecognized event types.
 	default:
-		// Return "unknown" for any unrecognized event type.
 		return "unknown"
 	}
 }
@@ -100,7 +83,6 @@ type Event struct {
 // Returns:
 //   - Event: the newly created process event
 func NewEvent(eventType EventType, processName string, pid, exitCode int, err error) Event {
-	// Return a new Event struct with all fields populated.
 	return Event{
 		Type:      eventType,
 		Process:   processName,

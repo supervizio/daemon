@@ -24,26 +24,7 @@ const (
 
 	// noSections indicates zero sections requested.
 	noSections int = 0
-
-	// defaultColspan is the default column span for cells.
-	defaultColspan int = 1
-
-	// flexibleRowHeight indicates a row with flexible height.
-	flexibleRowHeight int = 0
 )
-
-// Region represents a rectangular area of the terminal.
-// It defines the position (X, Y) and dimensions (Width, Height) for rendering content.
-type Region struct {
-	// X is the starting column (0-indexed).
-	X int
-	// Y is the starting row (0-indexed).
-	Y int
-	// Width in columns.
-	Width int
-	// Height in rows.
-	Height int
-}
 
 // Layout calculates content regions based on terminal size.
 // It supports multiple layout modes (compact, normal, wide) with responsive breakpoints.
@@ -184,17 +165,18 @@ func SplitHorizontal(r Region, n int) []Region {
 		return []Region{r}
 	}
 
-	regions := make([]Region, n)
+	// Pre-allocate with capacity using append pattern per VAR-MAKEAPPEND.
+	regions := make([]Region, 0, n)
 	height := r.Height / n
 
 	// Create regions for each horizontal section.
 	for i := range n {
-		regions[i] = Region{
+		regions = append(regions, Region{
 			X:      r.X,
 			Y:      r.Y + i*height,
 			Width:  r.Width,
 			Height: height,
-		}
+		})
 	}
 
 	// Give remaining height to last region.
@@ -215,7 +197,7 @@ func SplitHorizontal(r Region, n int) []Region {
 //
 // Returns:
 //   - []Region: slice of regions arranged horizontally
-func SplitVertical(r Region, n int, gap int) []Region {
+func SplitVertical(r Region, n, gap int) []Region {
 	// Handle invalid section count by returning nil.
 	if n <= noSections {
 		// Return nil for zero or negative sections.
@@ -230,16 +212,18 @@ func SplitVertical(r Region, n int, gap int) []Region {
 
 	totalGap := (n - singleSection) * gap
 	width := (r.Width - totalGap) / n
-	regions := make([]Region, n)
+
+	// Pre-allocate with capacity using append pattern per VAR-MAKEAPPEND.
+	regions := make([]Region, 0, n)
 
 	// Create regions for each vertical section.
 	for i := range n {
-		regions[i] = Region{
+		regions = append(regions, Region{
 			X:      r.X + i*(width+gap),
 			Y:      r.Y,
 			Width:  width,
 			Height: r.Height,
-		}
+		})
 	}
 
 	// Give remaining width to last region.
@@ -249,170 +233,4 @@ func SplitVertical(r Region, n int, gap int) []Region {
 
 	// Return the calculated regions.
 	return regions
-}
-
-// Grid represents a flexible grid layout.
-// It allows defining rows with fixed or flexible heights and cells with column spanning.
-type Grid struct {
-	// layout is the parent layout for dimension calculations.
-	layout *Layout
-	// rows contains the grid row definitions.
-	rows []gridRow
-}
-
-// gridRow represents a single row in the grid.
-// Height of 0 means flexible, positive values indicate fixed height.
-type gridRow struct {
-	// height is the row height (0 = flexible, >0 = fixed).
-	height int
-	// cells contains the cell definitions for this row.
-	cells []gridCell
-}
-
-// gridCell represents a single cell in a grid row.
-// It defines how many columns the cell spans.
-type gridCell struct {
-	// colspan is the number of columns this cell spans.
-	colspan int
-}
-
-// NewGrid creates a grid for the given layout.
-//
-// Params:
-//   - layout: parent layout for dimension calculations
-//
-// Returns:
-//   - *Grid: new grid instance with empty rows
-func NewGrid(layout *Layout) *Grid {
-	// Return a new grid with the specified layout.
-	return &Grid{
-		layout: layout,
-		rows:   make([]gridRow, noSections),
-	}
-}
-
-// AddRow adds a row with the specified height (0 for flexible).
-//
-// Params:
-//   - height: row height in rows (0 for flexible)
-//
-// Returns:
-//   - *Grid: the grid for method chaining
-func (g *Grid) AddRow(height int) *Grid {
-	// Append a new row with the specified height.
-	g.rows = append(g.rows, gridRow{
-		height: height,
-		cells:  make([]gridCell, noSections),
-	})
-
-	// Return the grid for chaining.
-	return g
-}
-
-// AddCell adds a cell to the last row.
-//
-// Params:
-//   - colspan: number of columns this cell spans
-//
-// Returns:
-//   - *Grid: the grid for method chaining
-func (g *Grid) AddCell(colspan int) *Grid {
-	// Create a row if none exist.
-	if len(g.rows) == noSections {
-		// Add a flexible row to hold the cell.
-		g.AddRow(flexibleRowHeight)
-	}
-
-	row := &g.rows[len(g.rows)-singleSection]
-	row.cells = append(row.cells, gridCell{colspan: colspan})
-
-	// Return the grid for chaining.
-	return g
-}
-
-// Calculate returns regions for all cells.
-//
-// Returns:
-//   - [][]Region: 2D slice of regions indexed by [row][cell]
-func (g *Grid) Calculate() [][]Region {
-	// Handle empty grid by returning nil.
-	if len(g.rows) == noSections {
-		// Return nil for empty grid.
-		return nil
-	}
-
-	content := g.layout.FullWidthRegion()
-	cols := g.layout.Columns()
-	gap := g.layout.Gap
-
-	// Calculate row heights by summing fixed heights and counting flexible rows.
-	fixedHeight := 0
-	flexRows := 0
-
-	// Iterate through rows to calculate fixed and flexible heights.
-	for _, row := range g.rows {
-		// Check if this row has a fixed height.
-		if row.height > flexibleRowHeight {
-			fixedHeight += row.height
-		} else {
-			// Count flexible rows for later distribution.
-			flexRows++
-		}
-	}
-
-	flexHeight := 0
-
-	// Calculate flexible row height if there are flexible rows.
-	if flexRows > noSections {
-		flexHeight = (content.Height - fixedHeight) / flexRows
-	}
-
-	// Generate regions for all cells.
-	result := make([][]Region, len(g.rows))
-	yPos := content.Y
-
-	// Iterate through each row to calculate cell regions.
-	for i, row := range g.rows {
-		height := row.height
-
-		// Use flexible height for rows with zero or negative height.
-		if height <= flexibleRowHeight {
-			height = flexHeight
-		}
-
-		result[i] = make([]Region, len(row.cells))
-		xPos := content.X
-		colWidth := g.layout.ColumnWidth()
-
-		// Iterate through cells to calculate their regions.
-		for j, cell := range row.cells {
-			span := cell.colspan
-
-			// Ensure minimum colspan of 1.
-			if span <= noSections {
-				span = defaultColspan
-			}
-
-			// Limit colspan to maximum available columns.
-			if span > cols {
-				span = cols
-			}
-
-			width := span*colWidth + (span-singleSection)*gap
-
-			result[i][j] = Region{
-				X:      xPos,
-				Y:      yPos,
-				Width:  width,
-				Height: height,
-			}
-
-			xPos += width + gap
-		}
-
-		yPos += height
-	}
-
-	// Return the calculated regions.
-	return result
 }

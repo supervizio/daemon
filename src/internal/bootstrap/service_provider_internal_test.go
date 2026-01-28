@@ -20,11 +20,11 @@ func (m *mockSnapshotsProvider) ServiceSnapshotsForTUI() []appsupervisor.Service
 	return m.snapshots
 }
 
-// Test_supervisorServiceProvider_Services verifies the Services method.
+// Test_supervisorServiceLister_ListServices verifies the ListServices method.
 //
 // Params:
 //   - t: testing context for assertions.
-func Test_supervisorServiceProvider_Services(t *testing.T) {
+func Test_supervisorServiceLister_ListServices(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -78,29 +78,29 @@ func Test_supervisorServiceProvider_Services(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Create a mock provider with configured snapshots.
+			// Create a mock lister with configured snapshots.
 			mock := &mockSnapshotsProvider{snapshots: tt.snapshots}
-			provider := &supervisorServiceProvider{sup: mock}
+			lister := &supervisorServiceLister{sup: mock}
 
-			// Call Services.
-			result := provider.Services()
+			// Call ListServices.
+			result := lister.ListServices()
 
 			// Verify count matches expectation.
 			if len(result) != tt.wantCount {
-				t.Errorf("Services() returned %d items, want %d", len(result), tt.wantCount)
+				t.Errorf("ListServices() returned %d items, want %d", len(result), tt.wantCount)
 			}
 
 			// Verify service names match (if any).
 			for i, snap := range result {
 				if i < len(tt.snapshots) && snap.Name != tt.snapshots[i].Name {
-					t.Errorf("Services()[%d].Name = %s, want %s", i, snap.Name, tt.snapshots[i].Name)
+					t.Errorf("ListServices()[%d].Name = %s, want %s", i, snap.Name, tt.snapshots[i].Name)
 				}
 			}
 
 			// Verify listener count for snapshot with listeners.
 			if tt.name == "snapshot_with_listeners" && len(result) > 0 {
 				if len(result[0].Listeners) != 2 {
-					t.Errorf("Services()[0].Listeners count = %d, want 2", len(result[0].Listeners))
+					t.Errorf("ListServices()[0].Listeners count = %d, want 2", len(result[0].Listeners))
 				}
 			}
 		})

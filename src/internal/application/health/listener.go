@@ -27,7 +27,6 @@ type ListenerProbe struct {
 // Returns:
 //   - *ListenerProbe: a new ListenerProbe instance.
 func NewListenerProbe(l *listener.Listener) *ListenerProbe {
-	// Return a new ListenerProbe with the listener set.
 	return &ListenerProbe{
 		Listener: l,
 	}
@@ -42,7 +41,6 @@ func NewListenerProbe(l *listener.Listener) *ListenerProbe {
 // Returns:
 //   - *ListenerProbe: a new ListenerProbe instance.
 func NewListenerProbeWithBinding(l *listener.Listener, binding *ProbeBinding) *ListenerProbe {
-	// Return a new ListenerProbe with listener and binding.
 	return &ListenerProbe{
 		Listener: l,
 		Binding:  binding,
@@ -54,7 +52,6 @@ func NewListenerProbeWithBinding(l *listener.Listener, binding *ProbeBinding) *L
 // Returns:
 //   - bool: true if prober is configured.
 func (lp *ListenerProbe) HasProber() bool {
-	// Check if a prober has been assigned to enable health probing.
 	return lp.Prober != nil
 }
 
@@ -63,7 +60,6 @@ func (lp *ListenerProbe) HasProber() bool {
 // Returns:
 //   - bool: true if binding is configured.
 func (lp *ListenerProbe) HasBinding() bool {
-	// Check if a binding has been assigned.
 	return lp.Binding != nil
 }
 
@@ -73,12 +69,10 @@ func (lp *ListenerProbe) HasBinding() bool {
 // Returns:
 //   - string: the address to probe.
 func (lp *ListenerProbe) ProbeAddress() string {
-	// Use binding address if configured.
+	// Use binding address if configured, otherwise fall back to listener address.
 	if lp.Binding != nil && lp.Binding.Target.Address != "" {
-		// Return address from binding target.
 		return lp.Binding.Target.Address
 	}
-	// Construct address from listener.
 	return lp.Listener.Address
 }
 
@@ -88,14 +82,13 @@ func (lp *ListenerProbe) ProbeAddress() string {
 // Returns:
 //   - domain.Target: the domain probe target.
 func (lp *ListenerProbe) ProbeTarget() domain.Target {
-	// Return empty target if no binding.
+	// Return minimal target when no binding configured.
 	if lp.Binding == nil {
-		// Return minimal target with listener address.
 		return domain.Target{
 			Address: lp.ProbeAddress(),
 		}
 	}
-	// Convert binding target to domain target.
+	// Return full target with all binding configuration fields.
 	return domain.Target{
 		Address:    lp.ProbeAddress(),
 		Path:       lp.Binding.Target.Path,
@@ -113,9 +106,8 @@ func (lp *ListenerProbe) ProbeTarget() domain.Target {
 // Returns:
 //   - domain.CheckConfig: the domain probe config.
 func (lp *ListenerProbe) ProbeConfig() domain.CheckConfig {
-	// Return default config if no binding.
+	// Return domain defaults when no binding configured.
 	if lp.Binding == nil {
-		// Return config with domain defaults.
 		return domain.CheckConfig{
 			Interval:         domain.DefaultInterval,
 			Timeout:          domain.DefaultTimeout,
@@ -123,7 +115,7 @@ func (lp *ListenerProbe) ProbeConfig() domain.CheckConfig {
 			FailureThreshold: domain.DefaultFailureThreshold,
 		}
 	}
-	// Convert binding config to domain config.
+	// Return config from binding.
 	return domain.CheckConfig{
 		Interval:         lp.Binding.Config.Interval,
 		Timeout:          lp.Binding.Config.Timeout,

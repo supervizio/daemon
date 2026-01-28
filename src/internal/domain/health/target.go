@@ -47,7 +47,6 @@ type Target struct {
 // Returns:
 //   - Target: a target configured with the specified network and address.
 func NewTarget(network, address string) Target {
-	// Return target with basic configuration.
 	return Target{
 		Network: network,
 		Address: address,
@@ -62,7 +61,6 @@ func NewTarget(network, address string) Target {
 // Returns:
 //   - Target: a target configured for TCP probing.
 func NewTCPTarget(address string) Target {
-	// Return target with TCP network.
 	return Target{
 		Network: "tcp",
 		Address: address,
@@ -77,7 +75,6 @@ func NewTCPTarget(address string) Target {
 // Returns:
 //   - Target: a target configured for UDP probing.
 func NewUDPTarget(address string) Target {
-	// Return target with UDP network.
 	return Target{
 		Network: "udp",
 		Address: address,
@@ -94,7 +91,6 @@ func NewUDPTarget(address string) Target {
 // Returns:
 //   - Target: a target configured for HTTP probing.
 func NewHTTPTarget(address, method string, statusCode int) Target {
-	// Return target with HTTP configuration.
 	return Target{
 		Network:    "tcp",
 		Address:    address,
@@ -112,7 +108,6 @@ func NewHTTPTarget(address, method string, statusCode int) Target {
 // Returns:
 //   - Target: a target configured for gRPC health probing.
 func NewGRPCTarget(address, service string) Target {
-	// Return target with gRPC configuration.
 	return Target{
 		Network: "tcp",
 		Address: address,
@@ -129,7 +124,6 @@ func NewGRPCTarget(address, service string) Target {
 // Returns:
 //   - Target: a target configured for exec probing.
 func NewExecTarget(command string, args ...string) Target {
-	// Return target with exec configuration.
 	return Target{
 		Command: command,
 		Args:    args,
@@ -144,7 +138,6 @@ func NewExecTarget(command string, args ...string) Target {
 // Returns:
 //   - Target: a target configured for ICMP probing.
 func NewICMPTarget(address string) Target {
-	// Return target with ICMP configuration.
 	return Target{
 		Network: "icmp",
 		Address: address,

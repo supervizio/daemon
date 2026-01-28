@@ -80,17 +80,6 @@ type Runner interface {
 	Run(ctx context.Context) error
 }
 
-// tuiModeConfig holds configuration for TUI mode execution.
-type tuiModeConfig struct {
-	ctx             context.Context
-	cancel          context.CancelFunc
-	sigCh           <-chan os.Signal
-	tui             Runner
-	bufferedConsole Flusher
-	tuiMode         tui.Mode
-	sup             SignalHandler
-}
-
 // Run is the main entry point called from cmd/daemon/main.go.
 // It parses flags, initializes the application via Wire, and runs the main loop.
 //
@@ -102,23 +91,17 @@ func Run() int {
 	forceInteractive := flag.Bool("tui", false, "enable interactive TUI mode")
 	flag.Parse()
 
-	// Check if version flag was provided to display version and exit.
 	if *showVersion {
 		fmt.Printf("supervizio %s\n", version)
-		// Return success exit code after displaying version.
 		return 0
 	}
 
-	// Determine TUI mode: raw by default, interactive only with --tui flag.
 	tuiMode := determineTUIMode(*forceInteractive)
 
-	// Run the main application logic and handle any errors.
 	if err := run(configPath, tuiMode); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		// Return failure exit code due to application error.
 		return 1
 	}
-	// Return success exit code after clean shutdown.
 	return 0
 }
 
@@ -131,12 +114,9 @@ func Run() int {
 // Returns:
 //   - tui.Mode: the determined TUI mode.
 func determineTUIMode(forceInteractive bool) tui.Mode {
-	// Check if interactive mode is forced via flag.
 	if forceInteractive {
-		// Return interactive mode when explicitly requested.
 		return tui.ModeInteractive
 	}
-	// Raw mode is the default (no TTY auto-detection).
 	return tui.ModeRaw
 }
 
@@ -149,7 +129,6 @@ func determineTUIMode(forceInteractive bool) tui.Mode {
 // Returns:
 //   - error: nil on success, error on failure.
 func RunWithConfig(cfgPath string) error {
-	// Delegate to internal run function with default mode (raw).
 	return run(cfgPath, determineTUIMode(false))
 }
 
@@ -162,36 +141,26 @@ func RunWithConfig(cfgPath string) error {
 // Returns:
 //   - error: nil on success, error on failure.
 func run(cfgPath string, tuiMode tui.Mode) error {
-	// Initialize the application and its dependencies.
 	app, logAdapter, err := initializeAppAndLogAdapter(cfgPath)
-	// Check if initialization failed.
 	if err != nil {
-		// Return error with context about initialization failure.
 		return fmt.Errorf("failed to initialize: %w", err)
 	}
-	// Ensure cleanup is called when run exits.
 	if app.Cleanup != nil {
 		defer app.Cleanup()
 	}
 
-	// Initialize logger and setup event handling.
 	logger, bufferedConsole := setupLoggingAndEvents(app, logAdapter, tuiMode)
 	defer func() { _ = logger.Close() }()
 
-	// Setup supervisor context and start services.
 	ctx, cancel, sigCh := setupContextAndSignals()
 	defer cancel()
 
-	// Start supervisor and metrics tracking.
 	if err := startSupervisorAndMetrics(ctx, app, logger); err != nil {
-		// Return error with context about startup failure.
 		return err
 	}
 
-	// Create and configure TUI with service and log providers.
 	t := setupTUI(app.Supervisor, logAdapter, cfgPath, tuiMode)
 
-	// Run TUI based on mode and handle signals.
 	cfg := tuiModeConfig{
 		ctx:             ctx,
 		cancel:          cancel,
@@ -201,7 +170,6 @@ func run(cfgPath string, tuiMode tui.Mode) error {
 		tuiMode:         tuiMode,
 		sup:             app.Supervisor,
 	}
-	// Execute TUI mode with the configured parameters.
 	return runTUIMode(cfg)
 }
 
@@ -215,26 +183,20 @@ func run(cfgPath string, tuiMode tui.Mode) error {
 //   - *tui.LogAdapter: the log adapter for TUI.
 //   - error: initialization error if any.
 func initializeAppAndLogAdapter(cfgPath string) (*App, *tui.LogAdapter, error) {
-	// Initialize the application using Wire-generated code.
 	app, err := InitializeApp(cfgPath)
-	// Check if initialization failed.
 	if err != nil {
-		// Return error with nil values.
 		return nil, nil, err
 	}
 
-	// Create log adapter for TUI (captures logs for display).
 	logAdapter := tui.NewLogAdapter()
 
-	// Attempt to load recent log history from file if available.
+	// Load recent log history from file if available for TUI display.
 	if logFilePath := findLogFilePath(app.Config); logFilePath != "" {
-		// Load the last N lines of log history for TUI display.
 		if err := logAdapter.LoadLogHistory(logFilePath, defaultLogHistoryLines); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to load log history: %v\n", err)
 		}
 	}
 
-	// Return initialized app and log adapter.
 	return app, logAdapter, nil
 }
 
@@ -249,23 +211,18 @@ func initializeAppAndLogAdapter(cfgPath string) (*App, *tui.LogAdapter, error) {
 //   - domainlogging.Logger: the configured logger.
 //   - *daemonlogger.BufferedWriter: buffered console writer (nil in interactive mode).
 func setupLoggingAndEvents(app *App, logAdapter *tui.LogAdapter, tuiMode tui.Mode) (domainlogging.Logger, *daemonlogger.BufferedWriter) {
-	// Initialize logger and buffered console writer.
 	logger, bufferedConsole, err := initializeLogger(app.Config, tuiMode)
-	// Check if logger initialization failed (continue with fallback).
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to build daemon logger: %v\n", err)
 	}
 
-	// Attach TUI writer to logger to capture events for display.
 	attachTUIWriter(logger, logAdapter)
 
-	// Set up event handler to log service events.
 	app.Supervisor.SetEventHandler(func(serviceName string, event *domainprocess.Event, stats *appsupervisor.ServiceStatsSnapshot) {
 		logEvent := convertProcessEventToLogEvent(serviceName, event, stats)
 		logger.Log(logEvent)
 	})
 
-	// Return configured logger and buffered console.
 	return logger, bufferedConsole
 }
 
@@ -276,13 +233,11 @@ func setupLoggingAndEvents(app *App, logAdapter *tui.LogAdapter, tuiMode tui.Mod
 //   - context.CancelFunc: the cancel function.
 //   - chan os.Signal: the signal channel.
 func setupContextAndSignals() (context.Context, context.CancelFunc, chan os.Signal) {
-	// Setup context and signals for graceful shutdown.
 	ctx, cancel := context.WithCancel(context.Background())
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
-	// Return context, cancel function, and signal channel.
 	return ctx, cancel, sigCh
 }
 
@@ -296,21 +251,16 @@ func setupContextAndSignals() (context.Context, context.CancelFunc, chan os.Sign
 // Returns:
 //   - error: startup error if any.
 func startSupervisorAndMetrics(ctx context.Context, app *App, logger domainlogging.Logger) error {
-	// Log daemon startup.
 	logger.Info("", "daemon_started", "Supervisor started", map[string]any{"version": version})
 
-	// Start supervisor and check for startup errors.
 	if err := app.Supervisor.Start(ctx); err != nil {
-		// Return error with context about supervisor startup failure.
 		return fmt.Errorf("failed to start supervisor: %w", err)
 	}
 
-	// Start metrics tracker for CPU/memory monitoring if available.
 	if app.MetricsTracker != nil {
 		_ = app.MetricsTracker.Start(ctx)
 	}
 
-	// Return nil indicating successful startup.
 	return nil
 }
 
@@ -329,34 +279,29 @@ func initializeLogger(cfg *domainconfig.Config, tuiMode tui.Mode) (domainlogging
 	var bufferedConsole *daemonlogger.BufferedWriter
 	var loggerErr error
 
-	// Check if interactive mode to avoid console pollution.
+	// Interactive mode: only file writers + TUI writer (no console pollution).
+	// Raw mode: use buffered console writer so logs appear after MOTD banner.
 	if tuiMode == tui.ModeInteractive {
-		// Interactive mode: only file writers + TUI writer (no console pollution).
 		logger, loggerErr = daemonlogger.BuildLoggerWithoutConsole(
 			cfg.Logging.Daemon,
 			cfg.Logging.BaseDir,
 		)
 	} else {
-		// Raw mode: use buffered console writer so logs appear after MOTD banner.
 		logger, bufferedConsole, loggerErr = daemonlogger.BuildLoggerWithBufferedConsole(
 			cfg.Logging.Daemon,
 			cfg.Logging.BaseDir,
 		)
 	}
 
-	// Check if logger creation failed (fallback to default logger).
+	// Fallback to silent logger (interactive) or default console logger (raw).
 	if loggerErr != nil {
-		// Use silent logger in interactive mode or default logger in raw mode.
 		if tuiMode == tui.ModeInteractive {
-			// In interactive mode, use a silent logger (TUI only).
 			logger = daemonlogger.NewSilentLogger()
 		} else {
-			// In raw mode, use default console logger as fallback.
 			logger = daemonlogger.DefaultLogger()
 		}
 	}
 
-	// Return configured logger and any initialization error.
 	return logger, bufferedConsole, loggerErr
 }
 
@@ -366,7 +311,6 @@ func initializeLogger(cfg *domainconfig.Config, tuiMode tui.Mode) (domainlogging
 //   - logger: the logger to attach writer to.
 //   - logAdapter: the log adapter for TUI.
 func attachTUIWriter(logger domainlogging.Logger, logAdapter *tui.LogAdapter) {
-	// Check if logger is a MultiLogger that supports adding writers.
 	if ml, ok := logger.(*daemonlogger.MultiLogger); ok {
 		tuiWriter := tui.NewTUILogWriter(logAdapter)
 		ml.AddWriter(tuiWriter)
@@ -384,25 +328,18 @@ func attachTUIWriter(logger domainlogging.Logger, logAdapter *tui.LogAdapter) {
 // Returns:
 //   - *tui.TUI: the configured TUI instance.
 func setupTUI(supervisor AppSupervisor, logAdapter *tui.LogAdapter, cfgPath string, tuiMode tui.Mode) *tui.TUI {
-	// Create TUI with the configured mode.
 	tuiConfig := tui.DefaultConfig(version)
 	tuiConfig.Mode = tuiMode
-	t := tui.New(tuiConfig)
+	t := tui.NewTUI(tuiConfig)
 
-	// Set service provider if supervisor supports ServiceSnapshotsForTUI.
 	if sup, ok := supervisor.(ServiceSnapshotsForTUIer); ok {
-		// Create a service provider that queries the supervisor.
-		provider := &supervisorServiceProvider{sup: sup}
-		t.SetServiceProvider(provider)
+		lister := &supervisorServiceLister{sup: sup}
+		t.SetServiceLister(lister)
 	}
 
-	// Set log adapter as health provider to display logs in TUI.
-	t.SetHealthProvider(logAdapter)
-
-	// Set config path for TUI display.
+	t.SetSummarizeer(logAdapter)
 	t.SetConfigPath(cfgPath)
 
-	// Return fully configured TUI instance.
 	return t
 }
 
@@ -419,22 +356,17 @@ func setupTUI(supervisor AppSupervisor, logAdapter *tui.LogAdapter, cfgPath stri
 //   - The goroutine sends its result to tuiDone channel and terminates.
 //   - Cleanup occurs when waitForTUIOrSignals returns, ensuring the goroutine has exited.
 func runTUIMode(cfg tuiModeConfig) error {
-	// Switch on TUI mode to determine execution flow.
 	switch cfg.tuiMode {
-	// Handle raw mode: show MOTD once then wait for signals.
 	case tui.ModeRaw:
 		// Raw mode: show MOTD once, then flush buffered logs and wait for signals.
 		if err := cfg.tui.Run(cfg.ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: TUI error: %v\n", err)
 		}
-		// Flush buffered logs after MOTD banner is displayed.
 		if cfg.bufferedConsole != nil {
 			_ = cfg.bufferedConsole.Flush()
 		}
-		// Continue to signal handling.
 		return WaitForSignals(cfg.ctx, cfg.cancel, cfg.sigCh, cfg.sup)
 
-	// Handle interactive mode: run TUI in parallel with signal handling.
 	case tui.ModeInteractive:
 		// Interactive mode: run TUI in parallel with signal handling.
 		tuiDone := make(chan error, 1)
@@ -443,11 +375,9 @@ func runTUIMode(cfg tuiModeConfig) error {
 			tuiDone <- cfg.tui.Run(cfg.ctx)
 		}()
 
-		// Wait for TUI exit or signals.
 		return waitForTUIOrSignals(cfg.ctx, cfg.cancel, cfg.sigCh, tuiDone, cfg.sup)
 	}
 
-	// Fallback: wait for signals.
 	return WaitForSignals(cfg.ctx, cfg.cancel, cfg.sigCh, cfg.sup)
 }
 
@@ -463,30 +393,19 @@ func runTUIMode(cfg tuiModeConfig) error {
 // Returns:
 //   - error: nil on success, error on failure.
 func waitForTUIOrSignals(ctx context.Context, cancel context.CancelFunc, sigCh <-chan os.Signal, tuiDone <-chan error, sup SignalHandler) error {
-	// Loop forever until TUI exits or shutdown signal received.
 	for {
-		// Select on signals, TUI completion, or context cancellation.
 		select {
-		// Handle OS signals for reload or shutdown.
 		case sig := <-sigCh:
-			// Handle signal based on type.
 			if err := handleSignal(sig, cancel, sup); err != nil {
-				// Return error from signal handling.
 				return err
 			}
-		// Handle TUI exit (user pressed q or error occurred).
 		case err := <-tuiDone:
-			// TUI exited (user pressed q or error).
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
 			}
-			// Stop the supervisor when TUI exits.
 			cancel()
-			// Stop supervisor and return result.
 			return sup.Stop()
-		// Handle context cancellation.
 		case <-ctx.Done():
-			// Stop supervisor when context is cancelled.
 			return sup.Stop()
 		}
 	}
@@ -502,23 +421,16 @@ func waitForTUIOrSignals(ctx context.Context, cancel context.CancelFunc, sigCh <
 // Returns:
 //   - error: error from stop operation if shutdown signal, nil otherwise.
 func handleSignal(sig os.Signal, cancel context.CancelFunc, sup SignalHandler) error {
-	// Switch on signal type to determine action.
 	switch sig {
-	// Handle SIGHUP for configuration reload.
 	case syscall.SIGHUP:
-		// Attempt to reload configuration.
 		if err := sup.Reload(); err != nil {
 			fmt.Fprintf(os.Stderr, "reload failed: %v\n", err)
 		}
-		// Return nil to continue loop.
 		return nil
-	// Handle SIGTERM or SIGINT for graceful shutdown.
 	case syscall.SIGTERM, syscall.SIGINT:
 		cancel()
-		// Stop supervisor and return result.
 		return sup.Stop()
 	}
-	// Return nil for unhandled signals.
 	return nil
 }
 
@@ -534,20 +446,13 @@ func handleSignal(sig os.Signal, cancel context.CancelFunc, sup SignalHandler) e
 // Returns:
 //   - error: nil on success, error on failure.
 func WaitForSignals(ctx context.Context, cancel context.CancelFunc, sigCh <-chan os.Signal, sup SignalHandler) error {
-	// Loop forever until a shutdown signal is received.
 	for {
-		// Select on signal channel or context done.
 		select {
-		// Handle OS signals received on signal channel.
 		case sig := <-sigCh:
-			// Handle signal and return error if shutdown requested.
 			if err := handleSignal(sig, cancel, sup); err != nil {
-				// Return error from signal handling (shutdown).
 				return err
 			}
-		// Handle context cancellation.
 		case <-ctx.Done():
-			// Return the result of stopping the supervisor when context is done.
 			return sup.Stop()
 		}
 	}
@@ -563,19 +468,10 @@ func WaitForSignals(ctx context.Context, cancel context.CancelFunc, sigCh <-chan
 // Returns:
 //   - domainlogging.LogEvent: the converted log event.
 func convertProcessEventToLogEvent(serviceName string, event *domainprocess.Event, stats *appsupervisor.ServiceStatsSnapshot) domainlogging.LogEvent {
-	// Determine appropriate log level based on event type.
 	level := determineLogLevel(event.Type)
-
-	// Build event type string.
 	eventType := event.Type.String()
-
-	// Build descriptive message based on event type and context.
 	message := buildEventMessage(event, stats)
-
-	// Create the log event with determined level and message.
 	logEvent := domainlogging.NewLogEvent(level, serviceName, eventType, message)
-
-	// Add relevant metadata to enrich log event.
 	return addEventMetadata(logEvent, event, stats)
 }
 
@@ -587,24 +483,15 @@ func convertProcessEventToLogEvent(serviceName string, event *domainprocess.Even
 // Returns:
 //   - domainlogging.Level: the determined log level.
 func determineLogLevel(eventType domainprocess.EventType) domainlogging.Level {
-	// Switch on event type to determine appropriate log level.
 	switch eventType {
-	// Failed and unhealthy events are warnings.
 	case domainprocess.EventFailed, domainprocess.EventUnhealthy:
-		// Return warning level for failure and unhealthy events.
 		return domainlogging.LevelWarn
-	// Exhausted events are errors (max restarts exceeded).
 	case domainprocess.EventExhausted:
-		// Return error level for exhausted restart attempts.
 		return domainlogging.LevelError
-	// Started, stopped, restarting, and healthy events are informational.
 	case domainprocess.EventStarted, domainprocess.EventStopped,
 		domainprocess.EventRestarting, domainprocess.EventHealthy:
-		// Return info level for normal lifecycle events.
 		return domainlogging.LevelInfo
-	// Default to info level for unknown event types.
 	default:
-		// Return info level as safe default.
 		return domainlogging.LevelInfo
 	}
 }
@@ -618,46 +505,22 @@ func determineLogLevel(eventType domainprocess.EventType) domainlogging.Level {
 // Returns:
 //   - string: the formatted event message.
 func buildEventMessage(event *domainprocess.Event, stats *appsupervisor.ServiceStatsSnapshot) string {
-	// Switch on event type to build appropriate message.
 	switch event.Type {
-	// Handle service started event.
 	case domainprocess.EventStarted:
-		// Return message for service start (with restart count if applicable).
 		return buildStartedMessage(stats)
-
-	// Handle service stopped event.
 	case domainprocess.EventStopped:
-		// Return message for service stop (with exit code).
 		return buildStoppedMessage(event.ExitCode)
-
-	// Handle service failed event.
 	case domainprocess.EventFailed:
-		// Return message for service failure (with failure count if applicable).
 		return buildFailedMessage(stats)
-
-	// Handle service restarting event.
 	case domainprocess.EventRestarting:
-		// Return message for service restart (with attempt number if applicable).
 		return buildRestartingMessage(stats)
-
-	// Handle service became healthy event.
 	case domainprocess.EventHealthy:
-		// Return message indicating service is now healthy.
 		return "Service became healthy"
-
-	// Handle service became unhealthy event.
 	case domainprocess.EventUnhealthy:
-		// Return message indicating service is now unhealthy.
 		return "Service became unhealthy"
-
-	// Handle service exhausted (max restarts exceeded) event.
 	case domainprocess.EventExhausted:
-		// Return message for service abandonment (with restart count).
 		return buildExhaustedMessage(stats)
-
-	// Handle unknown event types.
 	default:
-		// Return generic message for unknown event types.
 		return "Service event"
 	}
 }
@@ -670,12 +533,9 @@ func buildEventMessage(event *domainprocess.Event, stats *appsupervisor.ServiceS
 // Returns:
 //   - string: the formatted message.
 func buildStartedMessage(stats *appsupervisor.ServiceStatsSnapshot) string {
-	// Check if this is a restart (not initial start).
 	if stats != nil && stats.RestartCount > 0 {
-		// Return message showing restart count.
 		return fmt.Sprintf("Service started (restart #%d)", stats.RestartCount)
 	}
-	// Return simple started message for initial start.
 	return "Service started"
 }
 
@@ -687,12 +547,9 @@ func buildStartedMessage(stats *appsupervisor.ServiceStatsSnapshot) string {
 // Returns:
 //   - string: the formatted message.
 func buildStoppedMessage(exitCode int) string {
-	// Differentiate clean exit from non-clean exit.
 	if exitCode == cleanExitCode {
-		// Return message for clean shutdown.
 		return "Service stopped cleanly"
 	}
-	// Return message showing non-zero exit code.
 	return fmt.Sprintf("Service exited with code %d", exitCode)
 }
 
@@ -704,12 +561,9 @@ func buildStoppedMessage(exitCode int) string {
 // Returns:
 //   - string: the formatted message.
 func buildFailedMessage(stats *appsupervisor.ServiceStatsSnapshot) string {
-	// Check if this is a repeated failure.
 	if stats != nil && stats.FailCount > 1 {
-		// Return message showing failure count.
 		return fmt.Sprintf("Service failed (failure #%d)", stats.FailCount)
 	}
-	// Return simple failure message for first failure.
 	return "Service failed"
 }
 
@@ -721,12 +575,9 @@ func buildFailedMessage(stats *appsupervisor.ServiceStatsSnapshot) string {
 // Returns:
 //   - string: the formatted message.
 func buildRestartingMessage(stats *appsupervisor.ServiceStatsSnapshot) string {
-	// Check if stats available to show restart attempt number.
 	if stats != nil {
-		// Return message showing restart attempt number.
 		return fmt.Sprintf("Service restarting (attempt #%d)", stats.RestartCount+1)
 	}
-	// Return simple restarting message.
 	return "Service restarting"
 }
 
@@ -738,12 +589,9 @@ func buildRestartingMessage(stats *appsupervisor.ServiceStatsSnapshot) string {
 // Returns:
 //   - string: the formatted message.
 func buildExhaustedMessage(stats *appsupervisor.ServiceStatsSnapshot) string {
-	// Check if stats available to show total restart count.
 	if stats != nil {
-		// Return message showing restart count when abandoned.
 		return fmt.Sprintf("Service abandoned after %d restarts (max exceeded)", stats.RestartCount)
 	}
-	// Return simple exhausted message.
 	return "Service abandoned (max restarts exceeded)"
 }
 
@@ -757,35 +605,77 @@ func buildExhaustedMessage(stats *appsupervisor.ServiceStatsSnapshot) string {
 // Returns:
 //   - domainlogging.LogEvent: the enriched log event.
 func addEventMetadata(logEvent WithMetaer, event *domainprocess.Event, stats *appsupervisor.ServiceStatsSnapshot) domainlogging.LogEvent {
-	// Start with the input event cast to LogEvent for enrichment (KTN-VAR-TYPEASSERT).
+	// Type assertion for enrichment (KTN-VAR-TYPEASSERT).
+	// Graceful fallback avoids panic when caller passes incompatible interface type.
 	result, ok := logEvent.(domainlogging.LogEvent)
 	if !ok {
-		// Return zero value if type assertion fails.
 		return domainlogging.LogEvent{}
 	}
 
-	// Add PID if process was running.
-	if event.PID > 0 {
-		result = result.WithMeta("pid", event.PID)
-	}
+	result = addPIDMetadata(result, event)
+	result = addExitMetadata(result, event)
+	result = addRestartMetadata(result, event, stats)
 
-	// Always show exit_code for stopped/failed events (even 0).
-	if event.Type == domainprocess.EventStopped || event.Type == domainprocess.EventFailed {
-		result = result.WithMeta("exit_code", event.ExitCode)
-	}
-
-	// Add error message if present.
-	if event.Error != nil {
-		result = result.WithMeta("error", event.Error.Error())
-	}
-
-	// Add restart count for restarting/exhausted events.
-	if stats != nil && (event.Type == domainprocess.EventRestarting || event.Type == domainprocess.EventExhausted) {
-		result = result.WithMeta("restarts", stats.RestartCount)
-	}
-
-	// Return enriched log event.
 	return result
+}
+
+// addPIDMetadata adds PID to log event if process was running.
+//
+// Params:
+//   - result: the log event to enrich (uses WithMetaer interface).
+//   - event: the process event.
+//
+// Returns:
+//   - domainlogging.LogEvent: the enriched log event.
+func addPIDMetadata(result WithMetaer, event *domainprocess.Event) domainlogging.LogEvent {
+	if event.PID > 0 {
+		return result.WithMeta("pid", event.PID)
+	}
+	// Type assertion safe: all callers pass LogEvent.
+	logEvent, _ := result.(domainlogging.LogEvent)
+	return logEvent
+}
+
+// addExitMetadata adds exit code and error to log event.
+//
+// Params:
+//   - result: the log event to enrich (uses WithMetaer interface).
+//   - event: the process event.
+//
+// Returns:
+//   - domainlogging.LogEvent: the enriched log event.
+func addExitMetadata(result WithMetaer, event *domainprocess.Event) domainlogging.LogEvent {
+	// Track the enriched result through the chain.
+	enriched := result
+	if event.Type == domainprocess.EventStopped || event.Type == domainprocess.EventFailed {
+		enriched = enriched.WithMeta("exit_code", event.ExitCode)
+	}
+
+	if event.Error != nil {
+		enriched = enriched.WithMeta("error", event.Error.Error())
+	}
+
+	// Type assertion safe: WithMeta returns LogEvent which implements WithMetaer.
+	logEvent, _ := enriched.(domainlogging.LogEvent)
+	return logEvent
+}
+
+// addRestartMetadata adds restart count to log event for restarting/exhausted events.
+//
+// Params:
+//   - result: the log event to enrich (uses WithMetaer interface).
+//   - event: the process event.
+//   - stats: optional service statistics.
+//
+// Returns:
+//   - domainlogging.LogEvent: the enriched log event.
+func addRestartMetadata(result WithMetaer, event *domainprocess.Event, stats *appsupervisor.ServiceStatsSnapshot) domainlogging.LogEvent {
+	if stats != nil && (event.Type == domainprocess.EventRestarting || event.Type == domainprocess.EventExhausted) {
+		return result.WithMeta("restarts", stats.RestartCount)
+	}
+	// Type assertion safe: all callers pass LogEvent.
+	logEvent, _ := result.(domainlogging.LogEvent)
+	return logEvent
 }
 
 // findLogFilePath finds the first file writer's path from the config.
@@ -797,26 +687,19 @@ func addEventMetadata(logEvent WithMetaer, event *domainprocess.Event, stats *ap
 // Returns:
 //   - string: the log file path, or empty string if not found.
 func findLogFilePath(cfg *domainconfig.Config) string {
-	// Check if config is nil to avoid nil pointer dereference.
 	if cfg == nil {
-		// Return empty string if config is nil.
 		return ""
 	}
 
 	baseDir := cfg.Logging.BaseDir
-	// Iterate over configured writers to find file writer.
 	for _, w := range cfg.Logging.Daemon.Writers {
-		// Check if this is a file writer with a path.
 		if w.Type == "file" && w.File.Path != "" {
 			path := w.File.Path
-			// Convert relative path to absolute using baseDir.
 			if !filepath.IsAbs(path) && baseDir != "" {
 				path = filepath.Join(baseDir, path)
 			}
-			// Return the first file writer path found.
 			return path
 		}
 	}
-	// Return empty string if no file writer found.
 	return ""
 }

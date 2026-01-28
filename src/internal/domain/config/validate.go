@@ -36,33 +36,25 @@ var (
 // Returns:
 //   - error: validation error if any
 func Validate(cfg *Config) error {
-	// Check if at least one service is configured.
 	if len(cfg.Services) == 0 {
-		// Return error when no services are defined.
 		return ErrNoServices
 	}
 
 	seen := make(map[string]bool, len(cfg.Services))
 
-	// Iterate through all services to validate each one.
 	for i := range cfg.Services {
 		svc := &cfg.Services[i]
 
-		// Validate the service configuration.
 		if err := validateService(svc); err != nil {
-			// Return wrapped error with service name context.
 			return fmt.Errorf("service %q: %w", svc.Name, err)
 		}
 
-		// Check for duplicate service names.
 		if seen[svc.Name] {
-			// Return error for duplicate service name.
 			return fmt.Errorf("%w: %s", ErrDuplicateServiceName, svc.Name)
 		}
 		seen[svc.Name] = true
 	}
 
-	// Return nil when all validations pass.
 	return nil
 }
 
@@ -74,28 +66,20 @@ func Validate(cfg *Config) error {
 // Returns:
 //   - error: validation error if any
 func validateService(svc *ServiceConfig) error {
-	// Check if service name is provided.
 	if svc.Name == "" {
-		// Return error when service name is empty.
 		return ErrEmptyServiceName
 	}
 
-	// Check if service command is provided.
 	if svc.Command == "" {
-		// Return error when service command is empty.
 		return ErrEmptyCommand
 	}
 
-	// Iterate through all health checks to validate each one.
 	for i := range svc.HealthChecks {
-		// Validate the health check configuration.
 		if err := validateHealthCheck(&svc.HealthChecks[i]); err != nil {
-			// Return the health check validation error.
 			return err
 		}
 	}
 
-	// Return nil when all validations pass.
 	return nil
 }
 
@@ -107,40 +91,25 @@ func validateService(svc *ServiceConfig) error {
 // Returns:
 //   - error: validation error if any
 func validateHealthCheck(hc *HealthCheckConfig) error {
-	// Switch on health check type to apply type-specific validation.
 	switch hc.Type {
-	// Handle HTTP health check type.
 	case HealthCheckHTTP:
-		// Check if HTTP endpoint is provided.
 		if hc.Endpoint == "" {
-			// Return error when HTTP endpoint is missing.
 			return ErrMissingHTTPEndpoint
 		}
-	// Handle TCP health check type.
 	case HealthCheckTCP:
-		// Check if TCP host is provided.
 		if hc.Host == "" {
-			// Return error when TCP host is missing.
 			return ErrMissingTCPHost
 		}
-		// Check if TCP port is provided.
 		if hc.Port == 0 {
-			// Return error when TCP port is missing.
 			return ErrMissingTCPPort
 		}
-	// Handle command health check type.
 	case HealthCheckCommand:
-		// Check if health command is provided.
 		if hc.Command == "" {
-			// Return error when health command is missing.
 			return ErrMissingHealthCommand
 		}
-	// Handle unknown health check type.
 	default:
-		// Return error for invalid health check type.
 		return fmt.Errorf("%w: %s", ErrInvalidHealthCheckType, hc.Type)
 	}
 
-	// Return nil when validation passes.
 	return nil
 }

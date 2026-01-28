@@ -46,12 +46,11 @@ type LineWriter struct {
 // Returns:
 //   - *LineWriter: the initialized line writer instance.
 func NewLineWriter(w io.Writer, prefix string) *LineWriter {
-	// Return a new LineWriter with pre-allocated write buffer.
 	return &LineWriter{
 		writer:      w,
 		prefix:      prefix,
 		prefixBytes: []byte(prefix),
-		writeBuf:    make([]byte, 0, defaultWriteBufCapacity), // Pre-allocate for typical line length.
+		writeBuf:    make([]byte, 0, defaultWriteBufCapacity),
 	}
 }
 
@@ -68,12 +67,8 @@ func NewLineWriter(w io.Writer, prefix string) *LineWriter {
 func (lw *LineWriter) Write(p []byte) (n int, err error) {
 	lw.buf = append(lw.buf, p...)
 
-	// Iterate through the buffer to find and process complete lines.
 	for {
-		// Use bytes.IndexByte for optimized newline search (assembly-optimized).
 		idx := bytes.IndexByte(lw.buf, newlineChar)
-
-		// Check if no newline was found, meaning no complete line is available.
 		if idx == indexNotFound {
 			break
 		}
@@ -83,26 +78,19 @@ func (lw *LineWriter) Write(p []byte) (n int, err error) {
 
 		// Batch prefix + line into single write to reduce syscalls.
 		if len(lw.prefixBytes) > 0 {
-			// Reuse write buffer to avoid allocations.
 			lw.writeBuf = lw.writeBuf[:0]
 			lw.writeBuf = append(lw.writeBuf, lw.prefixBytes...)
 			lw.writeBuf = append(lw.writeBuf, line...)
-			// Check if write operation succeeded for prefixed line.
 			if _, err := lw.writer.Write(lw.writeBuf); err != nil {
-				// Write failed - return zero bytes and propagate error.
 				return zeroBytes, err
 			}
 		} else {
-			// No prefix, write line directly.
-			// Check if write operation succeeded for plain line.
 			if _, err := lw.writer.Write(line); err != nil {
-				// Write failed - return zero bytes and propagate error.
 				return zeroBytes, err
 			}
 		}
 	}
 
-	// Return the total number of bytes processed from the input.
 	return len(p), nil
 }
 
@@ -113,24 +101,19 @@ func (lw *LineWriter) Write(p []byte) (n int, err error) {
 // Returns:
 //   - error: an error if writing to the underlying writer fails.
 func (lw *LineWriter) Flush() error {
-	// Check if there is any buffered data remaining to be flushed.
 	if len(lw.buf) > zeroBytes {
-		// Batch prefix + content + newline into single write.
 		lw.writeBuf = lw.writeBuf[:0]
-		// Check if prefix should be prepended to the flushed content.
 		if len(lw.prefixBytes) > 0 {
 			lw.writeBuf = append(lw.writeBuf, lw.prefixBytes...)
 		}
 		lw.writeBuf = append(lw.writeBuf, lw.buf...)
 		lw.writeBuf = append(lw.writeBuf, newlineChar)
 
-		// Check if write operation succeeded for the flushed content.
 		if _, err := lw.writer.Write(lw.writeBuf); err != nil {
-			// Write failed - return error to caller.
 			return err
 		}
 		lw.buf = nil
 	}
-	// Return nil indicating successful flush or no data to flush.
+
 	return nil
 }

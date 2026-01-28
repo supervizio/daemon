@@ -198,6 +198,12 @@ func getDockerPorts(pid int) []int {
 // Returns:
 //   - bool: true if "run" subcommand found
 func hasRunSubcommand(args []string) bool {
+	// Guard against empty args.
+	if len(args) < minDockerArgs {
+		// Not enough arguments.
+		return false
+	}
+
 	// Check if "run" is in the arguments.
 	return slices.Contains(args[1:], "run")
 }
@@ -251,9 +257,7 @@ func findDockerContainerByPID(pid int) string {
 	// Iterate over running containers.
 	// Check each container for PID match.
 	for containerID := range strings.FieldsSeq(string(out)) {
-		// Found matching container.
 		if matchesContainerPID(ctx, containerID, pid) {
-			// Container matches PID.
 			return containerID
 		}
 	}

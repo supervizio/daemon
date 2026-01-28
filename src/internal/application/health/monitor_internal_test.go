@@ -34,9 +34,7 @@ type internalTestProber struct {
 // Returns:
 //   - domain.CheckResult: the configured test result.
 func (p *internalTestProber) Probe(_ context.Context, _ domain.Target) domain.CheckResult {
-	// Increment probe count for verification.
 	p.probeCount++
-	// Return the pre-configured result for testing.
 	return p.result
 }
 
@@ -45,7 +43,6 @@ func (p *internalTestProber) Probe(_ context.Context, _ domain.Target) domain.Ch
 // Returns:
 //   - string: the prober type identifier.
 func (p *internalTestProber) Type() string {
-	// Return the configured prober type.
 	return p.probeType
 }
 
@@ -2444,6 +2441,74 @@ func Test_ProbeMonitor_getFailureThreshold(t *testing.T) {
 
 			// Verify expectation.
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Test_ProbeMonitor_handleHealthyTransition tests the handleHealthyTransition method.
+//
+// Params:
+//   - t: the testing context.
+func Test_ProbeMonitor_handleHealthyTransition(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// prevState is the previous subject state.
+		prevState domain.SubjectState
+		// newState is the new subject state.
+		newState domain.SubjectState
+		// hasCallback indicates whether callback is set.
+		hasCallback bool
+		// expectCall indicates whether callback should be called.
+		expectCall bool
+	}{
+		{
+			name:        "listening_to_ready_triggers",
+			prevState:   domain.SubjectListening,
+			newState:    domain.SubjectReady,
+			hasCallback: true,
+			expectCall:  true,
+		},
+		{
+			name:        "listening_to_ready_no_callback",
+			prevState:   domain.SubjectListening,
+			newState:    domain.SubjectReady,
+			hasCallback: false,
+			expectCall:  false,
+		},
+		{
+			name:        "other_transition_no_trigger",
+			prevState:   domain.SubjectReady,
+			newState:    domain.SubjectListening,
+			hasCallback: true,
+			expectCall:  false,
+		},
+		{
+			name:        "same_state_no_trigger",
+			prevState:   domain.SubjectReady,
+			newState:    domain.SubjectReady,
+			hasCallback: true,
+			expectCall:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+			monitor := &ProbeMonitor{}
+
+			// Set callback if requested.
+			if tt.hasCallback {
+				monitor.onHealthy = func(_ string) {
+					called = true
+				}
+			}
+
+			// Call the method.
+			monitor.handleHealthyTransition("test", tt.prevState, tt.newState)
+
+			// Verify expectation.
+			assert.Equal(t, tt.expectCall, called)
 		})
 	}
 }

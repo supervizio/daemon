@@ -7,6 +7,10 @@ run:
   tests: false
 
 linters:
+  disable:
+    # govet shift analyzer panics on supervisor/ports_linux.go (linter bug, not code issue)
+    # The shift operation is safe: portBytes[0]<<8 where len is verified to be 2
+    - govet
   enable:
     - bodyclose
     - dogsled
@@ -38,6 +42,11 @@ formatters:
     - goimports
 
 linters-settings:
+  govet:
+    # Disable shift analyzer - panics on supervisor/ports_linux.go (linter bug)
+    disable:
+      - shift
+
   gocyclo:
     min-complexity: 15
 

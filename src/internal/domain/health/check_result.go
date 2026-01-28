@@ -38,7 +38,6 @@ type CheckResult struct {
 // Returns:
 //   - CheckResult: a probe result with the specified values.
 func NewCheckResult(success bool, latency time.Duration, output string, err error) CheckResult {
-	// Return result with all fields set.
 	return CheckResult{
 		Success: success,
 		Latency: latency,
@@ -56,7 +55,6 @@ func NewCheckResult(success bool, latency time.Duration, output string, err erro
 // Returns:
 //   - CheckResult: a successful probe result.
 func NewSuccessCheckResult(latency time.Duration, output string) CheckResult {
-	// Return successful result.
 	return CheckResult{
 		Success: true,
 		Latency: latency,
@@ -74,7 +72,6 @@ func NewSuccessCheckResult(latency time.Duration, output string) CheckResult {
 // Returns:
 //   - CheckResult: a failed probe result with error.
 func NewFailureCheckResult(latency time.Duration, output string, err error) CheckResult {
-	// Return failure result with error.
 	return CheckResult{
 		Success: false,
 		Latency: latency,
@@ -88,7 +85,6 @@ func NewFailureCheckResult(latency time.Duration, output string, err error) Chec
 // Returns:
 //   - bool: true if probe succeeded, false otherwise.
 func (r CheckResult) IsSuccess() bool {
-	// Return the success status.
 	return r.Success
 }
 
@@ -97,6 +93,5 @@ func (r CheckResult) IsSuccess() bool {
 // Returns:
 //   - bool: true if probe failed, false otherwise.
 func (r CheckResult) IsFailure() bool {
-	// Return the inverse of success.
 	return !r.Success
 }

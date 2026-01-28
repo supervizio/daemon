@@ -43,7 +43,6 @@ type NetStats struct {
 // Returns:
 //   - NetStats: new network statistics instance
 func NewNetStats(iface string, timestamp time.Time) NetStats {
-	// Return statistics with essential fields set.
 	return NetStats{
 		Interface: iface,
 		Timestamp: timestamp,
@@ -55,7 +54,6 @@ func NewNetStats(iface string, timestamp time.Time) NetStats {
 // Returns:
 //   - uint64: sum of bytes sent and received
 func (n *NetStats) TotalBytes() uint64 {
-	// Sum bytes sent and received to get total bytes transferred.
 	return n.BytesSent + n.BytesRecv
 }
 
@@ -64,7 +62,6 @@ func (n *NetStats) TotalBytes() uint64 {
 // Returns:
 //   - uint64: sum of packets sent and received
 func (n *NetStats) TotalPackets() uint64 {
-	// Sum packets sent and received to get total packets transferred.
 	return n.PacketsSent + n.PacketsRecv
 }
 
@@ -73,7 +70,6 @@ func (n *NetStats) TotalPackets() uint64 {
 // Returns:
 //   - uint64: sum of input and output errors
 func (n *NetStats) TotalErrors() uint64 {
-	// Sum input and output errors to get total error count.
 	return n.ErrorsIn + n.ErrorsOut
 }
 
@@ -82,6 +78,5 @@ func (n *NetStats) TotalErrors() uint64 {
 // Returns:
 //   - uint64: sum of input and output drops
 func (n *NetStats) TotalDrops() uint64 {
-	// Sum input and output drops to get total dropped packets.
 	return n.DropsIn + n.DropsOut
 }

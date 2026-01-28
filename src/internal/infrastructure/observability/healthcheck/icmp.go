@@ -41,8 +41,7 @@ type ICMPProber struct {
 // Returns:
 //   - *ICMPProber: a configured ICMP prober ready to perform probes.
 func NewICMPProber(timeout time.Duration) *ICMPProber {
-	// Return configured ICMP prober with TCP fallback enabled by default.
-	// ICMP requires CAP_NET_RAW which is often unavailable in containers.
+	// TCP fallback enabled by default since ICMP requires CAP_NET_RAW.
 	return &ICMPProber{
 		timeout:        timeout,
 		useTCPFallback: true,
@@ -59,7 +58,6 @@ func NewICMPProber(timeout time.Duration) *ICMPProber {
 // Returns:
 //   - *ICMPProber: a configured ICMP prober with TCP fallback.
 func NewICMPProberWithTCPFallback(timeout time.Duration, tcpPort int) *ICMPProber {
-	// Return configured ICMP prober with TCP fallback.
 	return &ICMPProber{
 		timeout:        timeout,
 		useTCPFallback: true,
@@ -72,7 +70,6 @@ func NewICMPProberWithTCPFallback(timeout time.Duration, tcpPort int) *ICMPProbe
 // Returns:
 //   - string: the constant "icmp" identifying the prober type.
 func (p *ICMPProber) Type() string {
-	// Return the ICMP prober type identifier.
 	return proberTypeICMP
 }
 
@@ -88,22 +85,16 @@ func (p *ICMPProber) Type() string {
 func (p *ICMPProber) Probe(ctx context.Context, target health.Target) health.CheckResult {
 	start := time.Now()
 
-	// Resolve the target address.
 	host := target.Address
-	// Check if address contains port (e.g., host:port format).
 	if hostPart, _, err := net.SplitHostPort(host); err == nil {
-		// Extract just the host portion for ICMP/TCP ping.
 		host = hostPart
 	}
 
-	// Use TCP fallback when CAP_NET_RAW is unavailable.
 	if p.useTCPFallback {
-		// Return TCP-based latency measurement.
 		return p.tcpPing(ctx, host, start)
 	}
 
 	// TODO: Implement real ICMP ping using golang.org/x/net/icmp
-	// For now, always use TCP fallback.
 	return p.tcpPing(ctx, host, start)
 }
 
@@ -118,40 +109,17 @@ func (p *ICMPProber) Probe(ctx context.Context, target health.Target) health.Che
 // Returns:
 //   - health.CheckResult: the probe result with latency.
 func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) health.CheckResult {
-	// Validate and normalize TCP port.
 	tcpPort := p.tcpPort
-	// Apply default port when not configured or invalid.
 	if tcpPort <= 0 || tcpPort > shared.MaxValidPort {
 		tcpPort = defaultTCPFallbackPort
 	}
-
-	// Build address with TCP port (handles IPv6 correctly).
 	address := net.JoinHostPort(host, strconv.Itoa(tcpPort))
-
-	// Create dialer with configured timeout.
-	dialer := &net.Dialer{
-		Timeout: p.timeout,
-	}
-
-	// Attempt to establish connection.
+	dialer := &net.Dialer{Timeout: p.timeout}
 	conn, err := dialer.DialContext(ctx, "tcp", address)
 	latency := time.Since(start)
-
-	// Handle connection failure.
 	if err != nil {
-		// Return failure result.
-		return health.NewFailureCheckResult(
-			latency,
-			fmt.Sprintf("ping failed: %v", err),
-			err,
-		)
+		return health.NewFailureCheckResult(latency, fmt.Sprintf("ping failed: %v", err), err)
 	}
-	// Close the connection.
 	_ = conn.Close()
-
-	// Return success result with latency.
-	return health.NewSuccessCheckResult(
-		latency,
-		fmt.Sprintf("ping %s: latency=%s (tcp fallback)", host, latency),
-	)
+	return health.NewSuccessCheckResult(latency, fmt.Sprintf("ping %s: latency=%s (tcp fallback)", host, latency))
 }

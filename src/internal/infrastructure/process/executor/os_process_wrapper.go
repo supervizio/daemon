@@ -12,49 +12,38 @@ type osProcessWrapper struct {
 	proc *os.Process
 }
 
-// Signal sends a signal to the process.
+// Signal delegates to os.Process.Signal.
 //
 // Params:
-//   - sig: the signal to send.
+//   - sig: signal to send to the process
 //
 // Returns:
-//   - error: any error from sending the signal.
-func (w *osProcessWrapper) Signal(sig os.Signal) error {
-	// Delegate to underlying os.Process.
-	return w.proc.Signal(sig)
-}
+//   - error: if signal delivery fails (process not found, permission denied, etc)
+func (w *osProcessWrapper) Signal(sig os.Signal) error { return w.proc.Signal(sig) }
 
-// Kill kills the process.
+// Kill delegates to os.Process.Kill.
 //
 // Returns:
-//   - error: any error from killing the process.
-func (w *osProcessWrapper) Kill() error {
-	// Delegate to underlying os.Process.
-	return w.proc.Kill()
-}
+//   - error: if SIGKILL delivery fails
+func (w *osProcessWrapper) Kill() error { return w.proc.Kill() }
 
-// Wait waits for the process to exit.
+// Wait delegates to os.Process.Wait.
 //
 // Returns:
-//   - *os.ProcessState: the process state after exit.
-//   - error: any error from waiting.
-func (w *osProcessWrapper) Wait() (*os.ProcessState, error) {
-	// Delegate to underlying os.Process.
-	return w.proc.Wait()
-}
+//   - *os.ProcessState: exit status and resource usage
+//   - error: if wait fails (process not a child, already reaped, etc)
+func (w *osProcessWrapper) Wait() (*os.ProcessState, error) { return w.proc.Wait() }
 
-// defaultFindProcess wraps os.FindProcess to return the Process interface.
+// defaultFindProcess creates a handle; existence check deferred to Signal/Kill.
+// On Unix, FindProcess always succeeds; actual existence verified on signal.
 //
 // Params:
-//   - pid: the process ID to find.
+//   - pid: process ID to create handle for
 //
 // Returns:
-//   - Process: the process interface wrapper.
-//   - error: any error from finding the process.
+//   - Process: wrapped process handle
+//   - error: always nil (Unix FindProcess never fails)
 func defaultFindProcess(pid int) (Process, error) {
-	// On Unix, os.FindProcess always succeeds - it only creates a handle.
-	// The actual existence check happens when Signal/Kill is called.
 	proc, _ := os.FindProcess(pid)
-	// Wrap and return the process.
 	return &osProcessWrapper{proc: proc}, nil
 }

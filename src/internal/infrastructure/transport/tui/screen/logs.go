@@ -59,7 +59,6 @@ type LogsRenderer struct {
 // Returns:
 //   - *LogsRenderer: configured renderer instance
 func NewLogsRenderer(width int) *LogsRenderer {
-	// Return configured logs renderer with defaults.
 	return &LogsRenderer{
 		theme:  ansi.DefaultTheme(),
 		width:  width,
@@ -86,15 +85,31 @@ func (l *LogsRenderer) SetWidth(width int) {
 func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 	logs := snap.Logs
 
-	// Summary line.
+	summaryLine := l.buildSummaryLine(logs)
+	lines := l.buildLogLines(logs, summaryLine)
+
+	box := widget.NewBox(l.width).
+		SetTitle("Logs Summary").
+		SetTitleColor(l.theme.Header).
+		AddLines(lines)
+
+	return box.Render()
+}
+
+// buildSummaryLine builds the summary line for log counts.
+//
+// Params:
+//   - logs: log summary data.
+//
+// Returns:
+//   - string: formatted summary line.
+func (l *LogsRenderer) buildSummaryLine(logs model.LogSummary) string {
 	period := logs.Period
-	// Use default 5 minute period if not specified.
 	if period == 0 {
 		period = defaultLogPeriod
 	}
 	periodStr := widget.FormatDurationShort(period)
 
-	// Build summary with strings.Builder to avoid allocations.
 	var sb strings.Builder
 	sb.Grow(summaryBufferSize)
 	sb.WriteString("Last ")
@@ -103,107 +118,154 @@ func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 	sb.WriteString(strconv.Itoa(logs.InfoCount))
 	sb.WriteString("  ")
 
-	// Color warnings/errors.
-	// Highlight warnings in yellow if no errors.
+	l.appendWarnCount(&sb, logs)
+	sb.WriteString("  ")
+
+	l.appendErrorCount(&sb, logs)
+
+	return sb.String()
+}
+
+// appendWarnCount appends warning count to builder with optional color.
+//
+// Params:
+//   - sb: string builder to append to.
+//   - logs: log summary data.
+func (l *LogsRenderer) appendWarnCount(sb *strings.Builder, logs model.LogSummary) {
 	if logs.WarnCount > 0 && logs.ErrorCount == 0 {
 		sb.WriteString(l.theme.Warning)
 		sb.WriteString("WARN: ")
 		sb.WriteString(strconv.Itoa(logs.WarnCount))
 		sb.WriteString(ansi.Reset)
-		// Use default formatting otherwise.
 	} else {
 		sb.WriteString("WARN: ")
 		sb.WriteString(strconv.Itoa(logs.WarnCount))
 	}
-	sb.WriteString("  ")
+}
 
-	// Highlight errors in red when present.
+// appendErrorCount appends error count to builder with optional color.
+//
+// Params:
+//   - sb: string builder to append to.
+//   - logs: log summary data.
+func (l *LogsRenderer) appendErrorCount(sb *strings.Builder, logs model.LogSummary) {
 	if logs.ErrorCount > 0 {
 		sb.WriteString(l.theme.Error)
 		sb.WriteString("ERROR: ")
 		sb.WriteString(strconv.Itoa(logs.ErrorCount))
 		sb.WriteString(ansi.Reset)
-		// Use default formatting otherwise.
 	} else {
 		sb.WriteString("ERROR: ")
 		sb.WriteString(strconv.Itoa(logs.ErrorCount))
 	}
+}
 
-	// Pre-allocate lines slice: summary + separator + entries + empty state.
+// buildLogLines builds all content lines for the logs section.
+//
+// Params:
+//   - logs: log summary data.
+//   - summaryLine: pre-formatted summary line.
+//
+// Returns:
+//   - []string: all content lines.
+func (l *LogsRenderer) buildLogLines(logs model.LogSummary, summaryLine string) []string {
 	linesCap := linesCapBaseCount + len(logs.RecentEntries)
 	lines := make([]string, 0, linesCap)
-	lines = append(lines, "  "+sb.String())
+	lines = append(lines, "  "+summaryLine)
 
-	// Separator.
-	// Add visual separator when log entries exist.
 	if len(logs.RecentEntries) > 0 {
-		sepWidth := l.width - separatorPadding
-		// Ensure non-negative separator width.
-		if sepWidth < 0 {
-			sepWidth = 0
-		}
-		lines = append(lines, "  "+l.theme.Muted+strings.Repeat("─", sepWidth)+ansi.Reset)
+		lines = append(lines, l.buildSeparator())
 	}
 
-	// Recent entries using strings.Builder.
-	maxWidth := l.width - logLinePadding
-	// Iterate through recent log entries to format each line.
-	for _, entry := range logs.RecentEntries {
-		ts := entry.Timestamp.Format("15:04:05")
-		level := l.status.LogLevel(entry.Level)
-		service := entry.Service
+	lines = append(lines, l.buildEntryLines(logs.RecentEntries)...)
 
-		// Calculate prefix length for truncation.
-		prefixLen := len(ts) + timestampBracketLen + len(entry.Level) + levelCloseBracketLen + len(service) + serviceColonLen
-
-		// Truncate message if needed (rune-safe for UTF-8).
-		msgWidth := maxWidth - prefixLen
-		msg := entry.Message
-		// Hide message when no space available.
-		if msgWidth <= 0 {
-			msg = ""
-			// Process message when space is available.
-		} else {
-			msgRunes := []rune(msg)
-			// Truncate with ellipsis if message exceeds available width.
-			if len(msgRunes) > msgWidth {
-				// Use only ellipsis for very narrow widths.
-				if msgWidth <= 1 {
-					msg = "…"
-					// Truncate with partial message plus ellipsis.
-				} else {
-					msg = string(msgRunes[:msgWidth-1]) + "…"
-				}
-			}
-		}
-
-		// Build line with strings.Builder.
-		var lineSb strings.Builder
-		lineSb.Grow(prefixLen + len(msg) + linePrefixExtra)
-		lineSb.WriteString("  ")
-		lineSb.WriteString(ts)
-		lineSb.WriteString(" [")
-		lineSb.WriteString(level)
-		lineSb.WriteString("] ")
-		lineSb.WriteString(service)
-		lineSb.WriteString(": ")
-		lineSb.WriteString(msg)
-		lines = append(lines, lineSb.String())
-	}
-
-	// Empty state.
-	// Show placeholder message when no logs available.
 	if len(logs.RecentEntries) == 0 {
 		lines = append(lines, "  "+l.theme.Muted+"No recent logs"+ansi.Reset)
 	}
 
-	box := widget.NewBox(l.width).
-		SetTitle("Logs Summary").
-		SetTitleColor(l.theme.Header).
-		AddLines(lines)
+	return lines
+}
 
-	// Return rendered logs summary box.
-	return box.Render()
+// buildSeparator builds a visual separator line.
+//
+// Returns:
+//   - string: separator line.
+func (l *LogsRenderer) buildSeparator() string {
+	sepWidth := max(l.width-separatorPadding, 0)
+	return "  " + l.theme.Muted + strings.Repeat("─", sepWidth) + ansi.Reset
+}
+
+// buildEntryLines builds lines for log entries.
+//
+// Params:
+//   - entries: recent log entries.
+//
+// Returns:
+//   - []string: formatted entry lines.
+func (l *LogsRenderer) buildEntryLines(entries []model.LogEntry) []string {
+	maxWidth := l.width - logLinePadding
+	lines := make([]string, 0, len(entries))
+
+	for _, entry := range entries {
+		lines = append(lines, l.formatLogEntry(entry, maxWidth))
+	}
+
+	return lines
+}
+
+// formatLogEntry formats a single log entry.
+//
+// Params:
+//   - entry: log entry to format.
+//   - maxWidth: maximum line width.
+//
+// Returns:
+//   - string: formatted log line.
+func (l *LogsRenderer) formatLogEntry(entry model.LogEntry, maxWidth int) string {
+	ts := entry.Timestamp.Format("15:04:05")
+	level := l.status.LogLevel(entry.Level)
+
+	prefixLen := len(ts) + timestampBracketLen + len(entry.Level) + levelCloseBracketLen + len(entry.Service) + serviceColonLen
+
+	msg := l.truncateMessage(entry.Message, maxWidth-prefixLen)
+
+	var sb strings.Builder
+	sb.Grow(prefixLen + len(msg) + linePrefixExtra)
+	sb.WriteString("  ")
+	sb.WriteString(ts)
+	sb.WriteString(" [")
+	sb.WriteString(level)
+	sb.WriteString("] ")
+	sb.WriteString(entry.Service)
+	sb.WriteString(": ")
+	sb.WriteString(msg)
+
+	return sb.String()
+}
+
+// truncateMessage truncates a message to fit width.
+//
+// Params:
+//   - msg: message to truncate.
+//   - width: available width.
+//
+// Returns:
+//   - string: truncated message.
+func (l *LogsRenderer) truncateMessage(msg string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+
+	msgRunes := []rune(msg)
+	if len(msgRunes) <= width {
+		return msg
+	}
+
+	if width <= 1 {
+		return "…"
+	}
+
+	return string(msgRunes[:width-1]) + "…"
 }
 
 // RenderBadge returns a compact badge for interactive mode.
@@ -216,17 +278,12 @@ func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 func (l *LogsRenderer) RenderBadge(snap *model.Snapshot) string {
 	logs := snap.Logs
 
-	// Show error count in red when errors exist.
 	if logs.ErrorCount > 0 {
-		// Return error badge with count.
 		return l.theme.Error + "Errors: " + strconv.Itoa(logs.ErrorCount) + ansi.Reset
 	}
-	// Show warning count in yellow when warnings exist.
 	if logs.WarnCount > 0 {
-		// Return warning badge with count.
 		return l.theme.Warning + "Warns: " + strconv.Itoa(logs.WarnCount) + ansi.Reset
 	}
-	// Return clean status when no issues.
 	return l.theme.Muted + "No errors" + ansi.Reset
 }
 
@@ -241,25 +298,19 @@ func (l *LogsRenderer) RenderInline(snap *model.Snapshot) string {
 	logs := snap.Logs
 
 	parts := make([]string, 0, inlinePartsCapacity)
-	// Add error count if present.
 	if logs.ErrorCount > 0 {
 		parts = append(parts, l.theme.Error+"E:"+strconv.Itoa(logs.ErrorCount)+ansi.Reset)
 	}
-	// Add warning count if present.
 	if logs.WarnCount > 0 {
 		parts = append(parts, l.theme.Warning+"W:"+strconv.Itoa(logs.WarnCount)+ansi.Reset)
 	}
-	// Add info count if present.
 	if logs.InfoCount > 0 {
 		parts = append(parts, "I:"+strconv.Itoa(logs.InfoCount))
 	}
 
-	// Return empty state message when no logs.
 	if len(parts) == 0 {
-		// Return placeholder for no logs.
 		return l.theme.Muted + "No logs" + ansi.Reset
 	}
 
-	// Return formatted log summary.
 	return strings.Join(parts, " ")
 }

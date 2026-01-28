@@ -13,10 +13,6 @@ import (
 func TestConsoleWriter_SplitByLevel(t *testing.T) {
 	t.Parallel()
 
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	writer := daemon.NewConsoleWriterWithOptions(stdout, stderr, false)
-
 	tests := []struct {
 		level        logging.Level
 		expectStdout bool
@@ -30,9 +26,11 @@ func TestConsoleWriter_SplitByLevel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.level.String(), func(t *testing.T) {
-			// Reset buffers.
-			stdout.Reset()
-			stderr.Reset()
+			t.Parallel()
+			// Create separate buffers for each subtest.
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			writer := daemon.NewConsoleWriterWithOptions(stdout, stderr, false)
 
 			event := logging.NewLogEvent(tt.level, "test", "event", "message")
 			err := writer.Write(event)
@@ -53,26 +51,164 @@ func TestConsoleWriter_SplitByLevel(t *testing.T) {
 func TestConsoleWriter_Format(t *testing.T) {
 	t.Parallel()
 
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	writer := daemon.NewConsoleWriterWithOptions(stdout, stderr, false)
+	tests := []struct {
+		name     string
+		level    logging.Level
+		service  string
+		event    string
+		message  string
+		metadata map[string]any
+		contains []string
+	}{
+		{
+			name:     "info with metadata",
+			level:    logging.LevelInfo,
+			service:  "nginx",
+			event:    "started",
+			message:  "Service started",
+			metadata: map[string]any{"pid": 1234},
+			contains: []string{"[INFO]", "nginx", "started", "pid=1234"},
+		},
+		{
+			name:     "error without metadata",
+			level:    logging.LevelError,
+			service:  "postgres",
+			event:    "failed",
+			message:  "Database connection failed",
+			metadata: nil,
+			contains: []string{"[ERROR]", "postgres", "failed"},
+		},
+	}
 
-	event := logging.NewLogEvent(logging.LevelInfo, "nginx", "started", "Service started").
-		WithMeta("pid", 1234)
-	err := writer.Write(event)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	output := stdout.String()
-	assert.Contains(t, output, "[INFO]")
-	assert.Contains(t, output, "nginx")
-	assert.Contains(t, output, "started")
-	assert.Contains(t, output, "pid=1234")
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			writer := daemon.NewConsoleWriterWithOptions(stdout, stderr, false)
+
+			event := logging.NewLogEvent(tt.level, tt.service, tt.event, tt.message).
+				WithMetadata(tt.metadata)
+			err := writer.Write(event)
+			require.NoError(t, err)
+
+			output := stdout.String() + stderr.String()
+			for _, expected := range tt.contains {
+				assert.Contains(t, output, expected)
+			}
+		})
+	}
 }
 
 func TestConsoleWriter_Close(t *testing.T) {
 	t.Parallel()
 
-	writer := daemon.NewConsoleWriter()
-	err := writer.Close()
-	assert.NoError(t, err)
+	tests := []struct {
+		name string
+	}{
+		{name: "close console writer"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			writer := daemon.NewConsoleWriter()
+			err := writer.Close()
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestNewConsoleWriter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+	}{
+		{name: "create console writer with defaults"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			writer := daemon.NewConsoleWriter()
+			assert.NotNil(t, writer)
+			_ = writer.Close()
+		})
+	}
+}
+
+func TestNewConsoleWriterWithOptions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		color bool
+	}{
+		{
+			name:  "with color",
+			color: true,
+		},
+		{
+			name:  "without color",
+			color: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			writer := daemon.NewConsoleWriterWithOptions(stdout, stderr, tt.color)
+			assert.NotNil(t, writer)
+			_ = writer.Close()
+		})
+	}
+}
+
+func TestConsoleWriter_Write(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		level logging.Level
+	}{
+		{
+			name:  "write debug",
+			level: logging.LevelDebug,
+		},
+		{
+			name:  "write info",
+			level: logging.LevelInfo,
+		},
+		{
+			name:  "write warn",
+			level: logging.LevelWarn,
+		},
+		{
+			name:  "write error",
+			level: logging.LevelError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			writer := daemon.NewConsoleWriterWithOptions(stdout, stderr, false)
+
+			event := logging.NewLogEvent(tt.level, "test", "event", "message")
+			err := writer.Write(event)
+			assert.NoError(t, err)
+
+			_ = writer.Close()
+		})
+	}
 }

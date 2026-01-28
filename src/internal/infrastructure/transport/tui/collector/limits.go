@@ -19,14 +19,14 @@ func NewLimitsCollector() *LimitsCollector {
 	return &LimitsCollector{}
 }
 
-// CollectInto populates resource limits.
+// Gather populates resource limits.
 //
 // Params:
 //   - snap: target snapshot to populate
 //
 // Returns:
 //   - error: always returns nil
-func (c *LimitsCollector) CollectInto(snap *model.Snapshot) error {
+func (c *LimitsCollector) Gather(snap *model.Snapshot) error {
 	limits := &snap.Limits
 
 	// Collect cgroup limits (platform-specific).

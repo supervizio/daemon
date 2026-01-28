@@ -52,7 +52,6 @@ type ListenerConfig struct {
 // Returns:
 //   - ListenerConfig: listener configuration with TCP protocol.
 func NewListenerConfig(name string, port int) ListenerConfig {
-	// Return listener config with TCP protocol as the default.
 	return ListenerConfig{
 		Name:     name,
 		Port:     port,
@@ -68,9 +67,7 @@ func NewListenerConfig(name string, port int) ListenerConfig {
 // Returns:
 //   - ListenerConfig: listener with probe configuration.
 func (l ListenerConfig) WithProbe(probe *ProbeConfig) ListenerConfig {
-	// Attach probe to listener for health checking.
 	l.Probe = probe
-	// Return the modified listener with probe attached.
 	return l
 }
 
@@ -79,9 +76,7 @@ func (l ListenerConfig) WithProbe(probe *ProbeConfig) ListenerConfig {
 // Returns:
 //   - ListenerConfig: listener with TCP probe.
 func (l ListenerConfig) WithTCPProbe() ListenerConfig {
-	// Create TCP probe and attach to listener.
 	probe := DefaultProbeConfig("tcp")
-	// Return listener with TCP probe for connection checks.
 	return l.WithProbe(&probe)
 }
 
@@ -93,10 +88,8 @@ func (l ListenerConfig) WithTCPProbe() ListenerConfig {
 // Returns:
 //   - ListenerConfig: listener with HTTP probe.
 func (l ListenerConfig) WithHTTPProbe(path string) ListenerConfig {
-	// Create HTTP probe config with the specified path.
 	probe := DefaultProbeConfig("http")
 	probe.Path = path
-	// Return listener with HTTP probe for endpoint checks.
 	return l.WithProbe(&probe)
 }
 
@@ -108,9 +101,7 @@ func (l ListenerConfig) WithHTTPProbe(path string) ListenerConfig {
 // Returns:
 //   - ListenerConfig: listener with gRPC probe.
 func (l ListenerConfig) WithGRPCProbe(service string) ListenerConfig {
-	// Create gRPC probe config with the specified service name.
 	probe := DefaultProbeConfig("grpc")
 	probe.Service = service
-	// Return listener with gRPC probe for health checks.
 	return l.WithProbe(&probe)
 }

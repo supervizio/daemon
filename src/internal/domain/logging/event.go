@@ -1,7 +1,10 @@
 // Package logging provides domain types for daemon event logging.
 package logging
 
-import "time"
+import (
+	"maps"
+	"time"
+)
 
 // defaultMetadataCapacity is the initial capacity for metadata maps.
 // Preallocated for typical 2-4 metadata entries to reduce allocations.
@@ -23,6 +26,7 @@ type LogEvent struct {
 	// Message is a human-readable description.
 	Message string
 	// Metadata contains additional event data (PID, ExitCode, Error, etc.).
+	// Uses any type to support diverse runtime metadata: primitives, errors, custom types.
 	Metadata map[string]any
 }
 
@@ -37,7 +41,6 @@ type LogEvent struct {
 // Returns:
 //   - LogEvent: the created event.
 func NewLogEvent(level Level, service, eventType, message string) LogEvent {
-	// Create event with preallocated metadata map.
 	return LogEvent{
 		Timestamp: time.Now(),
 		Level:     level,
@@ -52,20 +55,21 @@ func NewLogEvent(level Level, service, eventType, message string) LogEvent {
 //
 // Params:
 //   - key: the metadata key.
-//   - value: the metadata value.
+//   - value: the metadata value (any type for runtime flexibility: int, string, error, etc.).
 //
 // Returns:
 //   - LogEvent: the event with the added metadata.
+//
+// Note: any type required - metadata values are runtime-determined and type-heterogeneous.
+//
+//nolint:ktn-interface-anyuse // any required: heterogeneous log metadata (primitives, errors, custom types)
 func (e LogEvent) WithMeta(key string, value any) LogEvent {
-	// Create a copy of metadata to avoid mutating the original.
-	newMeta := make(map[string]any, len(e.Metadata)+1)
-	// Copy existing metadata.
-	for k, v := range e.Metadata {
-		newMeta[k] = v
+	newMeta := maps.Clone(e.Metadata)
+	if newMeta == nil {
+		newMeta = make(map[string]any, defaultMetadataCapacity)
 	}
 	newMeta[key] = value
 
-	// Return new event with updated metadata.
 	return LogEvent{
 		Timestamp: e.Timestamp,
 		Level:     e.Level,
@@ -79,29 +83,21 @@ func (e LogEvent) WithMeta(key string, value any) LogEvent {
 // WithMetadata returns a copy of the event with all specified metadata added.
 //
 // Params:
-//   - meta: the metadata map to add.
+//   - meta: the metadata map to add (uses any type to support diverse runtime metadata).
 //
 // Returns:
 //   - LogEvent: the event with the added metadata.
 func (e LogEvent) WithMetadata(meta map[string]any) LogEvent {
-	// Return unchanged if no metadata to add.
 	if meta == nil {
-		// No changes needed.
 		return e
 	}
 
-	// Create a copy of metadata to avoid mutating the original.
-	newMeta := make(map[string]any, len(e.Metadata)+len(meta))
-	// Copy existing metadata.
-	for k, v := range e.Metadata {
-		newMeta[k] = v
+	newMeta := maps.Clone(e.Metadata)
+	if newMeta == nil {
+		newMeta = make(map[string]any, len(meta))
 	}
-	// Merge new metadata.
-	for k, v := range meta {
-		newMeta[k] = v
-	}
+	maps.Copy(newMeta, meta)
 
-	// Return new event with merged metadata.
 	return LogEvent{
 		Timestamp: e.Timestamp,
 		Level:     e.Level,

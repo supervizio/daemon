@@ -4,13 +4,19 @@ package tui
 
 import (
 	"context"
-	"io"
-	"os"
 	"time"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/collector"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/model"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/terminal"
+)
+
+// Timing constants for TUI operations.
+const (
+	// defaultRefreshInterval is the default update frequency for interactive mode (10 FPS).
+	defaultRefreshInterval time.Duration = 100 * time.Millisecond
+	// startupPortWait is the delay before rendering raw mode to allow ports to bind.
+	startupPortWait time.Duration = 500 * time.Millisecond
 )
 
 // Mode represents the TUI operating mode.
@@ -24,45 +30,6 @@ const (
 	ModeInteractive
 )
 
-// Timing constants for TUI operations.
-const (
-	// defaultRefreshInterval is the default update frequency for interactive mode (10 FPS).
-	defaultRefreshInterval time.Duration = 100 * time.Millisecond
-	// startupPortWait is the delay before rendering raw mode to allow ports to bind.
-	startupPortWait time.Duration = 500 * time.Millisecond
-)
-
-// Config holds TUI configuration.
-// It specifies the operating mode, refresh interval, version, and output writer.
-type Config struct {
-	// Mode is the operating mode (raw or interactive).
-	Mode Mode
-	// RefreshInterval is the update frequency for interactive mode.
-	// Minimum: 1 second.
-	RefreshInterval time.Duration
-	// Version is the daemon version string.
-	Version string
-	// Output is the writer for raw mode output.
-	Output io.Writer
-}
-
-// DefaultConfig returns the default configuration.
-//
-// Params:
-//   - version: the daemon version string.
-//
-// Returns:
-//   - Config: the default configuration.
-func DefaultConfig(version string) Config {
-	// Return config with default values.
-	return Config{
-		Mode:            ModeRaw,
-		RefreshInterval: defaultRefreshInterval,
-		Version:         version,
-		Output:          os.Stdout,
-	}
-}
-
 // TUI is the main terminal user interface.
 // It coordinates data collection, snapshot management, and rendering for both raw and interactive modes.
 type TUI struct {
@@ -71,37 +38,37 @@ type TUI struct {
 	snapshot   *model.Snapshot
 
 	// Data providers (set externally).
-	serviceProvider ServiceProvider
-	metricsProvider MetricsProvider
-	healthProvider  HealthProvider
+	serviceLister ListServicesser
+	metricser     Metricser
+	summarizeer   Summarizeer
 }
 
-// ServiceProvider provides service information.
-type ServiceProvider interface {
-	// Services returns all service snapshots.
-	Services() []model.ServiceSnapshot
+// ListServicesser provides service information.
+type ListServicesser interface {
+	// ListServices returns all service snapshots.
+	ListServices() []model.ServiceSnapshot
 }
 
-// MetricsProvider provides system metrics.
-type MetricsProvider interface {
-	// SystemMetrics returns current system metrics.
-	SystemMetrics() model.SystemMetrics
+// Metricser provides system metrics.
+type Metricser interface {
+	// Metrics returns current system metrics.
+	Metrics() model.SystemMetrics
 }
 
-// HealthProvider provides health information.
-type HealthProvider interface {
-	// LogSummary returns log summary.
-	LogSummary() model.LogSummary
+// Summarizeer provides health information.
+type Summarizeer interface {
+	// Summarize returns log summary.
+	Summarize() model.LogSummary
 }
 
-// New creates a new TUI.
+// NewTUI creates a new TUI.
 //
 // Params:
 //   - config: the TUI configuration.
 //
 // Returns:
 //   - *TUI: the created TUI instance.
-func New(config Config) *TUI {
+func NewTUI(config Config) *TUI {
 	// Return new TUI instance with initialized collectors and snapshot.
 	return &TUI{
 		config:     config,
@@ -110,28 +77,28 @@ func New(config Config) *TUI {
 	}
 }
 
-// SetServiceProvider sets the service data provider.
+// SetServiceLister sets the service data provider.
 //
 // Params:
-//   - p: the service provider.
-func (t *TUI) SetServiceProvider(p ServiceProvider) {
-	t.serviceProvider = p
+//   - l: the service lister.
+func (t *TUI) SetServiceLister(l ListServicesser) {
+	t.serviceLister = l
 }
 
-// SetMetricsProvider sets the metrics data provider.
+// SetMetricser sets the metrics data provider.
 //
 // Params:
-//   - p: the metrics provider.
-func (t *TUI) SetMetricsProvider(p MetricsProvider) {
-	t.metricsProvider = p
+//   - m: the metricser.
+func (t *TUI) SetMetricser(m Metricser) {
+	t.metricser = m
 }
 
-// SetHealthProvider sets the health data provider.
+// SetSummarizeer sets the health data provider.
 //
 // Params:
-//   - p: the health provider.
-func (t *TUI) SetHealthProvider(p HealthProvider) {
-	t.healthProvider = p
+//   - s: the summarizeer.
+func (t *TUI) SetSummarizeer(s Summarizeer) {
+	t.summarizeer = s
 }
 
 // SetConfigPath sets the configuration file path for display.
@@ -218,19 +185,19 @@ func (t *TUI) collectData() {
 	// Collect system data.
 	_ = t.collectors.CollectAll(t.snapshot)
 
-	// Collect service data if provider is available.
-	if t.serviceProvider != nil {
-		t.snapshot.Services = t.serviceProvider.Services()
+	// Collect service data if lister is available.
+	if t.serviceLister != nil {
+		t.snapshot.Services = t.serviceLister.ListServices()
 	}
 
-	// Collect metrics if provider is available.
-	if t.metricsProvider != nil {
-		t.snapshot.System = t.metricsProvider.SystemMetrics()
+	// Collect metrics if metricser is available.
+	if t.metricser != nil {
+		t.snapshot.System = t.metricser.Metrics()
 	}
 
-	// Collect health/logs if provider is available.
-	if t.healthProvider != nil {
-		t.snapshot.Logs = t.healthProvider.LogSummary()
+	// Collect health/logs if summarizer is available.
+	if t.summarizeer != nil {
+		t.snapshot.Logs = t.summarizeer.Summarize()
 	}
 }
 
@@ -241,6 +208,15 @@ func (t *TUI) collectData() {
 func (t *TUI) Snapshot() *model.Snapshot {
 	// Return current snapshot reference.
 	return t.snapshot
+}
+
+// SetSnapshot sets the snapshot (for testing).
+//
+// Params:
+//   - snap: the snapshot to set.
+func (t *TUI) SetSnapshot(snap *model.Snapshot) {
+	// Set snapshot reference.
+	t.snapshot = snap
 }
 
 // ShouldUseInteractive determines if interactive mode should be used.

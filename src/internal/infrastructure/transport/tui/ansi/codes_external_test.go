@@ -470,33 +470,38 @@ func TestBgColor256(t *testing.T) {
 // Returns:
 //   - none: test function
 func TestConstants(t *testing.T) {
-	// Verify text attribute constants
-	t.Run("text attributes", func(t *testing.T) {
-		// Verify reset sequence
-		assert.Equal(t, "\033[0m", ansi.Reset)
+	// Test table for all constant categories
+	tests := []struct {
+		name     string
+		got      string
+		expected string
+	}{
+		// Text attributes
+		{name: "Reset", got: ansi.Reset, expected: "\033[0m"},
+		{name: "Bold", got: ansi.Bold, expected: "\033[1m"},
+		{name: "Underline", got: ansi.Underline, expected: "\033[4m"},
+		{name: "Dim", got: ansi.Dim, expected: "\033[2m"},
+		{name: "Italic", got: ansi.Italic, expected: "\033[3m"},
 
-		// Verify bold sequence
-		assert.Equal(t, "\033[1m", ansi.Bold)
+		// Foreground colors
+		{name: "FgBlack", got: ansi.FgBlack, expected: "\033[30m"},
+		{name: "FgRed", got: ansi.FgRed, expected: "\033[31m"},
+		{name: "FgGreen", got: ansi.FgGreen, expected: "\033[32m"},
+		{name: "FgYellow", got: ansi.FgYellow, expected: "\033[33m"},
+		{name: "FgBlue", got: ansi.FgBlue, expected: "\033[34m"},
 
-		// Verify underline sequence
-		assert.Equal(t, "\033[4m", ansi.Underline)
-	})
+		// Screen control
+		{name: "ClearScreen", got: ansi.ClearScreen, expected: "\033[2J"},
+		{name: "CursorHide", got: ansi.CursorHide, expected: "\033[?25l"},
+		{name: "CursorShow", got: ansi.CursorShow, expected: "\033[?25h"},
+		{name: "CursorHome", got: ansi.CursorHome, expected: "\033[H"},
+	}
 
-	// Verify foreground color constants
-	t.Run("foreground colors", func(t *testing.T) {
-		// Verify standard colors
-		assert.Equal(t, "\033[30m", ansi.FgBlack)
-		assert.Equal(t, "\033[31m", ansi.FgRed)
-		assert.Equal(t, "\033[32m", ansi.FgGreen)
-	})
-
-	// Verify screen control constants
-	t.Run("screen control", func(t *testing.T) {
-		// Verify clear screen sequence
-		assert.Equal(t, "\033[2J", ansi.ClearScreen)
-
-		// Verify cursor hide/show sequences
-		assert.Equal(t, "\033[?25l", ansi.CursorHide)
-		assert.Equal(t, "\033[?25h", ansi.CursorShow)
-	})
+	// Execute each test case
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Verify constant value matches expected
+			assert.Equal(t, tt.expected, tt.got)
+		})
+	}
 }

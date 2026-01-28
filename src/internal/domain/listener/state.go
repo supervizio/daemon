@@ -26,23 +26,14 @@ const (
 // Returns:
 //   - string: the human-readable state name.
 func (s State) String() string {
-	// Switch on state value to return the corresponding string.
 	switch s {
-	// Case for closed state.
 	case StateClosed:
-		// Return the closed state string.
 		return "closed"
-	// Case for listening state.
 	case StateListening:
-		// Return the listening state string.
 		return "listening"
-	// Case for ready state.
 	case StateReady:
-		// Return the ready state string.
 		return "ready"
-	// Default case for unknown states.
 	default:
-		// Return unknown for unrecognized values.
 		return "unknown"
 	}
 }
@@ -52,7 +43,6 @@ func (s State) String() string {
 // Returns:
 //   - bool: true if state is Closed.
 func (s State) IsClosed() bool {
-	// Return true if state equals StateClosed.
 	return s == StateClosed
 }
 
@@ -61,7 +51,6 @@ func (s State) IsClosed() bool {
 // Returns:
 //   - bool: true if state is Listening or Ready.
 func (s State) IsListening() bool {
-	// Return true if state is StateListening or StateReady.
 	return s == StateListening || s == StateReady
 }
 
@@ -70,7 +59,6 @@ func (s State) IsListening() bool {
 // Returns:
 //   - bool: true if state is Ready.
 func (s State) IsReady() bool {
-	// Return true if state equals StateReady.
 	return s == StateReady
 }
 
@@ -82,23 +70,14 @@ func (s State) IsReady() bool {
 // Returns:
 //   - bool: true if the transition is valid.
 func (s State) CanTransitionTo(target State) bool {
-	// Define valid transitions.
 	switch s {
-	// From StateClosed, can go to StateListening.
 	case StateClosed:
-		// Return true only for StateListening.
 		return target == StateListening
-	// From StateListening, can go to StateReady or back to StateClosed.
 	case StateListening:
-		// Return true for StateReady or StateClosed.
 		return target == StateReady || target == StateClosed
-	// From StateReady, can go back to StateListening or StateClosed.
 	case StateReady:
-		// Return true for StateListening or StateClosed.
 		return target == StateListening || target == StateClosed
-	// Default case for unknown states.
 	default:
-		// Return false for unknown states.
 		return false
 	}
 }

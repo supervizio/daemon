@@ -89,38 +89,23 @@ func NewWriterFromConfig(path string, cfg writerConfig) (*Writer, error) {
 	// This is more restrictive than typical 0o755 used by syslog/logrotate.
 	// nosemgrep: go.lang.correctness.permissions.file_permission.incorrect-default-permission
 	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
-		// Return directory creation error to caller.
 		return nil, fmt.Errorf("creating log directory: %w", err)
 	}
 
-	// Open and initialize the log file.
 	file, size, err := openLogFile(path)
-
-	// Check if file opening succeeded.
 	if err != nil {
-		// Return file open error to caller.
 		return nil, err
 	}
 
-	// Get rotation config from interface.
 	rotation := cfg.Rotation()
-
-	// Parse max size from config, using default on failure.
 	maxSize := parseMaxSize(rotation.MaxSize)
-
-	// Determine max files count from config.
 	maxFiles := rotation.MaxFiles
-
-	// Check if max files is not configured (zero), use default.
 	if maxFiles == 0 {
-		// Use default max files backup count when config is zero.
 		maxFiles = defaultMaxFilesBackup
 	}
 
-	// Get timestamp format from interface.
 	timestampFormat := cfg.TimestampFormat()
 
-	// Return the initialized writer with rotation settings from config.
 	return &Writer{
 		file:            file,
 		writer:          bufio.NewWriter(file),
@@ -151,29 +136,18 @@ func NewWriter(path string, cfg writerConfig) (*Writer, error) {
 	// This is more restrictive than typical 0o755 used by syslog/logrotate.
 	// nosemgrep: go.lang.correctness.permissions.file_permission.incorrect-default-permission
 	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
-		// Directory creation failed - return error to caller.
 		return nil, fmt.Errorf("creating log directory: %w", err)
 	}
 
-	// Open and initialize the log file.
 	file, size, err := openLogFile(path)
-
-	// Check if file opening succeeded.
 	if err != nil {
-		// File open failed - return error to caller.
 		return nil, err
 	}
 
-	// Get rotation config from struct.
 	rotation := cfg.Rotation()
-
-	// Parse max size from config, using default on failure.
 	maxSize := parseMaxSize(rotation.MaxSize)
-
-	// Get timestamp format from struct.
 	timestampFormat := cfg.TimestampFormat()
 
-	// Return the initialized writer.
 	return &Writer{
 		file:            file,
 		writer:          bufio.NewWriter(file),
@@ -197,30 +171,19 @@ func NewWriter(path string, cfg writerConfig) (*Writer, error) {
 //   - int64: the current file size
 //   - error: nil on success, error on failure
 func openLogFile(path string) (*os.File, int64, error) {
-	// Create file opener for the log file path.
 	opener := newFileOpener(path)
-
-	// Open the file using the opener.
 	f, err := opener.open()
-
-	// Check if file opening succeeded.
 	if err != nil {
-		// Return nil file and zero size when file open fails.
 		return nil, 0, fmt.Errorf("opening log file: %w", err)
 	}
 
-	// Get current file size.
 	info, err := f.Stat()
-
-	// Check if file stat operation succeeded.
 	if err != nil {
-		// Close file on stat error before returning.
 		_ = f.Close()
-		// Return nil file and zero size when stat fails.
+
 		return nil, 0, fmt.Errorf("getting file info: %w", err)
 	}
 
-	// Return opened file and its current size on success.
 	return f, info.Size(), nil
 }
 
@@ -232,16 +195,11 @@ func openLogFile(path string) (*os.File, int64, error) {
 // Returns:
 //   - int64: parsed size in bytes or default on failure
 func parseMaxSize(sizeStr string) int64 {
-	// Parse max size from config string.
 	maxSize, err := shared.ParseSize(sizeStr)
-
-	// Check if size parsing succeeded, use default on failure.
 	if err != nil {
-		// Return default on parse failure.
 		return defaultMaxSize
 	}
 
-	// Return parsed size.
 	return maxSize
 }
 
@@ -255,48 +213,32 @@ func parseMaxSize(sizeStr string) int64 {
 //   - error: nil on success, error on failure
 func (w *Writer) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
-
-	// Defer unlocking the mutex to ensure it is released on function exit.
 	defer w.mu.Unlock()
 
-	// Check if rotation is needed based on max size and incoming data.
 	if w.maxSize > 0 && w.size+int64(len(p)) > w.maxSize {
-		// Check if rotation operation succeeds.
 		if err := w.rotate(); err != nil {
-			// Rotation failed - return error to caller.
 			return 0, fmt.Errorf("rotating log: %w", err)
 		}
 	}
 
-	// Check if timestamp should be added to the log entry.
 	if w.addTimestamp {
 		ts := FormatTimestamp(time.Now(), w.timestampFormat)
-
-		// Check if timestamp write operation succeeds.
 		if _, err := w.writer.WriteString(ts + " "); err != nil {
-			// Timestamp write failed - return error to caller.
 			return 0, err
 		}
 		w.size += int64(len(ts) + timestampSeparatorLen)
 	}
 
-	// Write data
 	n, err = w.writer.Write(p)
-
-	// Check if write operation succeeded.
 	if err != nil {
-		// Write failed - return bytes written and error.
 		return n, err
 	}
 	w.size += int64(n)
 
-	// Check if flush operation succeeds to ensure logs are persisted.
 	if err := w.writer.Flush(); err != nil {
-		// Flush failed - return bytes written and error.
 		return n, err
 	}
 
-	// Return successful write count.
 	return n, nil
 }
 
@@ -306,30 +248,20 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 // Returns:
 //   - error: nil on success, error on failure
 func (w *Writer) rotate() error {
-	// Check if buffer flush succeeds before closing the file.
 	if err := w.writer.Flush(); err != nil {
-		// Flush failed - return error to caller.
 		return err
 	}
 
-	// Check if file close operation succeeds.
 	if err := w.file.Close(); err != nil {
-		// Close failed - return error to caller.
 		return err
 	}
 
-	// Check if file rotation succeeds.
 	if err := w.rotateFiles(); err != nil {
-		// Rotation failed - return error to caller.
 		return err
 	}
 
-	// Create new file using openNewFile helper.
 	file, err := w.openNewFile()
-
-	// Check if new file creation succeeded.
 	if err != nil {
-		// File creation failed - return error to caller.
 		return err
 	}
 
@@ -337,7 +269,6 @@ func (w *Writer) rotate() error {
 	w.writer = bufio.NewWriter(file)
 	w.size = 0
 
-	// Return nil indicating success.
 	return nil
 }
 
@@ -347,19 +278,12 @@ func (w *Writer) rotate() error {
 //   - *os.File: the opened file handle
 //   - error: nil on success, error on failure
 func (w *Writer) openNewFile() (*os.File, error) {
-	// Create file opener for the writer path.
 	opener := newFileOpener(w.path)
-
-	// Open the file using the opener.
 	f, err := opener.open()
-
-	// Check if file opening succeeded.
 	if err != nil {
-		// Return nil file when open fails.
 		return nil, err
 	}
 
-	// Return the opened file handle on success.
 	return f, nil
 }
 
@@ -369,26 +293,20 @@ func (w *Writer) openNewFile() (*os.File, error) {
 // Returns:
 //   - error: nil on success, error on failure
 func (w *Writer) rotateFiles() error {
-	// Remove oldest file if at max
 	oldest := fmt.Sprintf("%s.%d", w.path, w.maxFiles)
-	// Ignore error - file may not exist
 	_ = os.Remove(oldest)
 
-	// Iterate through existing backup files from oldest to newest to shift them.
+	// Shift backup files from oldest to newest.
 	for i := w.maxFiles - firstBackupIndex; i >= firstBackupIndex; i-- {
 		oldPath := fmt.Sprintf("%s.%d", w.path, i)
 		newPath := fmt.Sprintf("%s.%d", w.path, i+firstBackupIndex)
-		// Ignore error - file may not exist
 		_ = os.Rename(oldPath, newPath)
 	}
 
-	// Check if renaming current file to first backup succeeds (ignore if file doesn't exist).
 	if err := os.Rename(w.path, w.path+firstBackupSuffix); err != nil && !os.IsNotExist(err) {
-		// Rename failed for existing file - return error to caller.
 		return err
 	}
 
-	// Return nil indicating success.
 	return nil
 }
 
@@ -399,17 +317,12 @@ func (w *Writer) rotateFiles() error {
 //   - error: nil on success, error on failure
 func (w *Writer) Close() error {
 	w.mu.Lock()
-
-	// Defer unlocking the mutex to ensure it is released on function exit.
 	defer w.mu.Unlock()
 
-	// Check if buffer flush succeeds before closing.
 	if err := w.writer.Flush(); err != nil {
-		// Flush failed - return error to caller.
 		return err
 	}
 
-	// Close file and return result.
 	return w.file.Close()
 }
 
@@ -420,17 +333,12 @@ func (w *Writer) Close() error {
 //   - error: nil on success, error on failure
 func (w *Writer) Sync() error {
 	w.mu.Lock()
-
-	// Defer unlocking the mutex to ensure it is released on function exit.
 	defer w.mu.Unlock()
 
-	// Check if buffer flush succeeds before syncing.
 	if err := w.writer.Flush(); err != nil {
-		// Flush failed - return error to caller.
 		return err
 	}
 
-	// Sync file and return result.
 	return w.file.Sync()
 }
 
@@ -439,7 +347,6 @@ func (w *Writer) Sync() error {
 // Returns:
 //   - string: the file path
 func (w *Writer) Path() string {
-	// Return the stored path value.
 	return w.path
 }
 
@@ -449,10 +356,7 @@ func (w *Writer) Path() string {
 //   - int64: the current file size in bytes
 func (w *Writer) Size() int64 {
 	w.mu.Lock()
-
-	// Defer unlocking the mutex to ensure it is released on function exit.
 	defer w.mu.Unlock()
 
-	// Return the current size value.
 	return w.size
 }

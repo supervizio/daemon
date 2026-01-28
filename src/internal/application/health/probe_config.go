@@ -34,7 +34,6 @@ type ProbeConfig struct {
 // Returns:
 //   - ProbeConfig: configuration with default interval (10s), timeout (5s), success threshold (1), and failure threshold (3).
 func DefaultProbeConfig() ProbeConfig {
-	// Return configuration with production-ready defaults.
 	return ProbeConfig{
 		Interval:         defaultProbeInterval,
 		Timeout:          defaultProbeTimeout,

@@ -40,14 +40,6 @@ type Size struct {
 	Rows int
 }
 
-var (
-	// MinSize is the minimum usable terminal size.
-	MinSize Size = Size{Cols: minCols, Rows: minRows}
-
-	// DefaultSize is used when detection fails.
-	DefaultSize Size = Size{Cols: defaultCols, Rows: defaultRows}
-)
-
 // Layout represents the current layout mode.
 type Layout int
 
@@ -57,6 +49,14 @@ const (
 	LayoutNormal                  // 80-120 cols: single column, full info
 	LayoutWide                    // 120-160 cols: two columns
 	LayoutUltraWide               // > 160 cols: three columns
+)
+
+var (
+	// MinSize is the minimum usable terminal size.
+	MinSize Size = Size{Cols: minCols, Rows: minRows}
+
+	// DefaultSize is used when detection fails.
+	DefaultSize Size = Size{Cols: defaultCols, Rows: defaultRows}
 )
 
 // GetSize returns the current terminal size.

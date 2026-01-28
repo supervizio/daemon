@@ -25,19 +25,13 @@ var (
 	cachedRuntimeMode func() runtimeModeResult = sync.OnceValue(detectRuntimeModeOnce)
 	cachedDNSConfig   func() dnsConfigResult   = sync.OnceValue(getDNSConfigOnce)
 	cachedPrimaryIP   func() string            = sync.OnceValue(getPrimaryIP)
+
+	// vmVendorPatterns contains patterns identifying VM environments.
+	vmVendorPatterns []string = []string{
+		"vmware", "virtualbox", "kvm", "qemu", "xen", "hyper-v",
+		"microsoft", "parallels", "virtual", "bochs", "bhyve",
+	}
 )
-
-// runtimeModeResult holds the cached runtime mode detection result.
-type runtimeModeResult struct {
-	mode    model.RuntimeMode
-	runtime string
-}
-
-// dnsConfigResult holds the cached DNS configuration.
-type dnsConfigResult struct {
-	servers []string
-	search  []string
-}
 
 // getHostnameOnce returns the hostname (called once).
 //
@@ -104,7 +98,7 @@ func (c *ContextCollector) SetConfigPath(path string) {
 	c.configPath = path
 }
 
-// CollectInto populates context information.
+// Gather populates context information.
 // Uses cached values for static data (hostname, kernel, runtime mode, DNS, IP).
 //
 // Params:
@@ -112,7 +106,7 @@ func (c *ContextCollector) SetConfigPath(path string) {
 //
 // Returns:
 //   - error: always returns nil
-func (c *ContextCollector) CollectInto(snap *model.Snapshot) error {
+func (c *ContextCollector) Gather(snap *model.Snapshot) error {
 	ctx := &snap.Context
 
 	// Basic info (dynamic).
@@ -155,49 +149,15 @@ func (c *ContextCollector) CollectInto(snap *model.Snapshot) error {
 //   - string: container runtime name (docker, kubernetes, etc.) or empty
 func detectRuntimeMode() (model.RuntimeMode, string) {
 	// Check for container indicators.
-
-	// Docker/containerd.
-	if fileExists("/.dockerenv") {
-		// Docker environment file found.
-		return model.ModeContainer, "docker"
+	if mode, runtime, found := detectContainerByFiles(); found {
+		// Container detected via files.
+		return mode, runtime
 	}
 
-	// Kubernetes (check for service account).
-	if fileExists("/var/run/secrets/kubernetes.io/serviceaccount/token") {
-		// Kubernetes service account token found.
-		return model.ModeContainer, "kubernetes"
-	}
-
-	// LXC.
-	if content, err := os.ReadFile("/proc/1/environ"); err == nil {
-		// Check for LXC container marker.
-		if strings.Contains(string(content), "container=lxc") {
-			// LXC container detected.
-			return model.ModeContainer, "lxc"
-		}
-	}
-
-	// Read /proc/1/cgroup ONCE and check all patterns.
-	if content, err := os.ReadFile("/proc/1/cgroup"); err == nil {
-		cgroupContent := string(content)
-
-		// Podman detection.
-		if strings.Contains(cgroupContent, "libpod") || strings.Contains(cgroupContent, "podman") {
-			// Podman cgroup markers found.
-			return model.ModeContainer, "podman"
-		}
-
-		// Docker/containerd detection.
-		if strings.Contains(cgroupContent, "docker") || strings.Contains(cgroupContent, "containerd") {
-			// Docker/containerd cgroup markers found.
-			return model.ModeContainer, "docker"
-		}
-
-		// Generic container detection: non-root cgroup suggests container.
-		if !strings.Contains(cgroupContent, ":/\n") {
-			// Non-root cgroup detected.
-			return model.ModeContainer, unknownValue
-		}
+	// Check cgroup-based container detection.
+	if mode, runtime, found := detectContainerByCgroup(); found {
+		// Container detected via cgroup.
+		return mode, runtime
 	}
 
 	// Check for VM indicators.
@@ -210,44 +170,99 @@ func detectRuntimeMode() (model.RuntimeMode, string) {
 	return model.ModeHost, ""
 }
 
+// detectContainerByFiles checks for container markers via file existence.
+//
+// Returns:
+//   - model.RuntimeMode: detected runtime mode
+//   - string: container runtime name
+//   - bool: true if container detected
+func detectContainerByFiles() (model.RuntimeMode, string, bool) {
+	// Docker/containerd.
+	if fileExists("/.dockerenv") {
+		// Docker environment file found.
+		return model.ModeContainer, "docker", true
+	}
+
+	// Kubernetes (check for service account).
+	if fileExists("/var/run/secrets/kubernetes.io/serviceaccount/token") {
+		// Kubernetes service account token found.
+		return model.ModeContainer, "kubernetes", true
+	}
+
+	// LXC.
+	if content, err := os.ReadFile("/proc/1/environ"); err == nil {
+		contentStr := string(content)
+		// Check for LXC container marker.
+		if strings.Contains(contentStr, "container=lxc") {
+			// LXC container detected.
+			return model.ModeContainer, "lxc", true
+		}
+	}
+
+	// No container detected by files.
+	return model.ModeHost, "", false
+}
+
+// detectContainerByCgroup checks for container markers via cgroup content.
+//
+// Returns:
+//   - model.RuntimeMode: detected runtime mode
+//   - string: container runtime name
+//   - bool: true if container detected
+func detectContainerByCgroup() (model.RuntimeMode, string, bool) {
+	// Read /proc/1/cgroup ONCE and check all patterns.
+	content, err := os.ReadFile("/proc/1/cgroup")
+	// Handle read error.
+	if err != nil {
+		// Cannot read cgroup file.
+		return model.ModeHost, "", false
+	}
+
+	cgroupContent := string(content)
+
+	// Podman detection.
+	if strings.Contains(cgroupContent, "libpod") || strings.Contains(cgroupContent, "podman") {
+		// Podman cgroup markers found.
+		return model.ModeContainer, "podman", true
+	}
+
+	// Docker/containerd detection.
+	if strings.Contains(cgroupContent, "docker") || strings.Contains(cgroupContent, "containerd") {
+		// Docker/containerd cgroup markers found.
+		return model.ModeContainer, "docker", true
+	}
+
+	// Generic container detection: non-root cgroup suggests container.
+	if !strings.Contains(cgroupContent, ":/\n") {
+		// Non-root cgroup detected.
+		return model.ModeContainer, unknownValue, true
+	}
+
+	// No container detected via cgroup.
+	return model.ModeHost, "", false
+}
+
 // isVM checks for virtual machine indicators.
 //
 // Returns:
 //   - bool: true if running in a virtual machine
 func isVM() bool {
-	// Check DMI/SMBIOS for VM vendors.
-	vmIndicators := []string{
-		"/sys/class/dmi/id/product_name",
-		"/sys/class/dmi/id/sys_vendor",
-		"/sys/class/dmi/id/board_vendor",
+	// Check DMI/SMBIOS paths for VM vendors.
+	if checkDMIForVM("/sys/class/dmi/id/product_name") {
+		return true
 	}
-
-	vmVendors := []string{
-		"vmware", "virtualbox", "kvm", "qemu",
-		"xen", "hyper-v", "microsoft", "parallels",
-		"virtual", "bochs", "bhyve",
+	if checkDMIForVM("/sys/class/dmi/id/sys_vendor") {
+		return true
 	}
-
-	// Iterate through DMI paths.
-	for _, path := range vmIndicators {
-		// Try to read each indicator file.
-		if content, err := os.ReadFile(path); err == nil {
-			lower := strings.ToLower(string(content))
-			// Check against known VM vendors.
-			for _, vendor := range vmVendors {
-				// Match vendor string.
-				if strings.Contains(lower, vendor) {
-					// VM vendor detected.
-					return true
-				}
-			}
-		}
+	if checkDMIForVM("/sys/class/dmi/id/board_vendor") {
+		return true
 	}
 
 	// Check cpuinfo for hypervisor flag.
 	if content, err := os.ReadFile("/proc/cpuinfo"); err == nil {
+		contentStr := string(content)
 		// Look for hypervisor CPU flag.
-		if strings.Contains(string(content), "hypervisor") {
+		if strings.Contains(contentStr, "hypervisor") {
 			// Hypervisor flag found.
 			return true
 		}
@@ -257,12 +272,46 @@ func isVM() bool {
 	return false
 }
 
+// checkDMIForVM checks a DMI path for known VM vendor strings.
+//
+// Params:
+//   - path: path to DMI file to check
+//
+// Returns:
+//   - bool: true if VM vendor detected
+func checkDMIForVM(path string) bool {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	contentStr := string(content)
+	lower := strings.ToLower(contentStr)
+	// Check against known VM vendors using loop to reduce complexity.
+	return containsAnyVMVendor(lower)
+}
+
+// containsAnyVMVendor checks if content contains any known VM vendor pattern.
+//
+// Params:
+//   - content: lowercased content to check
+//
+// Returns:
+//   - bool: true if any VM vendor pattern found
+func containsAnyVMVendor(content string) bool {
+	for _, vendor := range vmVendorPatterns {
+		if strings.Contains(content, vendor) {
+			return true
+		}
+	}
+	return false
+}
+
 // getDNSConfig reads DNS configuration.
 //
 // Returns:
 //   - servers: DNS nameservers from resolv.conf
 //   - search: DNS search domains from resolv.conf
-func getDNSConfig() (servers []string, search []string) {
+func getDNSConfig() (servers, search []string) {
 	content, err := os.ReadFile("/etc/resolv.conf")
 	// Handle read error.
 	if err != nil {
@@ -270,9 +319,9 @@ func getDNSConfig() (servers []string, search []string) {
 		return nil, nil
 	}
 
-	lines := strings.Split(string(content), "\n")
+	contentStr := string(content)
 	// Parse each line of resolv.conf.
-	for _, line := range lines {
+	for line := range strings.SplitSeq(contentStr, "\n") {
 		line = strings.TrimSpace(line)
 		// Skip comment lines.
 		if strings.HasPrefix(line, "#") {

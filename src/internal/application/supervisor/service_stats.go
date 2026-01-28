@@ -28,7 +28,6 @@ type ServiceStats struct {
 // Returns:
 //   - *ServiceStats: a new ServiceStats instance initialized to zero.
 func NewServiceStats() *ServiceStats {
-	// Return zero-initialized stats
 	return &ServiceStats{}
 }
 
@@ -57,7 +56,6 @@ func (s *ServiceStats) IncrementRestart() {
 // Returns:
 //   - int: the number of times the service has been started.
 func (s *ServiceStats) StartCount() int {
-	// Load and convert atomic counter to int
 	return int(s.startCount.Load())
 }
 
@@ -66,7 +64,6 @@ func (s *ServiceStats) StartCount() int {
 // Returns:
 //   - int: the number of times the service has stopped normally.
 func (s *ServiceStats) StopCount() int {
-	// Load and convert atomic counter to int
 	return int(s.stopCount.Load())
 }
 
@@ -75,7 +72,6 @@ func (s *ServiceStats) StopCount() int {
 // Returns:
 //   - int: the number of times the service has failed.
 func (s *ServiceStats) FailCount() int {
-	// Load and convert atomic counter to int
 	return int(s.failCount.Load())
 }
 
@@ -84,7 +80,6 @@ func (s *ServiceStats) FailCount() int {
 // Returns:
 //   - int: the number of times the service has been automatically restarted.
 func (s *ServiceStats) RestartCount() int {
-	// Load and convert atomic counter to int
 	return int(s.restartCount.Load())
 }
 
@@ -94,22 +89,12 @@ func (s *ServiceStats) RestartCount() int {
 // Returns:
 //   - ServiceStatsSnapshot: a copy of all counter values.
 func (s *ServiceStats) Snapshot() ServiceStatsSnapshot {
-	// Return snapshot with all current counter values
 	return ServiceStatsSnapshot{
 		StartCount:   int(s.startCount.Load()),
 		StopCount:    int(s.stopCount.Load()),
 		FailCount:    int(s.failCount.Load()),
 		RestartCount: int(s.restartCount.Load()),
 	}
-}
-
-// ServiceStatsSnapshot is an immutable copy of ServiceStats counters.
-// Used for passing stats to callbacks without race conditions.
-type ServiceStatsSnapshot struct {
-	StartCount   int
-	StopCount    int
-	FailCount    int
-	RestartCount int
 }
 
 // SnapshotPtr returns a pointer to a copy of all counters.
@@ -119,7 +104,6 @@ type ServiceStatsSnapshot struct {
 // Returns:
 //   - *ServiceStatsSnapshot: a pointer to a copy of all counter values.
 func (s *ServiceStats) SnapshotPtr() *ServiceStatsSnapshot {
-	// Return pointer to snapshot with all current counter values
 	return &ServiceStatsSnapshot{
 		StartCount:   int(s.startCount.Load()),
 		StopCount:    int(s.stopCount.Load()),

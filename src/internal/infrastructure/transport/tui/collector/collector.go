@@ -3,6 +3,8 @@
 package collector
 
 import (
+	"net"
+
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/model"
 )
 
@@ -11,18 +13,23 @@ const (
 	defaultCollectorsCap int = 8
 )
 
-// Collector interface for gathering system information.
-type Collector interface {
-	// CollectInto populates the snapshot with collected data.
+// Gatherer interface for gathering system information.
+type Gatherer interface {
+	// Gather populates the snapshot with collected data.
 	// Returns error only for critical failures; partial data is acceptable.
-	CollectInto(snap *model.Snapshot) error
+	Gather(snap *model.Snapshot) error
+}
+
+// Addrser defines the minimal interface for network interface address retrieval (KTN-API-MINIF).
+type Addrser interface {
+	Addrs() ([]net.Addr, error)
 }
 
 // Collectors aggregates all collectors.
 // It provides a convenient way to run multiple collectors and gather data
 // into a single snapshot.
 type Collectors struct {
-	collectors []Collector
+	collectors []Gatherer
 }
 
 // NewCollectors creates a new collector aggregator.
@@ -32,7 +39,7 @@ type Collectors struct {
 func NewCollectors() *Collectors {
 	// Initialize with pre-allocated slice for efficiency.
 	return &Collectors{
-		collectors: make([]Collector, 0, defaultCollectorsCap),
+		collectors: make([]Gatherer, 0, defaultCollectorsCap),
 	}
 }
 
@@ -43,8 +50,8 @@ func NewCollectors() *Collectors {
 //
 // Returns:
 //   - *Collectors: self reference for chaining
-func (c *Collectors) Add(collector Collector) *Collectors {
-	c.collectors = append(c.collectors, collector)
+func (c *Collectors) Add(gatherer Gatherer) *Collectors {
+	c.collectors = append(c.collectors, gatherer)
 	// Return self for fluent interface.
 	return c
 }
@@ -58,11 +65,11 @@ func (c *Collectors) Add(collector Collector) *Collectors {
 // Returns:
 //   - error: always returns nil (errors handled gracefully)
 func (c *Collectors) CollectAll(snap *model.Snapshot) error {
-	// Execute each collector independently.
-	for _, collector := range c.collectors {
-		// Ignore errors from individual collectors.
+	// Execute each gatherer independently.
+	for _, gatherer := range c.collectors {
+		// Ignore errors from individual gatherers.
 		// They should handle graceful degradation internally.
-		_ = collector.CollectInto(snap)
+		_ = gatherer.Gather(snap)
 	}
 	// Always return nil for graceful degradation.
 	return nil

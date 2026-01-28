@@ -482,7 +482,6 @@ func Test_Manager_run(t *testing.T) {
 
 			executor := &testExecutor{
 				startFunc: func(ctx context.Context, spec domain.Spec) (int, <-chan domain.ExitResult, error) {
-					// Return the prepared exit channel.
 					return 1234, exitCh, nil
 				},
 			}
@@ -1024,7 +1023,6 @@ func Test_Manager_Stop_with_running_process(t *testing.T) {
 			cfg := createInternalTestConfig("test-service", "/bin/echo")
 			executor := &testExecutor{
 				stopFunc: func(pid int, timeout time.Duration) error {
-					// Return the configured stop error.
 					return tt.stopErr
 				},
 			}
@@ -1082,7 +1080,6 @@ func Test_Manager_Reload_when_running(t *testing.T) {
 			cfg := createInternalTestConfig("test-service", "/bin/echo")
 			executor := &testExecutor{
 				signalFunc: func(pid int, sig os.Signal) error {
-					// Return the configured signal error.
 					return tt.signalErr
 				},
 			}
@@ -1267,6 +1264,321 @@ func Test_Manager_sendEvent_channel_full(t *testing.T) {
 
 			// Verify channel size hasn't changed.
 			assert.Len(t, mgr.events, eventBufferSize)
+		})
+	}
+}
+
+// Test_Manager_updateStateAfterExit tests the updateStateAfterExit method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_updateStateAfterExit(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// exitCode is the exit code to test.
+		exitCode int
+		// initialPID is the initial process PID.
+		initialPID int
+		// expectedState is the expected state after exit.
+		expectedState domain.State
+		// expectedPID is the expected PID after exit.
+		expectedPID int
+	}{
+		{
+			name:          "successful_exit_sets_stopped_state",
+			exitCode:      0,
+			initialPID:    1234,
+			expectedState: domain.StateStopped,
+			expectedPID:   0,
+		},
+		{
+			name:          "failed_exit_sets_failed_state",
+			exitCode:      1,
+			initialPID:    1234,
+			expectedState: domain.StateFailed,
+			expectedPID:   0,
+		},
+		{
+			name:          "exit_with_code_2_sets_failed_state",
+			exitCode:      2,
+			initialPID:    5678,
+			expectedState: domain.StateFailed,
+			expectedPID:   0,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			executor := &testExecutor{}
+
+			mgr := NewManager(cfg, executor)
+			mgr.pid = tt.initialPID
+
+			result := domain.ExitResult{Code: tt.exitCode}
+			mgr.updateStateAfterExit(result)
+
+			assert.Equal(t, tt.expectedState, mgr.state)
+			assert.Equal(t, tt.expectedPID, mgr.pid)
+			assert.Equal(t, tt.exitCode, mgr.exitCode)
+		})
+	}
+}
+
+// Test_Manager_sendExitEvent tests the sendExitEvent method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_sendExitEvent(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// exitCode is the exit code to test.
+		exitCode int
+		// expectedEventType is the expected event type.
+		expectedEventType domain.EventType
+	}{
+		{
+			name:              "zero_exit_sends_stopped_event",
+			exitCode:          0,
+			expectedEventType: domain.EventStopped,
+		},
+		{
+			name:              "nonzero_exit_sends_failed_event",
+			exitCode:          1,
+			expectedEventType: domain.EventFailed,
+		},
+		{
+			name:              "exit_code_137_sends_failed_event",
+			exitCode:          137,
+			expectedEventType: domain.EventFailed,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			executor := &testExecutor{}
+
+			mgr := NewManager(cfg, executor)
+
+			result := domain.ExitResult{Code: tt.exitCode}
+			mgr.sendExitEvent(result)
+
+			// Read event from channel.
+			select {
+			case event := <-mgr.events:
+				assert.Equal(t, tt.expectedEventType, event.Type)
+			case <-time.After(100 * time.Millisecond):
+				t.Fatal("expected event not received")
+			}
+		})
+	}
+}
+
+// Test_Manager_calculateUptime tests the calculateUptime method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_calculateUptime(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// startTime is the process start time.
+		startTime time.Time
+		// minExpectedUptime is the minimum expected uptime.
+		minExpectedUptime time.Duration
+	}{
+		{
+			name:              "calculates_uptime_for_running_process",
+			startTime:         time.Now().Add(-5 * time.Second),
+			minExpectedUptime: 4 * time.Second,
+		},
+		{
+			name:              "calculates_uptime_for_recent_start",
+			startTime:         time.Now().Add(-100 * time.Millisecond),
+			minExpectedUptime: 50 * time.Millisecond,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			executor := &testExecutor{}
+
+			mgr := NewManager(cfg, executor)
+			mgr.startTime = tt.startTime
+
+			uptime := mgr.calculateUptime()
+
+			assert.GreaterOrEqual(t, uptime, tt.minExpectedUptime)
+		})
+	}
+}
+
+// Test_Manager_handleExhaustedRestarts tests the handleExhaustedRestarts method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_handleExhaustedRestarts(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// restartPolicy is the restart policy.
+		restartPolicy config.RestartPolicy
+		// maxRetries is the max retries.
+		maxRetries int
+		// attempts is the number of attempts made.
+		attempts int
+		// exitCode is the exit code.
+		exitCode int
+		// expectEvent indicates if exhausted event expected.
+		expectEvent bool
+	}{
+		{
+			name:          "exhausted_with_always_policy",
+			restartPolicy: config.RestartAlways,
+			maxRetries:    3,
+			attempts:      3,
+			exitCode:      0,
+			expectEvent:   true,
+		},
+		{
+			name:          "exhausted_with_on_failure_policy_and_failure",
+			restartPolicy: config.RestartOnFailure,
+			maxRetries:    3,
+			attempts:      3,
+			exitCode:      1,
+			expectEvent:   true,
+		},
+		{
+			name:          "not_exhausted_below_max",
+			restartPolicy: config.RestartAlways,
+			maxRetries:    3,
+			attempts:      2,
+			exitCode:      0,
+			expectEvent:   false,
+		},
+		{
+			name:          "on_failure_policy_success_no_event",
+			restartPolicy: config.RestartOnFailure,
+			maxRetries:    3,
+			attempts:      3,
+			exitCode:      0,
+			expectEvent:   false,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			cfg.Restart.Policy = tt.restartPolicy
+			cfg.Restart.MaxRetries = tt.maxRetries
+			executor := &testExecutor{}
+
+			mgr := NewManager(cfg, executor)
+			// Simulate attempts by recording them.
+			for range tt.attempts {
+				mgr.tracker.RecordAttempt()
+			}
+
+			result := domain.ExitResult{Code: tt.exitCode}
+			mgr.handleExhaustedRestarts(result)
+
+			// Check for event.
+			if tt.expectEvent {
+				select {
+				case event := <-mgr.events:
+					assert.Equal(t, domain.EventExhausted, event.Type)
+				case <-time.After(100 * time.Millisecond):
+					t.Fatal("expected exhausted event not received")
+				}
+			} else {
+				select {
+				case <-mgr.events:
+					t.Fatal("unexpected event received")
+				case <-time.After(50 * time.Millisecond):
+					// No event as expected.
+				}
+			}
+		})
+	}
+}
+
+// Test_Manager_shouldEmitExhaustedEvent tests the shouldEmitExhaustedEvent method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Manager_shouldEmitExhaustedEvent(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// restartPolicy is the restart policy.
+		restartPolicy config.RestartPolicy
+		// exitCode is the exit code.
+		exitCode int
+		// expected is the expected result.
+		expected bool
+	}{
+		{
+			name:          "always_policy_success_emits",
+			restartPolicy: config.RestartAlways,
+			exitCode:      0,
+			expected:      true,
+		},
+		{
+			name:          "always_policy_failure_emits",
+			restartPolicy: config.RestartAlways,
+			exitCode:      1,
+			expected:      true,
+		},
+		{
+			name:          "on_failure_policy_failure_emits",
+			restartPolicy: config.RestartOnFailure,
+			exitCode:      1,
+			expected:      true,
+		},
+		{
+			name:          "on_failure_policy_success_no_emit",
+			restartPolicy: config.RestartOnFailure,
+			exitCode:      0,
+			expected:      false,
+		},
+		{
+			name:          "never_policy_no_emit",
+			restartPolicy: config.RestartNever,
+			exitCode:      1,
+			expected:      false,
+		},
+		{
+			name:          "unless_policy_no_emit",
+			restartPolicy: config.RestartUnless,
+			exitCode:      0,
+			expected:      false,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createInternalTestConfig("test-service", "/bin/echo")
+			cfg.Restart.Policy = tt.restartPolicy
+			executor := &testExecutor{}
+
+			mgr := NewManager(cfg, executor)
+
+			result := mgr.shouldEmitExhaustedEvent(tt.exitCode)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

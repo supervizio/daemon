@@ -51,7 +51,6 @@ type ProbeMonitorConfig struct {
 // Returns:
 //   - ProbeMonitorConfig: a new configuration instance.
 func NewProbeMonitorConfig(factory Creator) ProbeMonitorConfig {
-	// Return config with factory set and default timeouts to be resolved by ProbeMonitor.
 	return ProbeMonitorConfig{
 		Factory: factory,
 	}

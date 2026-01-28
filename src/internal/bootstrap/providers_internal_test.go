@@ -217,4 +217,3 @@ func (m *mockCollector) CollectMemory(_ context.Context, _ int) (domainmetrics.P
 	// Return empty memory metrics.
 	return domainmetrics.ProcessMemory{}, nil
 }
-

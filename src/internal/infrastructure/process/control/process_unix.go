@@ -15,51 +15,46 @@ import (
 // It provides process group management capabilities using Unix syscalls.
 type Control struct{}
 
-// NewControl creates a new process Control instance.
+// NewControl returns a new Control for managing process groups.
 //
 // Returns:
-//   - *Control: a new process control instance
-func NewControl() *Control {
-	// Return a new instance of Control.
-	return &Control{}
-}
+//   - *Control: initialized process control for Unix systems
+func NewControl() *Control { return &Control{} }
 
-// New creates a new process Control instance.
+// New returns a new Control for managing process groups.
 //
 // Returns:
-//   - *Control: a new process control instance
-func New() *Control {
-	// Return a new instance of Control.
-	return &Control{}
-}
+//   - *Control: initialized process control for Unix systems
+func New() *Control { return &Control{} }
 
-// SetProcessGroup configures a command to run in its own process group.
+// SetProcessGroup configures a command to run in its own process group,
+// enabling signal forwarding to all child processes.
 //
 // Params:
 //   - cmd: the command to configure
 func (m *Control) SetProcessGroup(cmd *exec.Cmd) {
-	// Check if SysProcAttr is nil and initialize it.
+	// Initialize SysProcAttr if not set to avoid nil pointer dereference.
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.Setpgid = true
 }
 
-// GetProcessGroup returns the process group ID for a process.
+// GetProcessGroup retrieves the process group ID via syscall.
 //
 // Params:
-//   - pid: the process ID to get the group for
+//   - pid: the process ID to query
 //
 // Returns:
 //   - int: the process group ID
-//   - error: an error if the process group could not be retrieved
+//   - error: wrapped syscall error if the query fails
 func (m *Control) GetProcessGroup(pid int) (int, error) {
 	pgid, err := syscall.Getpgid(pid)
-	// Check if getpgid syscall failed.
+	// Check for syscall failure to provide meaningful error context.
 	if err != nil {
-		// Return zero and the wrapped error.
+		// Early exit: wrap syscall error with operation name for debugging.
 		return 0, process.WrapError("getpgid", err)
 	}
-	// Return the process group ID.
+	// Success: return the process group ID to the caller.
 	return pgid, nil
 }

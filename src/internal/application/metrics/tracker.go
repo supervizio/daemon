@@ -3,6 +3,8 @@ package metrics
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 	"unsafe"
@@ -387,12 +389,7 @@ func (t *Tracker) collectLoop() {
 func (t *Tracker) collectAll() {
 	t.mu.Lock()
 	// Collect process snapshots to avoid holding lock during collection.
-	// Preallocate slice to avoid allocation in slices.Collect.
-	processes := make([]*trackedProcess, 0, len(t.processes))
-	// Collect all tracked processes.
-	for _, p := range t.processes {
-		processes = append(processes, p)
-	}
+	processes := slices.Collect(maps.Values(t.processes))
 	t.mu.Unlock()
 
 	// Collect metrics for each process.

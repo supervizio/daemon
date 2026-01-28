@@ -120,47 +120,11 @@ func (c *ContextRenderer) RenderLimits(snap *model.Snapshot) string {
 		return ""
 	}
 
-	const (
-		// cpuPadding is the padding width for CPU quota display.
-		cpuPadding int = 35
-		// pidsPadding is the padding width for PIDs display.
-		pidsPadding int = 34
-	)
+	// Format limit values.
+	cpuStr, memStr, pidsStr, cpusetStr := c.formatLimitValues(limits)
 
-	// Format CPU quota with limits.
-	cpuStr := "-"
-	// Build CPU quota string if quota is set.
-	if limits.CPUQuota > 0 {
-		cpuStr = formatFloat1(limits.CPUQuota) + " cores (quota " +
-			strconv.FormatInt(limits.CPUQuotaRaw, decimalBase) + "/" +
-			strconv.FormatInt(limits.CPUPeriod, decimalBase) + ")"
-	}
-
-	// Format memory limits.
-	memStr := "-"
-	// Build memory limit string if memory limit is set.
-	if limits.MemoryMax > 0 {
-		memStr = widget.FormatBytes(limits.MemoryMax) + " max"
-	}
-
-	// Format PID usage and limits.
-	pidsStr := "-"
-	// Build PIDs string showing current/max if limit is set.
-	if limits.PIDsMax > 0 {
-		pidsStr = strconv.FormatInt(limits.PIDsCurrent, decimalBase) + "/" + strconv.FormatInt(limits.PIDsMax, decimalBase)
-	}
-
-	// Format CPU affinity set.
-	cpusetStr := limits.CPUSet
-	// Show placeholder when no CPU set configured.
-	if cpusetStr == "" {
-		cpusetStr = "-"
-	}
-
-	lines := []string{
-		"  CPU: " + widget.PadRight(cpuStr, cpuPadding) + " Memory: " + memStr,
-		"  PIDs: " + widget.PadRight(pidsStr, pidsPadding) + " Cpuset: " + cpusetStr,
-	}
+	// Build content lines.
+	lines := c.buildLimitsLines(cpuStr, memStr, pidsStr, cpusetStr)
 
 	box := widget.NewBox(c.width).
 		SetTitle("Limits").
@@ -169,6 +133,76 @@ func (c *ContextRenderer) RenderLimits(snap *model.Snapshot) string {
 
 	// Return rendered limits box.
 	return box.Render()
+}
+
+// formatLimitValues formats individual limit values.
+//
+// Params:
+//   - limits: resource limits data.
+//
+// Returns:
+//   - cpuStr: formatted CPU quota string.
+//   - memStr: formatted memory string.
+//   - pidsStr: formatted PIDs string.
+//   - cpusetStr: formatted CPUSet string.
+func (c *ContextRenderer) formatLimitValues(limits model.ResourceLimits) (cpuStr, memStr, pidsStr, cpusetStr string) {
+	// Format CPU quota with limits.
+	cpuStr = "-"
+	// Build CPU quota string if quota is set.
+	if limits.CPUQuota > 0 {
+		cpuStr = formatFloat1(limits.CPUQuota) + " cores (quota " +
+			strconv.FormatInt(limits.CPUQuotaRaw, decimalBase) + "/" +
+			strconv.FormatInt(limits.CPUPeriod, decimalBase) + ")"
+	}
+
+	// Format memory limits.
+	memStr = "-"
+	// Build memory limit string if memory limit is set.
+	if limits.MemoryMax > 0 {
+		memStr = widget.FormatBytes(limits.MemoryMax) + " max"
+	}
+
+	// Format PID usage and limits.
+	pidsStr = "-"
+	// Build PIDs string showing current/max if limit is set.
+	if limits.PIDsMax > 0 {
+		pidsStr = strconv.FormatInt(limits.PIDsCurrent, decimalBase) + "/" + strconv.FormatInt(limits.PIDsMax, decimalBase)
+	}
+
+	// Format CPU affinity set.
+	cpusetStr = limits.CPUSet
+	// Show placeholder when no CPU set configured.
+	if cpusetStr == "" {
+		cpusetStr = "-"
+	}
+
+	// Return all formatted values.
+	return cpuStr, memStr, pidsStr, cpusetStr
+}
+
+// buildLimitsLines builds the content lines for limits section.
+//
+// Params:
+//   - cpuStr: formatted CPU quota string.
+//   - memStr: formatted memory string.
+//   - pidsStr: formatted PIDs string.
+//   - cpusetStr: formatted CPUSet string.
+//
+// Returns:
+//   - []string: content lines for limits box.
+func (c *ContextRenderer) buildLimitsLines(cpuStr, memStr, pidsStr, cpusetStr string) []string {
+	const (
+		// cpuPadding is the padding width for CPU quota display.
+		cpuPadding int = 35
+		// pidsPadding is the padding width for PIDs display.
+		pidsPadding int = 34
+	)
+
+	// Return formatted lines.
+	return []string{
+		"  CPU: " + widget.PadRight(cpuStr, cpuPadding) + " Memory: " + memStr,
+		"  PIDs: " + widget.PadRight(pidsStr, pidsPadding) + " Cpuset: " + cpusetStr,
+	}
 }
 
 // RenderSandboxes returns the sandboxes section.
@@ -185,56 +219,8 @@ func (c *ContextRenderer) RenderSandboxes(snap *model.Snapshot) string {
 		return ""
 	}
 
-	const (
-		// columnCount is the number of columns for sandbox layout.
-		columnCount int = 2
-		// boxBorderWidth is the total width consumed by box borders.
-		boxBorderWidth int = 6
-	)
-
-	// Check if any sandboxes are detected.
-	anyDetected := false
-	// Iterate through sandboxes to find any detected ones.
-	for _, sb := range snap.Sandboxes {
-		// Mark as detected if sandbox is active.
-		if sb.Detected {
-			anyDetected = true
-			break
-		}
-	}
-
-	// Calculate two-column layout.
-	perCol := (len(snap.Sandboxes) + columnCount - 1) / columnCount
-
-	lines := make([]string, perCol)
-	halfWidth := (c.width - boxBorderWidth) / columnCount
-
-	// Build lines with left and right columns.
-	// Iterate over rows to create two-column layout.
-	for i := range perCol {
-		left := ""
-		right := ""
-
-		// Format left column entry.
-		// Check if sandbox exists for left column position.
-		if i < len(snap.Sandboxes) {
-			sb := snap.Sandboxes[i]
-			left = c.formatSandbox(sb, halfWidth)
-		}
-
-		// Format right column entry.
-		rightIdx := i + perCol
-		// Check if sandbox exists for right column position.
-		if rightIdx < len(snap.Sandboxes) {
-			sb := snap.Sandboxes[rightIdx]
-			right = c.formatSandbox(sb, halfWidth)
-		}
-
-		lines[i] = "  " + left + " │ " + right
-	}
-
-	// Show even if nothing detected (for completeness in raw mode).
-	_ = anyDetected
+	// Build sandbox content lines.
+	lines := c.buildSandboxLines(snap.Sandboxes)
 
 	box := widget.NewBox(c.width).
 		SetTitle("Sandboxes").
@@ -243,6 +229,58 @@ func (c *ContextRenderer) RenderSandboxes(snap *model.Snapshot) string {
 
 	// Return rendered sandboxes box.
 	return box.Render()
+}
+
+// buildSandboxLines builds the two-column layout for sandboxes.
+//
+// Params:
+//   - sandboxes: list of sandbox information.
+//
+// Returns:
+//   - []string: formatted lines for sandbox display.
+func (c *ContextRenderer) buildSandboxLines(sandboxes []model.SandboxInfo) []string {
+	const (
+		// columnCount is the number of columns for sandbox layout.
+		columnCount int = 2
+		// boxBorderWidth is the total width consumed by box borders.
+		boxBorderWidth int = 6
+	)
+
+	// Calculate two-column layout.
+	perCol := (len(sandboxes) + columnCount - 1) / columnCount
+
+	// Pre-allocate with capacity using append pattern per VAR-MAKEAPPEND.
+	lines := make([]string, 0, perCol)
+	halfWidth := (c.width - boxBorderWidth) / columnCount
+
+	// Build lines with left and right columns.
+	for i := range perCol {
+		left := c.getSandboxEntry(sandboxes, i, halfWidth)
+		right := c.getSandboxEntry(sandboxes, i+perCol, halfWidth)
+		lines = append(lines, "  "+left+" │ "+right)
+	}
+
+	// Return formatted lines.
+	return lines
+}
+
+// getSandboxEntry returns a formatted sandbox entry or empty string.
+//
+// Params:
+//   - sandboxes: list of sandbox information.
+//   - idx: index to retrieve.
+//   - width: available width for formatting.
+//
+// Returns:
+//   - string: formatted sandbox entry or empty string.
+func (c *ContextRenderer) getSandboxEntry(sandboxes []model.SandboxInfo, idx, width int) string {
+	// Return empty if index out of bounds.
+	if idx >= len(sandboxes) {
+		// No sandbox at this index.
+		return ""
+	}
+	// Return formatted sandbox.
+	return c.formatSandbox(sandboxes[idx], width)
 }
 
 // formatSandbox formats a single sandbox entry.

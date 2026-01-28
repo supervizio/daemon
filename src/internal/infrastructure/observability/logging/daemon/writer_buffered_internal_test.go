@@ -12,123 +12,179 @@ import (
 )
 
 func TestBufferedWriter_BuffersUntilFlush(t *testing.T) {
-	// Create a buffer to capture output
-	var buf bytes.Buffer
+	t.Parallel()
 
-	// Create console writer writing to our buffer
-	cw := NewConsoleWriterWithOptions(&buf, &buf, false)
+	tests := []struct {
+		name   string
+		events []string
+	}{
+		{
+			name:   "buffer and flush events",
+			events: []string{"Test started", "Test running"},
+		},
+	}
 
-	// Wrap in buffered writer
-	bw := NewBufferedWriter(cw)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Write some events
-	event1 := logging.NewLogEvent(logging.LevelInfo, "test", "started", "Test started")
-	event2 := logging.NewLogEvent(logging.LevelInfo, "test", "running", "Test running")
+			var buf bytes.Buffer
+			cw := NewConsoleWriterWithOptions(&buf, &buf, false)
+			bw := NewBufferedWriter(cw)
 
-	err := bw.Write(event1)
-	assert.NoError(t, err)
-	err = bw.Write(event2)
-	assert.NoError(t, err)
+			for _, msg := range tt.events {
+				event := logging.NewLogEvent(logging.LevelInfo, "test", "event", msg)
+				err := bw.Write(event)
+				assert.NoError(t, err)
+			}
 
-	// Buffer should be empty (not flushed yet)
-	assert.Empty(t, buf.String(), "Buffer should be empty before flush")
+			assert.Empty(t, buf.String(), "Buffer should be empty before flush")
 
-	// Flush
-	err = bw.Flush()
-	assert.NoError(t, err)
+			err := bw.Flush()
+			assert.NoError(t, err)
 
-	// Now events should be written
-	output := buf.String()
-	assert.Contains(t, output, "Test started")
-	assert.Contains(t, output, "Test running")
+			output := buf.String()
+			for _, msg := range tt.events {
+				assert.Contains(t, output, msg)
+			}
 
-	// Write after flush should go directly
-	buf.Reset()
-	event3 := logging.NewLogEvent(logging.LevelInfo, "test", "done", "Test done")
-	err = bw.Write(event3)
-	assert.NoError(t, err)
-	assert.Contains(t, buf.String(), "Test done")
+			// Write after flush should go directly
+			buf.Reset()
+			event3 := logging.NewLogEvent(logging.LevelInfo, "test", "done", "Test done")
+			err = bw.Write(event3)
+			assert.NoError(t, err)
+			assert.Contains(t, buf.String(), "Test done")
+		})
+	}
 }
 
 func TestBufferedWriter_OrderPreserved(t *testing.T) {
-	var buf bytes.Buffer
-	cw := NewConsoleWriterWithOptions(&buf, &buf, false)
-	bw := NewBufferedWriter(cw)
+	t.Parallel()
 
-	// Write events in order
-	for i := 1; i <= 5; i++ {
-		event := logging.NewLogEvent(logging.LevelInfo, "test", "event", "Event "+string(rune('0'+i)))
-		bw.Write(event)
+	tests := []struct {
+		name       string
+		eventCount int
+	}{
+		{
+			name:       "preserve event order",
+			eventCount: 5,
+		},
 	}
 
-	bw.Flush()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	output := buf.String()
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	assert.Len(t, lines, 5)
+			var buf bytes.Buffer
+			cw := NewConsoleWriterWithOptions(&buf, &buf, false)
+			bw := NewBufferedWriter(cw)
 
-	// Check order
-	for i, line := range lines {
-		expected := "Event " + string(rune('1'+i))
-		assert.Contains(t, line, expected)
-	}
-}
-
-// TestBufferedWriter_EnforcesMaxSize tests that buffer size is limited to prevent OOM.
-func TestBufferedWriter_EnforcesMaxSize(t *testing.T) {
-	var buf bytes.Buffer
-	cw := NewConsoleWriterWithOptions(&buf, &buf, false)
-	bw := NewBufferedWriter(cw)
-
-	// Write more than maxBufferSize events.
-	for i := range maxBufferSize + 100 {
-		event := logging.NewLogEvent(logging.LevelInfo, "test", "event", "message")
-		event = event.WithMeta("index", i)
-		err := bw.Write(event)
-		require.NoError(t, err)
-	}
-
-	// Flush and count lines (events).
-	err := bw.Flush()
-	require.NoError(t, err)
-
-	// Should have exactly maxBufferSize events (oldest dropped).
-	output := buf.String()
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	assert.Equal(t, maxBufferSize, len(lines), "Buffer should be limited to maxBufferSize")
-}
-
-// TestBufferedWriter_ConcurrentWrites tests thread safety of buffered writes.
-func TestBufferedWriter_ConcurrentWrites(t *testing.T) {
-	var buf bytes.Buffer
-	cw := NewConsoleWriterWithOptions(&buf, &buf, false)
-	bw := NewBufferedWriter(cw)
-
-	const numGoroutines int = 50
-	const writesPerGoroutine int = 10
-
-	var wg sync.WaitGroup
-	wg.Add(numGoroutines)
-
-	for range numGoroutines {
-		go func() {
-			defer wg.Done()
-			for range writesPerGoroutine {
-				event := logging.NewLogEvent(logging.LevelInfo, "test", "event", "concurrent message")
+			for i := 1; i <= tt.eventCount; i++ {
+				event := logging.NewLogEvent(logging.LevelInfo, "test", "event", "Event "+string(rune('0'+i)))
 				_ = bw.Write(event)
 			}
-		}()
+
+			_ = bw.Flush()
+
+			output := buf.String()
+			lines := strings.Split(strings.TrimSpace(output), "\n")
+			assert.Len(t, lines, tt.eventCount)
+
+			for i, line := range lines {
+				expected := "Event " + string(rune('1'+i))
+				assert.Contains(t, line, expected)
+			}
+		})
+	}
+}
+
+func TestBufferedWriter_EnforcesMaxSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		eventCount int
+	}{
+		{
+			name:       "enforce max buffer size",
+			eventCount: maxBufferSize + 100,
+		},
 	}
 
-	wg.Wait()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Flush and verify no panic or race.
-	err := bw.Flush()
-	require.NoError(t, err)
+			var buf bytes.Buffer
+			cw := NewConsoleWriterWithOptions(&buf, &buf, false)
+			bw := NewBufferedWriter(cw)
 
-	// Total events should be capped at maxBufferSize.
-	output := buf.String()
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	expected := min(numGoroutines*writesPerGoroutine, maxBufferSize)
-	assert.Equal(t, expected, len(lines))
+			for i := range tt.eventCount {
+				event := logging.NewLogEvent(logging.LevelInfo, "test", "event", "message")
+				event = event.WithMeta("index", i)
+				err := bw.Write(event)
+				require.NoError(t, err)
+			}
+
+			err := bw.Flush()
+			require.NoError(t, err)
+
+			output := buf.String()
+			lines := strings.Split(strings.TrimSpace(output), "\n")
+			assert.Equal(t, maxBufferSize, len(lines), "Buffer should be limited to maxBufferSize")
+		})
+	}
+}
+
+// Goroutine lifecycle: Each goroutine writes writesPerGoroutine events then terminates.
+// Cleanup: wg.Wait() ensures all goroutines finish before verification.
+func TestBufferedWriter_ConcurrentWrites(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		numGoroutines      int
+		writesPerGoroutine int
+	}{
+		{
+			name:               "concurrent writes thread safe",
+			numGoroutines:      50,
+			writesPerGoroutine: 10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			cw := NewConsoleWriterWithOptions(&buf, &buf, false)
+			bw := NewBufferedWriter(cw)
+
+			var wg sync.WaitGroup
+			wg.Add(tt.numGoroutines)
+
+			// Goroutine lifecycle: Each goroutine completes after writesPerGoroutine writes.
+			// Cleanup: wg.Wait() ensures all goroutines finish before assertion.
+			for range tt.numGoroutines {
+				go func() {
+					defer wg.Done()
+					for range tt.writesPerGoroutine {
+						event := logging.NewLogEvent(logging.LevelInfo, "test", "event", "concurrent message")
+						_ = bw.Write(event)
+					}
+				}()
+			}
+
+			wg.Wait()
+
+			err := bw.Flush()
+			require.NoError(t, err)
+
+			output := buf.String()
+			lines := strings.Split(strings.TrimSpace(output), "\n")
+			expected := min(tt.numGoroutines*tt.writesPerGoroutine, maxBufferSize)
+			assert.Equal(t, expected, len(lines))
+		})
+	}
 }

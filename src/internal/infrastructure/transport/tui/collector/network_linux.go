@@ -77,45 +77,94 @@ var (
 func getInterfaceStats(name string) (rxBytes, txBytes, speed uint64) {
 	basePath := filepath.Join("/sys/class/net", name, "statistics")
 
-	// RX bytes.
-	if content, err := os.ReadFile(filepath.Join(basePath, "rx_bytes")); err == nil {
-		contentStr := string(content)
-		// Parse RX bytes.
-		if val, err := strconv.ParseUint(strings.TrimSpace(contentStr), networkDecimalBase, networkBitSize64); err == nil {
-			rxBytes = val
-		}
+	// Read RX and TX bytes.
+	rxBytes = readSysfsCounter(filepath.Join(basePath, "rx_bytes"))
+	txBytes = readSysfsCounter(filepath.Join(basePath, "tx_bytes"))
+
+	// Get speed (hardware or adaptive).
+	speed = getInterfaceSpeed(name)
+
+	// Return all stats.
+	return rxBytes, txBytes, speed
+}
+
+// readSysfsCounter reads a single counter from sysfs.
+//
+// Params:
+//   - path: path to the sysfs file
+//
+// Returns:
+//   - uint64: counter value or 0 on error
+func readSysfsCounter(path string) uint64 {
+	content, err := os.ReadFile(path)
+	// Handle read error.
+	if err != nil {
+		// Cannot read counter.
+		return 0
+	}
+	// Parse counter value.
+	val, _ := strconv.ParseUint(strings.TrimSpace(string(content)), networkDecimalBase, networkBitSize64)
+	// Return parsed value (0 on parse error).
+	return val
+}
+
+// getInterfaceSpeed returns the interface speed in bps.
+// Uses hardware speed if available, otherwise adaptive estimation.
+//
+// Params:
+//   - name: interface name
+//
+// Returns:
+//   - uint64: speed in bits per second
+func getInterfaceSpeed(name string) uint64 {
+	// Try hardware speed first.
+	if speed := readHardwareSpeed(name); speed > 0 {
+		// Hardware speed available.
+		return speed
 	}
 
-	// TX bytes.
-	if content, err := os.ReadFile(filepath.Join(basePath, "tx_bytes")); err == nil {
-		contentStr := string(content)
-		// Parse TX bytes.
-		if val, err := strconv.ParseUint(strings.TrimSpace(contentStr), networkDecimalBase, networkBitSize64); err == nil {
-			txBytes = val
-		}
-	}
+	// Fall back to adaptive estimation for virtual interfaces.
+	return getAdaptiveSpeed(name)
+}
 
-	// Speed (in Mbps from sysfs, convert to bps).
-	// Virtual interfaces (lo, veth, docker0) don't have speed - use adaptive fallback.
+// readHardwareSpeed reads the hardware speed from sysfs.
+//
+// Params:
+//   - name: interface name
+//
+// Returns:
+//   - uint64: speed in bps or 0 if not available
+func readHardwareSpeed(name string) uint64 {
 	speedPath := filepath.Join("/sys/class/net", name, "speed")
-	// Try to read speed file.
-	if content, err := os.ReadFile(speedPath); err == nil {
-		// Parse speed in Mbps.
-		if val, err := strconv.ParseUint(strings.TrimSpace(string(content)), networkDecimalBase, networkBitSize64); err == nil {
-			// sysfs reports in Mbps, convert to bps.
-			// Some virtual interfaces report -1 or very large invalid values.
-			// Validate speed is within sane range.
-			if val > 0 && val < maxSaneMbps { // Sanity check (< 1 Tbps)
-				speed = val * mbpsMultiplier
-				// Return hardware-reported speed.
-				return rxBytes, txBytes, speed
-			}
-		}
+	content, err := os.ReadFile(speedPath)
+	// Handle read error.
+	if err != nil {
+		// Speed file not available.
+		return 0
 	}
 
-	// No hardware speed - use adaptive estimation for virtual interfaces.
+	// Parse speed in Mbps.
+	val, err := strconv.ParseUint(strings.TrimSpace(string(content)), networkDecimalBase, networkBitSize64)
+	// Handle parse error or invalid value.
+	if err != nil || val == 0 || val >= maxSaneMbps {
+		// Invalid or out of range speed.
+		return 0
+	}
+
+	// Convert Mbps to bps.
+	return val * mbpsMultiplier
+}
+
+// getAdaptiveSpeed returns or initializes the adaptive speed estimate.
+//
+// Params:
+//   - name: interface name
+//
+// Returns:
+//   - uint64: estimated speed in bps
+func getAdaptiveSpeed(name string) uint64 {
 	adaptiveSpeedMu.RLock()
-	speed = adaptiveSpeed[name]
+	speed := adaptiveSpeed[name]
 	adaptiveSpeedMu.RUnlock()
 
 	// Check if speed needs initialization.
@@ -127,8 +176,8 @@ func getInterfaceStats(name string) (rxBytes, txBytes, speed uint64) {
 		adaptiveSpeedMu.Unlock()
 	}
 
-	// Return with adaptive speed.
-	return rxBytes, txBytes, speed
+	// Return adaptive speed.
+	return speed
 }
 
 // UpdateAdaptiveSpeed adjusts the estimated speed based on observed throughput.

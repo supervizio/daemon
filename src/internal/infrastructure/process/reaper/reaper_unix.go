@@ -24,126 +24,104 @@ type Reaper struct {
 	doneCh chan struct{}
 }
 
-// NewReaper creates a new ZombieReaper.
+// NewReaper returns a Reaper for orphan zombie cleanup.
 //
 // Returns:
-//   - *Reaper: a new zombie reaper instance
+//   - *Reaper: initialized reaper ready to start
 func NewReaper() *Reaper {
-	// Return a new instance with initialized channels.
-	return &Reaper{
-		stopCh: make(chan struct{}),
-		doneCh: make(chan struct{}),
-	}
+	return &Reaper{stopCh: make(chan struct{}), doneCh: make(chan struct{})}
 }
 
-// New creates a new ZombieReaper.
+// New returns a Reaper for orphan zombie cleanup.
 //
 // Returns:
-//   - *Reaper: a new zombie reaper instance
+//   - *Reaper: initialized reaper ready to start
 func New() *Reaper {
-	// Return a new instance with initialized channels.
-	return &Reaper{
-		stopCh: make(chan struct{}),
-		doneCh: make(chan struct{}),
-	}
+	return &Reaper{stopCh: make(chan struct{}), doneCh: make(chan struct{})}
 }
 
-// Start begins the background reaping loop.
+// Start launches the SIGCHLD-driven reaping goroutine.
 func (r *Reaper) Start() {
 	r.mu.Lock()
-	// Check if the reaper is already running to avoid duplicate loops.
+	// Already running; prevent duplicate goroutines.
 	if r.running {
 		r.mu.Unlock()
-		// Return early since the reaper is already running.
 		return
 	}
 	r.running = true
+	// Fresh channels for this run cycle.
 	r.stopCh = make(chan struct{})
 	r.doneCh = make(chan struct{})
 	r.mu.Unlock()
-
 	go r.reapLoop()
 }
 
-// Stop stops the reaping loop.
+// Stop terminates the reaping loop and waits for completion.
 func (r *Reaper) Stop() {
 	r.mu.Lock()
-	// Check if the reaper is not running to avoid closing already closed channels.
+	// Not running; nothing to stop.
 	if !r.running {
 		r.mu.Unlock()
-		// Return early since the reaper is not running.
 		return
 	}
 	r.running = false
 	r.mu.Unlock()
-
 	close(r.stopCh)
+	// Wait for final reap cycle to complete.
 	<-r.doneCh
 }
 
-// reapLoop continuously reaps zombie processes.
+// reapLoop waits for SIGCHLD and reaps zombies until stopped.
 func (r *Reaper) reapLoop() {
-	// Defer closing doneCh to signal completion to Stop().
 	defer close(r.doneCh)
-
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGCHLD)
-	// Defer stopping signal notifications to clean up resources.
 	defer signal.Stop(sigCh)
-
-	// Iterate indefinitely until stop signal is received.
 	for {
-		// Select on stop or SIGCHLD channels.
 		select {
-		// Case stopCh handles the stop signal to terminate the loop.
+		// Shutdown requested; do final cleanup.
 		case <-r.stopCh:
-			// Final reap before exit.
 			r.reapAll()
-			// Return to exit the reap loop.
 			return
-		// Case sigCh handles SIGCHLD signal indicating child process state change.
+		// Child terminated; reap all pending zombies.
 		case <-sigCh:
 			r.reapAll()
 		}
 	}
 }
 
-// reapAll reaps all zombie processes.
+// reapAll uses non-blocking waitpid to collect all terminated children.
 func (r *Reaper) reapAll() {
-	// Iterate until no more zombie processes are available to reap.
+	// Loop until no more zombies remain.
 	for {
 		pid, err := syscall.Wait4(-1, nil, syscall.WNOHANG, nil)
-		// Check if wait4 failed or returned no process to break the loop.
+		// No more children or error (ECHILD when no children exist).
 		if err != nil || pid <= 0 {
 			break
 		}
 	}
 }
 
-// ReapOnce performs a single reap cycle and returns the count of reaped processes.
+// ReapOnce collects zombies once and returns the count.
 //
 // Returns:
-//   - int: the number of zombie processes reaped
+//   - int: number of zombie processes reaped in this call
 func (r *Reaper) ReapOnce() int {
 	count := 0
-	// Iterate until no more zombie processes are available to reap.
+	// Loop until no more zombies remain.
 	for {
 		pid, err := syscall.Wait4(-1, nil, syscall.WNOHANG, nil)
-		// Check if wait4 failed or returned no process to break the loop.
+		// No more children or error (ECHILD when no children exist).
 		if err != nil || pid <= 0 {
 			break
 		}
 		count++
 	}
-	// Return the total count of reaped zombie processes.
 	return count
 }
 
-// IsPID1 returns true if the current process is running as PID 1.
+// IsPID1 checks if running as init process (needed for subreaper role).
 //
 // Returns:
-//   - bool: true if the current process ID is 1
-func (r *Reaper) IsPID1() bool {
-	// Return true if the current process ID equals 1.
-	return os.Getpid() == 1
-}
+//   - bool: true when running as PID 1 (container init or system init)
+func (r *Reaper) IsPID1() bool { return os.Getpid() == 1 }

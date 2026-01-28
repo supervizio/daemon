@@ -439,3 +439,105 @@ func TestManager_Status(t *testing.T) {
 		})
 	}
 }
+
+// TestManager_Name tests the Name method.
+//
+// Params:
+//   - t: the testing context.
+
+// TestManager_Name tests the Name method.
+//
+// Params:
+//   - t: the testing context.
+func TestManager_Name(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// serviceName is the configured service name.
+		serviceName string
+		// expected is the expected return value.
+		expected string
+	}{
+		{
+			name:        "returns_configured_service_name",
+			serviceName: "test-service",
+			expected:    "test-service",
+		},
+		{
+			name:        "returns_different_service_name",
+			serviceName: "another-service",
+			expected:    "another-service",
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createTestConfig(tt.serviceName, "/bin/echo")
+			executor := &mockExecutor{}
+
+			mgr := lifecycle.NewManager(cfg, executor)
+
+			result := mgr.Name()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestManager_RestartOnHealthFailure tests the RestartOnHealthFailure method.
+//
+// Params:
+//   - t: the testing context.
+func TestManager_RestartOnHealthFailure(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// stopErr is the error to return from stop.
+		stopErr error
+		// expectError indicates if an error is expected.
+		expectError bool
+	}{
+		{
+			name:        "restarts_running_process",
+			stopErr:     nil,
+			expectError: false,
+		},
+		{
+			name:        "returns_stop_error",
+			stopErr:     domain.ErrProcessFailed,
+			expectError: true,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createTestConfig("test-service", "/bin/echo")
+			executor := &mockExecutor{
+				stopFunc: func(_ int, _ time.Duration) error {
+					return tt.stopErr
+				},
+			}
+
+			mgr := lifecycle.NewManager(cfg, executor)
+			// Start the manager first to set running state.
+			_ = mgr.Start()
+			// Wait briefly for manager to initialize.
+			time.Sleep(10 * time.Millisecond)
+
+			err := mgr.RestartOnHealthFailure("health probe failed")
+
+			// Check if error is expected.
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			// Clean up.
+			_ = mgr.Stop()
+		})
+	}
+}

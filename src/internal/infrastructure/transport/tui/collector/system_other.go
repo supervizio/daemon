@@ -16,9 +16,9 @@ func NewSystemCollector() *SystemCollector {
 	return &SystemCollector{}
 }
 
-// CollectInto gathers system metrics.
+// Collect gathers system metrics.
 // On non-Linux platforms, returns zeros (graceful degradation).
-func (c *SystemCollector) CollectInto(snap *model.Snapshot) error {
+func (c *SystemCollector) Gather(snap *model.Snapshot) error {
 	// CPU, memory, load average, and disk metrics require platform-specific
 	// implementations (sysctl on BSD/Darwin, etc.).
 	// For now, return zeros - the TUI will display "-" for missing data.

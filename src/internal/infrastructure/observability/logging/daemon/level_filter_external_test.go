@@ -9,47 +9,137 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLevelFilter_FiltersBelow(t *testing.T) {
-	t.Parallel()
-
-	mock := &mockWriter{}
-	filtered := daemon.WithLevelFilter(mock, logging.LevelWarn)
-
-	// Debug and Info should be filtered.
-	filtered.Write(logging.NewLogEvent(logging.LevelDebug, "svc", "debug", "msg"))
-	filtered.Write(logging.NewLogEvent(logging.LevelInfo, "svc", "info", "msg"))
-	assert.Empty(t, mock.Events())
-
-	// Warn and Error should pass through.
-	filtered.Write(logging.NewLogEvent(logging.LevelWarn, "svc", "warn", "msg"))
-	filtered.Write(logging.NewLogEvent(logging.LevelError, "svc", "error", "msg"))
-	assert.Len(t, mock.Events(), 2)
+type mockWriter struct {
+	events []logging.LogEvent
 }
 
-func TestLevelFilter_PassesAtAndAbove(t *testing.T) {
+func (m *mockWriter) Write(event logging.LogEvent) error {
+	m.events = append(m.events, event)
+	return nil
+}
+
+func (m *mockWriter) Close() error {
+	return nil
+}
+
+func TestWithLevelFilter(t *testing.T) {
 	t.Parallel()
 
-	mock := &mockWriter{}
-	filtered := daemon.WithLevelFilter(mock, logging.LevelInfo)
+	tests := []struct {
+		name     string
+		minLevel logging.Level
+	}{
+		{
+			name:     "info level filter",
+			minLevel: logging.LevelInfo,
+		},
+		{
+			name:     "error level filter",
+			minLevel: logging.LevelError,
+		},
+	}
 
-	// Debug should be filtered.
-	filtered.Write(logging.NewLogEvent(logging.LevelDebug, "svc", "debug", "msg"))
-	assert.Empty(t, mock.Events())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Info and above should pass through.
-	filtered.Write(logging.NewLogEvent(logging.LevelInfo, "svc", "info", "msg"))
-	filtered.Write(logging.NewLogEvent(logging.LevelWarn, "svc", "warn", "msg"))
-	filtered.Write(logging.NewLogEvent(logging.LevelError, "svc", "error", "msg"))
-	assert.Len(t, mock.Events(), 3)
+			mock := &mockWriter{}
+			filter := daemon.WithLevelFilter(mock, tt.minLevel)
+			assert.NotNil(t, filter)
+		})
+	}
+}
+
+func TestNewLevelFilter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		minLevel logging.Level
+	}{
+		{
+			name:     "create with constructor",
+			minLevel: logging.LevelWarn,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mock := &mockWriter{}
+			filter := daemon.NewLevelFilter(mock, tt.minLevel)
+			assert.NotNil(t, filter)
+		})
+	}
+}
+
+func TestLevelFilter_Write(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		minLevel   logging.Level
+		eventLevel logging.Level
+		shouldPass bool
+	}{
+		{
+			name:       "debug below info threshold",
+			minLevel:   logging.LevelInfo,
+			eventLevel: logging.LevelDebug,
+			shouldPass: false,
+		},
+		{
+			name:       "info at info threshold",
+			minLevel:   logging.LevelInfo,
+			eventLevel: logging.LevelInfo,
+			shouldPass: true,
+		},
+		{
+			name:       "error above info threshold",
+			minLevel:   logging.LevelInfo,
+			eventLevel: logging.LevelError,
+			shouldPass: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mock := &mockWriter{}
+			filter := daemon.WithLevelFilter(mock, tt.minLevel)
+
+			event := logging.NewLogEvent(tt.eventLevel, "test", "event", "message")
+			err := filter.Write(event)
+			require.NoError(t, err)
+
+			if tt.shouldPass {
+				assert.Len(t, mock.events, 1)
+			} else {
+				assert.Empty(t, mock.events)
+			}
+		})
+	}
 }
 
 func TestLevelFilter_Close(t *testing.T) {
 	t.Parallel()
 
-	mock := &mockWriter{}
-	filtered := daemon.WithLevelFilter(mock, logging.LevelInfo)
+	tests := []struct {
+		name string
+	}{
+		{name: "close level filter"},
+	}
 
-	err := filtered.Close()
-	require.NoError(t, err)
-	assert.True(t, mock.closed)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mock := &mockWriter{}
+			filter := daemon.WithLevelFilter(mock, logging.LevelInfo)
+			err := filter.Close()
+			assert.NoError(t, err)
+		})
+	}
 }

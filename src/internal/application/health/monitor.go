@@ -81,7 +81,6 @@ func NewProbeMonitor(config ProbeMonitorConfig) *ProbeMonitor {
 		defaultInterval = domain.DefaultInterval
 	}
 
-	// Return configured monitor with initialized state.
 	return &ProbeMonitor{
 		listeners:       nil,
 		health:          domain.NewAggregatedHealth(process.StateStopped),
@@ -109,19 +108,15 @@ func listenerStateToSubjectState(state listener.State) domain.SubjectState {
 	switch state {
 	// Listener is ready (passed healthcheck).
 	case listener.StateReady:
-		// Return subject ready state.
 		return domain.SubjectReady
 	// Listener is listening but not yet ready.
 	case listener.StateListening:
-		// Return subject listening state.
 		return domain.SubjectListening
 	// Listener is closed or stopped.
 	case listener.StateClosed:
-		// Return subject closed state.
 		return domain.SubjectClosed
 	// Unrecognized or invalid listener state.
 	default:
-		// Return unknown subject state for safety.
 		return domain.SubjectUnknown
 	}
 }
@@ -140,7 +135,6 @@ func (m *ProbeMonitor) AddListener(l *listener.Listener) error {
 
 	// Add listener without binding (no probing).
 	m.listeners = append(m.listeners, NewListenerProbe(l))
-	// Return success for listener without healthcheck.
 	return nil
 }
 
@@ -157,15 +151,11 @@ func (m *ProbeMonitor) AddListenerWithBinding(l *listener.Listener, binding *Pro
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Create listener probe with binding.
 	lp := NewListenerProbeWithBinding(l, binding)
 
-	// Create prober if binding is provided.
 	if binding != nil {
 		prober, err := m.createProberFromBinding(binding)
-		// Check for prober creation failure.
 		if err != nil {
-			// Return prober creation error.
 			return err
 		}
 		lp.Prober = prober
@@ -173,7 +163,6 @@ func (m *ProbeMonitor) AddListenerWithBinding(l *listener.Listener, binding *Pro
 
 	// Add listener probe.
 	m.listeners = append(m.listeners, lp)
-	// Return success.
 	return nil
 }
 
@@ -186,33 +175,27 @@ func (m *ProbeMonitor) AddListenerWithBinding(l *listener.Listener, binding *Pro
 //   - domain.Prober: the created prober.
 //   - error: if factory is missing or creation fails.
 func (m *ProbeMonitor) createProberFromBinding(binding *ProbeBinding) (domain.Prober, error) {
-	// Check if factory is configured.
 	if m.factory == nil {
-		// Return error when factory is missing.
 		return nil, ErrProberFactoryMissing
 	}
 
 	// Validate probe type is not empty.
 	if binding.Type == "" {
-		// Return error when probe type is missing.
 		return nil, ErrEmptyProbeType
 	}
 
 	// Use binding timeout, falling back to default if not set.
 	timeout := binding.Config.Timeout
-	// Apply default timeout when not configured.
 	if timeout == 0 {
 		timeout = m.defaultTimeout
 	}
 
-	// Create prober with effective timeout.
 	prober, err := m.factory.Create(string(binding.Type), timeout)
 	// Check for factory creation failure.
 	if err != nil {
 		// Wrap factory error with listener context.
 		return nil, fmt.Errorf("create prober for binding %q: %w", binding.ListenerName, err)
 	}
-	// Return successfully created prober.
 	return prober, nil
 }
 
@@ -225,10 +208,8 @@ func (m *ProbeMonitor) SetProcessState(state process.State) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Update process state in monitor.
 	m.processState = state
 
-	// Update process state in aggregated health.
 	m.health.ProcessState = state
 }
 
@@ -241,10 +222,8 @@ func (m *ProbeMonitor) SetCustomStatus(status string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Update custom status in monitor.
 	m.customStatus = status
 
-	// Update custom status in aggregated health.
 	m.health.SetCustomStatus(status)
 }
 
@@ -260,7 +239,6 @@ func (m *ProbeMonitor) Start(ctx context.Context) {
 	// Lock to check and update running state.
 	m.mu.Lock()
 
-	// Check if already running to prevent duplicate goroutines.
 	if m.running {
 		m.mu.Unlock()
 		// Return early to avoid starting duplicate probers.
@@ -295,7 +273,6 @@ func (m *ProbeMonitor) Stop() {
 	// Lock to check and update running state.
 	m.mu.Lock()
 
-	// Check if not running to avoid closing already-closed channel.
 	if !m.running {
 		m.mu.Unlock()
 		// Return early since monitor is not running.
@@ -325,7 +302,6 @@ func (m *ProbeMonitor) runProber(ctx context.Context, stopCh <-chan struct{}, lp
 		interval = m.defaultInterval
 	}
 
-	// Create ticker for periodic probes.
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -377,17 +353,14 @@ func (m *ProbeMonitor) performProbe(ctx context.Context, lp *ListenerProbe) {
 		timeout = m.defaultTimeout
 	}
 
-	// Create timeout context for this healthcheck.
 	probeCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// Get target from listener probe.
 	target := lp.ProbeTarget()
 
 	// Execute the healthcheck.
 	result := lp.Prober.Probe(probeCtx, target)
 
-	// Update state with probe result.
 	m.updateProbeResult(lp, result)
 }
 
@@ -404,19 +377,15 @@ func (m *ProbeMonitor) updateProbeResult(lp *ListenerProbe, result domain.CheckR
 	// Find or create listener status in health.
 	ls := m.findOrCreateSubjectStatus(lp)
 
-	// Get previous state for event comparison.
 	prevState := lp.Listener.State
 
 	// Store previous failure count for threshold checking.
 	prevFailures := ls.ConsecutiveFailures
 
-	// Get probe config for thresholds.
 	config := lp.ProbeConfig()
 
-	// Get normalized thresholds (zero values become 1).
 	successThreshold, failureThreshold := m.normalizeThresholds(config)
 
-	// Update state based on probe result.
 	m.updateListenerState(lp, ls, result, successThreshold, failureThreshold)
 
 	// Store the probe result and update latency.
@@ -425,7 +394,6 @@ func (m *ProbeMonitor) updateProbeResult(lp *ListenerProbe, result domain.CheckR
 	// Send event if state changed.
 	m.sendEventIfChanged(lp, ls, prevState, result)
 
-	// Check if failure threshold was just reached (triggers restart).
 	m.checkFailureThresholdReached(lp, ls, prevFailures, result)
 }
 
@@ -440,7 +408,6 @@ func (m *ProbeMonitor) updateProbeResult(lp *ListenerProbe, result domain.CheckR
 func (m *ProbeMonitor) normalizeThresholds(config domain.CheckConfig) (successThreshold, failureThreshold int) {
 	// Default to 1 for zero or negative success threshold.
 	successThreshold = config.SuccessThreshold
-	// Check if success threshold needs normalization.
 	if successThreshold <= 0 {
 		// Use minimum of 1 for unset threshold.
 		successThreshold = 1
@@ -448,13 +415,11 @@ func (m *ProbeMonitor) normalizeThresholds(config domain.CheckConfig) (successTh
 
 	// Default to 1 for zero or negative failure threshold.
 	failureThreshold = config.FailureThreshold
-	// Check if failure threshold needs normalization.
 	if failureThreshold <= 0 {
 		// Use minimum of 1 for unset threshold.
 		failureThreshold = 1
 	}
 
-	// Return both normalized values.
 	return successThreshold, failureThreshold
 }
 
@@ -534,7 +499,6 @@ func (m *ProbeMonitor) storeProbeResult(ls *domain.SubjectStatus, result domain.
 		Error:     result.Error,
 	}
 
-	// Update latency in aggregated health.
 	m.health.SetLatency(result.Latency)
 }
 
@@ -555,12 +519,10 @@ func (m *ProbeMonitor) findOrCreateSubjectStatus(lp *ListenerProbe) *domain.Subj
 		}
 	}
 
-	// Create new subject status if not found.
 	m.health.Subjects = append(m.health.Subjects, domain.SubjectStatus{
 		Name:  lp.Listener.Name,
 		State: listenerStateToSubjectState(lp.Listener.State),
 	})
-	// Return pointer to newly created subject status.
 	return &m.health.Subjects[len(m.health.Subjects)-1]
 }
 
@@ -572,17 +534,12 @@ func (m *ProbeMonitor) findOrCreateSubjectStatus(lp *ListenerProbe) *domain.Subj
 // Returns:
 //   - string: the failure reason extracted from error or output.
 func extractFailureReason(result domain.CheckResult) string {
-	// Check if error message is available.
 	if result.Error != nil {
-		// Return the error message string.
 		return result.Error.Error()
 	}
-	// Check if output is available.
 	if result.Output != "" {
-		// Return the output as reason.
 		return result.Output
 	}
-	// Return default failure message.
 	return "health probe failed"
 }
 
@@ -597,7 +554,6 @@ func (m *ProbeMonitor) sendEventIfChanged(lp *ListenerProbe, ls *domain.SubjectS
 	// Convert previous state to subject state for comparison.
 	prevSubjectState := listenerStateToSubjectState(prevState)
 
-	// Check if state has changed.
 	if prevSubjectState == ls.State {
 		// Return early when state unchanged.
 		return
@@ -624,12 +580,10 @@ func (m *ProbeMonitor) sendEventIfChanged(lp *ListenerProbe, ls *domain.SubjectS
 //   - newState: the new subject state.
 //   - result: the probe result.
 func (m *ProbeMonitor) notifyStateChange(name string, prevState, newState domain.SubjectState, result domain.CheckResult) {
-	// Check if callback is configured.
 	if m.onStateChange == nil {
 		// Return early when no callback configured.
 		return
 	}
-	// Call the state change callback.
 	m.onStateChange(name, prevState, newState, result)
 }
 
@@ -641,12 +595,10 @@ func (m *ProbeMonitor) notifyStateChange(name string, prevState, newState domain
 //   - newState: the new subject state.
 //   - result: the probe result.
 func (m *ProbeMonitor) handleUnhealthyTransition(name string, prevState, newState domain.SubjectState, result domain.CheckResult) {
-	// Check if this is a ready -> listening transition.
 	if newState != domain.SubjectListening || prevState != domain.SubjectReady {
 		// Return early for non-unhealthy transitions.
 		return
 	}
-	// Check if callback is configured.
 	if m.onUnhealthy == nil {
 		// Return early when no callback configured.
 		return
@@ -663,17 +615,14 @@ func (m *ProbeMonitor) handleUnhealthyTransition(name string, prevState, newStat
 //   - prevState: the previous subject state.
 //   - newState: the new subject state.
 func (m *ProbeMonitor) handleHealthyTransition(name string, prevState, newState domain.SubjectState) {
-	// Check if this is a listening -> ready transition (became healthy).
 	if newState != domain.SubjectReady || prevState != domain.SubjectListening {
 		// Return early for non-healthy transitions.
 		return
 	}
-	// Check if callback is configured.
 	if m.onHealthy == nil {
 		// Return early when no callback configured.
 		return
 	}
-	// Call healthy callback.
 	m.onHealthy(name)
 }
 
@@ -684,18 +633,15 @@ func (m *ProbeMonitor) handleHealthyTransition(name string, prevState, newState 
 //   - ls: the subject status.
 //   - result: the probe result.
 func (m *ProbeMonitor) sendEvent(name string, ls *domain.SubjectStatus, result domain.CheckResult) {
-	// Check if events channel is configured.
 	if m.events == nil {
 		// Return early when no event channel.
 		return
 	}
-	// Check if probe result is stored.
 	if ls.LastProbeResult == nil {
 		// Return early when no probe result available.
 		return
 	}
 
-	// Create and send event.
 	event := domain.NewEvent(name, m.resultToStatus(result), *ls.LastProbeResult)
 
 	// Non-blocking send to avoid deadlocks.
@@ -718,22 +664,18 @@ func (m *ProbeMonitor) sendEvent(name string, ls *domain.SubjectStatus, result d
 //   - prevFailures: the failure count before the probe.
 //   - result: the probe result.
 func (m *ProbeMonitor) checkFailureThresholdReached(lp *ListenerProbe, ls *domain.SubjectStatus, prevFailures int, result domain.CheckResult) {
-	// Check if probe was successful.
 	if result.Success {
 		// Return early on successful probes.
 		return
 	}
 
-	// Get the failure threshold from config.
 	failureThreshold := m.getFailureThreshold(lp)
 
-	// Check if threshold was crossed.
 	if prevFailures >= failureThreshold || ls.ConsecutiveFailures < failureThreshold {
 		// Return early when threshold not crossed.
 		return
 	}
 
-	// Check if callback is configured.
 	if m.onUnhealthy == nil {
 		// Return early when no callback configured.
 		return
@@ -757,7 +699,6 @@ func (m *ProbeMonitor) checkFailureThresholdReached(lp *ListenerProbe, ls *domai
 //   - int: the failure threshold (minimum 1).
 func (m *ProbeMonitor) getFailureThreshold(lp *ListenerProbe) int {
 	config := lp.ProbeConfig()
-	// Check if threshold is valid.
 	if config.FailureThreshold <= 0 {
 		// Return minimum threshold of 1.
 		return 1

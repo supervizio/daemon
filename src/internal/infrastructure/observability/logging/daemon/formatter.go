@@ -3,6 +3,8 @@ package daemon
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,7 +42,13 @@ var (
 //   - *strings.Builder: a builder from the pool.
 func getBuilder() *strings.Builder {
 	// Get builder from pool (safe cast from pool).
-	return builderPool.Get().(*strings.Builder)
+	sb, ok := builderPool.Get().(*strings.Builder)
+	// Create new builder if pool returned invalid type.
+	if !ok {
+		sb = &strings.Builder{}
+	}
+	// Return builder for string concatenation.
+	return sb
 }
 
 // putBuilder returns a strings.Builder to the pool after resetting it.
@@ -143,11 +151,7 @@ func (f *TextFormatter) Format(event logging.LogEvent) string {
 //   - meta: the metadata map to format.
 func formatMetadataToBuilder(sb *strings.Builder, meta map[string]any) {
 	// Sort keys for consistent output.
-	keys := make([]string, 0, len(meta))
-	// Collect all keys from metadata.
-	for k := range meta {
-		keys = append(keys, k)
-	}
+	keys := slices.Collect(maps.Keys(meta))
 	sort.Strings(keys)
 
 	// Format each key-value pair.
@@ -166,7 +170,12 @@ func formatMetadataToBuilder(sb *strings.Builder, meta map[string]any) {
 //
 // Params:
 //   - sb: the string builder to write to.
-//   - v: the value to format.
+//   - v: the value to format (any type for log metadata flexibility).
+//
+// Note: any type required - log metadata values are runtime-determined and type-heterogeneous
+// (primitives, errors, custom types). Type switch handles common cases efficiently.
+//
+//nolint:ktn-interface-anyuse // any required: log metadata is runtime-determined, type switch for efficient handling
 func formatValue(sb *strings.Builder, v any) {
 	// Type switch for efficient formatting.
 	switch val := v.(type) {

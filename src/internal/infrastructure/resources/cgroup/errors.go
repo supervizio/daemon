@@ -29,40 +29,30 @@ type InvalidFormatError struct {
 	Got      int
 }
 
-// NewInvalidFormatError creates a new InvalidFormatError.
+// NewInvalidFormatError wraps parsing failures with context.
 //
 // Params:
-//   - file: the name of the file that failed validation.
-//   - content: the content that failed to parse.
-//   - expected: the expected number of fields.
-//   - got: the actual number of fields found.
+//   - file: cgroup file that failed to parse
+//   - content: raw content that could not be parsed
+//   - expected: number of fields expected
+//   - got: actual number of fields found
 //
 // Returns:
-//   - *InvalidFormatError: a new format validation error.
+//   - *InvalidFormatError: structured error with parsing context
 func NewInvalidFormatError(file, content string, expected, got int) *InvalidFormatError {
-	// Create and return new error with provided values.
-	return &InvalidFormatError{
-		File:     file,
-		Content:  content,
-		Expected: expected,
-		Got:      got,
-	}
+	return &InvalidFormatError{File: file, Content: content, Expected: expected, Got: got}
 }
 
-// Error implements the error interface.
+// Error formats the validation failure with file and field count details.
 //
 // Returns:
-//   - string: formatted error message
+//   - string: formatted error message with file, content, and field counts
 func (e *InvalidFormatError) Error() string {
-	// Return detailed error message
 	return fmt.Sprintf("invalid %s format %q: expected %d fields, got %d", e.File, e.Content, e.Expected, e.Got)
 }
 
-// Unwrap returns the base error for errors.Is/As support.
+// Unwrap enables errors.Is/As to match ErrInvalidFormat.
 //
 // Returns:
-//   - error: the base error
-func (e *InvalidFormatError) Unwrap() error {
-	// Return base error for error chain
-	return ErrInvalidFormat
-}
+//   - error: base ErrInvalidFormat for error chain matching
+func (e *InvalidFormatError) Unwrap() error { return ErrInvalidFormat }
