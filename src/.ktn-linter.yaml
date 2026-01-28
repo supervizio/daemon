@@ -13,9 +13,6 @@ exclude:
 - '**/*.pb.go'
 - '**/wire_gen.go'
 - api/**
-# Exclude file that triggers shift analyzer panic (linter bug, not code issue)
-# The shift operation portBytes[0]<<8 is safe: len is verified to be 2
-- '**/supervisor/ports_linux.go'
 rules:
   KTN-API-MINIF:
     enabled: true
