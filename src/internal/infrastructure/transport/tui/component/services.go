@@ -201,6 +201,7 @@ func (s *ServicesPanel) formatServiceLine(svc model.ServiceSnapshot) string {
 }
 
 // formatServiceName truncates and formats a service name.
+// Sanitizes input to prevent terminal escape injection attacks.
 //
 // Params:
 //   - name: raw service name
@@ -208,13 +209,16 @@ func (s *ServicesPanel) formatServiceLine(svc model.ServiceSnapshot) string {
 // Returns:
 //   - string: formatted service name
 func (s *ServicesPanel) formatServiceName(name string) string {
+	// Sanitize input to prevent ANSI escape injection.
+	sanitized := widget.StripANSI(name)
+
 	// Truncate long names.
-	if len([]rune(name)) > nameColWidth {
+	if len([]rune(sanitized)) > nameColWidth {
 		// Return truncated name.
-		return widget.TruncateRunes(name, nameColWidth, "...")
+		return widget.TruncateRunes(sanitized, nameColWidth, "...")
 	}
 	// Return original name.
-	return name
+	return sanitized
 }
 
 // collectServiceColumns gathers all formatted column values for a service.

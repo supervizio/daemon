@@ -280,6 +280,7 @@ func (l *LogsPanel) formatLogLine(entry model.LogEntry, msgWidth int) string {
 }
 
 // formatServiceName formats and truncates the service name.
+// Sanitizes input to prevent terminal escape injection attacks.
 //
 // Params:
 //   - service: raw service name
@@ -293,17 +294,21 @@ func (l *LogsPanel) formatServiceName(service string) string {
 		return "daemon"
 	}
 
+	// Sanitize input to prevent ANSI escape injection.
+	sanitized := widget.StripANSI(service)
+
 	// Truncate service name if too long.
-	if len([]rune(service)) > serviceNameMaxWidth {
+	if len([]rune(sanitized)) > serviceNameMaxWidth {
 		// Return truncated name with ellipsis.
-		return widget.TruncateRunes(service, serviceNameMaxWidth, "...")
+		return widget.TruncateRunes(sanitized, serviceNameMaxWidth, "...")
 	}
 
 	// Return original service name.
-	return service
+	return sanitized
 }
 
 // buildMessage builds the message string with metadata.
+// Sanitizes input to prevent terminal escape injection attacks.
 //
 // Params:
 //   - entry: log entry containing message and metadata
@@ -312,11 +317,12 @@ func (l *LogsPanel) formatServiceName(service string) string {
 // Returns:
 //   - string: formatted message with metadata
 func (l *LogsPanel) buildMessage(entry model.LogEntry, msgWidth int) string {
-	msg := entry.Message
+	// Sanitize message to prevent ANSI escape injection.
+	msg := widget.StripANSI(entry.Message)
 
 	// Use event type if message is empty.
 	if msg == "" {
-		msg = entry.EventType
+		msg = widget.StripANSI(entry.EventType)
 	}
 
 	// Append metadata if present.

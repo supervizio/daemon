@@ -28,8 +28,8 @@ func getKernelVersion() string {
 		}
 	}
 
-	// Fallback: just return "BSD".
-	return "BSD"
+	// Fallback: return unknown for consistency with other platforms.
+	return unknownValue
 }
 
 // getPrimaryIP returns the primary non-loopback IP address.

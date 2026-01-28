@@ -314,13 +314,28 @@ func (m Model) updatePanelSizes() Model {
 	// Standard terminal: 80x24.
 	headerHeight := layoutHeaderHeight
 	statusHeight := layoutStatusBarHeight
-	systemHeight := layoutSystemSectionLines // System section (box with 5 content lines).
+
+	// Determine layout to check if system section is rendered.
+	size := terminal.Size{Cols: m.width, Rows: m.height}
+	layout := terminal.GetLayout(size)
+
+	// System section only rendered in non-compact modes.
+	var systemHeight int
+	if layout != terminal.LayoutCompact {
+		systemHeight = layoutSystemSectionLines
+	}
 
 	// Available height for content.
 	availableHeight := m.height - headerHeight - statusHeight - systemHeight
 
 	// Services panel: adapts to number of services, max 10 visible (+3 for borders/header).
 	servicesHeight := m.servicesPanel.OptimalHeight()
+
+	// Ensure services panel doesn't exceed available space minus minimum logs.
+	maxServicesHeight := availableHeight - layoutMinLogHeight
+	if maxServicesHeight > 0 && servicesHeight > maxServicesHeight {
+		servicesHeight = maxServicesHeight
+	}
 
 	// Remaining space goes to logs, enforcing minimum.
 	logsHeight := max(availableHeight-servicesHeight, layoutMinLogHeight)

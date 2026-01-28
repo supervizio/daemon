@@ -409,7 +409,8 @@ func getDockerContainerPorts(containerNameOrID string) []int {
 }
 
 // parseDockerPortOutput parses "docker port" command output.
-// Output format: "80/tcp -> 0.0.0.0:8082"
+// Output format: "80/tcp -> 0.0.0.0:8082" or "80/tcp -> [::]:8082" (IPv6)
+// Uses LastIndex to correctly handle IPv6 addresses which contain colons.
 //
 // Params:
 //   - output: raw output from docker port command
@@ -427,15 +428,15 @@ func parseDockerPortOutput(output string) []int {
 			continue
 		}
 
-		// Extract host port after last colon.
-		parts := strings.Split(line, ":")
-		// Not enough parts for valid mapping.
-		if len(parts) < minPortParts {
+		// Extract host port after last colon (handles IPv6 like [::]:8080).
+		lastColon := strings.LastIndex(line, ":")
+		// No colon found in line.
+		if lastColon == -1 {
 			continue
 		}
 
-		// Parse port number.
-		portStr := strings.TrimSpace(parts[len(parts)-1])
+		// Parse port number from after the last colon.
+		portStr := strings.TrimSpace(line[lastColon+1:])
 		port, err := strconv.Atoi(portStr)
 		// Failed to parse port.
 		if err != nil {

@@ -2,6 +2,7 @@
 package collector
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/model"
@@ -60,7 +61,7 @@ func getSandboxChecks() []sandboxCheck {
 			endpoints: []string{
 				"/var/run/podman/podman.sock",
 				"/run/podman/podman.sock",
-				"/run/user/1000/podman/podman.sock",
+				fmt.Sprintf("/run/user/%d/podman/podman.sock", os.Getuid()),
 			},
 		},
 		{
