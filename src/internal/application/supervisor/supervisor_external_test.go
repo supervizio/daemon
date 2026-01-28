@@ -3,10 +3,10 @@
 package supervisor_test
 
 import (
-	"github.com/kodflow/daemon/internal/application/metrics"
-	"fmt"
 	"context"
 	"errors"
+	"fmt"
+	"github.com/kodflow/daemon/internal/application/metrics"
 	"os"
 	"sync"
 	"testing"

@@ -321,7 +321,7 @@ reviews:
         - Proper dependencies declaration
         - Pre/post install scripts tested
 
-    - path: "src/.golangci.yml"
+    - path: ".golangci.yml"
       instructions: |
         **golangci-lint Configuration:**
         - Justify any disabled linters
@@ -436,7 +436,7 @@ reviews:
     # Go
     golangci-lint:
       enabled: true
-      config_file: "src/.golangci.yml"
+      config_file: ".golangci.yml"
 
     # Protobuf
     buf:

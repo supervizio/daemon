@@ -686,26 +686,19 @@ func (s *Supervisor) hasConfiguredProbes(svc *domainconfig.ServiceConfig) bool {
 func (s *Supervisor) createProbeMonitorConfig(serviceName string) apphealth.ProbeMonitorConfig {
 	return apphealth.ProbeMonitorConfig{
 		Factory: s.proberFactory,
-		OnStateChange: func(listenerName string, prevState, newState domainhealth.SubjectState, result domainhealth.CheckResult) {
+		OnStateChange: func(_ string, _, _ domainhealth.SubjectState, _ domainhealth.CheckResult) {
 			// Health state transitions are tracked internally.
 			// Events are emitted via OnHealthy/OnUnhealthy callbacks.
-			_ = listenerName
-			_ = prevState
-			_ = newState
-			_ = result
 		},
-		OnUnhealthy: func(listenerName, reason string) {
+		OnUnhealthy: func(_, reason string) {
 			// Trigger restart on health failure (event emitted by restart logic).
-			_ = listenerName
-			_ = reason
 			// Attempt to restart the service on health failure.
 			if err := s.RestartOnHealthFailure(serviceName, reason); err != nil {
 				s.handleRecoveryError("health-restart", serviceName, err)
 			}
 		},
-		OnHealthy: func(listenerName string) {
+		OnHealthy: func(_ string) {
 			// Emit healthy event when service becomes healthy.
-			_ = listenerName
 			// Call event handler if registered.
 			if s.eventHandler != nil {
 				s.mu.RLock()

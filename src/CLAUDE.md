@@ -36,8 +36,8 @@ go 1.25
 ```bash
 go build ./cmd/daemon         # Build binary
 go test -race ./...           # Tests with race detection
-golangci-lint run             # Standard linting
-ktn-linter lint ./...         # KTN convention linting
+golangci-lint run -c ../.golangci.yml   # Standard linting
+ktn-linter lint -c ../.ktn-linter.yaml ./...  # KTN convention linting
 ```
 
 ## Hexagonal Architecture

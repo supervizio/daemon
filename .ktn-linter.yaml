@@ -1,23 +1,24 @@
 version: 1
-strict_mode: false
+strict_mode: true
 skip_generated: true
 serialization_tags:
-- json
-- xml
-- yaml
-- toml
-- protobuf
+  - json
+  - xml
+  - yaml
+  - toml
+  - protobuf
 exclude:
-- vendor/**
-- '**/api/proto/**'
-- '**/*.pb.go'
-- '**/wire_gen.go'
-- api/**
+  - vendor/**
+  - e2e/**
+  - "**/api/proto/**"
+  - "**/*.pb.go"
+  - "**/wire_gen.go"
+  - api/**
 rules:
   KTN-API-MINIF:
     enabled: true
   KTN-COMMENT-BLOCK:
-    enabled: false
+    enabled: true
   KTN-COMMENT-CONST:
     enabled: true
   KTN-COMMENT-FUNC:
@@ -145,7 +146,7 @@ rules:
   KTN-GOVET-WAITGROUP:
     enabled: true
   KTN-INTERFACE-ANYUSE:
-    enabled: false
+    enabled: true
   KTN-INTERFACE-ERNAME:
     enabled: true
   KTN-INTERFACE-UNUSED:
@@ -289,7 +290,7 @@ rules:
   KTN-VAR-TYPEASSERT:
     enabled: true
   KTN-VAR-USEANY:
-    enabled: false
+    enabled: true
   KTN-VAR-USECLEAR:
     enabled: true
   KTN-VAR-USEMINMAX:

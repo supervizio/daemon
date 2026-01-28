@@ -6,10 +6,10 @@ package supervisor
 
 import (
 	"context"
-	"time"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )

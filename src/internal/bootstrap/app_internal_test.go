@@ -1653,7 +1653,6 @@ func (m *mockAppSupervisorWithErr) SetEventHandler(_ appsupervisor.EventHandler)
 	// Do nothing.
 }
 
-
 // Test_addPIDMetadata verifies PID metadata enrichment.
 //
 // Params:
