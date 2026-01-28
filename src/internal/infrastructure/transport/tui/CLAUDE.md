@@ -72,3 +72,14 @@ TUI.Run() → Collectors.CollectAll() → ServiceProvider.Services() → Rendere
 
 - Depends on: `domain/process`, `domain/health`, `domain/metrics`
 - Used by: `bootstrap` (CLI entry point)
+
+## Related Directories
+
+| Directory | See |
+|-----------|-----|
+| collector | `collector/CLAUDE.md` |
+| component | `component/CLAUDE.md` |
+| layout | `layout/CLAUDE.md` |
+| model | `model/CLAUDE.md` |
+| screen | `screen/CLAUDE.md` |
+| widget | `widget/CLAUDE.md` |
