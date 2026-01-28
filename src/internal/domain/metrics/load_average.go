@@ -30,7 +30,6 @@ type LoadAverage struct {
 // Returns:
 //   - LoadAverage: the created LoadAverage instance
 func NewLoadAverage(params LoadAverageParams) LoadAverage {
-	// Convert parameter struct directly to LoadAverage (identical fields).
 	return LoadAverage(params)
 }
 
@@ -43,10 +42,8 @@ func NewLoadAverage(params LoadAverageParams) LoadAverage {
 // Returns:
 //   - bool: true if load exceeds available CPU cores
 func (l LoadAverage) IsOverloaded(numCPU int) bool {
-	// Ensure we have at least one CPU to avoid division by zero.
 	if numCPU <= 0 {
 		numCPU = 1
 	}
-	// Load exceeding CPU count indicates overload.
 	return l.Load1 > float64(numCPU)
 }

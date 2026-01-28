@@ -66,7 +66,6 @@ func TestNewSpec_TableDriven(t *testing.T) {
 	}
 }
 
-
 // TestSpec_Fields validates direct field access on Spec struct.
 // It ensures all struct fields can be accessed directly.
 //

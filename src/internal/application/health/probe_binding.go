@@ -24,7 +24,6 @@ type ProbeBinding struct {
 // Returns:
 //   - *ProbeBinding: new binding with default config.
 func NewProbeBinding(listenerName string, probeType ProbeType, target ProbeTarget) *ProbeBinding {
-	// Return new binding with provided parameters and default configuration.
 	return &ProbeBinding{
 		ListenerName: listenerName,
 		Type:         probeType,
@@ -41,8 +40,6 @@ func NewProbeBinding(listenerName string, probeType ProbeType, target ProbeTarge
 // Returns:
 //   - *ProbeBinding: self for method chaining.
 func (b *ProbeBinding) WithConfig(config ProbeConfig) *ProbeBinding {
-	// Update config and return self for fluent API.
 	b.Config = config
-	// Return self to enable method chaining.
 	return b
 }

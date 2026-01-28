@@ -90,8 +90,8 @@ func TestRestartPolicyNever(t *testing.T) {
 	require.True(t, tc.waitForProcess("crasher", 10*time.Second),
 		"crasher should start initially")
 
-	// Wait for crasher to exit (it exits with code 1 after 1s)
-	require.True(t, tc.waitForProcessExit("crasher", 5*time.Second),
+	// Wait for crasher to exit (it exits with code 1 after 3s)
+	require.True(t, tc.waitForProcessExit("crasher", 10*time.Second),
 		"crasher should exit after delay")
 
 	// Give supervisor time to potentially restart

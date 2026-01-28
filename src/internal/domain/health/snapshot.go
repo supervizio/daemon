@@ -27,7 +27,6 @@ const (
 // Returns:
 //   - bool: true if state is ready or running, false otherwise.
 func (s SubjectState) IsReady() bool {
-	// Return true if state is ready or running.
 	return s == SubjectReady || s == SubjectRunning
 }
 
@@ -37,7 +36,6 @@ func (s SubjectState) IsReady() bool {
 // Returns:
 //   - bool: true if state is listening or ready, false otherwise.
 func (s SubjectState) IsListening() bool {
-	// Return true if state is listening or ready.
 	return s == SubjectListening || s == SubjectReady
 }
 
@@ -46,7 +44,6 @@ func (s SubjectState) IsListening() bool {
 // Returns:
 //   - bool: true if state is closed, stopped, or failed, false otherwise.
 func (s SubjectState) IsClosed() bool {
-	// Return true if state indicates termination.
 	return s == SubjectClosed || s == SubjectStopped || s == SubjectFailed
 }
 
@@ -71,7 +68,6 @@ type SubjectSnapshot struct {
 // Returns:
 //   - SubjectSnapshot: a new subject snapshot with the specified values.
 func NewSubjectSnapshot(name, kind string, state SubjectState) SubjectSnapshot {
-	// Return new snapshot with provided values.
 	return SubjectSnapshot{
 		Name:  name,
 		Kind:  kind,
@@ -84,7 +80,6 @@ func NewSubjectSnapshot(name, kind string, state SubjectState) SubjectSnapshot {
 // Returns:
 //   - bool: true if subject is ready or running, false otherwise.
 func (s SubjectSnapshot) IsReady() bool {
-	// Check if subject state is ready or running.
 	return s.State == SubjectReady || s.State == SubjectRunning
 }
 
@@ -93,7 +88,6 @@ func (s SubjectSnapshot) IsReady() bool {
 // Returns:
 //   - bool: true if subject is listening or ready, false otherwise.
 func (s SubjectSnapshot) IsListening() bool {
-	// Check if subject state is listening or ready.
 	return s.State == SubjectListening || s.State == SubjectReady
 }
 
@@ -102,6 +96,5 @@ func (s SubjectSnapshot) IsListening() bool {
 // Returns:
 //   - bool: true if subject is closed, stopped, or failed, false otherwise.
 func (s SubjectSnapshot) IsClosed() bool {
-	// Check if subject state indicates termination.
 	return s.State == SubjectClosed || s.State == SubjectStopped || s.State == SubjectFailed
 }

@@ -17,7 +17,6 @@ type LogStreamConfig struct {
 // Returns:
 //   - string: the configured file path for this log stream.
 func (l *LogStreamConfig) File() string {
-	// Return the configured file path.
 	return l.FilePath
 }
 
@@ -26,7 +25,6 @@ func (l *LogStreamConfig) File() string {
 // Returns:
 //   - string: the Go time format string for log timestamps.
 func (l *LogStreamConfig) TimestampFormat() string {
-	// Return the configured timestamp format.
 	return l.Format
 }
 
@@ -35,7 +33,6 @@ func (l *LogStreamConfig) TimestampFormat() string {
 // Returns:
 //   - RotationConfig: the log rotation settings for this stream.
 func (l *LogStreamConfig) Rotation() RotationConfig {
-	// Return the configured rotation settings.
 	return l.RotationConfig
 }
 
@@ -47,7 +44,6 @@ func (l *LogStreamConfig) Rotation() RotationConfig {
 // Returns:
 //   - LogStreamConfig: a log stream configuration with the given file path.
 func NewLogStreamConfig(filePath string) LogStreamConfig {
-	// Return a new LogStreamConfig with the specified file path.
 	return LogStreamConfig{
 		FilePath:       filePath,
 		RotationConfig: DefaultRotationConfig(),

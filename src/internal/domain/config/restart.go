@@ -46,7 +46,6 @@ const (
 // Returns:
 //   - string: the policy value as a string.
 func (p RestartPolicy) String() string {
-	// Convert policy to its underlying string type.
 	return string(p)
 }
 
@@ -59,32 +58,19 @@ func (p RestartPolicy) String() string {
 // Returns:
 //   - bool: true if the service should be restarted, false otherwise.
 func (r *RestartConfig) ShouldRestartOnExit(exitCode, attempts int) bool {
-	// Evaluate restart policy to determine behavior.
 	switch r.Policy {
-	// Handle always restart policy.
 	case RestartAlways:
-		// Restart if attempts are below the maximum retry limit.
 		return attempts < r.MaxRetries
-	// Handle restart on failure policy.
 	case RestartOnFailure:
-		// Check if process exited successfully.
 		if exitCode == 0 {
-			// Do not restart on successful exit.
 			return false
 		}
-		// Restart failed process if attempts are below limit.
 		return attempts < r.MaxRetries
-	// Handle never restart policy.
 	case RestartNever:
-		// Never restart regardless of exit status.
 		return false
-	// Handle unless-stopped policy.
 	case RestartUnless:
-		// Always restart unless explicitly stopped.
 		return true
-	// Handle unknown policies.
 	default:
-		// Default to no restart for unrecognized policies.
 		return false
 	}
 }
@@ -94,7 +80,6 @@ func (r *RestartConfig) ShouldRestartOnExit(exitCode, attempts int) bool {
 // Returns:
 //   - RestartConfig: a configuration with on-failure policy and standard retry settings.
 func DefaultRestartConfig() RestartConfig {
-	// Build default configuration with reasonable values.
 	return RestartConfig{
 		Policy:     RestartOnFailure,
 		MaxRetries: defaultRestartMaxRetries,
@@ -110,7 +95,6 @@ func DefaultRestartConfig() RestartConfig {
 // Returns:
 //   - RestartConfig: a restart configuration with the given policy and default settings.
 func NewRestartConfig(policy RestartPolicy) RestartConfig {
-	// Return a new RestartConfig with the specified policy and default values.
 	return RestartConfig{
 		Policy:     policy,
 		MaxRetries: defaultRestartMaxRetries,

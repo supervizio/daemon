@@ -42,19 +42,14 @@ type DiskUsage struct {
 // Returns:
 //   - *DiskUsage: initialized disk usage metrics with calculated percentages.
 func NewDiskUsage(input *DiskUsageInput) *DiskUsage {
-	// Calculate usage percentage, handling zero total case.
 	var usagePercent float64
-	// Check if total is non-zero to avoid division by zero.
 	if input.Total > 0 {
 		usagePercent = float64(input.Used) / float64(input.Total) * percentMultiplier
 	}
-	// Calculate inode usage percentage, handling zero total case.
 	var inodesUsagePercent float64
-	// Check if inodesTotal is non-zero to avoid division by zero.
 	if input.InodesTotal > 0 {
 		inodesUsagePercent = float64(input.InodesUsed) / float64(input.InodesTotal) * percentMultiplier
 	}
-	// Return initialized disk usage metrics struct.
 	return &DiskUsage{
 		Path:               input.Path,
 		Device:             input.Device,
@@ -76,6 +71,5 @@ func NewDiskUsage(input *DiskUsageInput) *DiskUsage {
 // Returns:
 //   - uint64: available space, which may differ from Free on filesystems with reserved space.
 func (d *DiskUsage) Available() uint64 {
-	// Return free space (on most filesystems this equals available space).
 	return d.Free
 }

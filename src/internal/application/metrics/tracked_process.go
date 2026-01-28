@@ -18,4 +18,8 @@ type trackedProcess struct {
 	restartCount int
 	lastError    string
 	lastMetrics  domainmetrics.ProcessMetrics
+	// prevCPU stores the previous CPU sample for calculating usage percentage.
+	prevCPU domainmetrics.ProcessCPU
+	// prevCPUTime stores when the previous CPU sample was taken.
+	prevCPUTime time.Time
 }

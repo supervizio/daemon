@@ -40,7 +40,6 @@ type CheckConfig struct {
 // Returns:
 //   - CheckConfig: a configuration with default timeout, interval, and thresholds.
 func NewCheckConfig() CheckConfig {
-	// Return configuration with defaults.
 	return CheckConfig{
 		Timeout:          DefaultTimeout,
 		Interval:         DefaultInterval,
@@ -57,10 +56,7 @@ func NewCheckConfig() CheckConfig {
 // Returns:
 //   - CheckConfig: a copy of the config with updated timeout.
 func (c CheckConfig) WithTimeout(timeout time.Duration) CheckConfig {
-	// Set the new timeout value.
 	c.Timeout = timeout
-
-	// Return copy with new timeout.
 	return c
 }
 
@@ -72,10 +68,7 @@ func (c CheckConfig) WithTimeout(timeout time.Duration) CheckConfig {
 // Returns:
 //   - CheckConfig: a copy of the config with updated interval.
 func (c CheckConfig) WithInterval(interval time.Duration) CheckConfig {
-	// Set the new interval value.
 	c.Interval = interval
-
-	// Return copy with new interval.
 	return c
 }
 
@@ -87,10 +80,7 @@ func (c CheckConfig) WithInterval(interval time.Duration) CheckConfig {
 // Returns:
 //   - CheckConfig: a copy of the config with updated success threshold.
 func (c CheckConfig) WithSuccessThreshold(threshold int) CheckConfig {
-	// Set the new success threshold value.
 	c.SuccessThreshold = threshold
-
-	// Return copy with new threshold.
 	return c
 }
 
@@ -102,10 +92,7 @@ func (c CheckConfig) WithSuccessThreshold(threshold int) CheckConfig {
 // Returns:
 //   - CheckConfig: a copy of the config with updated failure threshold.
 func (c CheckConfig) WithFailureThreshold(threshold int) CheckConfig {
-	// Set the new failure threshold value.
 	c.FailureThreshold = threshold
-
-	// Return copy with new threshold.
 	return c
 }
 
@@ -114,30 +101,21 @@ func (c CheckConfig) WithFailureThreshold(threshold int) CheckConfig {
 // Returns:
 //   - error: nil if valid, otherwise an error describing the problem.
 func (c CheckConfig) Validate() error {
-	// Check timeout is positive.
 	if c.Timeout <= 0 {
-		// Return error for invalid timeout.
 		return ErrInvalidTimeout
 	}
 
-	// Check interval is positive.
 	if c.Interval <= 0 {
-		// Return error for invalid interval.
 		return ErrInvalidInterval
 	}
 
-	// Check success threshold is positive.
 	if c.SuccessThreshold <= 0 {
-		// Return error for invalid threshold.
 		return ErrInvalidSuccessThreshold
 	}
 
-	// Check failure threshold is positive.
 	if c.FailureThreshold <= 0 {
-		// Return error for invalid threshold.
 		return ErrInvalidFailureThreshold
 	}
 
-	// Return nil if all validations pass.
 	return nil
 }

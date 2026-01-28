@@ -26,185 +26,139 @@ const (
 	VersionHybrid
 )
 
-// String returns the string representation of the version.
+// String formats the version for display.
 //
 // Returns:
-//   - string: human-readable version name ("unknown", "v1", "v2", "hybrid")
+//   - string: human-readable version name ("v1", "v2", "hybrid", or "unknown")
 func (v Version) String() string {
-	// Match version constant to its string representation
+	// Map enum values to display strings.
 	switch v {
-	// Handle unknown version
 	case VersionUnknown:
-		// Return unknown identifier
 		return "unknown"
-	// Handle v1 legacy cgroups
 	case VersionV1:
-		// Return v1 identifier
 		return "v1"
-	// Handle v2 unified hierarchy
 	case VersionV2:
-		// Return v2 identifier
 		return "v2"
-	// Handle hybrid mode (v1 + v2 coexistence)
 	case VersionHybrid:
-		// Return hybrid identifier
 		return "hybrid"
+	default:
+		// Defensive case for future enum additions.
+		return "unknown"
 	}
-	// Return default for unrecognized values
-	return "unknown"
 }
 
-// Detect detects the cgroup version in use.
+// Detect auto-detects the cgroup version from the default path.
 //
 // Returns:
-//   - Version: detected cgroup version (VersionV1, VersionV2, VersionHybrid, or VersionUnknown)
-func Detect() Version {
-	// Use default cgroup path for detection
-	return DetectWithPath(DefaultCgroupPath)
-}
+//   - Version: detected cgroup version (V1, V2, Hybrid, or Unknown)
+func Detect() Version { return DetectWithPath(DefaultCgroupPath) }
 
-// DetectWithPath detects the cgroup version using a custom path.
+// DetectWithPath probes filesystem markers to determine cgroup version.
 //
 // Params:
-//   - cgroupPath: filesystem path to cgroup root
+//   - cgroupPath: root path to cgroup filesystem (typically /sys/fs/cgroup)
 //
 // Returns:
-//   - Version: detected cgroup version
+//   - Version: detected cgroup version (V1, V2, Hybrid, or Unknown)
 func DetectWithPath(cgroupPath string) Version {
-	// Check for cgroup v2 (unified hierarchy)
-	// In v2, /sys/fs/cgroup/cgroup.controllers exists
+	// V2 marker file: cgroup.controllers exists at root.
 	controllersPath := filepath.Join(cgroupPath, "cgroup.controllers")
-	// Test if controllers file exists (v2 marker)
+	// cgroup.controllers present indicates v2 or hybrid.
 	if _, err := os.Stat(controllersPath); err == nil {
-		// Check if this is pure v2 or hybrid
-		// In hybrid mode, v1 controllers exist alongside v2
+		// Check for legacy v1 controller directories coexisting with v2.
 		cpuPath := filepath.Join(cgroupPath, "cpu")
 		memoryPath := filepath.Join(cgroupPath, "memory")
-
 		cpuInfo, cpuErr := os.Stat(cpuPath)
 		memInfo, memErr := os.Stat(memoryPath)
-
-		// Both v1 controllers exist as directories means hybrid mode
+		// Legacy cpu and memory dirs indicate hybrid mode.
 		if cpuErr == nil && cpuInfo.IsDir() && memErr == nil && memInfo.IsDir() {
-			// Return hybrid version (v1 + v2 coexist)
 			return VersionHybrid
 		}
-		// Only v2 controllers exist (pure unified hierarchy)
+		// Pure v2: only unified hierarchy.
 		return VersionV2
 	}
-
-	// Check for cgroup v1
-	// In v1, /sys/fs/cgroup/cpu and /sys/fs/cgroup/memory exist
+	// V1 detection: legacy cpu controller directory exists.
 	cpuPath := filepath.Join(cgroupPath, "cpu")
-	// Test if cpu controller directory exists (v1 marker)
 	if _, err := os.Stat(cpuPath); err == nil {
-		// Return v1 legacy version
 		return VersionV1
 	}
-
-	// No recognizable cgroup structure found
+	// No cgroup markers found (non-Linux or misconfigured).
 	return VersionUnknown
 }
 
-// IsContainerized attempts to detect if we're running in a container.
+// IsContainerized checks for container runtime markers.
 //
 // Returns:
-//   - bool: true if running in a container, false otherwise
-func IsContainerized() bool {
-	// Delegate to injectable version with default filesystem
-	return IsContainerizedWithFS(shared.DefaultFileSystem)
-}
+//   - bool: true when running inside Docker, Kubernetes, LXC, or containerd
+func IsContainerized() bool { return IsContainerizedWithFS(shared.DefaultFileSystem) }
 
-// IsContainerizedWithFS detects if running in a container using the provided filesystem.
-// This function allows dependency injection for testing.
+// IsContainerizedWithFS allows testing with a mock filesystem.
 //
 // Params:
 //   - fs: filesystem interface for file operations
 //
 // Returns:
-//   - bool: true if running in a container, false otherwise
+//   - bool: true when container markers are detected
 func IsContainerizedWithFS(fs shared.FileSystem) bool {
-	// Check for /.dockerenv
-	// Docker marker file exists in all Docker containers
+	// Docker creates /.dockerenv in container root.
 	if _, err := fs.Stat("/.dockerenv"); err == nil {
-		// Found Docker marker file
 		return true
 	}
-
-	// Check /proc/1/cgroup for container indicators
+	// Check cgroup path of init process for container identifiers.
 	data, err := fs.ReadFile("/proc/1/cgroup")
-	// File read failed (not fatal for detection)
+	// Cannot read cgroup info; assume not containerized.
 	if err != nil {
-		// Assume not containerized if can't read cgroup info
 		return false
 	}
-
+	// Look for known container runtime path patterns.
 	content := string(data)
-	// Docker/containerd typically have paths like /docker/<id> or /kubepods/<id>
-	// Return true if container runtime markers found in cgroup path
 	return content != "" && (strings.Contains(content, "/docker/") ||
 		strings.Contains(content, "/kubepods/") ||
 		strings.Contains(content, "/lxc/") ||
 		strings.Contains(content, "/containerd/"))
 }
 
-// Reader is the interface for reading cgroup metrics.
-// Implementations: V1Reader (legacy), V2Reader (unified).
+// Reader abstracts cgroup v1/v2 metric collection.
 type Reader interface {
-	// CPUUsage returns the total CPU usage in microseconds.
 	CPUUsage(ctx context.Context) (uint64, error)
-	// CPULimit returns the CPU quota and period. Returns (0, 0) if unlimited.
 	CPULimit(ctx context.Context) (quota, period uint64, err error)
-	// MemoryUsage returns the current memory usage in bytes.
 	MemoryUsage(ctx context.Context) (uint64, error)
-	// MemoryLimit returns the memory limit in bytes. Returns 0 if unlimited.
 	MemoryLimit(ctx context.Context) (uint64, error)
-	// ReadMemoryStat returns detailed memory statistics.
 	ReadMemoryStat(ctx context.Context) (MemoryStat, error)
-	// Path returns the primary cgroup path.
 	Path() string
-	// Version returns the cgroup version (1 or 2).
 	Version() int
 }
 
-// NewReader creates a cgroup reader based on the detected version.
-// Returns an error if the cgroup version is not supported.
+// NewReader auto-detects version and returns an appropriate Reader.
 //
 // Returns:
-//   - Reader: cgroup reader instance
-//   - error: ErrUnknownVersion if cgroup version cannot be detected
-func NewReader() (Reader, error) {
-	// Use auto-detection with empty path
-	return NewReaderWithPath("")
-}
+//   - Reader: cgroup reader appropriate for detected version
+//   - error: ErrUnknownVersion if cgroup type cannot be determined
+func NewReader() (Reader, error) { return NewReaderWithPath("") }
 
-// NewReaderWithPath creates a cgroup reader for the specified path.
-// If path is empty, it auto-detects the current cgroup.
+// NewReaderWithPath returns a Reader for the specified cgroup path.
 //
 // Params:
-//   - path: cgroup path (empty for auto-detection)
+//   - path: cgroup path (empty string for auto-detection)
 //
 // Returns:
-//   - Reader: cgroup reader instance
-//   - error: ErrUnknownVersion if cgroup version is not supported
+//   - Reader: version-appropriate cgroup reader
+//   - error: ErrUnknownVersion if detection fails
 func NewReaderWithPath(path string) (Reader, error) {
 	version := Detect()
-	// Select reader implementation based on detected version
+	// Select reader implementation based on detected version.
 	switch version {
-	// Unified hierarchy (v2) or hybrid mode
+	// V2 and hybrid both use unified hierarchy for metrics.
 	case VersionV2, VersionHybrid:
-		// Create v2 reader (handles both v2 and hybrid)
 		return NewV2Reader(path)
-	// Legacy cgroups (v1)
+	// Legacy v1 uses separate controller hierarchies.
 	case VersionV1:
-		// For V1, path is ignored - we auto-detect CPU and memory paths
-		// Create v1 reader with auto-detected paths
 		return NewV1Reader("", "")
-	// Unknown version cannot be handled
+	// Unknown version means no cgroup support detected.
 	case VersionUnknown:
-		// Return error for unknown version
+		return nil, ErrUnknownVersion
+	default:
+		// Unreachable but required for exhaustive.
 		return nil, ErrUnknownVersion
 	}
-	// Fallback return (should never reach here)
-	return nil, ErrUnknownVersion
 }

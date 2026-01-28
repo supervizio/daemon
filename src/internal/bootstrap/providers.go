@@ -9,6 +9,8 @@ import (
 
 	appconfig "github.com/kodflow/daemon/internal/application/config"
 	apphealth "github.com/kodflow/daemon/internal/application/health"
+	appmetrics "github.com/kodflow/daemon/internal/application/metrics"
+	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
 	domainconfig "github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/domain/lifecycle"
 	infrahealthcheck "github.com/kodflow/daemon/internal/infrastructure/observability/healthcheck"
@@ -33,6 +35,8 @@ type supervisorConfigurer interface {
 	Stop() error
 	Reload() error
 	SetProberFactory(factory apphealth.Creator)
+	SetMetricsTracker(tracker appmetrics.ProcessTracker)
+	SetEventHandler(handler appsupervisor.EventHandler)
 }
 
 // ProvideReaper returns the zombie reaper only if running as PID 1.
@@ -44,12 +48,9 @@ type supervisorConfigurer interface {
 // Returns:
 //   - lifecycle.Reaper: the reaper if PID 1, nil otherwise.
 func ProvideReaper(r ReaperMinimal) lifecycle.Reaper {
-	// Check if the process is running as PID 1.
 	if r.IsPID1() {
-		// Return the reaper for zombie cleanup.
 		return r
 	}
-	// Return nil when not PID 1 (reaping not needed).
 	return nil
 }
 
@@ -63,25 +64,23 @@ func ProvideReaper(r ReaperMinimal) lifecycle.Reaper {
 //   - *domainconfig.Config: the loaded configuration.
 //   - error: any error during loading.
 func LoadConfig(loader appconfig.Loader, configPath string) (*domainconfig.Config, error) {
-	// Load and return the configuration from the specified path.
 	return loader.Load(configPath)
 }
 
 // NewApp creates the App struct from the supervisor.
 // This is the final provider in the dependency graph.
 //
-// Deprecated: Use NewAppWithHealth instead.
-//
 // Params:
 //   - sup: the configured supervisor instance (minimal interface).
 //
 // Returns:
 //   - *App: the application container with all dependencies wired.
+//
+// Deprecated: Use NewAppWithHealth instead.
 func NewApp(sup AppSupervisor) *App {
-	// Return the App with supervisor and optional cleanup.
 	return &App{
 		Supervisor: sup,
-		Cleanup:    nil, // No cleanup needed currently; add if resources require it.
+		Cleanup:    nil,
 	}
 }
 
@@ -90,28 +89,41 @@ func NewApp(sup AppSupervisor) *App {
 // Returns:
 //   - *infrahealthcheck.Factory: the prober factory instance.
 func ProvideProberFactory() *infrahealthcheck.Factory {
-	// Return factory with default timeout.
 	return infrahealthcheck.NewFactory(defaultProbeTimeout)
 }
 
-// NewAppWithHealth creates the App struct with health monitoring wired.
-// This provider connects the health prober factory to the supervisor,
+// ProvideMetricsTracker creates a metrics tracker with a platform-specific collector.
+//
+// Params:
+//   - collector: the process metrics collector.
+//
+// Returns:
+//   - *appmetrics.Tracker: the metrics tracker instance.
+func ProvideMetricsTracker(collector appmetrics.Collector) *appmetrics.Tracker {
+	return appmetrics.NewTracker(collector)
+}
+
+// NewAppWithHealth creates the App struct with health monitoring and metrics wired.
+// This provider connects the health prober factory and metrics tracker to the supervisor,
 // enabling health-probe-triggered restarts following the Kubernetes
-// liveness probe pattern.
+// liveness probe pattern and process CPU/memory tracking.
 //
 // Params:
 //   - sup: the configured supervisor instance (minimal interface).
 //   - factory: the health prober factory.
+//   - tracker: the metrics tracker for CPU/memory monitoring.
+//   - cfg: the domain configuration for daemon logging.
 //
 // Returns:
-//   - *App: the application container with health monitoring enabled.
-func NewAppWithHealth(sup supervisorConfigurer, factory apphealth.Creator) *App {
-	// Wire the prober factory to enable health monitoring.
+//   - *App: the application container with health monitoring and metrics enabled.
+func NewAppWithHealth(sup supervisorConfigurer, factory apphealth.Creator, tracker *appmetrics.Tracker, cfg *domainconfig.Config) *App {
 	sup.SetProberFactory(factory)
+	sup.SetMetricsTracker(tracker)
 
-	// Return the App with supervisor and optional cleanup.
 	return &App{
-		Supervisor: sup,
-		Cleanup:    nil, // No cleanup needed currently; add if resources require it.
+		Supervisor:     sup,
+		Config:         cfg,
+		MetricsTracker: tracker,
+		Cleanup:        nil,
 	}
 }

@@ -15,6 +15,10 @@ type HealthStateLogger func(listenerName string, prevState, newState domain.Subj
 // This enables the supervisor to trigger restart on health failure.
 type UnhealthyCallback func(listenerName string, reason string)
 
+// HealthyCallback is called when a service becomes healthy.
+// This enables the supervisor to emit healthy events for observability.
+type HealthyCallback func(listenerName string)
+
 // ProbeMonitorConfig contains configuration for ProbeMonitor.
 // It provides all necessary dependencies for creating a new ProbeMonitor.
 type ProbeMonitorConfig struct {
@@ -33,6 +37,9 @@ type ProbeMonitorConfig struct {
 	// This callback enables the supervisor to trigger restart on health failure,
 	// following the Kubernetes liveness probe pattern.
 	OnUnhealthy UnhealthyCallback
+	// OnHealthy is called when a service becomes healthy (optional).
+	// This callback enables the supervisor to emit healthy events for observability.
+	OnHealthy HealthyCallback
 }
 
 // NewProbeMonitorConfig creates a new ProbeMonitorConfig with the given factory.
@@ -44,7 +51,6 @@ type ProbeMonitorConfig struct {
 // Returns:
 //   - ProbeMonitorConfig: a new configuration instance.
 func NewProbeMonitorConfig(factory Creator) ProbeMonitorConfig {
-	// Return config with factory set and default timeouts to be resolved by ProbeMonitor.
 	return ProbeMonitorConfig{
 		Factory: factory,
 	}

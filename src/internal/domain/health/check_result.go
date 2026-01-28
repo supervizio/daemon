@@ -5,13 +5,13 @@ import "time"
 
 // CheckResult represents the outcome of a probe execution.
 // It contains the probe status, latency measurement, output, and any error.
+//
+// Fields are ordered by size for optimal memory alignment:
+// error interface (16B), string (16B), Duration (8B), bool (1B).
 type CheckResult struct {
-	// Success indicates whether the probe succeeded.
-	Success bool
-
-	// Latency records how long the probe took to complete.
-	// This is useful for measuring network latency and service response times.
-	Latency time.Duration
+	// Error holds any error that occurred during probing.
+	// When Success is false, this should contain the failure reason.
+	Error error
 
 	// Output contains any output from the probe.
 	// For exec probes: stdout content.
@@ -19,9 +19,12 @@ type CheckResult struct {
 	// For other probes: connection details.
 	Output string
 
-	// Error holds any error that occurred during probing.
-	// When Success is false, this should contain the failure reason.
-	Error error
+	// Latency records how long the probe took to complete.
+	// This is useful for measuring network latency and service response times.
+	Latency time.Duration
+
+	// Success indicates whether the probe succeeded.
+	Success bool
 }
 
 // NewCheckResult creates a new probe result with the specified parameters.
@@ -35,7 +38,6 @@ type CheckResult struct {
 // Returns:
 //   - CheckResult: a probe result with the specified values.
 func NewCheckResult(success bool, latency time.Duration, output string, err error) CheckResult {
-	// Return result with all fields set.
 	return CheckResult{
 		Success: success,
 		Latency: latency,
@@ -53,7 +55,6 @@ func NewCheckResult(success bool, latency time.Duration, output string, err erro
 // Returns:
 //   - CheckResult: a successful probe result.
 func NewSuccessCheckResult(latency time.Duration, output string) CheckResult {
-	// Return successful result.
 	return CheckResult{
 		Success: true,
 		Latency: latency,
@@ -71,7 +72,6 @@ func NewSuccessCheckResult(latency time.Duration, output string) CheckResult {
 // Returns:
 //   - CheckResult: a failed probe result with error.
 func NewFailureCheckResult(latency time.Duration, output string, err error) CheckResult {
-	// Return failure result with error.
 	return CheckResult{
 		Success: false,
 		Latency: latency,
@@ -85,7 +85,6 @@ func NewFailureCheckResult(latency time.Duration, output string, err error) Chec
 // Returns:
 //   - bool: true if probe succeeded, false otherwise.
 func (r CheckResult) IsSuccess() bool {
-	// Return the success status.
 	return r.Success
 }
 
@@ -94,6 +93,5 @@ func (r CheckResult) IsSuccess() bool {
 // Returns:
 //   - bool: true if probe failed, false otherwise.
 func (r CheckResult) IsFailure() bool {
-	// Return the inverse of success.
 	return !r.Success
 }

@@ -22,7 +22,6 @@ type OSFileSystem struct{}
 // Returns:
 //   - *OSFileSystem: a new filesystem that uses real OS calls.
 func NewOSFileSystem() *OSFileSystem {
-	// Return new OSFileSystem instance.
 	return &OSFileSystem{}
 }
 
@@ -35,7 +34,6 @@ func NewOSFileSystem() *OSFileSystem {
 //   - os.FileInfo: file information
 //   - error: error if file cannot be stat'd
 func (OSFileSystem) Stat(name string) (os.FileInfo, error) {
-	// Return file info from OS.
 	return os.Stat(name)
 }
 
@@ -48,7 +46,6 @@ func (OSFileSystem) Stat(name string) (os.FileInfo, error) {
 //   - []byte: file contents
 //   - error: error if file cannot be read
 func (OSFileSystem) ReadFile(name string) ([]byte, error) {
-	// Return file contents from OS.
 	return os.ReadFile(name)
 }
 

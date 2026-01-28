@@ -348,7 +348,6 @@ func (r *V2Reader) ReadMemoryStat(ctx context.Context) (MemoryStat, error) {
 	defer func() { _ = file.Close() }()
 
 	var stat MemoryStat
-	fields := stat.fieldMap()
 
 	scanner := bufio.NewScanner(file)
 	// Parse each line: "key value"
@@ -360,12 +359,9 @@ func (r *V2Reader) ReadMemoryStat(ctx context.Context) (MemoryStat, error) {
 			continue
 		}
 
-		// Update field if key is recognized
-		if field, ok := fields[parts[0]]; ok {
-			// Parse and store numeric value
-			if value, err := strconv.ParseUint(parts[1], baseDecimal, bitSize64); err == nil {
-				*field = value
-			}
+		// Parse and store numeric value if key is recognized
+		if value, err := strconv.ParseUint(parts[1], baseDecimal, bitSize64); err == nil {
+			stat.setField(parts[0], value)
 		}
 	}
 

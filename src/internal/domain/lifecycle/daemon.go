@@ -125,7 +125,6 @@ type KubernetesPod struct {
 // Returns:
 //   - int: total count of processes in this daemon state
 func (d *DaemonState) ProcessCount() int {
-	// Return length of processes slice
 	return len(d.Processes)
 }
 
@@ -134,16 +133,12 @@ func (d *DaemonState) ProcessCount() int {
 // Returns:
 //   - int: count of processes currently in running state
 func (d *DaemonState) RunningProcessCount() int {
-	// Initialize counter
 	count := 0
-	// Iterate over all processes
 	for i := range d.Processes {
-		// Check if process is running
 		if d.Processes[i].IsRunning() {
 			count++
 		}
 	}
-	// Return total running count
 	return count
 }
 
@@ -152,15 +147,11 @@ func (d *DaemonState) RunningProcessCount() int {
 // Returns:
 //   - int: count of processes currently marked as healthy
 func (d *DaemonState) HealthyProcessCount() int {
-	// Initialize counter
 	count := 0
-	// Iterate over all processes
 	for i := range d.Processes {
-		// Check if process is healthy
 		if d.Processes[i].Healthy {
 			count++
 		}
 	}
-	// Return total healthy count
 	return count
 }

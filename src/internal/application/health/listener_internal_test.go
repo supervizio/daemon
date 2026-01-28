@@ -31,7 +31,6 @@ type testProber struct {
 // Returns:
 //   - domain.CheckResult: the configured test result.
 func (p *testProber) Probe(_ context.Context, _ domain.Target) domain.CheckResult {
-	// Return the pre-configured result for testing.
 	return p.result
 }
 
@@ -40,7 +39,6 @@ func (p *testProber) Probe(_ context.Context, _ domain.Target) domain.CheckResul
 // Returns:
 //   - string: the prober type identifier.
 func (p *testProber) Type() string {
-	// Return the configured prober type.
 	return p.probeType
 }
 

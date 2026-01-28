@@ -27,15 +27,11 @@ type Config struct {
 // Returns:
 //   - *ServiceConfig: service configuration or nil if not found
 func (c *Config) FindService(name string) *ServiceConfig {
-	// Iterate through all services to find matching name
 	for i := range c.Services {
-		// Check if current service name matches the search name
 		if c.Services[i].Name == name {
-			// Return pointer to found service configuration
 			return &c.Services[i]
 		}
 	}
-	// Return nil when no service matches the given name
 	return nil
 }
 
@@ -44,7 +40,6 @@ func (c *Config) FindService(name string) *ServiceConfig {
 // Returns:
 //   - error: validation error if any
 func (c *Config) Validate() error {
-	// Delegate validation to the package-level Validate function
 	return Validate(c)
 }
 
@@ -69,7 +64,6 @@ func (c *Config) GetServiceLogPath(serviceName, logFile string) string {
 // Returns:
 //   - *Config: configuration with the provided services and default logging settings.
 func NewConfig(services []ServiceConfig) *Config {
-	// Return config with provided services and default settings.
 	return &Config{
 		Version:  "1",
 		Logging:  DefaultLoggingConfig(),
@@ -82,7 +76,6 @@ func NewConfig(services []ServiceConfig) *Config {
 // Returns:
 //   - *Config: configuration with sensible defaults for logging and rotation
 func DefaultConfig() *Config {
-	// Return config with default version, logging directory, and rotation settings
 	return &Config{
 		Version: "1",
 		Logging: LoggingConfig{

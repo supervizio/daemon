@@ -38,7 +38,6 @@ type Bandwidth struct {
 // Returns:
 //   - Bandwidth: new bandwidth instance
 func NewBandwidth(iface string, timestamp time.Time) Bandwidth {
-	// Return bandwidth with essential fields set.
 	return Bandwidth{
 		Interface: iface,
 		Timestamp: timestamp,
@@ -50,7 +49,6 @@ func NewBandwidth(iface string, timestamp time.Time) Bandwidth {
 // Returns:
 //   - float64: sum of transmit and receive bytes per second
 func (b Bandwidth) TotalBytesPerSec() float64 {
-	// Sum transmit and receive rates to get total bandwidth.
 	return b.TxBytesPerSec + b.RxBytesPerSec
 }
 
@@ -59,7 +57,6 @@ func (b Bandwidth) TotalBytesPerSec() float64 {
 // Returns:
 //   - float64: sum of transmit and receive packets per second
 func (b Bandwidth) TotalPacketsPerSec() float64 {
-	// Sum transmit and receive packet rates to get total packet rate.
 	return b.TxPacketsPerSec + b.RxPacketsPerSec
 }
 
@@ -68,7 +65,6 @@ func (b Bandwidth) TotalPacketsPerSec() float64 {
 // Returns:
 //   - float64: transmit rate in bits per second
 func (b Bandwidth) TxBitsPerSec() float64 {
-	// Convert bytes to bits by multiplying by bitsPerByte.
 	return b.TxBytesPerSec * bitsPerByte
 }
 
@@ -77,7 +73,6 @@ func (b Bandwidth) TxBitsPerSec() float64 {
 // Returns:
 //   - float64: receive rate in bits per second
 func (b Bandwidth) RxBitsPerSec() float64 {
-	// Convert bytes to bits by multiplying by bitsPerByte.
 	return b.RxBytesPerSec * bitsPerByte
 }
 
@@ -91,9 +86,7 @@ func (b Bandwidth) RxBitsPerSec() float64 {
 //   - Bandwidth: calculated bandwidth metrics
 func CalculateBandwidth(prev, curr *NetStats) Bandwidth {
 	duration := curr.Timestamp.Sub(prev.Timestamp)
-	// Check if duration is invalid (zero or negative).
 	if duration <= 0 {
-		// Return empty bandwidth with just interface and timestamp.
 		return Bandwidth{
 			Interface: curr.Interface,
 			Timestamp: curr.Timestamp,
@@ -101,7 +94,6 @@ func CalculateBandwidth(prev, curr *NetStats) Bandwidth {
 	}
 
 	seconds := duration.Seconds()
-	// Calculate rates by dividing deltas by elapsed time in seconds.
 	return Bandwidth{
 		Interface:       curr.Interface,
 		TxBytesPerSec:   float64(curr.BytesSent-prev.BytesSent) / seconds,

@@ -1,8 +1,14 @@
 ---
-# Codacy configuration for supervizio/daemon
+# =============================================================================
+# Codacy Configuration - supervizio/daemon
+# =============================================================================
+# PID1-capable process supervisor for containers and Unix systems
 # Documentation: https://docs.codacy.com/repositories-configure/codacy-configuration-file/
+# =============================================================================
 
-# Global path exclusions (analysis + coverage)
+# -----------------------------------------------------------------------------
+# Global Exclusions
+# -----------------------------------------------------------------------------
 exclude_paths:
   # DevContainer and IDE configuration
   - ".devcontainer/**"
@@ -10,44 +16,172 @@ exclude_paths:
   - ".github/**"
   - ".vscode/**"
 
-  # Documentation and examples
+  # Documentation (analyzed separately)
   - "docs/**"
+  - "website/**"
   - "examples/**"
-  - "**/*.md"
 
   # Build artifacts and dependencies
   - "vendor/**"
   - "dist/**"
   - "build/**"
+  - "bin/**"
 
   # Generated code (protobuf, wire, mocks)
   - "**/*.pb.go"
   - "**/*_grpc.pb.go"
   - "**/wire_gen.go"
   - "**/mock_*.go"
-  - "src/api/proto/**"
+  - "**/*.gen.go"
+  - "src/api/proto/**/*.go"
 
-  # Test files and test data
-  - "**/*_test.go"
-  - "**/testdata/**"
+  # E2E test infrastructure (not production code)
+  - "e2e/.vagrant/**"
+  - "e2e/behavioral/crasher/**"
 
-  # Config files
+  # Config files (linter configs, not code)
   - "src/.golangci.yml"
   - "src/.ktn-linter.yaml"
+  - ".coderabbit.yaml"
+  - ".qodo-merge.toml"
 
+# -----------------------------------------------------------------------------
+# Languages
+# -----------------------------------------------------------------------------
+languages:
+  go:
+    version: "1.25"
+
+# -----------------------------------------------------------------------------
+# Engines Configuration
+# -----------------------------------------------------------------------------
 engines:
-  # Semgrep configuration - no exclusions, issues will be fixed via centralized kernel package
+  # ---------------------------------------------------------------------------
+  # Go Static Analysis
+  # ---------------------------------------------------------------------------
+  # gosec - Security scanner for Go
+  gosec:
+    enabled: true
+    # Exclude G304 (file path from variable) - false positives on procfs readers
+    # Security is covered by custom checks
+    exclude:
+      - "G304"
+
+  # revive - Go linter (disabled - using golangci-lint + ktn-linter)
+  revive:
+    enabled: false
+
+  # staticcheck - Advanced Go analysis (via golangci-lint)
+  staticcheck:
+    enabled: false
+
+  # ---------------------------------------------------------------------------
+  # Security
+  # ---------------------------------------------------------------------------
+  # Semgrep - Multi-language security scanner
   semgrep:
     enabled: true
 
-  # Markdownlint disabled - using ktn-linter for docs
+  # Trivy - Vulnerability scanner
+  trivy:
+    enabled: true
+
+  # ---------------------------------------------------------------------------
+  # Shell
+  # ---------------------------------------------------------------------------
+  # ShellCheck - Shell script analysis
+  shellcheck:
+    enabled: true
+
+  # ---------------------------------------------------------------------------
+  # Protobuf
+  # ---------------------------------------------------------------------------
+  # buf - Protobuf linting (disabled - using buf separately)
+  buf:
+    enabled: false
+
+  # ---------------------------------------------------------------------------
+  # Documentation
+  # ---------------------------------------------------------------------------
+  # Markdownlint (disabled - ktn-linter handles docs)
   markdownlint:
     enabled: false
 
-# Coverage configuration
+  # ---------------------------------------------------------------------------
+  # YAML
+  # ---------------------------------------------------------------------------
+  yamllint:
+    enabled: true
+
+  # ---------------------------------------------------------------------------
+  # Dockerfile
+  # ---------------------------------------------------------------------------
+  hadolint:
+    enabled: true
+
+# -----------------------------------------------------------------------------
+# Coverage Configuration
+# -----------------------------------------------------------------------------
 coverage:
+  # Minimum coverage threshold (%)
+  # Note: Platform-specific files (_linux, _darwin, _bsd) may have lower coverage
+  # due to CI running on Linux only
+  minimum: 60
+
+  # Exclude from coverage calculation
   exclude_paths:
+    # Generated code
     - "**/*.pb.go"
     - "**/*_grpc.pb.go"
     - "**/wire_gen.go"
+    - "**/mock_*.go"
+    - "**/*.gen.go"
     - "src/api/proto/**"
+
+    # Platform-specific code (coverage only on Linux CI)
+    - "**/*_darwin.go"
+    - "**/*_bsd.go"
+    - "**/*_freebsd.go"
+    - "**/*_openbsd.go"
+    - "**/*_netbsd.go"
+    - "**/*_dragonfly.go"
+
+    # Scratch/stub implementations (CI-only)
+    - "**/*_scratch.go"
+
+    # E2E tests (separate coverage)
+    - "e2e/**"
+
+    # Bootstrap/main (hard to unit test)
+    - "src/cmd/**"
+    - "src/internal/bootstrap/**"
+
+# -----------------------------------------------------------------------------
+# Tool-Specific Settings
+# -----------------------------------------------------------------------------
+tools:
+  gosec:
+    patterns:
+      # Include all Go files in src/
+      include:
+        - "src/**/*.go"
+      # Exclude generated and test files
+      exclude:
+        - "**/*_test.go"
+        - "**/*.pb.go"
+        - "**/wire_gen.go"
+
+  shellcheck:
+    patterns:
+      include:
+        - "**/*.sh"
+        - "setup/**"
+        - "e2e/**/*.sh"
+      exclude:
+        - ".devcontainer/**"
+
+  hadolint:
+    patterns:
+      include:
+        - "**/Dockerfile*"
+        - "e2e/Dockerfile*"

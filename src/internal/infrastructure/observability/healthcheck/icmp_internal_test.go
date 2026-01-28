@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/kodflow/daemon/internal/domain/health"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestICMPProber_internalFields tests internal struct fields.
@@ -214,7 +214,6 @@ func TestICMPProber_tcpPing_invalidPort(t *testing.T) {
 		})
 	}
 }
-
 
 // TestDefaultTCPFallbackPort_constant tests the default TCP fallback port constant.
 func TestDefaultTCPFallbackPort_constant(t *testing.T) {

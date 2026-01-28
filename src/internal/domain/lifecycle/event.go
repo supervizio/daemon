@@ -101,12 +101,9 @@ var (
 // Returns:
 //   - string: string representation of the type
 func (t Type) String() string {
-	// Check if type exists in map
 	if s, ok := typeStrings[t]; ok {
-		// Return mapped string
 		return s
 	}
-	// Return unknown for unmapped types
 	return unknownString
 }
 
@@ -115,12 +112,9 @@ func (t Type) String() string {
 // Returns:
 //   - string: category name (process, mesh, kubernetes, system, daemon, or unknown)
 func (t Type) Category() string {
-	// Look up category in map
 	if category, ok := typeCategories[t]; ok {
-		// Return mapped category
 		return category
 	}
-	// Return unknown for unmapped types
 	return unknownString
 }
 
@@ -156,7 +150,6 @@ type Event struct {
 // Returns:
 //   - Event: newly created event with current timestamp
 func NewEvent(t Type, message string) Event {
-	// Create event with provided type and message
 	return Event{
 		Type:      t,
 		Timestamp: time.Now(),
@@ -172,9 +165,7 @@ func NewEvent(t Type, message string) Event {
 // Returns:
 //   - Event: updated event with service name set
 func (e Event) WithServiceName(name string) Event {
-	// Set service name field
 	e.ServiceName = name
-	// Return modified event
 	return e
 }
 
@@ -186,9 +177,7 @@ func (e Event) WithServiceName(name string) Event {
 // Returns:
 //   - Event: updated event with node ID set
 func (e Event) WithNodeID(id string) Event {
-	// Set node ID field
 	e.NodeID = id
-	// Return modified event
 	return e
 }
 
@@ -200,9 +189,7 @@ func (e Event) WithNodeID(id string) Event {
 // Returns:
 //   - Event: updated event with pod name set
 func (e Event) WithPodName(name string) Event {
-	// Set pod name field
 	e.PodName = name
-	// Return modified event
 	return e
 }
 
@@ -215,14 +202,10 @@ func (e Event) WithPodName(name string) Event {
 // Returns:
 //   - Event: updated event with additional data
 func (e Event) WithStringData(key, value string) Event {
-	// Initialize data map if nil
 	if e.Data == nil {
-		// Create map with initial capacity
 		e.Data = make(map[string]any, eventDataInitialCapacity)
 	}
-	// Add key-value pair to data map
 	e.Data[key] = value
-	// Return modified event
 	return e
 }
 
@@ -235,14 +218,10 @@ func (e Event) WithStringData(key, value string) Event {
 // Returns:
 //   - Event: updated event with additional data
 func (e Event) WithIntData(key string, value int) Event {
-	// Initialize data map if nil
 	if e.Data == nil {
-		// Create map with initial capacity
 		e.Data = make(map[string]any, eventDataInitialCapacity)
 	}
-	// Add key-value pair to data map
 	e.Data[key] = value
-	// Return modified event
 	return e
 }
 
@@ -255,13 +234,9 @@ func (e Event) WithIntData(key string, value int) Event {
 // Returns:
 //   - Event: updated event with additional data
 func (e Event) WithBoolData(key string, value bool) Event {
-	// Initialize data map if nil
 	if e.Data == nil {
-		// Create map with initial capacity
 		e.Data = make(map[string]any, eventDataInitialCapacity)
 	}
-	// Add key-value pair to data map
 	e.Data[key] = value
-	// Return modified event
 	return e
 }

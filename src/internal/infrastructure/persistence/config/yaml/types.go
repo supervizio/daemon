@@ -43,23 +43,17 @@ type Duration time.Duration
 func (d *Duration) UnmarshalYAML(unmarshal func(any) error) error {
 	var s string
 
-	// Unmarshal the YAML value into a string
 	if err := unmarshal(&s); err != nil {
-		// Return error if unmarshaling fails
 		return err
 	}
 
 	parsed, err := time.ParseDuration(s)
-
-	// Check if duration parsing was successful
 	if err != nil {
-		// Return parsing error
 		return err
 	}
 
 	*d = Duration(parsed)
 
-	// Return nil on success
 	return nil
 }
 
@@ -71,7 +65,6 @@ func (d *Duration) UnmarshalYAML(unmarshal func(any) error) error {
 //   - []byte: the duration as a formatted string in bytes
 //   - error: always nil for this implementation
 func (d *Duration) MarshalText() ([]byte, error) {
-	// Return the duration as a formatted string in bytes
 	return []byte(time.Duration(*d).String()), nil
 }
 
@@ -108,6 +101,7 @@ type ListenerDTO struct {
 	Port     int      `yaml:"port"`
 	Protocol string   `yaml:"protocol,omitempty"`
 	Address  string   `yaml:"address,omitempty"`
+	Exposed  bool     `yaml:"exposed,omitempty"`
 	Probe    ProbeDTO `yaml:"probe,omitempty"`
 }
 
@@ -156,8 +150,38 @@ type HealthCheckDTO struct {
 // LoggingConfigDTO is the YAML representation of logging configuration.
 // It contains global logging settings including defaults and base directory.
 type LoggingConfigDTO struct {
-	Defaults LogDefaultsDTO `yaml:"defaults"`
-	BaseDir  string         `yaml:"base_dir"`
+	Defaults LogDefaultsDTO   `yaml:"defaults"`
+	BaseDir  string           `yaml:"base_dir"`
+	Daemon   DaemonLoggingDTO `yaml:"daemon,omitempty"`
+}
+
+// DaemonLoggingDTO is the YAML representation of daemon-level logging.
+// It defines writers for daemon event logging.
+type DaemonLoggingDTO struct {
+	Writers []WriterConfigDTO `yaml:"writers,omitempty"`
+}
+
+// WriterConfigDTO is the YAML representation of a log writer configuration.
+// It defines the type, level, and specific writer settings for file or JSON output.
+type WriterConfigDTO struct {
+	Type  string              `yaml:"type"`
+	Level string              `yaml:"level,omitempty"`
+	File  FileWriterConfigDTO `yaml:"file,omitempty"`
+	JSON  JSONWriterConfigDTO `yaml:"json,omitempty"`
+}
+
+// FileWriterConfigDTO is the YAML representation of file writer configuration.
+// It specifies the output file path and rotation policy for file-based logging.
+type FileWriterConfigDTO struct {
+	Path     string            `yaml:"path,omitempty"`
+	Rotation RotationConfigDTO `yaml:"rotation,omitempty"`
+}
+
+// JSONWriterConfigDTO is the YAML representation of JSON writer configuration.
+// It specifies the output file path and rotation policy for JSON-formatted logging.
+type JSONWriterConfigDTO struct {
+	Path     string            `yaml:"path,omitempty"`
+	Rotation RotationConfigDTO `yaml:"rotation,omitempty"`
 }
 
 // LogDefaultsDTO is the YAML representation of logging defaults.
@@ -202,12 +226,10 @@ type LogStreamConfigDTO struct {
 func (c *ConfigDTO) ToDomain(configPath string) *config.Config {
 	services := make([]config.ServiceConfig, 0, len(c.Services))
 
-	// Convert each service configuration to domain model
 	for i := range c.Services {
 		services = append(services, c.Services[i].ToDomain())
 	}
 
-	// Return the fully converted configuration
 	return &config.Config{
 		Version:    c.Version,
 		ConfigPath: configPath,
@@ -224,19 +246,16 @@ func (c *ConfigDTO) ToDomain(configPath string) *config.Config {
 func (s *ServiceConfigDTO) ToDomain() config.ServiceConfig {
 	healthChecks := make([]config.HealthCheckConfig, 0, len(s.HealthChecks))
 
-	// Convert each health check configuration to domain model
 	for i := range s.HealthChecks {
 		healthChecks = append(healthChecks, s.HealthChecks[i].ToDomain())
 	}
 
 	listeners := make([]config.ListenerConfig, 0, len(s.Listeners))
 
-	// Convert each listener configuration to domain model
 	for i := range s.Listeners {
 		listeners = append(listeners, s.Listeners[i].ToDomain())
 	}
 
-	// Return the fully converted service configuration
 	return config.ServiceConfig{
 		Name:             s.Name,
 		Command:          s.Command,
@@ -260,28 +279,25 @@ func (s *ServiceConfigDTO) ToDomain() config.ServiceConfig {
 // Returns:
 //   - config.ListenerConfig: the converted domain listener configuration
 func (l *ListenerDTO) ToDomain() config.ListenerConfig {
-	// Determine protocol, default to TCP.
+	// Default to TCP when no protocol is specified.
 	protocol := l.Protocol
-	// Fall back to TCP when no protocol is specified in configuration.
 	if protocol == "" {
 		protocol = "tcp"
 	}
 
-	// Create listener config.
 	listener := config.ListenerConfig{
 		Name:     l.Name,
 		Port:     l.Port,
 		Protocol: protocol,
 		Address:  l.Address,
+		Exposed:  l.Exposed,
 	}
 
-	// Add probe if configured.
 	if l.Probe.Type != "" {
 		probe := l.Probe.ToDomain()
 		listener.Probe = &probe
 	}
 
-	// Return the converted listener configuration.
 	return listener
 }
 
@@ -291,12 +307,10 @@ func (l *ListenerDTO) ToDomain() config.ListenerConfig {
 // Returns:
 //   - config.ProbeConfig: the converted domain probe configuration
 func (p *ProbeDTO) ToDomain() config.ProbeConfig {
-	// Get threshold, timing, and HTTP defaults.
 	successThreshold, failureThreshold := p.getThresholdDefaults()
 	interval, timeout := p.getTimingDefaults()
 	method, statusCode := p.getHTTPDefaults()
 
-	// Return the converted probe configuration.
 	return config.ProbeConfig{
 		Type:             p.Type,
 		Interval:         shared.FromTimeDuration(interval),
@@ -318,21 +332,18 @@ func (p *ProbeDTO) ToDomain() config.ProbeConfig {
 //   - int: success threshold (default 1).
 //   - int: failure threshold (default 3).
 func (p *ProbeDTO) getThresholdDefaults() (successThreshold, failureThreshold int) {
-	// Apply default for success threshold.
+	// Require at least one success to mark healthy.
 	successThreshold = p.SuccessThreshold
-	// Require at least one success to mark healthy when not configured or invalid.
 	if successThreshold <= 0 {
 		successThreshold = 1
 	}
 
-	// Apply default for failure threshold.
+	// Allow three failures before marking unhealthy.
 	failureThreshold = p.FailureThreshold
-	// Allow three failures before marking unhealthy when not configured or invalid.
 	if failureThreshold <= 0 {
 		failureThreshold = defaultFailureThreshold
 	}
 
-	// Return both threshold values.
 	return successThreshold, failureThreshold
 }
 
@@ -342,21 +353,16 @@ func (p *ProbeDTO) getThresholdDefaults() (successThreshold, failureThreshold in
 //   - time.Duration: interval (default 10s).
 //   - time.Duration: timeout (default 5s).
 func (p *ProbeDTO) getTimingDefaults() (interval, timeout time.Duration) {
-	// Apply default for interval.
 	interval = time.Duration(p.Interval)
-	// Use default probe interval when not configured or invalid.
 	if interval <= 0 {
 		interval = defaultProbeInterval
 	}
 
-	// Apply default for timeout.
 	timeout = time.Duration(p.Timeout)
-	// Use default probe timeout when not configured or invalid.
 	if timeout <= 0 {
 		timeout = defaultProbeTimeout
 	}
 
-	// Return both timing values.
 	return interval, timeout
 }
 
@@ -366,21 +372,18 @@ func (p *ProbeDTO) getTimingDefaults() (interval, timeout time.Duration) {
 //   - string: HTTP method (default "GET").
 //   - int: expected status code (default 200).
 func (p *ProbeDTO) getHTTPDefaults() (method string, statusCode int) {
-	// Apply default method.
+	// GET is the standard HTTP method for health probes.
 	method = p.Method
-	// Use GET as the standard HTTP method for health probes when not specified.
 	if method == "" {
 		method = "GET"
 	}
 
-	// Apply default status code.
+	// HTTP 200 OK indicates a healthy response.
 	statusCode = p.StatusCode
-	// Expect HTTP 200 OK as the healthy response when not specified.
 	if statusCode == 0 {
 		statusCode = defaultHTTPStatusCode
 	}
 
-	// Return both HTTP values.
 	return method, statusCode
 }
 
@@ -390,7 +393,6 @@ func (p *ProbeDTO) getHTTPDefaults() (method string, statusCode int) {
 // Returns:
 //   - config.RestartConfig: the converted domain restart configuration
 func (r *RestartConfigDTO) ToDomain() config.RestartConfig {
-	// Return the converted restart configuration with policy and timing
 	return config.RestartConfig{
 		Policy:          config.RestartPolicy(r.Policy),
 		MaxRetries:      r.MaxRetries,
@@ -406,7 +408,6 @@ func (r *RestartConfigDTO) ToDomain() config.RestartConfig {
 // Returns:
 //   - config.HealthCheckConfig: the converted domain health check configuration
 func (h *HealthCheckDTO) ToDomain() config.HealthCheckConfig {
-	// Return the converted health check with all parameters
 	return config.HealthCheckConfig{
 		Name:       h.Name,
 		Type:       config.HealthCheckType(h.Type),
@@ -428,10 +429,65 @@ func (h *HealthCheckDTO) ToDomain() config.HealthCheckConfig {
 // Returns:
 //   - config.LoggingConfig: the converted domain logging configuration
 func (l *LoggingConfigDTO) ToDomain() config.LoggingConfig {
-	// Return the converted logging configuration with base directory and defaults
 	return config.LoggingConfig{
 		BaseDir:  l.BaseDir,
 		Defaults: l.Defaults.ToDomain(),
+		Daemon:   l.Daemon.ToDomain(),
+	}
+}
+
+// ToDomain converts DaemonLoggingDTO to domain DaemonLogging.
+// It transforms daemon-level logging settings to the domain model format.
+//
+// Returns:
+//   - config.DaemonLogging: the converted domain daemon logging configuration
+func (d *DaemonLoggingDTO) ToDomain() config.DaemonLogging {
+	writers := make([]config.WriterConfig, 0, len(d.Writers))
+
+	for i := range d.Writers {
+		writers = append(writers, d.Writers[i].ToDomain())
+	}
+
+	return config.DaemonLogging{
+		Writers: writers,
+	}
+}
+
+// ToDomain converts WriterConfigDTO to domain WriterConfig.
+// It transforms writer configuration to the domain model format.
+//
+// Returns:
+//   - config.WriterConfig: the converted domain writer configuration
+func (w *WriterConfigDTO) ToDomain() config.WriterConfig {
+	return config.WriterConfig{
+		Type:  w.Type,
+		Level: w.Level,
+		File:  w.File.ToDomain(),
+		JSON:  w.JSON.ToDomain(),
+	}
+}
+
+// ToDomain converts FileWriterConfigDTO to domain FileWriterConfig.
+// It transforms file writer configuration to the domain model format.
+//
+// Returns:
+//   - config.FileWriterConfig: the converted domain file writer configuration
+func (f *FileWriterConfigDTO) ToDomain() config.FileWriterConfig {
+	return config.FileWriterConfig{
+		Path:     f.Path,
+		Rotation: f.Rotation.ToDomain(),
+	}
+}
+
+// ToDomain converts JSONWriterConfigDTO to domain JSONWriterConfig.
+// It transforms JSON writer configuration to the domain model format.
+//
+// Returns:
+//   - config.JSONWriterConfig: the converted domain JSON writer configuration
+func (j *JSONWriterConfigDTO) ToDomain() config.JSONWriterConfig {
+	return config.JSONWriterConfig{
+		Path:     j.Path,
+		Rotation: j.Rotation.ToDomain(),
 	}
 }
 
@@ -441,7 +497,6 @@ func (l *LoggingConfigDTO) ToDomain() config.LoggingConfig {
 // Returns:
 //   - config.LogDefaults: the converted domain log defaults
 func (l *LogDefaultsDTO) ToDomain() config.LogDefaults {
-	// Return the converted log defaults with format and rotation settings
 	return config.LogDefaults{
 		TimestampFormat: l.TimestampFormat,
 		Rotation:        l.Rotation.ToDomain(),
@@ -454,7 +509,6 @@ func (l *LogDefaultsDTO) ToDomain() config.LogDefaults {
 // Returns:
 //   - config.RotationConfig: the converted domain rotation configuration
 func (r *RotationConfigDTO) ToDomain() config.RotationConfig {
-	// Return the converted rotation configuration with size and retention limits
 	return config.RotationConfig{
 		MaxSize:  r.MaxSize,
 		MaxAge:   r.MaxAge,
@@ -469,7 +523,6 @@ func (r *RotationConfigDTO) ToDomain() config.RotationConfig {
 // Returns:
 //   - config.ServiceLogging: the converted domain service logging configuration
 func (s *ServiceLoggingDTO) ToDomain() config.ServiceLogging {
-	// Return the converted service logging with stdout and stderr streams
 	return config.ServiceLogging{
 		Stdout: s.Stdout.ToDomain(),
 		Stderr: s.Stderr.ToDomain(),
@@ -482,7 +535,6 @@ func (s *ServiceLoggingDTO) ToDomain() config.ServiceLogging {
 // Returns:
 //   - config.LogStreamConfig: the converted domain log stream configuration
 func (l *LogStreamConfigDTO) ToDomain() config.LogStreamConfig {
-	// Return the converted log stream with file path, format, and rotation
 	return config.LogStreamConfig{
 		FilePath:       l.File,
 		Format:         l.TimestampFormat,

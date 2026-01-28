@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	appmetrics "github.com/kodflow/daemon/internal/application/metrics"
 	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
 	"github.com/kodflow/daemon/internal/bootstrap"
 	domainconfig "github.com/kodflow/daemon/internal/domain/config"
@@ -311,12 +312,14 @@ func TestNewAppWithHealth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Create a supervisor and factory.
+			// Create a supervisor, factory, tracker, and config.
 			sup := &appsupervisor.Supervisor{}
 			factory := bootstrap.ProvideProberFactory()
+			tracker := appmetrics.NewTracker(nil)
+			cfg := &domainconfig.Config{}
 
 			// Call NewAppWithHealth.
-			app := bootstrap.NewAppWithHealth(sup, factory)
+			app := bootstrap.NewAppWithHealth(sup, factory, tracker, cfg)
 
 			// Verify app was created.
 			if app == nil {
@@ -326,6 +329,42 @@ func TestNewAppWithHealth(t *testing.T) {
 			// Verify supervisor is set in app.
 			if app.Supervisor != sup {
 				t.Error("NewAppWithHealth set wrong supervisor")
+			}
+
+			// Verify config is set in app.
+			if app.Config != cfg {
+				t.Error("NewAppWithHealth set wrong config")
+			}
+		})
+	}
+}
+
+// TestProvideMetricsTracker verifies ProvideMetricsTracker behavior.
+//
+// Params:
+//   - t: testing context for assertions.
+func TestProvideMetricsTracker(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "returns_non_nil_tracker",
+		},
+	}
+
+	// Run all test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Call ProvideMetricsTracker with nil collector.
+			result := bootstrap.ProvideMetricsTracker(nil)
+
+			// Verify tracker is not nil.
+			if result == nil {
+				t.Error("ProvideMetricsTracker should return non-nil tracker")
 			}
 		})
 	}

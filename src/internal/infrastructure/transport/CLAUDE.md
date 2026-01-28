@@ -1,29 +1,49 @@
-# Transport - Communication Réseau
+# Transport - Network Communication
 
-Serveurs et clients pour communication externe.
+Servers and clients for external communication.
 
-## Rôle
+## Role
 
-Exposer des APIs pour contrôler le daemon (start/stop services, métriques, état).
+Expose APIs to control the daemon (start/stop services, metrics, status).
 
 ## Navigation
 
-| Protocole | Package |
-|-----------|---------|
+| Protocol | Package |
+|----------|---------|
 | gRPC | `grpc/` |
+| TUI | `tui/` |
 
 ## Structure
 
 ```
 transport/
-└── grpc/              # API gRPC du daemon
-    └── server.go      # Serveur gRPC
+├── grpc/              # gRPC API
+│   └── server.go      # gRPC server
+└── tui/               # Terminal User Interface
+    ├── tui.go         # Main TUI entry
+    ├── raw.go         # Static MOTD mode
+    ├── interactive.go # Real-time TUI
+    └── ...            # See tui/CLAUDE.md
 ```
 
-## Services Exposés
+## Services Exposed
 
 | Service | Description |
 |---------|-------------|
-| `DaemonService` | Start, Stop, Restart, Status des services |
-| `MetricsService` | Métriques processus (CPU, RAM) |
+| `DaemonService` | Start, Stop, Restart, Status of services |
+| `MetricsService` | Process metrics (CPU, RAM) |
 | Health | gRPC health/v1 standard |
+
+## TUI Modes
+
+| Mode | Flag | Description |
+|------|------|-------------|
+| Raw | (default) | Static MOTD snapshot + log stream |
+| Interactive | `--tui` | Real-time TUI with 1Hz refresh |
+
+## Related Packages
+
+| Package | See |
+|---------|-----|
+| gRPC | `grpc/CLAUDE.md` |
+| TUI | `tui/CLAUDE.md` |

@@ -4,10 +4,10 @@ package metrics
 import (
 	"context"
 	"maps"
-	"reflect"
 	"slices"
 	"sync"
 	"time"
+	"unsafe"
 
 	domainmetrics "github.com/kodflow/daemon/internal/domain/metrics"
 	"github.com/kodflow/daemon/internal/domain/process"
@@ -20,6 +20,13 @@ const (
 	collectionTimeoutDivisor  int           = 2
 	defaultProcessMapCap      int           = 16
 	defaultSubscriberMapCap   int           = 4
+	maxSubscribers            int           = 64
+)
+
+// Metric calculation constants.
+const (
+	// percentMultiplier converts a ratio to a percentage (0.5 -> 50%).
+	percentMultiplier float64 = 100.0
 )
 
 // Tracker implements ProcessTracker using infrastructure collectors.
@@ -254,17 +261,23 @@ func (t *Tracker) All() []domainmetrics.ProcessMetrics {
 }
 
 // Subscribe returns a channel that receives metrics updates.
+// Returns nil if max subscribers limit is reached to prevent resource exhaustion.
 //
 // Returns:
-//   - <-chan ProcessMetrics: receive-only channel for updates
+//   - <-chan ProcessMetrics: receive-only channel for updates, or nil if limit reached.
 func (t *Tracker) Subscribe() <-chan domainmetrics.ProcessMetrics {
-	ch := make(chan domainmetrics.ProcessMetrics, defaultSubscriberBuffer)
-
 	t.subsMu.Lock()
+	// Enforce max subscribers limit to prevent resource exhaustion.
+	if len(t.subscribers) >= maxSubscribers {
+		t.subsMu.Unlock()
+		// Reject subscription if limit reached.
+		return nil
+	}
+	ch := make(chan domainmetrics.ProcessMetrics, defaultSubscriberBuffer)
 	t.subscribers[ch] = struct{}{}
 	t.subsMu.Unlock()
 
-	// Return receive-only channel.
+	// Return subscription channel.
 	return ch
 }
 
@@ -274,20 +287,19 @@ func (t *Tracker) Subscribe() <-chan domainmetrics.ProcessMetrics {
 //   - ch: channel to unsubscribe
 func (t *Tracker) Unsubscribe(ch <-chan domainmetrics.ProcessMetrics) {
 	// Get pointer value for channel identity comparison.
-	// Since Subscribe() returns a receive-only channel (<-chan) but internally
-	// stores a bidirectional channel (chan), we need to use reflection to
-	// compare channel identity across type conversions.
-	recvPtr := reflect.ValueOf(ch).Pointer()
+	// Uses unsafe.Pointer instead of reflect.ValueOf().Pointer() for efficiency.
+	// Both <-chan and chan have the same underlying pointer representation.
+	recvPtr := *(*uintptr)(unsafe.Pointer(&ch))
 
 	t.subsMu.Lock()
 	var bidirCh chan domainmetrics.ProcessMetrics
 	var found bool
 
 	// Find the bidirectional channel with matching pointer.
-	for ch := range t.subscribers {
+	for c := range t.subscribers {
 		// Check if this channel's pointer matches the receive channel.
-		if reflect.ValueOf(ch).Pointer() == recvPtr {
-			bidirCh = ch
+		if *(*uintptr)(unsafe.Pointer(&c)) == recvPtr {
+			bidirCh = c
 			found = true
 			break
 		}
@@ -412,7 +424,72 @@ func (t *Tracker) collectProcess(proc *trackedProcess) {
 		return
 	}
 
+	// Calculate CPU percentage using delta between snapshots.
+	now := time.Now()
+	// Calculate CPU percentage if previous snapshot exists.
+	if cpuErr == nil && !proc.prevCPUTime.IsZero() {
+		cpu.UsagePercent = t.calculateCPUPercent(proc.prevCPU, cpu, proc.prevCPUTime, now)
+	}
+
+	// Store current CPU snapshot for next calculation.
+	if cpuErr == nil {
+		proc.prevCPU = cpu
+		proc.prevCPUTime = now
+	}
+
 	t.updateProcessMetrics(proc, cpu, mem)
+}
+
+// calculateCPUPercent calculates CPU usage percentage from two snapshots.
+// The formula compares the change in CPU jiffies over time.
+//
+// Params:
+//   - prev: previous CPU snapshot
+//   - curr: current CPU snapshot
+//   - prevTime: time of previous snapshot
+//   - currTime: time of current snapshot
+//
+// Returns:
+//   - float64: CPU usage percentage (0-100 per core, can exceed 100 for multi-core)
+func (t *Tracker) calculateCPUPercent(prev, curr domainmetrics.ProcessCPU, prevTime, currTime time.Time) float64 {
+	// Calculate elapsed time in seconds.
+	elapsed := currTime.Sub(prevTime).Seconds()
+	// Avoid division by zero for invalid time delta.
+	if elapsed <= 0 {
+		// Invalid time delta, cannot calculate.
+		return 0
+	}
+
+	// Calculate total jiffies used (user + system) for both snapshots.
+	prevTotal := prev.User + prev.System
+	currTotal := curr.User + curr.System
+
+	// Avoid underflow if counters wrapped or process restarted.
+	if currTotal < prevTotal {
+		// Counters wrapped or process restarted, invalid delta.
+		return 0
+	}
+
+	// Calculate jiffies delta.
+	delta := currTotal - prevTotal
+
+	// Convert jiffies to seconds (assuming 100 Hz = 100 jiffies per second).
+	// This is the standard USER_HZ on Linux.
+	const jiffiesPerSecond float64 = 100.0
+	cpuSeconds := float64(delta) / jiffiesPerSecond
+
+	// Calculate percentage relative to elapsed wall time.
+	// Result can exceed 100% for multi-threaded processes using multiple cores.
+	percent := (cpuSeconds / elapsed) * percentMultiplier
+
+	// Clamp negative values to zero.
+	if percent < 0 {
+		// Negative percentage is invalid.
+		return 0
+	}
+
+	// Return calculated CPU percentage.
+	return percent
 }
 
 // updateProcessMetrics updates and publishes metrics for a process.

@@ -42,15 +42,11 @@ type SystemMemory struct {
 // Returns:
 //   - *SystemMemory: initialized memory metrics with calculated Used and UsagePercent.
 func NewSystemMemory(input *SystemMemoryInput) *SystemMemory {
-	// Calculate used memory as total minus available.
 	used := input.Total - input.Available
-	// Calculate usage percentage, handling zero total case.
 	var usagePercent float64
-	// Check if total is non-zero to avoid division by zero.
 	if input.Total > 0 {
 		usagePercent = float64(used) / float64(input.Total) * percentMultiplier
 	}
-	// Return initialized memory metrics struct.
 	return &SystemMemory{
 		Total:        input.Total,
 		Available:    input.Available,
@@ -72,11 +68,8 @@ func NewSystemMemory(input *SystemMemoryInput) *SystemMemory {
 // Returns:
 //   - float64: swap usage percentage, or 0 if SwapTotal is 0.
 func (m *SystemMemory) SwapUsagePercent() float64 {
-	// Check if swap is configured on the system.
 	if m.SwapTotal == 0 {
-		// No swap available, return zero percentage.
 		return 0
 	}
-	// Calculate swap usage percentage from used and total swap.
 	return float64(m.SwapUsed) / float64(m.SwapTotal) * percentMultiplier
 }

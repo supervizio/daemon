@@ -6,27 +6,20 @@ import (
 	"os/exec"
 )
 
-// TrustedCommand creates an exec.Cmd from trusted configuration sources.
-// SECURITY: This function is intended for commands loaded from validated
-// configuration files (YAML configs, health check definitions), NOT for
-// user-provided input. The commands are trusted because they come from
-// administrator-controlled configuration files loaded at startup.
-// This is expected behavior for a process supervisor whose core function
-// is to execute configured services and health check commands.
-// The nosemgrep annotations acknowledge this is intentional design,
-// not a security vulnerability.
+// TrustedCommand wraps exec.CommandContext for admin-controlled config commands.
+// SECURITY: Only use for commands from validated YAML configs, not user input.
+// Commands are trusted as they come from administrator-controlled files.
 //
 // Params:
-//   - ctx: context for cancellation support.
-//   - name: the command executable name or path.
-//   - args: command arguments (variadic).
+//   - ctx: context for cancellation support
+//   - name: executable path or name to run
+//   - args: command-line arguments to pass
 //
 // Returns:
-//   - *exec.Cmd: configured command ready for execution.
+//   - *exec.Cmd: configured command ready to start
 //
 // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 // nosemgrep: go_subproc_rule-subproc
 func TrustedCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
-	// Delegate to exec.CommandContext with the trusted command parameters
 	return exec.CommandContext(ctx, name, args...)
 }

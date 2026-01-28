@@ -19,6 +19,5 @@ type nopCloser struct {
 // Returns:
 //   - error: always returns nil.
 func (n *nopCloser) Close() error {
-	// Return nil since this is a no-op closer.
 	return nil
 }

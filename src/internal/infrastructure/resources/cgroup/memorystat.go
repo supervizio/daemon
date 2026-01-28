@@ -28,22 +28,35 @@ type MemoryStat struct {
 	Pgmajfault uint64
 }
 
-// fieldMap returns the field mapping for MemoryStat parsing.
+// fieldSetters maps field names to setter functions.
+// Using a map avoids deep switch/case complexity.
+var fieldSetters map[string]func(*MemoryStat, uint64) = map[string]func(*MemoryStat, uint64){
+	"anon":       func(m *MemoryStat, v uint64) { m.Anon = v },
+	"file":       func(m *MemoryStat, v uint64) { m.File = v },
+	"kernel":     func(m *MemoryStat, v uint64) { m.Kernel = v },
+	"slab":       func(m *MemoryStat, v uint64) { m.Slab = v },
+	"sock":       func(m *MemoryStat, v uint64) { m.Sock = v },
+	"shmem":      func(m *MemoryStat, v uint64) { m.Shmem = v },
+	"mapped":     func(m *MemoryStat, v uint64) { m.Mapped = v },
+	"dirty":      func(m *MemoryStat, v uint64) { m.Dirty = v },
+	"pgfault":    func(m *MemoryStat, v uint64) { m.Pgfault = v },
+	"pgmajfault": func(m *MemoryStat, v uint64) { m.Pgmajfault = v },
+}
+
+// setField applies a value to the field matching key via map lookup.
+//
+// Params:
+//   - key: field name from memory.stat (e.g., "anon", "file", "kernel")
+//   - value: parsed numeric value in bytes
 //
 // Returns:
-//   - map[string]*uint64: field name to struct field pointer mapping
-func (m *MemoryStat) fieldMap() map[string]*uint64 {
-	// Return mapping of memory.stat keys to struct fields
-	return map[string]*uint64{
-		"anon":       &m.Anon,
-		"file":       &m.File,
-		"kernel":     &m.Kernel,
-		"slab":       &m.Slab,
-		"sock":       &m.Sock,
-		"shmem":      &m.Shmem,
-		"mapped":     &m.Mapped,
-		"dirty":      &m.Dirty,
-		"pgfault":    &m.Pgfault,
-		"pgmajfault": &m.Pgmajfault,
+//   - bool: true if key matched a known field, false for unrecognized keys
+func (m *MemoryStat) setField(key string, value uint64) bool {
+	setter, ok := fieldSetters[key]
+	// Unknown field; skip silently for forward compatibility.
+	if !ok {
+		return false
 	}
+	setter(m, value)
+	return true
 }

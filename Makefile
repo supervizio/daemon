@@ -1,10 +1,13 @@
-.PHONY: help build build-e2e lint fmt test test-unit test-e2e coverage clean
+.PHONY: help build build-e2e run run-dev run-tui lint lint-golangci lint-ktn fmt test test-unit test-e2e coverage clean
 
 .DEFAULT_GOAL := help
 
 # Colors
 CYAN := \033[36m
 RESET := \033[0m
+
+# Version from git
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 help: ## Show this help
 	@echo ""
@@ -14,13 +17,27 @@ help: ## Show this help
 	@echo ""
 
 build: ## Build supervizio binary to bin/
-	@cd src && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../bin/supervizio ./cmd/daemon
+	@cd src && CGO_ENABLED=0 go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=$(VERSION)" -o ../bin/supervizio ./cmd/daemon
+
+run: build ## Run the daemon (raw mode by default, requires /etc/daemon/config.yaml)
+	@./bin/supervizio
+
+run-dev: build ## Run the daemon with examples/config-dev.yaml (raw mode)
+	@./bin/supervizio --config=examples/config-dev.yaml
+
+run-tui: build ## Run the daemon in interactive TUI mode
+	@./bin/supervizio --config=examples/config-dev.yaml --tui
 
 build-e2e: build ## Build E2E test binaries (supervizio + crasher)
 	@cd e2e/behavioral/crasher && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../../../bin/crasher .
 
-lint: ## Run golangci-lint
+lint: lint-golangci lint-ktn ## Run all linters
+
+lint-golangci: ## Run golangci-lint
 	@cd src && golangci-lint run
+
+lint-ktn: ## Run ktn-linter
+	@cd src && ktn-linter lint --no-cache ./...
 
 fmt: ## Format code with gofmt
 	@cd src && go fmt ./...

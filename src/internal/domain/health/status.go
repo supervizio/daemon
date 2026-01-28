@@ -22,27 +22,16 @@ const (
 // Returns:
 //   - string: the human-readable status name
 func (s Status) String() string {
-	// Switch on status value to return the corresponding string representation.
 	switch s {
-	// Case for healthy status.
 	case StatusHealthy:
-		// Return the healthy status string.
 		return "healthy"
-	// Case for unhealthy status.
 	case StatusUnhealthy:
-		// Return the unhealthy status string.
 		return "unhealthy"
-	// Case for degraded status.
 	case StatusDegraded:
-		// Return the degraded status string.
 		return "degraded"
-	// Case for unknown status.
 	case StatusUnknown:
-		// Return the unknown status string.
 		return "unknown"
-	// Default case for unexpected status values.
 	default:
-		// Return the unknown status string for invalid values.
 		return "unknown"
 	}
 }
@@ -52,7 +41,6 @@ func (s Status) String() string {
 // Returns:
 //   - bool: true if status equals StatusHealthy, false otherwise
 func (s Status) IsHealthy() bool {
-	// Return true if status equals StatusHealthy.
 	return s == StatusHealthy
 }
 
@@ -61,6 +49,5 @@ func (s Status) IsHealthy() bool {
 // Returns:
 //   - bool: true if status equals StatusUnhealthy, false otherwise
 func (s Status) IsUnhealthy() bool {
-	// Return true if status equals StatusUnhealthy.
 	return s == StatusUnhealthy
 }

@@ -20,7 +20,6 @@ type RealClock struct{}
 // Returns:
 //   - *RealClock: a new clock that returns system time.
 func NewRealClock() *RealClock {
-	// Return new RealClock instance.
 	return &RealClock{}
 }
 
@@ -29,7 +28,6 @@ func NewRealClock() *RealClock {
 // Returns:
 //   - time.Time: the current time from the system clock.
 func (RealClock) Now() time.Time {
-	// Return current system time.
 	return time.Now()
 }
 

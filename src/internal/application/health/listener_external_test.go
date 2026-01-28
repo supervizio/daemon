@@ -28,7 +28,6 @@ type mockProber struct {
 // Returns:
 //   - health.CheckResult: the configured mock result.
 func (m *mockProber) Probe(_ context.Context, _ health.Target) health.CheckResult {
-	// Return the pre-configured result for testing.
 	return m.result
 }
 
@@ -37,7 +36,6 @@ func (m *mockProber) Probe(_ context.Context, _ health.Target) health.CheckResul
 // Returns:
 //   - string: the prober type identifier.
 func (m *mockProber) Type() string {
-	// Return the configured prober type.
 	return m.probeType
 }
 

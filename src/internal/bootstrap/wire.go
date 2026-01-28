@@ -14,6 +14,7 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/process/credentials"
 	"github.com/kodflow/daemon/internal/infrastructure/process/executor"
 	infrareaper "github.com/kodflow/daemon/internal/infrastructure/process/reaper"
+	inframetrics "github.com/kodflow/daemon/internal/infrastructure/resources/metrics"
 )
 
 // InitializeApp creates the application with all dependencies wired.
@@ -50,6 +51,12 @@ func InitializeApp(configPath string) (*App, error) {
 		// Infrastructure: Health prober factory.
 		ProvideProberFactory,
 		wire.Bind(new(apphealth.Creator), new(*infrahealthcheck.Factory)),
+
+		// Infrastructure: Process metrics collector (returns appmetrics.Collector interface).
+		inframetrics.NewProcessCollector,
+
+		// Application: Metrics tracker.
+		ProvideMetricsTracker,
 
 		// Providers: Custom provider functions.
 		ProvideReaper,

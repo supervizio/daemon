@@ -51,7 +51,8 @@ Vagrant.configure("2") do |config|
   # Note: rsync must be installed on guest for these to work
   # ===========================================================================
   config.vm.synced_folder "../setup", "/setup", type: "rsync"
-  config.vm.synced_folder "../bin", "/bin-local", type: "rsync"
+  # bin folder is optional - only synced for script-based tests, not package tests
+  config.vm.synced_folder "../bin", "/bin-local", type: "rsync" if File.exist?("../bin")
   config.vm.synced_folder ".", "/vagrant", type: "rsync"
 
   # ===========================================================================

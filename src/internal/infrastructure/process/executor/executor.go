@@ -47,308 +47,224 @@ type Executor struct {
 	findProcess ProcessFinder
 }
 
-// NewExecutor creates a new Unix process executor with default dependencies.
+// NewExecutor returns an Executor with production dependencies.
 //
 // Returns:
-//   - *Executor: a configured executor instance.
+//   - *Executor: initialized executor with default credential and process managers
 func NewExecutor() *Executor {
-	// Create and return executor with default dependencies.
-	return &Executor{
-		credentials: credentials.New(),
-		process:     control.New(),
-		findProcess: defaultFindProcess,
-	}
+	return &Executor{credentials: credentials.New(), process: control.New(), findProcess: defaultFindProcess}
 }
 
-// New creates a new Unix process executor with default dependencies.
+// New returns an Executor with production dependencies.
 //
 // Returns:
-//   - *Executor: a configured executor instance.
+//   - *Executor: initialized executor with default credential and process managers
 func New() *Executor {
-	// Create and return executor with default dependencies.
-	return &Executor{
-		credentials: credentials.New(),
-		process:     control.New(),
-		findProcess: defaultFindProcess,
-	}
+	return &Executor{credentials: credentials.New(), process: control.New(), findProcess: defaultFindProcess}
 }
 
-// NewWithDeps creates a new Unix process executor with injected dependencies.
-// This is the primary constructor for Wire dependency injection.
+// NewWithDeps returns an Executor with Wire-injected dependencies.
 //
 // Params:
-//   - creds: the credential manager for user/group resolution.
-//   - proc: the process control for process group management.
+//   - creds: credential manager for user/group resolution
+//   - proc: process control for group management
 //
 // Returns:
-//   - *Executor: a configured executor instance.
+//   - *Executor: initialized executor with provided dependencies
 func NewWithDeps(creds credentials.CredentialManager, proc control.ProcessControl) *Executor {
-	// Create and return executor with injected dependencies.
-	return &Executor{
-		credentials: creds,
-		process:     proc,
-		findProcess: defaultFindProcess,
-	}
+	return &Executor{credentials: creds, process: proc, findProcess: defaultFindProcess}
 }
 
-// NewWithOptions creates a new Unix process executor with custom options.
-// This constructor is useful for testing with mock implementations.
+// NewWithOptions returns an Executor with custom dependencies for testing.
 //
 // Params:
-//   - creds: the credential manager for user/group resolution.
-//   - proc: the process control for process group management.
-//   - finder: the process finder function to use.
+//   - creds: credential manager for user/group resolution
+//   - proc: process control for group management
+//   - finder: custom process finder for mock injection
 //
 // Returns:
-//   - *Executor: a configured executor instance.
+//   - *Executor: initialized executor with all custom dependencies
 func NewWithOptions(creds credentials.CredentialManager, proc control.ProcessControl, finder ProcessFinder) *Executor {
-	// Create and return executor with custom options for testing.
-	return &Executor{
-		credentials: creds,
-		process:     proc,
-		findProcess: finder,
-	}
+	return &Executor{credentials: creds, process: proc, findProcess: finder}
 }
 
-// Start starts a process with the given specification and returns its PID.
-// This method spawns a background goroutine to monitor the process lifecycle.
-// The goroutine terminates when the spawned process exits (normally or via signal).
-// Resources: The goroutine uses a buffered channel (size 1) for the exit result.
-// Thread-safety: The wait channel is safe to read from any goroutine.
-// Cleanup: The channel is closed after sending the result.
+// Start spawns a process and returns a channel for exit notification.
+// The background goroutine terminates when the process exits.
 //
 // Params:
-//   - ctx: context for command cancellation.
-//   - spec: process specification containing command, args, env, and credentials.
+//   - ctx: context for process cancellation
+//   - spec: process specification including command, args, env, and credentials
 //
 // Returns:
-//   - int: the process ID of the started process.
-//   - <-chan domain.ExitResult: channel that receives exit result when process terminates.
-//   - error: any error encountered during process start.
+//   - pid: process ID of the started process
+//   - wait: channel that receives exit result when process terminates
+//   - err: error if command build, credential setup, or start fails
 func (e *Executor) Start(ctx context.Context, spec domain.Spec) (pid int, wait <-chan domain.ExitResult, err error) {
-	// Build the command from specification
 	cmd, err := e.buildCommand(ctx, spec)
-	// Check if command building failed
+	// Command parsing or environment setup failed.
 	if err != nil {
-		// Return error if command could not be built
 		return 0, nil, err
 	}
-
-	// Configure user and group credentials if specified
+	// Credential resolution or application failed.
 	if err := e.configureCredentials(cmd, spec.User, spec.Group); err != nil {
-		// Return error if credentials configuration failed
 		return 0, nil, err
 	}
-
-	// Start the process
+	// Fork/exec failed.
 	if err := cmd.Start(); err != nil {
-		// Return error if process failed to start
 		return 0, nil, fmt.Errorf("starting process: %w", err)
 	}
-
-	// Create channel for exit result notification
+	// Buffer of 1 prevents goroutine leak if receiver abandons channel.
 	waitCh := make(chan domain.ExitResult, 1)
-	// Launch goroutine to wait for process completion
 	go e.waitForProcess(cmd, waitCh)
-
-	// Return process ID and wait channel
 	return cmd.Process.Pid, waitCh, nil
 }
 
-// waitForProcess waits for the command to complete and sends the result.
+// waitForProcess collects the exit result and signals completion via channel.
 //
 // Params:
-//   - cmd: the command waiter interface to wait on
-//   - wait: channel to send the exit result
-//
-// Returns:
-//   - None (sends result via channel)
+//   - cmd: waiter interface (typically *exec.Cmd) to wait on
+//   - wait: channel to send exit result when process terminates
 func (e *Executor) waitForProcess(cmd Waiter, wait chan<- domain.ExitResult) {
-	// Wait for process to complete
 	err := cmd.Wait()
-	// Initialize result with zero exit code
 	result := domain.ExitResult{}
-	// Check if process exited with an error
+	// Process exited with error or non-zero status.
 	if err != nil {
-		// Try to extract exit code from error
 		var exitErr *exec.ExitError
-		// Handle exit error type to extract exit code
+		// Normal exit with non-zero code.
 		if errors.As(err, &exitErr) {
-			// Set exit code from exit error
 			result.Code = exitErr.ExitCode()
 		} else {
-			// Set error code for non-exit errors
+			// Abnormal termination (signal, resource limit, etc).
 			result.Code = -1
 			result.Error = err
 		}
 	}
-	// Send result to wait channel
 	wait <- result
-	// Close channel to signal completion
 	close(wait)
 }
 
-// Stop gracefully stops the process with the given PID using SIGTERM.
-// If the process does not exit within the timeout, it is forcefully killed.
-// This method launches a background goroutine to wait for process exit.
-// The goroutine terminates when the process exits or is killed.
-// Resources: Uses a buffered channel (size 1) for completion signaling.
-// Thread-safety: The done channel is managed internally by this method.
-// Cleanup: The goroutine always terminates within the timeout duration.
+// Stop sends SIGTERM and waits for graceful exit, then SIGKILL on timeout.
 //
 // Params:
-//   - pid: the process ID to stop.
-//   - timeout: maximum time to wait for graceful shutdown before killing.
+//   - pid: process ID to stop
+//   - timeout: maximum time to wait for graceful shutdown before SIGKILL
 //
 // Returns:
-//   - error: any error encountered during stop operation.
+//   - error: if process cannot be found or signal delivery fails
+//
+// Goroutine lifecycle: Spawns one goroutine to wait for process exit.
+// Termination: Goroutine exits when proc.Wait() returns (process exits or is killed).
+// Cleanup: Done channel is buffered (size 1) to prevent goroutine leak if caller abandons.
 func (e *Executor) Stop(pid int, timeout time.Duration) error {
-	// Find the process by PID
 	proc, err := e.findProcess(pid)
-	// Check if process lookup failed
+	// Process handle acquisition failed.
 	if err != nil {
-		// Return error if process not found
 		return fmt.Errorf("finding process: %w", err)
 	}
-
-	// Send SIGTERM for graceful shutdown
+	// Request graceful shutdown.
 	if err := proc.Signal(syscall.SIGTERM); err != nil {
-		// Return error if signal could not be sent
 		return fmt.Errorf("sending SIGTERM: %w", err)
 	}
-
-	// Create channel for process wait result
+	// Wait for process exit in background.
+	// Goroutine lifecycle: Waits for process termination, sends result to done channel.
+	// Termination guarantee: proc.Wait() always returns when process exits (naturally or killed).
 	done := make(chan error, 1)
-	// Launch goroutine to wait for process exit using inline adapter
 	go func() {
-		// Wait for process to exit and capture any error
 		_, err := proc.Wait()
-		// Send completion signal with error status
 		done <- err
 	}()
-
-	// Wait for process to exit or timeout
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 	select {
-	// Handle process exit completion
+	// Process exited gracefully within timeout.
 	case <-done:
-		// Return nil on successful exit
 		return nil
-	// Handle timeout case
-	case <-time.After(timeout):
-		// Force kill after timeout exceeded
+	// Timeout expired; force kill.
+	case <-timer.C:
 		if err := proc.Kill(); err != nil {
-			// Return error if kill failed
 			return fmt.Errorf("killing process: %w", err)
 		}
-		// Wait for process to actually terminate
+		// Wait for kill to complete.
 		<-done
-		// Return nil after forced kill
 		return nil
 	}
 }
 
-// Signal sends a signal to the process with the given PID.
+// Signal delivers a signal to the specified process.
 //
 // Params:
-//   - pid: the process ID to signal
-//   - sig: the signal to send
+//   - pid: process ID to signal
+//   - sig: signal to deliver (e.g., syscall.SIGHUP for reload)
 //
 // Returns:
-//   - error: any error encountered during signal delivery
+//   - error: if process cannot be found or signal delivery fails
 func (e *Executor) Signal(pid int, sig os.Signal) error {
-	// Find the process by PID
 	proc, err := e.findProcess(pid)
-	// Check if process lookup failed
+	// Process handle acquisition failed.
 	if err != nil {
-		// Return error if process not found
 		return fmt.Errorf("finding process: %w", err)
 	}
-	// Send the signal and return result
 	return proc.Signal(sig)
 }
 
-// buildCommand creates an exec.Cmd from the specification.
+// buildCommand constructs an exec.Cmd with environment and process group setup.
 //
 // Params:
-//   - ctx: context for command cancellation
-//   - spec: process specification with command, args, and environment
+//   - ctx: context for cancellation support
+//   - spec: process specification with command, args, dir, and env
 //
 // Returns:
-//   - *exec.Cmd: configured command ready to execute
-//   - error: any error encountered during command building
+//   - *exec.Cmd: configured command with environment and process group
+//   - error: ErrEmptyCommand if command string is empty
 func (e *Executor) buildCommand(ctx context.Context, spec domain.Spec) (*exec.Cmd, error) {
-	// Split command string into parts
 	parts := strings.Fields(spec.Command)
-	// Check if command is empty
+	// Empty command string after whitespace split.
 	if len(parts) == 0 {
-		// Return error for empty command
 		return nil, shared.ErrEmptyCommand
 	}
-
-	// Initialize args slice with preallocated capacity
+	// Combine inline args from command string with explicit args.
 	args := make([]string, 0, len(parts)-1+len(spec.Args))
 	args = append(args, parts[1:]...)
-	// Append additional args from spec
 	args = append(args, spec.Args...)
-
-	// Create command with context for cancellation support
 	cmd := TrustedCommand(ctx, parts[0], args...)
-
-	// Set working directory if specified
+	// Set working directory if specified.
 	if spec.Dir != "" {
-		// Configure command working directory
 		cmd.Dir = spec.Dir
 	}
-
-	// Initialize environment with current process environment
-	cmd.Env = os.Environ()
-	// Append custom environment variables from spec
+	// Inherit current environment and merge spec-provided vars.
+	baseEnv := os.Environ()
+	cmd.Env = make([]string, 0, len(baseEnv)+len(spec.Env))
+	cmd.Env = append(cmd.Env, baseEnv...)
 	for k, v := range spec.Env {
-		// Add each environment variable in KEY=VALUE format
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+		cmd.Env = append(cmd.Env, k+"="+v)
 	}
-
-	// Note: stdout/stderr are inherited from parent process by default.
-	// I/O configuration is handled at infrastructure level (e.g., logging/capture)
-	// rather than through domain Spec, following hexagonal architecture.
-
-	// Set process group for signal forwarding
+	// Enable process group for clean signal delivery.
 	e.process.SetProcessGroup(cmd)
-
-	// Return configured command
 	return cmd, nil
 }
 
-// configureCredentials sets up user/group credentials on the command.
+// configureCredentials applies user/group credentials for privilege drop.
 //
 // Params:
-//   - cmd: the exec.Cmd to configure
-//   - user: username or UID to run as (empty string to skip)
-//   - group: group name or GID to run as (empty string to skip)
+//   - cmd: exec.Cmd to configure with credentials
+//   - user: username or UID (empty to skip)
+//   - group: group name or GID (empty to inherit from user)
 //
 // Returns:
-//   - error: any error encountered during credentials configuration
+//   - error: if credential resolution or application fails
 func (e *Executor) configureCredentials(cmd *exec.Cmd, user, group string) error {
-	// Check if credentials are specified
+	// Skip credential setup when running as invoking user.
 	if user == "" && group == "" {
-		// Skip configuration if no credentials specified
 		return nil
 	}
-
-	// Resolve user and group to UID and GID
+	// Resolve names to numeric IDs.
 	uid, gid, err := e.credentials.ResolveCredentials(user, group)
-	// Check if resolution failed
 	if err != nil {
-		// Return error if credentials could not be resolved
 		return fmt.Errorf("resolving credentials: %w", err)
 	}
-
-	// Apply resolved credentials to command
+	// Apply credentials to SysProcAttr for privilege drop.
 	if err := e.credentials.ApplyCredentials(cmd, uid, gid); err != nil {
-		// Return error if credentials could not be applied
 		return fmt.Errorf("applying credentials: %w", err)
 	}
-
-	// Return nil on success
 	return nil
 }

@@ -26,17 +26,12 @@ type Filter func(Event) bool
 // Returns:
 //   - Filter: filter function that passes only matching event types
 func FilterByType(types ...Type) Filter {
-	// Build set of types for fast lookup
 	typeSet := make(map[Type]struct{}, len(types))
-	// Populate type set
 	for _, t := range types {
 		typeSet[t] = struct{}{}
 	}
-	// Return filter function that checks type membership
 	return func(e Event) bool {
-		// Check if event type is in the set
 		_, ok := typeSet[e.Type]
-		// Return whether type was found
 		return ok
 	}
 }
@@ -49,9 +44,7 @@ func FilterByType(types ...Type) Filter {
 // Returns:
 //   - Filter: filter function that passes only events matching the category
 func FilterByCategory(category string) Filter {
-	// Return filter function that checks category
 	return func(e Event) bool {
-		// Check if event category matches
 		return e.Type.Category() == category
 	}
 }
@@ -64,9 +57,7 @@ func FilterByCategory(category string) Filter {
 // Returns:
 //   - Filter: filter function that passes only events for the specified service
 func FilterByServiceName(serviceName string) Filter {
-	// Return filter function that checks service name
 	return func(e Event) bool {
-		// Check if event service name matches
 		return e.ServiceName == serviceName
 	}
 }

@@ -57,10 +57,10 @@ func TestPrctlSubreaperError(t *testing.T) {
 
 	// Define test cases.
 	tests := []struct {
-		name     string
-		errno    syscall.Errno
-		flag     int
-		wantErr  bool
+		name    string
+		errno   syscall.Errno
+		flag    int
+		wantErr bool
 	}{
 		{
 			name:    "EINVAL error",

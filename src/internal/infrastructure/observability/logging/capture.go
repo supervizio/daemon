@@ -53,39 +53,30 @@ type Capture struct {
 func NewCapture(serviceName string, cfg GetServiceLogPather, svcCfg serviceLogging) (*Capture, error) {
 	c := &Capture{}
 
-	// Check if stdout file path is configured for file-based logging.
 	if svcCfg.StdoutConfig().File() != "" {
 		path := cfg.GetServiceLogPath(serviceName, svcCfg.StdoutConfig().File())
 		writer, err := NewWriter(path, svcCfg.StdoutConfig())
-		// Check if writer creation failed.
 		if err != nil {
-			// Return nil capture and propagate the writer creation error.
 			return nil, err
 		}
 		c.stdout = writer
 	} else {
-		// Else use a no-op closer wrapping os.Stdout for passthrough mode.
 		c.stdout = &nopCloser{os.Stdout}
 	}
 
-	// Check if stderr file path is configured for file-based logging.
 	if svcCfg.StderrConfig().File() != "" {
 		path := cfg.GetServiceLogPath(serviceName, svcCfg.StderrConfig().File())
 		writer, err := NewWriter(path, svcCfg.StderrConfig())
-		// Check if writer creation failed and cleanup is needed.
 		if err != nil {
-			// Ignore close error since we're returning a different error
 			_ = c.stdout.Close()
-			// Return nil capture and propagate the stderr writer creation error.
+
 			return nil, err
 		}
 		c.stderr = writer
 	} else {
-		// Else use a no-op closer wrapping os.Stderr for passthrough mode.
 		c.stderr = &nopCloser{os.Stderr}
 	}
 
-	// Return the fully initialized capture instance with no error.
 	return c, nil
 }
 
@@ -95,7 +86,6 @@ func NewCapture(serviceName string, cfg GetServiceLogPather, svcCfg serviceLoggi
 // Returns:
 //   - io.Writer: the stdout writer instance.
 func (c *Capture) Stdout() io.Writer {
-	// Return the configured stdout writer for the capture.
 	return c.stdout
 }
 
@@ -105,7 +95,6 @@ func (c *Capture) Stdout() io.Writer {
 // Returns:
 //   - io.Writer: the stderr writer instance.
 func (c *Capture) Stderr() io.Writer {
-	// Return the configured stderr writer for the capture.
 	return c.stderr
 }
 
@@ -116,25 +105,20 @@ func (c *Capture) Stderr() io.Writer {
 //   - error: the first error encountered during close operations, if any.
 func (c *Capture) Close() error {
 	c.mu.Lock()
-	// Defer unlocking the mutex to ensure it is released on function exit.
 	defer c.mu.Unlock()
 
-	// Check if the capture has already been closed to prevent double-close.
 	if c.closed {
-		// Return nil since already closed successfully.
 		return nil
 	}
 	c.closed = true
 
 	var firstErr error
-	// Check if stdout close returns an error and capture it.
 	if err := c.stdout.Close(); err != nil && firstErr == nil {
 		firstErr = err
 	}
-	// Check if stderr close returns an error and capture it.
 	if err := c.stderr.Close(); err != nil && firstErr == nil {
 		firstErr = err
 	}
-	// Return the first error encountered, or nil if both closed successfully.
+
 	return firstErr
 }

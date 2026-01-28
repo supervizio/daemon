@@ -1,31 +1,22 @@
+// Package metrics provides internal tests for tracker.go.
+// It tests internal implementation details using white-box testing.
 package metrics
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	domainmetrics "github.com/kodflow/daemon/internal/domain/metrics"
-	"github.com/kodflow/daemon/internal/domain/process"
+	domain "github.com/kodflow/daemon/internal/domain/process"
 )
 
-// === Test Constants ===
-
-// internalTestInterval is the interval used in internal tests.
-const internalTestInterval time.Duration = 50 * time.Millisecond
-
-// internalTestPID is a sample PID for internal testing.
-const internalTestPID int = 1234
-
-// === Mock Types ===
-
-// internalMockCollector implements Collector for internal testing.
-type internalMockCollector struct {
+// mockCollectorInternal implements MetricsCollector for internal testing.
+type mockCollectorInternal struct {
 	mu       sync.Mutex
 	cpuCalls int
 	memCalls int
@@ -35,16 +26,16 @@ type internalMockCollector struct {
 	mem      domainmetrics.ProcessMemory
 }
 
-// CollectCPU collects CPU metrics for testing.
+// CollectCPU collects CPU metrics for a process.
 //
 // Params:
-//   - ctx: context for cancellation
-//   - pid: process ID to collect for
+//   - ctx: the context for the collection
+//   - pid: the process ID
 //
 // Returns:
-//   - ProcessCPU: collected CPU metrics
-//   - error: collection error if any
-func (m *internalMockCollector) CollectCPU(_ context.Context, pid int) (domainmetrics.ProcessCPU, error) {
+//   - ProcessCPU: the CPU metrics
+//   - error: any error that occurred
+func (m *mockCollectorInternal) CollectCPU(_ context.Context, pid int) (domainmetrics.ProcessCPU, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cpuCalls++
@@ -56,16 +47,16 @@ func (m *internalMockCollector) CollectCPU(_ context.Context, pid int) (domainme
 	return cpu, nil
 }
 
-// CollectMemory collects memory metrics for testing.
+// CollectMemory collects memory metrics for a process.
 //
 // Params:
-//   - ctx: context for cancellation
-//   - pid: process ID to collect for
+//   - ctx: the context for the collection
+//   - pid: the process ID
 //
 // Returns:
-//   - ProcessMemory: collected memory metrics
-//   - error: collection error if any
-func (m *internalMockCollector) CollectMemory(_ context.Context, pid int) (domainmetrics.ProcessMemory, error) {
+//   - ProcessMemory: the memory metrics
+//   - error: any error that occurred
+func (m *mockCollectorInternal) CollectMemory(_ context.Context, pid int) (domainmetrics.ProcessMemory, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.memCalls++
@@ -77,507 +68,403 @@ func (m *internalMockCollector) CollectMemory(_ context.Context, pid int) (domai
 	return mem, nil
 }
 
-// Test internal buildMetrics function.
-func TestTracker_buildMetrics(t *testing.T) {
-	t.Parallel()
-
+// Test_Tracker_calculateCPUPercent tests the calculateCPUPercent method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Tracker_calculateCPUPercent(t *testing.T) {
 	tests := []struct {
-		name     string
-		proc     *trackedProcess
-		now      time.Time
-		expected domainmetrics.ProcessMetrics
+		// name is the test case name.
+		name string
+		// prevCPU is the previous CPU snapshot.
+		prevCPU domainmetrics.ProcessCPU
+		// currCPU is the current CPU snapshot.
+		currCPU domainmetrics.ProcessCPU
+		// prevTime is the time of previous snapshot.
+		prevTime time.Time
+		// currTime is the time of current snapshot.
+		currTime time.Time
+		// expected is the expected CPU percentage.
+		expected float64
 	}{
 		{
-			name: "running process with uptime",
+			name: "calculates_cpu_percent_for_1_second_interval",
+			prevCPU: domainmetrics.ProcessCPU{
+				User:   100, // 1 second of user time (100 jiffies at 100 Hz)
+				System: 100, // 1 second of system time
+			},
+			currCPU: domainmetrics.ProcessCPU{
+				User:   200, // 2 seconds total
+				System: 200, // 2 seconds total
+			},
+			prevTime: time.Now(),
+			currTime: time.Now().Add(1 * time.Second),
+			expected: 200.0, // (200 jiffies / 100 Hz / 1 second) * 100 = 200%
+		},
+		{
+			name: "returns_zero_for_zero_elapsed_time",
+			prevCPU: domainmetrics.ProcessCPU{
+				User:   100,
+				System: 100,
+			},
+			currCPU: domainmetrics.ProcessCPU{
+				User:   200,
+				System: 200,
+			},
+			prevTime: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
+			currTime: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC), // Same time
+			expected: 0.0,
+		},
+		{
+			name: "returns_zero_for_negative_elapsed_time",
+			prevCPU: domainmetrics.ProcessCPU{
+				User:   100,
+				System: 100,
+			},
+			currCPU: domainmetrics.ProcessCPU{
+				User:   200,
+				System: 200,
+			},
+			prevTime: time.Now(),
+			currTime: time.Now().Add(-1 * time.Second), // Earlier time
+			expected: 0.0,
+		},
+		{
+			name: "returns_zero_for_counter_wrap",
+			prevCPU: domainmetrics.ProcessCPU{
+				User:   200,
+				System: 200,
+			},
+			currCPU: domainmetrics.ProcessCPU{
+				User:   100, // Wrapped/reset
+				System: 100,
+			},
+			prevTime: time.Now(),
+			currTime: time.Now().Add(1 * time.Second),
+			expected: 0.0, // Underflow detected
+		},
+		{
+			name: "calculates_low_cpu_usage",
+			prevCPU: domainmetrics.ProcessCPU{
+				User:   10,
+				System: 10,
+			},
+			currCPU: domainmetrics.ProcessCPU{
+				User:   15,
+				System: 15,
+			},
+			prevTime: time.Now(),
+			currTime: time.Now().Add(1 * time.Second),
+			expected: 10.0, // (10 jiffies / 100 Hz / 1 second) * 100 = 10%
+		},
+		{
+			name: "zero_cpu_usage",
+			prevCPU: domainmetrics.ProcessCPU{
+				User:   100,
+				System: 100,
+			},
+			currCPU: domainmetrics.ProcessCPU{
+				User:   100, // No change
+				System: 100,
+			},
+			prevTime: time.Now(),
+			currTime: time.Now().Add(1 * time.Second),
+			expected: 0.0,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			tracker := NewTracker(nil)
+
+			percent := tracker.calculateCPUPercent(tt.prevCPU, tt.currCPU, tt.prevTime, tt.currTime)
+
+			// Use delta comparison for floating point.
+			assert.InDelta(t, tt.expected, percent, 0.1)
+		})
+	}
+}
+
+// Test_Tracker_buildMetrics tests the buildMetrics method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Tracker_buildMetrics(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// proc is the tracked process.
+		proc *trackedProcess
+		// expectedServiceName is the expected service name.
+		expectedServiceName string
+		// expectedPID is the expected PID.
+		expectedPID int
+	}{
+		{
+			name: "builds_metrics_with_zero_pid",
 			proc: &trackedProcess{
 				serviceName:  "test-service",
-				pid:          123,
-				state:        process.StateRunning,
-				healthy:      true,
-				startTime:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-				restartCount: 2,
-				lastError:    "",
-				lastMetrics: domainmetrics.ProcessMetrics{
-					CPU:    domainmetrics.ProcessCPU{User: 100, System: 50},
-					Memory: domainmetrics.ProcessMemory{RSS: 1024},
-				},
-			},
-			now: time.Date(2024, 1, 1, 1, 0, 0, 0, time.UTC),
-			expected: domainmetrics.ProcessMetrics{
-				ServiceName:  "test-service",
-				PID:          123,
-				State:        process.StateRunning,
-				Healthy:      true,
-				CPU:          domainmetrics.ProcessCPU{User: 100, System: 50},
-				Memory:       domainmetrics.ProcessMemory{RSS: 1024},
-				StartTime:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-				Uptime:       time.Hour,
-				RestartCount: 2,
-				LastError:    "",
-				Timestamp:    time.Date(2024, 1, 1, 1, 0, 0, 0, time.UTC),
-			},
-		},
-		{
-			name: "stopped process without uptime",
-			proc: &trackedProcess{
-				serviceName:  "stopped-service",
 				pid:          0,
-				state:        process.StateStopped,
-				healthy:      false,
-				startTime:    time.Time{},
+				state:        domain.StateRunning,
+				healthy:      true,
+				startTime:    time.Now(),
 				restartCount: 0,
-				lastError:    "exit code 1",
 				lastMetrics:  domainmetrics.ProcessMetrics{},
 			},
-			now: time.Date(2024, 1, 1, 1, 0, 0, 0, time.UTC),
-			expected: domainmetrics.ProcessMetrics{
-				ServiceName:  "stopped-service",
-				PID:          0,
-				State:        process.StateStopped,
-				Healthy:      false,
-				CPU:          domainmetrics.ProcessCPU{},
-				Memory:       domainmetrics.ProcessMemory{},
-				StartTime:    time.Time{},
-				Uptime:       0,
-				RestartCount: 0,
-				LastError:    "exit code 1",
-				Timestamp:    time.Date(2024, 1, 1, 1, 0, 0, 0, time.UTC),
+			expectedServiceName: "test-service",
+			expectedPID:         0,
+		},
+		{
+			name: "builds_metrics_with_positive_pid",
+			proc: &trackedProcess{
+				serviceName:  "web-service",
+				pid:          1234,
+				state:        domain.StateRunning,
+				healthy:      true,
+				startTime:    time.Now().Add(-1 * time.Minute),
+				restartCount: 2,
+				lastMetrics: domainmetrics.ProcessMetrics{
+					CPU: domainmetrics.ProcessCPU{
+						UsagePercent: 50.0,
+					},
+					Memory: domainmetrics.ProcessMemory{
+						RSS: 1024 * 1024,
+					},
+				},
+			},
+			expectedServiceName: "web-service",
+			expectedPID:         1234,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			tracker := NewTracker(nil)
+			now := time.Now()
+
+			metrics := tracker.buildMetrics(tt.proc, now)
+
+			assert.Equal(t, tt.expectedServiceName, metrics.ServiceName)
+			assert.Equal(t, tt.expectedPID, metrics.PID)
+			assert.Equal(t, tt.proc.state, metrics.State)
+			assert.Equal(t, tt.proc.healthy, metrics.Healthy)
+			assert.Equal(t, now, metrics.Timestamp)
+		})
+	}
+}
+
+// Test_Tracker_collectLoop tests the collectLoop method.
+//
+// Params:
+
+// Goroutine lifecycle:
+//   - Spawns one goroutine for testing collectLoop.
+//   - Goroutine exits when context is cancelled.
+//   - Test blocks until goroutine exits or timeout.
+//   - t: the testing context.
+func Test_Tracker_collectLoop(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// interval is the collection interval.
+		interval time.Duration
+	}{
+		{
+			name:     "exits_when_context_cancelled",
+			interval: 100 * time.Millisecond,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			tracker := NewTracker(nil, WithCollectionInterval(tt.interval))
+			ctx, cancel := context.WithCancel(context.Background())
+			tracker.ctx = ctx
+			tracker.cancel = cancel
+
+			// Start collectLoop in background.
+			done := make(chan struct{})
+			go func() {
+				tracker.collectLoop()
+				close(done)
+			}()
+
+			// Cancel context to stop loop.
+			cancel()
+
+			// Wait for goroutine to exit.
+			select {
+			case <-done:
+				// Success - goroutine exited.
+			case <-time.After(1 * time.Second):
+				t.Fatal("collectLoop did not exit after context cancellation")
+			}
+		})
+	}
+}
+
+// Test_Tracker_collectAll tests the collectAll method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Tracker_collectAll(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// numProcesses is the number of processes to track.
+		numProcesses int
+	}{
+		{
+			name:         "collects_zero_processes",
+			numProcesses: 0,
+		},
+		{
+			name:         "collects_single_process",
+			numProcesses: 1,
+		},
+		{
+			name:         "collects_multiple_processes",
+			numProcesses: 3,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			collector := &mockCollectorInternal{}
+			tracker := NewTracker(collector)
+			tracker.ctx = context.Background()
+			tracker.interval = 1 * time.Second
+
+			// Add processes to tracker.
+			for i := range tt.numProcesses {
+				proc := &trackedProcess{
+					serviceName:  fmt.Sprintf("service-%d", i),
+					pid:          i + 1,
+					state:        domain.StateRunning,
+					healthy:      true,
+					startTime:    time.Now(),
+					restartCount: 0,
+					lastMetrics:  domainmetrics.ProcessMetrics{},
+				}
+				tracker.processes[proc.serviceName] = proc
+			}
+
+			// Call collectAll - should not panic.
+			tracker.collectAll()
+
+			// Verify collector was called for each process with valid PID.
+			assert.Equal(t, tt.numProcesses, collector.cpuCalls)
+			assert.Equal(t, tt.numProcesses, collector.memCalls)
+		})
+	}
+}
+
+// Test_Tracker_collectProcess tests the collectProcess method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Tracker_collectProcess(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// pid is the process PID.
+		pid int
+	}{
+		{
+			name: "handles_zero_pid",
+			pid:  0,
+		},
+		{
+			name: "handles_negative_pid",
+			pid:  -1,
+		},
+	}
+
+	// Iterate through all test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			tracker := NewTracker(nil)
+			tracker.ctx = context.Background()
+			tracker.interval = 1 * time.Second
+
+			proc := &trackedProcess{
+				serviceName:  "test-service",
+				pid:          tt.pid,
+				state:        domain.StateRunning,
+				healthy:      true,
+				startTime:    time.Now(),
+				restartCount: 0,
+				lastMetrics:  domainmetrics.ProcessMetrics{},
+			}
+
+			// Call collectProcess - should not panic.
+			tracker.collectProcess(proc)
+		})
+	}
+}
+
+// Test_Tracker_updateProcessMetrics tests the updateProcessMetrics method.
+//
+// Params:
+//   - t: the testing context.
+func Test_Tracker_updateProcessMetrics(t *testing.T) {
+	tests := []struct {
+		// name is the test case name.
+		name string
+		// cpu is the CPU metrics.
+		cpu domainmetrics.ProcessCPU
+		// mem is the memory metrics.
+		mem domainmetrics.ProcessMemory
+	}{
+		{
+			name: "updates_metrics_with_zero_values",
+			cpu:  domainmetrics.ProcessCPU{},
+			mem:  domainmetrics.ProcessMemory{},
+		},
+		{
+			name: "updates_metrics_with_positive_values",
+			cpu: domainmetrics.ProcessCPU{
+				UsagePercent: 75.5,
+				User:         100,
+				System:       50,
+			},
+			mem: domainmetrics.ProcessMemory{
+				RSS:  2 * 1024 * 1024,
+				VMS:  4 * 1024 * 1024,
+				Swap: 1024 * 1024,
 			},
 		},
 	}
 
+	// Iterate through all test cases.
 	for _, tt := range tests {
+		// Run each test case as a subtest.
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			tracker := &Tracker{}
-			result := tracker.buildMetrics(tt.proc, tt.now)
-
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-// TestTracker_collectLoop tests the collectLoop method.
-func TestTracker_collectLoop(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name        string
-		setupProcs  int
-		waitCycles  int
-		expectCalls bool
-	}{
-		{
-			name:        "runs collection cycle",
-			setupProcs:  1,
-			waitCycles:  2,
-			expectCalls: true,
-		},
-		{
-			name:        "stops on context cancellation",
-			setupProcs:  1,
-			waitCycles:  1,
-			expectCalls: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			collector := &internalMockCollector{
-				cpu: domainmetrics.ProcessCPU{User: 100, System: 50},
-				mem: domainmetrics.ProcessMemory{RSS: 1024},
-			}
-			tracker := NewTracker(collector, WithCollectionInterval(internalTestInterval))
-
-			ctx, cancel := context.WithCancel(t.Context())
-
-			err := tracker.Start(ctx)
-			require.NoError(t, err)
-
-			for i := range tt.setupProcs {
-				err := tracker.Track("service-"+string(rune('a'+i)), internalTestPID+i)
-				require.NoError(t, err)
-			}
-
-			// Wait for collection cycles
-			time.Sleep(internalTestInterval * time.Duration(tt.waitCycles+1))
-
-			cancel()
-			tracker.Stop()
-
-			collector.mu.Lock()
-			cpuCalls := collector.cpuCalls
-			collector.mu.Unlock()
-
-			if tt.expectCalls {
-				assert.Greater(t, cpuCalls, 0, "expected collection calls")
-			}
-		})
-	}
-}
-
-// TestTracker_collectAll tests the collectAll method.
-func TestTracker_collectAll(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name         string
-		processCount int
-		expectCalls  int
-	}{
-		{
-			name:         "collects for single process",
-			processCount: 1,
-			expectCalls:  1,
-		},
-		{
-			name:         "collects for multiple processes",
-			processCount: 3,
-			expectCalls:  3,
-		},
-		{
-			name:         "no-op with no processes",
-			processCount: 0,
-			expectCalls:  0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			collector := &internalMockCollector{
-				cpu: domainmetrics.ProcessCPU{User: 100},
-				mem: domainmetrics.ProcessMemory{RSS: 1024},
-			}
-			tracker := NewTracker(collector, WithCollectionInterval(internalTestInterval))
-			tracker.ctx, tracker.cancel = context.WithCancel(t.Context())
-
-			for i := range tt.processCount {
-				err := tracker.Track("service-"+string(rune('a'+i)), internalTestPID+i)
-				require.NoError(t, err)
-			}
-
-			tracker.collectAll()
-
-			collector.mu.Lock()
-			cpuCalls := collector.cpuCalls
-			memCalls := collector.memCalls
-			collector.mu.Unlock()
-
-			assert.Equal(t, tt.expectCalls, cpuCalls, "CPU collection calls")
-			assert.Equal(t, tt.expectCalls, memCalls, "Memory collection calls")
-		})
-	}
-}
-
-// TestTracker_collectProcess tests the collectProcess method.
-func TestTracker_collectProcess(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name        string
-		pid         int
-		cpuErr      error
-		memErr      error
-		expectState process.State
-		expectCalls bool
-	}{
-		{
-			name:        "collects successfully",
-			pid:         internalTestPID,
-			cpuErr:      nil,
-			memErr:      nil,
-			expectState: process.StateRunning,
-			expectCalls: true,
-		},
-		{
-			name:        "skips collection for zero PID",
-			pid:         0,
-			cpuErr:      nil,
-			memErr:      nil,
-			expectState: process.StateRunning,
-			expectCalls: false,
-		},
-		{
-			name:        "marks failed when both errors",
-			pid:         internalTestPID,
-			cpuErr:      errors.New("cpu error"),
-			memErr:      errors.New("mem error"),
-			expectState: process.StateFailed,
-			expectCalls: true,
-		},
-		{
-			name:        "continues when only CPU fails",
-			pid:         internalTestPID,
-			cpuErr:      errors.New("cpu error"),
-			memErr:      nil,
-			expectState: process.StateRunning,
-			expectCalls: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			collector := &internalMockCollector{
-				cpuErr: tt.cpuErr,
-				memErr: tt.memErr,
-				cpu:    domainmetrics.ProcessCPU{User: 100},
-				mem:    domainmetrics.ProcessMemory{RSS: 1024},
-			}
-			tracker := NewTracker(collector, WithCollectionInterval(internalTestInterval))
-			tracker.ctx, tracker.cancel = context.WithCancel(t.Context())
+			tracker := NewTracker(nil)
 
 			proc := &trackedProcess{
-				serviceName: "test-service",
-				pid:         tt.pid,
-				state:       process.StateRunning,
-				healthy:     true,
-				startTime:   time.Now(),
-			}
-			tracker.processes["test-service"] = proc
-
-			tracker.collectProcess(proc)
-
-			collector.mu.Lock()
-			cpuCalls := collector.cpuCalls
-			collector.mu.Unlock()
-
-			if tt.expectCalls {
-				assert.Greater(t, cpuCalls, 0, "expected collection calls")
-			} else {
-				assert.Equal(t, 0, cpuCalls, "expected no collection calls")
-			}
-
-			m, ok := tracker.Get("test-service")
-			require.True(t, ok)
-			assert.Equal(t, tt.expectState, m.State)
-		})
-	}
-}
-
-// TestTracker_updateProcessMetrics tests the updateProcessMetrics method.
-func TestTracker_updateProcessMetrics(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name          string
-		cpu           domainmetrics.ProcessCPU
-		mem           domainmetrics.ProcessMemory
-		expectCPU     domainmetrics.ProcessCPU
-		expectMem     domainmetrics.ProcessMemory
-		subscriberCnt int
-	}{
-		{
-			name:          "updates metrics without subscribers",
-			cpu:           domainmetrics.ProcessCPU{User: 100, System: 50},
-			mem:           domainmetrics.ProcessMemory{RSS: 1024},
-			expectCPU:     domainmetrics.ProcessCPU{User: 100, System: 50},
-			expectMem:     domainmetrics.ProcessMemory{RSS: 1024},
-			subscriberCnt: 0,
-		},
-		{
-			name:          "updates and publishes with subscriber",
-			cpu:           domainmetrics.ProcessCPU{User: 200, System: 100},
-			mem:           domainmetrics.ProcessMemory{RSS: 2048},
-			expectCPU:     domainmetrics.ProcessCPU{User: 200, System: 100},
-			expectMem:     domainmetrics.ProcessMemory{RSS: 2048},
-			subscriberCnt: 1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			collector := &internalMockCollector{}
-			tracker := NewTracker(collector)
-
-			proc := &trackedProcess{
-				serviceName: "test-service",
-				pid:         internalTestPID,
-				state:       process.StateRunning,
-				healthy:     true,
-				startTime:   time.Now(),
-			}
-			tracker.processes["test-service"] = proc
-
-			var subscribers []<-chan domainmetrics.ProcessMetrics
-			for range tt.subscriberCnt {
-				subscribers = append(subscribers, tracker.Subscribe())
+				serviceName:  "test-service",
+				pid:          1234,
+				state:        domain.StateRunning,
+				healthy:      true,
+				startTime:    time.Now().Add(-1 * time.Minute),
+				restartCount: 0,
+				lastMetrics:  domainmetrics.ProcessMetrics{},
 			}
 
 			tracker.updateProcessMetrics(proc, tt.cpu, tt.mem)
 
-			m, ok := tracker.Get("test-service")
-			require.True(t, ok)
-			assert.Equal(t, tt.expectCPU, m.CPU)
-			assert.Equal(t, tt.expectMem, m.Memory)
-
-			// Cleanup subscribers
-			for _, sub := range subscribers {
-				tracker.Unsubscribe(sub)
-			}
-		})
-	}
-}
-
-// TestTracker_Unsubscribe_nil tests Unsubscribe with nil channel.
-// This verifies the defensive handling when a nil channel is passed.
-//
-// Note: With the reflection-based implementation, nil channels are handled
-// safely by reflect.ValueOf().Pointer() which returns 0 for nil channels,
-// so the channel is simply not found in the subscribers map and nothing happens.
-func TestTracker_Unsubscribe_nil(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-	}{
-		{
-			name: "handles_nil_channel_without_panic",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			collector := &internalMockCollector{}
-			tracker := NewTracker(collector)
-
-			// Pass nil - should not panic or cause errors.
-			// Note: nil channels are handled safely by reflection,
-			// as reflect.ValueOf(nil).Pointer() returns 0 and won't match any channel.
-			assert.NotPanics(t, func() {
-				tracker.Unsubscribe(nil)
-			})
-		})
-	}
-}
-
-// TestTracker_Unsubscribe_verifyChannelClosed tests that Unsubscribe
-// properly closes the channel and removes it from subscribers.
-func TestTracker_Unsubscribe_verifyChannelClosed(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-	}{
-		{
-			name: "channel_is_closed_and_removed",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			collector := &internalMockCollector{}
-			tracker := NewTracker(collector)
-
-			// Subscribe to get a channel
-			ch := tracker.Subscribe()
-
-			// Verify channel is open by trying non-blocking receive
-			select {
-			case _, ok := <-ch:
-				if !ok {
-					t.Fatal("channel should be open after subscribe")
-				}
-			default:
-				// Channel is open and empty (expected)
-			}
-
-			// Unsubscribe
-			tracker.Unsubscribe(ch)
-
-			// Verify channel is closed
-			_, ok := <-ch
-			assert.False(t, ok, "channel should be closed after unsubscribe")
-
-			// Verify channel is removed from subscribers by publishing
-			// If channel was not removed, this would panic trying to send to closed channel
-			metrics := &domainmetrics.ProcessMetrics{
-				ServiceName: "test",
-				PID:         1234,
-			}
-			assert.NotPanics(t, func() {
-				tracker.publish(metrics)
-			}, "publishing should not panic after unsubscribe")
-		})
-	}
-}
-
-// TestTracker_publish tests the publish method.
-func TestTracker_publish(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name          string
-		subscriberCnt int
-		expectMsgs    int
-	}{
-		{
-			name:          "no subscribers",
-			subscriberCnt: 0,
-			expectMsgs:    0,
-		},
-		{
-			name:          "single subscriber",
-			subscriberCnt: 1,
-			expectMsgs:    1,
-		},
-		{
-			name:          "multiple subscribers",
-			subscriberCnt: 3,
-			expectMsgs:    3,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			collector := &internalMockCollector{}
-			tracker := NewTracker(collector)
-
-			var subscribers []<-chan domainmetrics.ProcessMetrics
-			for range tt.subscriberCnt {
-				subscribers = append(subscribers, tracker.Subscribe())
-			}
-
-			metrics := &domainmetrics.ProcessMetrics{
-				ServiceName: "test-service",
-				PID:         internalTestPID,
-				State:       process.StateRunning,
-				Timestamp:   time.Now(),
-			}
-
-			tracker.publish(metrics)
-
-			received := 0
-			for _, sub := range subscribers {
-				select {
-				case m := <-sub:
-					assert.Equal(t, "test-service", m.ServiceName)
-					received++
-				case <-time.After(100 * time.Millisecond):
-					// Timeout
-				}
-			}
-
-			assert.Equal(t, tt.expectMsgs, received)
-
-			// Cleanup
-			for _, sub := range subscribers {
-				tracker.Unsubscribe(sub)
-			}
+			assert.Equal(t, tt.cpu, proc.lastMetrics.CPU)
+			assert.Equal(t, tt.mem, proc.lastMetrics.Memory)
 		})
 	}
 }

@@ -29,6 +29,5 @@ type Spec struct {
 // Returns:
 //   - Spec: a configured process specification ready for execution
 func NewSpec(params SpecParams) Spec {
-	// Convert params to Spec (identical struct layouts).
 	return Spec(params)
 }

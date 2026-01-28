@@ -27,7 +27,6 @@ type Partition struct {
 // Returns:
 //   - *Partition: initialized partition struct
 func NewPartition(device, mountpoint, fsType string, options []string) *Partition {
-	// Return initialized partition struct with provided values.
 	return &Partition{
 		Device:     device,
 		Mountpoint: mountpoint,

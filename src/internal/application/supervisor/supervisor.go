@@ -5,12 +5,13 @@ package supervisor
 import (
 	"context"
 	"fmt"
-	"log"
+	"sort"
 	"sync"
 
 	appconfig "github.com/kodflow/daemon/internal/application/config"
 	apphealth "github.com/kodflow/daemon/internal/application/health"
 	applifecycle "github.com/kodflow/daemon/internal/application/lifecycle"
+	appmetrics "github.com/kodflow/daemon/internal/application/metrics"
 	domainconfig "github.com/kodflow/daemon/internal/domain/config"
 	domainhealth "github.com/kodflow/daemon/internal/domain/health"
 	domainlifecycle "github.com/kodflow/daemon/internal/domain/lifecycle"
@@ -42,7 +43,8 @@ var (
 
 // EventHandler is a callback function for process events.
 // It is called when a service emits a lifecycle event.
-type EventHandler func(serviceName string, event *domain.Event)
+// The stats parameter contains an atomic snapshot of service statistics.
+type EventHandler func(serviceName string, event *domain.Event, stats *ServiceStatsSnapshot)
 
 // ErrorHandler is a callback function for handling non-fatal errors.
 // These errors occur in recovery/cleanup paths where the supervisor
@@ -94,6 +96,8 @@ type Supervisor struct {
 	errorHandler ErrorHandler
 	// stats holds per-service statistics.
 	stats map[string]*ServiceStats
+	// metricsTracker tracks process CPU and memory metrics.
+	metricsTracker appmetrics.ProcessTracker
 }
 
 // NewSupervisor creates a new supervisor from configuration.
@@ -110,7 +114,6 @@ type Supervisor struct {
 func NewSupervisor(cfg *domainconfig.Config, loader appconfig.Loader, executor domain.Executor, reaper domainlifecycle.Reaper) (*Supervisor, error) {
 	// Validate the configuration before creating the supervisor.
 	if err := cfg.Validate(); err != nil {
-		// Return nil supervisor and validation error.
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
@@ -125,14 +128,12 @@ func NewSupervisor(cfg *domainconfig.Config, loader appconfig.Loader, executor d
 		stats:          make(map[string]*ServiceStats, len(cfg.Services)),
 	}
 
-	// Create a manager for each configured service.
 	for i := range cfg.Services {
 		svc := &cfg.Services[i]
 		s.managers[svc.Name] = applifecycle.NewManager(svc, executor)
 		s.stats[svc.Name] = NewServiceStats()
 	}
 
-	// Return the configured supervisor.
 	return s, nil
 }
 
@@ -151,7 +152,6 @@ func NewSupervisor(cfg *domainconfig.Config, loader appconfig.Loader, executor d
 func (s *Supervisor) Start(ctx context.Context) error {
 	// Initialize supervisor state and context.
 	if err := s.initializeStart(ctx); err != nil {
-		// Return initialization error.
 		return err
 	}
 
@@ -160,14 +160,12 @@ func (s *Supervisor) Start(ctx context.Context) error {
 
 	// Start all managed services.
 	if err := s.startAllServices(); err != nil {
-		// Return service start error.
 		return err
 	}
 
 	// Start monitoring goroutines for each service.
 	s.startMonitoringGoroutines()
 
-	// Create and start health monitors.
 	s.startHealthMonitors()
 
 	// Mark supervisor as running.
@@ -175,7 +173,6 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	s.state = StateRunning
 	s.mu.Unlock()
 
-	// Return nil on successful start.
 	return nil
 }
 
@@ -190,16 +187,13 @@ func (s *Supervisor) initializeStart(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Check if already running.
 	if s.state != StateStopped {
 		// Return error when supervisor is already running.
 		return ErrAlreadyRunning
 	}
 
-	// Set state and create cancellable context.
 	s.state = StateStarting
 	s.ctx, s.cancel = context.WithCancel(ctx)
-	// Return nil on successful initialization.
 	return nil
 }
 
@@ -231,7 +225,6 @@ func (s *Supervisor) startAllServices() error {
 			return fmt.Errorf("failed to start service %s: %w", name, err)
 		}
 	}
-	// Return nil when all services started successfully.
 	return nil
 }
 
@@ -246,7 +239,6 @@ func (s *Supervisor) startMonitoringGoroutines() {
 
 // startHealthMonitors creates and starts health monitors for services with probes.
 func (s *Supervisor) startHealthMonitors() {
-	// Create and start health monitor for each service.
 	for i := range s.config.Services {
 		svc := &s.config.Services[i]
 		monitor := s.createHealthMonitor(svc)
@@ -268,7 +260,6 @@ func (s *Supervisor) startHealthMonitors() {
 //   - error: always nil, provided for interface compatibility.
 func (s *Supervisor) Stop() error {
 	s.mu.Lock()
-	// Check if the supervisor is running.
 	if s.state != StateRunning {
 		s.mu.Unlock()
 		// Return nil when not running.
@@ -298,7 +289,6 @@ func (s *Supervisor) Stop() error {
 	s.state = StateStopped
 	s.mu.Unlock()
 
-	// Return nil on successful stop.
 	return nil
 }
 
@@ -331,13 +321,11 @@ func (s *Supervisor) stopAll() {
 // Returns:
 //   - error: an error if the reload fails.
 func (s *Supervisor) Reload() error {
-	// Check state and get config path without holding lock during I/O.
 	s.mu.RLock()
 	state := s.state
 	configPath := s.config.ConfigPath
 	s.mu.RUnlock()
 
-	// Check if the supervisor is running.
 	if state != StateRunning {
 		// Return error when not running.
 		return ErrNotRunning
@@ -365,7 +353,6 @@ func (s *Supervisor) Reload() error {
 	s.removeDeletedServices(newCfg)
 
 	s.config = newCfg
-	// Return nil on successful reload.
 	return nil
 }
 
@@ -414,7 +401,6 @@ func (s *Supervisor) updateServices(newCfg *domainconfig.Config) {
 //   - newCfg: the new service configuration.
 func (s *Supervisor) removeDeletedServices(newCfg *domainconfig.Config) {
 	newServices := make(map[string]bool, len(newCfg.Services))
-	// Build a map of services in the new configuration.
 	for i := range newCfg.Services {
 		newServices[newCfg.Services[i].Name] = true
 	}
@@ -467,37 +453,140 @@ func (s *Supervisor) monitorService(name string, mgr Eventser) {
 //   - event: the process event.
 func (s *Supervisor) handleEvent(name string, event *domain.Event) {
 	s.mu.Lock()
-	// Get or create stats for this service.
+	stats := s.getOrCreateStats(name)
+
+	s.updateStatsForEvent(stats, event)
+	s.updateHealthMonitor(name, event)
+	s.updateMetricsTracker(name, event)
+
+	statsSnap := s.getStatsSnapshot(stats)
+	s.mu.Unlock()
+
+	s.callEventHandler(name, event, statsSnap)
+}
+
+// getOrCreateStats gets or creates stats for a service.
+//
+// Params:
+//   - name: the service name.
+//
+// Returns:
+//   - *ServiceStats: the service statistics.
+func (s *Supervisor) getOrCreateStats(name string) *ServiceStats {
 	stats, ok := s.stats[name]
-	// Create new stats entry if service not tracked yet.
 	if !ok {
 		stats = NewServiceStats()
 		s.stats[name] = stats
 	}
+	return stats
+}
 
-	// Update statistics based on event type.
+// updateStatsForEvent updates statistics based on event type.
+//
+// Params:
+//   - stats: the service statistics to update.
+//   - event: the process event.
+func (s *Supervisor) updateStatsForEvent(stats *ServiceStats, event *domain.Event) {
+	// Increment counters based on event type.
 	switch event.Type {
-	// Started: service successfully started.
+	// Process started.
 	case domain.EventStarted:
-		stats.StartCount++
-	// Stopped: service stopped normally.
+		stats.IncrementStart()
+	// Process stopped cleanly.
 	case domain.EventStopped:
-		stats.StopCount++
-	// Failed: service exited with error.
+		stats.IncrementStop()
+	// Process failed.
 	case domain.EventFailed:
-		stats.FailCount++
-	// Restarting: service is restarting after exit.
+		stats.IncrementFail()
+	// Process restarting.
 	case domain.EventRestarting:
-		stats.RestartCount++
-	// Health events: tracked by health monitor, not stats.
+		stats.IncrementRestart()
+	// Restart attempts exhausted.
+	case domain.EventExhausted:
+		stats.IncrementFail()
+	// Health events are tracked separately.
 	case domain.EventHealthy, domain.EventUnhealthy:
 		// Health events are tracked by the health monitor, not stats.
 	}
-	s.mu.Unlock()
+}
 
-	// Call user event handler if registered.
+// updateHealthMonitor updates health monitor process state if monitor exists.
+//
+// Params:
+//   - name: the service name.
+//   - event: the process event.
+func (s *Supervisor) updateHealthMonitor(name string, event *domain.Event) {
+	monitor, ok := s.healthMonitors[name]
+	// Skip if no health monitor configured.
+	if !ok {
+		// Not found.
+		return
+	}
+
+	switch event.Type {
+	case domain.EventStarted:
+		monitor.SetProcessState(domain.StateRunning)
+	case domain.EventStopped, domain.EventFailed, domain.EventExhausted:
+		monitor.SetProcessState(domain.StateStopped)
+	// No state change for these events.
+	case domain.EventRestarting, domain.EventHealthy, domain.EventUnhealthy:
+		// No state change needed.
+	}
+}
+
+// updateMetricsTracker updates metrics tracker if configured and event is relevant.
+//
+// Params:
+//   - name: the service name.
+//   - event: the process event.
+func (s *Supervisor) updateMetricsTracker(name string, event *domain.Event) {
+	// Skip if metrics tracking disabled.
+	if s.metricsTracker == nil {
+		// Metrics tracking disabled.
+		return
+	}
+
+	// Start or stop metrics tracking based on event.
+	switch event.Type {
+	// Start tracking process metrics.
+	case domain.EventStarted:
+		// Validate PID before tracking.
+		if event.PID > 0 {
+			_ = s.metricsTracker.Track(name, event.PID)
+		}
+	// Stop tracking metrics.
+	case domain.EventStopped, domain.EventFailed, domain.EventExhausted:
+		s.metricsTracker.Untrack(name)
+	// No metrics action needed.
+	case domain.EventRestarting, domain.EventHealthy, domain.EventUnhealthy:
+		// No action needed.
+	}
+}
+
+// getStatsSnapshot returns a snapshot pointer for the service stats.
+//
+// Params:
+//   - stats: the service statistics.
+//
+// Returns:
+//   - *ServiceStatsSnapshot: atomic snapshot pointer or nil.
+func (s *Supervisor) getStatsSnapshot(stats *ServiceStats) *ServiceStatsSnapshot {
+	if stats == nil {
+		// Return nil.
+		return nil
+	}
+	return stats.SnapshotPtr()
+}
+
+// callEventHandler calls user event handler if registered.
+//
+// Params:
+//   - name: the service name.
+//   - event: the process event.
+//   - statsSnap: the statistics snapshot.
+func (s *Supervisor) callEventHandler(name string, event *domain.Event, statsSnap *ServiceStatsSnapshot) {
 	if s.eventHandler != nil {
-		s.eventHandler(name, event)
+		s.eventHandler(name, event, statsSnap)
 	}
 }
 
@@ -536,6 +625,17 @@ func (s *Supervisor) SetProberFactory(factory apphealth.Creator) {
 	s.proberFactory = factory
 }
 
+// SetMetricsTracker sets the process metrics tracker.
+// When set, the supervisor will track CPU and memory usage per service.
+//
+// Params:
+//   - tracker: the metrics tracker to use.
+func (s *Supervisor) SetMetricsTracker(tracker appmetrics.ProcessTracker) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.metricsTracker = tracker
+}
+
 // createHealthMonitor creates a health monitor for a service if it has probes configured.
 //
 // Params:
@@ -544,19 +644,16 @@ func (s *Supervisor) SetProberFactory(factory apphealth.Creator) {
 // Returns:
 //   - *apphealth.ProbeMonitor: the health monitor if probes are configured, nil otherwise.
 func (s *Supervisor) createHealthMonitor(svc *domainconfig.ServiceConfig) *apphealth.ProbeMonitor {
-	// Check prerequisites for health monitoring.
 	if !s.hasConfiguredProbes(svc) || s.proberFactory == nil {
 		// Return nil when no probes configured or no factory available.
 		return nil
 	}
 
-	// Create and configure the health monitor.
 	monitor := apphealth.NewProbeMonitor(s.createProbeMonitorConfig(svc.Name))
 
 	// Add all listeners with probe bindings.
 	s.addListenersWithProbes(monitor, svc)
 
-	// Return the configured monitor.
 	return monitor
 }
 
@@ -576,7 +673,6 @@ func (s *Supervisor) hasConfiguredProbes(svc *domainconfig.ServiceConfig) bool {
 			return true
 		}
 	}
-	// Return false when no probes configured.
 	return false
 }
 
@@ -588,21 +684,43 @@ func (s *Supervisor) hasConfiguredProbes(svc *domainconfig.ServiceConfig) bool {
 // Returns:
 //   - apphealth.ProbeMonitorConfig: the monitor configuration with callbacks.
 func (s *Supervisor) createProbeMonitorConfig(serviceName string) apphealth.ProbeMonitorConfig {
-	// Build and return the monitor configuration.
 	return apphealth.ProbeMonitorConfig{
 		Factory: s.proberFactory,
 		OnStateChange: func(listenerName string, prevState, newState domainhealth.SubjectState, result domainhealth.CheckResult) {
-			// Log health state transition.
-			log.Printf("[health] service=%s listener=%s state=%s->%s success=%v latency=%s",
-				serviceName, listenerName, prevState, newState, result.Success, result.Latency)
+			// Health state transitions are tracked internally.
+			// Events are emitted via OnHealthy/OnUnhealthy callbacks.
+			_ = listenerName
+			_ = prevState
+			_ = newState
+			_ = result
 		},
 		OnUnhealthy: func(listenerName, reason string) {
-			// Log unhealthy transition and trigger restart.
-			log.Printf("[health] service=%s listener=%s unhealthy: %s - triggering restart",
-				serviceName, listenerName, reason)
-			// Trigger restart on health failure.
+			// Trigger restart on health failure (event emitted by restart logic).
+			_ = listenerName
+			_ = reason
+			// Attempt to restart the service on health failure.
 			if err := s.RestartOnHealthFailure(serviceName, reason); err != nil {
 				s.handleRecoveryError("health-restart", serviceName, err)
+			}
+		},
+		OnHealthy: func(listenerName string) {
+			// Emit healthy event when service becomes healthy.
+			_ = listenerName
+			// Call event handler if registered.
+			if s.eventHandler != nil {
+				s.mu.RLock()
+				stats, ok := s.stats[serviceName]
+				var statsSnap *ServiceStatsSnapshot
+				// Get stats snapshot if available.
+				if ok && stats != nil {
+					snap := stats.Snapshot()
+					statsSnap = &snap
+				}
+				s.mu.RUnlock()
+				event := &domain.Event{
+					Type: domain.EventHealthy,
+				}
+				s.eventHandler(serviceName, event, statsSnap)
 			}
 		},
 	}
@@ -622,7 +740,7 @@ func (s *Supervisor) addListenersWithProbes(monitor *apphealth.ProbeMonitor, svc
 			continue
 		}
 		// Add the listener with its probe binding.
-		s.addSingleListenerWithProbe(monitor, lc, svc.Name)
+		s.addSingleListenerWithProbe(monitor, lc)
 	}
 }
 
@@ -631,19 +749,14 @@ func (s *Supervisor) addListenersWithProbes(monitor *apphealth.ProbeMonitor, svc
 // Params:
 //   - monitor: the health monitor (minimal interface).
 //   - lc: the listener configuration.
-//   - serviceName: the name of the service for logging.
-func (s *Supervisor) addSingleListenerWithProbe(monitor AddListenerWithBindinger, lc *domainconfig.ListenerConfig, serviceName string) {
-	// Create domain listener with resolved defaults.
+func (s *Supervisor) addSingleListenerWithProbe(monitor AddListenerWithBindinger, lc *domainconfig.ListenerConfig) {
 	domainListener := s.createDomainListener(lc)
 
-	// Create probe binding from configuration.
 	binding := s.createProbeBinding(lc)
 
 	// Add listener with binding to monitor.
-	if err := monitor.AddListenerWithBinding(domainListener, binding); err != nil {
-		log.Printf("[health] failed to add listener %s for service %s: %v",
-			lc.Name, serviceName, err)
-	}
+	// Errors are silently ignored - health monitoring is best-effort.
+	_ = monitor.AddListenerWithBinding(domainListener, binding)
 }
 
 // createDomainListener creates a domain listener from configuration with defaults.
@@ -656,20 +769,16 @@ func (s *Supervisor) addSingleListenerWithProbe(monitor AddListenerWithBindinger
 func (s *Supervisor) createDomainListener(lc *domainconfig.ListenerConfig) *listener.Listener {
 	// Resolve protocol with default.
 	protocol := lc.Protocol
-	// Apply default protocol if not specified.
 	if protocol == "" {
 		protocol = "tcp"
 	}
 	// Resolve address with default.
 	address := lc.Address
-	// Apply default address if not specified.
 	if address == "" {
 		address = "localhost"
 	}
-	// Create and mark listener as listening.
 	domainListener := listener.NewListener(lc.Name, protocol, address, lc.Port)
 	domainListener.MarkListening()
-	// Return the configured listener.
 	return domainListener
 }
 
@@ -683,11 +792,9 @@ func (s *Supervisor) createDomainListener(lc *domainconfig.ListenerConfig) *list
 func (s *Supervisor) createProbeBinding(lc *domainconfig.ListenerConfig) *apphealth.ProbeBinding {
 	// Resolve address with default for target.
 	address := lc.Address
-	// Apply default address if not specified.
 	if address == "" {
 		address = "localhost"
 	}
-	// Build and return the probe binding.
 	return &apphealth.ProbeBinding{
 		ListenerName: lc.Name,
 		Type:         apphealth.ProbeType(lc.Probe.Type),
@@ -724,7 +831,6 @@ func (s *Supervisor) handleRecoveryError(operation, serviceName string, err erro
 	handler := s.errorHandler
 	s.mu.RUnlock()
 
-	// Call handler if registered.
 	if handler != nil {
 		handler(operation, serviceName, err)
 	}
@@ -736,15 +842,14 @@ func (s *Supervisor) handleRecoveryError(operation, serviceName string, err erro
 //   - name: the service name.
 //
 // Returns:
-//   - *ServiceStats: the service statistics, or nil if not found.
-func (s *Supervisor) Stats(name string) *ServiceStats {
+//   - *ServiceStatsSnapshot: the service statistics snapshot, or nil if not found.
+func (s *Supervisor) Stats(name string) *ServiceStatsSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	// Return a copy to avoid race conditions.
 	if stats, ok := s.stats[name]; ok {
-		statsCopy := *stats
-		// Return copy of stats for the requested service.
-		return &statsCopy
+		snap := stats.Snapshot()
+		// Return pointer to snapshot.
+		return &snap
 	}
 	// Service not found, return nil.
 	return nil
@@ -753,18 +858,16 @@ func (s *Supervisor) Stats(name string) *ServiceStats {
 // AllStats returns statistics for all services.
 //
 // Returns:
-//   - map[string]*ServiceStats: a copy of all service statistics.
-func (s *Supervisor) AllStats() map[string]*ServiceStats {
+//   - map[string]*ServiceStatsSnapshot: atomic snapshots of all service statistics.
+func (s *Supervisor) AllStats() map[string]*ServiceStatsSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	// Return a copy of all stats.
-	result := make(map[string]*ServiceStats, len(s.stats))
-	// Copy each service's stats to avoid race conditions.
+	// Use SnapshotPtr to avoid escape analysis issue from &Snapshot().
+	result := make(map[string]*ServiceStatsSnapshot, len(s.stats))
+	// Iterate through stats and collect snapshots.
 	for name, stats := range s.stats {
-		statsCopy := *stats
-		result[name] = &statsCopy
+		result[name] = stats.SnapshotPtr()
 	}
-	// Return the copied stats map.
 	return result
 }
 
@@ -790,13 +893,11 @@ func (s *Supervisor) RestartOnHealthFailure(serviceName, reason string) error {
 	mgr, ok := s.managers[serviceName]
 	s.mu.RUnlock()
 
-	// Check if the service exists.
 	if !ok {
 		// Return error for missing service.
 		return fmt.Errorf("%w: %s", ErrServiceNotFound, serviceName)
 	}
 
-	// Delegate to the manager's health failure restart method.
 	return mgr.RestartOnHealthFailure(reason)
 }
 
@@ -807,7 +908,6 @@ func (s *Supervisor) RestartOnHealthFailure(serviceName, reason string) error {
 func (s *Supervisor) State() State {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	// Return the current state.
 	return s.state
 }
 
@@ -829,8 +929,137 @@ func (s *Supervisor) Services() map[string]ServiceInfo {
 			Uptime: mgr.Uptime(),
 		}
 	}
-	// Return the service information map.
 	return info
+}
+
+// ServiceSnapshotsForTUI returns service data formatted for TUI display.
+// Services are returned in alphabetical order for stable display.
+//
+// Returns:
+//   - []ServiceSnapshotForTUI: a slice of service snapshots sorted by name.
+func (s *Supervisor) ServiceSnapshotsForTUI() []ServiceSnapshotForTUI {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Collect all services.
+	result := make([]ServiceSnapshotForTUI, 0, len(s.managers))
+	// Iterate through managers and build snapshots.
+	for name, mgr := range s.managers {
+		state := mgr.State()
+		snap := ServiceSnapshotForTUI{
+			Name:       mgr.Name(),
+			StateInt:   int(state),
+			StateName:  state.String(),
+			PID:        mgr.PID(),
+			UptimeSecs: mgr.Uptime(),
+		}
+
+		// Get listening ports for running processes.
+		if snap.PID > 0 {
+			snap.Ports = getListeningPorts(snap.PID)
+		}
+
+		// Enrich with config-based data (health checks, listeners).
+		s.enrichSnapshotWithConfig(&snap, name)
+
+		// Enrich with runtime metrics (health status, restart count, CPU/memory).
+		s.enrichSnapshotWithMetrics(&snap, name)
+
+		result = append(result, snap)
+	}
+
+	// Sort alphabetically by name for stable display.
+	sort.Slice(result, func(i, j int) bool {
+		// Compare service names for alphabetical ordering.
+		return result[i].Name < result[j].Name
+	})
+
+	return result
+}
+
+// enrichSnapshotWithConfig enriches snapshot with config-based data.
+//
+// Params:
+//   - snap: target snapshot to enrich.
+//   - name: service name to lookup in config.
+func (s *Supervisor) enrichSnapshotWithConfig(snap *ServiceSnapshotForTUI, name string) {
+	// Find service configuration.
+	for i := range s.config.Services {
+		// Match service by name.
+		if s.config.Services[i].Name == name {
+			snap.HasHealthChecks = s.hasConfiguredProbes(&s.config.Services[i])
+			snap.Listeners = s.buildListenerSnapshots(&s.config.Services[i], snap.Ports)
+			// Found and enriched - exit early.
+			return
+		}
+	}
+}
+
+// enrichSnapshotWithMetrics enriches snapshot with runtime metrics.
+//
+// Params:
+//   - snap: target snapshot to enrich.
+//   - name: service name to lookup metrics for.
+func (s *Supervisor) enrichSnapshotWithMetrics(snap *ServiceSnapshotForTUI, name string) {
+	if monitor, ok := s.healthMonitors[name]; ok {
+		snap.HealthInt = int(monitor.Status())
+	}
+
+	if stats, ok := s.stats[name]; ok {
+		snap.RestartCount = stats.RestartCount()
+	}
+
+	if s.metricsTracker != nil {
+		// Retrieve metrics if available for this service.
+		if metrics, ok := s.metricsTracker.Get(name); ok {
+			snap.CPUPercent = metrics.CPU.UsagePercent
+			snap.MemoryRSS = metrics.Memory.RSS
+		}
+	}
+}
+
+// buildListenerSnapshots creates listener snapshots with status from config.
+// Status logic:
+//   - 0 (OK/Green): port listening and state matches config
+//   - 1 (Warning/Yellow): mismatch (exposed but not reachable, or vice versa)
+//   - 2 (Error/Red): expected port but nothing listening
+//
+// Params:
+//   - svc: the service configuration with listener definitions.
+//   - listeningPorts: the list of actually listening ports from the process.
+//
+// Returns:
+//   - []ListenerSnapshotForTUI: listener snapshots with status indicators.
+func (s *Supervisor) buildListenerSnapshots(svc *domainconfig.ServiceConfig, listeningPorts []int) []ListenerSnapshotForTUI {
+	listening := make(map[int]bool, len(listeningPorts))
+	for _, p := range listeningPorts {
+		listening[p] = true
+	}
+
+	result := make([]ListenerSnapshotForTUI, 0, len(svc.Listeners))
+	for _, lc := range svc.Listeners {
+		ls := ListenerSnapshotForTUI{
+			Name:      lc.Name,
+			Port:      lc.Port,
+			Protocol:  lc.Protocol,
+			Exposed:   lc.Exposed,
+			Listening: listening[lc.Port],
+		}
+
+		// Determine status based on listening state.
+		// StatusInt: 0=OK, 2=Error
+		if ls.Listening {
+			// Listening → OK (green), whether exposed or internal.
+			ls.StatusInt = ListenerStatusOK
+		} else {
+			// Expected port but nothing listening → Error (red).
+			ls.StatusInt = ListenerStatusError
+		}
+
+		result = append(result, ls)
+	}
+
+	return result
 }
 
 // Service returns a specific service manager.
@@ -845,7 +1074,6 @@ func (s *Supervisor) Service(name string) (*applifecycle.Manager, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	mgr, ok := s.managers[name]
-	// Return the manager and found status.
 	return mgr, ok
 }
 
@@ -861,12 +1089,10 @@ func (s *Supervisor) StartService(name string) error {
 	mgr, ok := s.managers[name]
 	s.mu.RUnlock()
 
-	// Check if the service exists.
 	if !ok {
 		// Return error for missing service.
 		return fmt.Errorf("%w: %s", ErrServiceNotFound, name)
 	}
-	// Return the result of starting the service.
 	return mgr.Start()
 }
 
@@ -882,12 +1108,10 @@ func (s *Supervisor) StopService(name string) error {
 	mgr, ok := s.managers[name]
 	s.mu.RUnlock()
 
-	// Check if the service exists.
 	if !ok {
 		// Return error for missing service.
 		return fmt.Errorf("%w: %s", ErrServiceNotFound, name)
 	}
-	// Return the result of stopping the service.
 	return mgr.Stop()
 }
 
@@ -903,7 +1127,6 @@ func (s *Supervisor) RestartService(name string) error {
 	mgr, ok := s.managers[name]
 	s.mu.RUnlock()
 
-	// Check if the service exists.
 	if !ok {
 		// Return error for missing service.
 		return fmt.Errorf("%w: %s", ErrServiceNotFound, name)
@@ -914,6 +1137,5 @@ func (s *Supervisor) RestartService(name string) error {
 		// Return stop error if failed.
 		return err
 	}
-	// Return the result of starting the service.
 	return mgr.Start()
 }

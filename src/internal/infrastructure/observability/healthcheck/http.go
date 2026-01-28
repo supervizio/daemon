@@ -42,17 +42,14 @@ type HTTPProber struct {
 // Returns:
 //   - *HTTPProber: a configured HTTP prober ready to perform probes.
 func NewHTTPProber(timeout time.Duration) *HTTPProber {
-	// Ensure timeout is always positive to prevent indefinite hangs.
 	if timeout <= 0 {
 		timeout = health.DefaultTimeout
 	}
 
-	// Configure transport with timeout.
 	transport := &http.Transport{
 		ResponseHeaderTimeout: timeout,
 	}
 
-	// Return configured HTTP prober.
 	return &HTTPProber{
 		timeout: timeout,
 		client: &http.Client{
@@ -67,7 +64,6 @@ func NewHTTPProber(timeout time.Duration) *HTTPProber {
 // Returns:
 //   - string: the constant "http" identifying the prober type.
 func (p *HTTPProber) Type() string {
-	// Return the HTTP prober type identifier.
 	return proberTypeHTTP
 }
 
@@ -83,29 +79,20 @@ func (p *HTTPProber) Type() string {
 func (p *HTTPProber) Probe(ctx context.Context, target health.Target) health.CheckResult {
 	start := time.Now()
 
-	// Determine HTTP method.
 	method := target.Method
-	// Check if method is specified.
 	if method == "" {
-		// Default to GET if not specified.
 		method = defaultHTTPMethod
 	}
 
-	// Determine expected status code.
 	expectedStatus := target.StatusCode
-	// Check if status code is specified.
 	if expectedStatus == 0 {
-		// Default to 200 OK if not specified.
 		expectedStatus = defaultHTTPStatusCode
 	}
 
-	// Get the status code, including optional path.
 	statusCode, err := p.getStatusCode(ctx, method, target.Address, target.Path)
 	latency := time.Since(start)
 
-	// Handle request errors.
 	if err != nil {
-		// Return failure result with error details.
 		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("request failed: %v", err),
@@ -113,9 +100,7 @@ func (p *HTTPProber) Probe(ctx context.Context, target health.Target) health.Che
 		)
 	}
 
-	// Check if status code matches expected.
 	if statusCode != expectedStatus {
-		// Return failure result for status mismatch.
 		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("unexpected status code: %d (expected %d)", statusCode, expectedStatus),
@@ -123,7 +108,6 @@ func (p *HTTPProber) Probe(ctx context.Context, target health.Target) health.Che
 		)
 	}
 
-	// Return success result with status code.
 	return health.NewSuccessCheckResult(
 		latency,
 		fmt.Sprintf("HTTP %d", statusCode),
@@ -142,53 +126,33 @@ func (p *HTTPProber) Probe(ctx context.Context, target health.Target) health.Che
 //   - int: the HTTP status code from the response.
 //   - error: any error that occurred during the request.
 func (p *HTTPProber) getStatusCode(ctx context.Context, method, address, path string) (int, error) {
-	// Parse the base URL.
 	targetURL, err := url.Parse(address)
-	// Check if URL parsing failed.
 	if err != nil {
-		// Return wrapped error.
 		return 0, fmt.Errorf("failed to parse url: %w", err)
 	}
 
-	// If scheme is not http/https (e.g. "localhost:8080" parses as scheme="localhost"),
-	// prepend http:// and re-parse. Go's url.Parse treats "host:port" as "scheme:opaque".
+	// Go's url.Parse treats "host:port" as "scheme:opaque", so prepend http:// if needed.
 	if targetURL.Scheme != "http" && targetURL.Scheme != "https" {
 		targetURL, err = url.Parse("http://" + address)
-		// Check if reparsing with scheme failed.
 		if err != nil {
-			// Return wrapped error.
 			return 0, fmt.Errorf("failed to parse url: %w", err)
 		}
 	}
 
-	// Append path if provided.
 	if path != "" {
-		// Join paths, handling leading/trailing slashes.
 		targetURL.Path = strings.TrimRight(targetURL.Path, "/") + "/" + strings.TrimLeft(path, "/")
 	}
 
-	// Create the request with the full URL.
 	req, err := http.NewRequestWithContext(ctx, method, targetURL.String(), http.NoBody)
-	// Check if request creation failed.
 	if err != nil {
-		// Return wrapped error.
 		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Execute the request using the configured client.
-	// Using client.Do respects client configuration (timeouts, redirects, etc.).
 	resp, err := p.client.Do(req)
-	// Check if request failed.
 	if err != nil {
-		// Return the client error.
 		return 0, err
 	}
-	// Ensure response body is closed.
-	defer func() {
-		// Ignore close error.
-		_ = resp.Body.Close()
-	}()
+	defer func() { _ = resp.Body.Close() }()
 
-	// Return the status code.
 	return resp.StatusCode, nil
 }

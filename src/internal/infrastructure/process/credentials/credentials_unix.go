@@ -26,49 +26,38 @@ const (
 // and applying them to processes via syscall.Credential.
 type Manager struct{}
 
-// NewManager creates a new credential Manager instance.
+// NewManager returns a new credential Manager.
 //
 // Returns:
-//   - *Manager: a new credential manager instance
-func NewManager() *Manager {
-	// Return a new empty instance of Manager.
-	return &Manager{}
-}
+//   - *Manager: initialized credential manager for Unix systems
+func NewManager() *Manager { return &Manager{} }
 
-// New creates a new credential Manager instance.
+// New returns a new credential Manager.
 //
 // Returns:
-//   - *Manager: a new credential manager instance
-func New() *Manager {
-	// Return a new empty instance of Manager.
-	return &Manager{}
-}
+//   - *Manager: initialized credential manager for Unix systems
+func New() *Manager { return &Manager{} }
 
-// LookupUser looks up a user by name or numeric UID.
+// LookupUser resolves a user by name or UID, with UID fallback.
 //
 // Params:
-//   - nameOrID: the username or numeric UID to look up
+//   - nameOrID: username string or numeric UID to resolve
 //
 // Returns:
-//   - *User: the user information if found
-//   - error: an error if the user could not be found
+//   - *User: resolved user with UID, GID, username, and home directory
+//   - error: ErrUserNotFound if neither name nor UID lookup succeeds
 func (m *Manager) LookupUser(nameOrID string) (*User, error) {
 	lookedUpUser, err := user.Lookup(nameOrID)
-	// Check if the user lookup by name failed.
+	// Fallback to numeric UID for minimal containers without passwd file.
 	if err != nil {
-		// Try looking up by UID as fallback.
 		lookedUpUser, err = user.LookupId(nameOrID)
-		// Check if the lookup by UID also failed.
+		// Both lookups failed.
 		if err != nil {
-			// Return an error indicating the user was not found.
 			return nil, process.WrapError("lookup user", ErrUserNotFound)
 		}
 	}
-
 	uid, _ := strconv.ParseUint(lookedUpUser.Uid, baseDecimal, bitSize32)
 	gid, _ := strconv.ParseUint(lookedUpUser.Gid, baseDecimal, bitSize32)
-
-	// Return the user information with parsed UID and GID.
 	return &User{
 		UID:      uint32(uid),
 		GID:      uint32(gid),
@@ -77,117 +66,105 @@ func (m *Manager) LookupUser(nameOrID string) (*User, error) {
 	}, nil
 }
 
-// LookupGroup looks up a group by name or numeric GID.
+// LookupGroup resolves a group by name or GID, with GID fallback.
 //
 // Params:
-//   - nameOrID: the group name or numeric GID to look up
+//   - nameOrID: group name string or numeric GID to resolve
 //
 // Returns:
-//   - *Group: the group information if found
-//   - error: an error if the group could not be found
+//   - *Group: resolved group with GID and name
+//   - error: ErrGroupNotFound if neither name nor GID lookup succeeds
 func (m *Manager) LookupGroup(nameOrID string) (*Group, error) {
 	lookedUpGroup, err := user.LookupGroup(nameOrID)
-	// Check if the group lookup by name failed.
+	// Fallback to numeric GID for minimal containers without group file.
 	if err != nil {
-		// Try looking up by GID as fallback.
 		lookedUpGroup, err = user.LookupGroupId(nameOrID)
-		// Check if the lookup by GID also failed.
+		// Both lookups failed.
 		if err != nil {
-			// Return an error indicating the group was not found.
 			return nil, process.WrapError("lookup group", ErrGroupNotFound)
 		}
 	}
-
 	gid, _ := strconv.ParseUint(lookedUpGroup.Gid, baseDecimal, bitSize32)
-
-	// Return the group information with parsed GID.
 	return &Group{
 		GID:  uint32(gid),
 		Name: lookedUpGroup.Name,
 	}, nil
 }
 
-// ResolveCredentials resolves user and group names to UIDs and GIDs.
+// ResolveCredentials converts user/group names to numeric IDs.
+// Supports numeric fallback for minimal containers without passwd/group files.
 //
 // Params:
-//   - username: the username to resolve (can be empty)
-//   - groupname: the group name to resolve (can be empty)
+//   - username: user name or numeric UID (empty string skips user resolution)
+//   - groupname: group name or numeric GID (empty string inherits from user)
 //
 // Returns:
-//   - uid: the resolved user ID
-//   - gid: the resolved group ID
-//   - err: an error if resolution failed
+//   - uid: resolved user ID (0 if username empty)
+//   - gid: resolved group ID (inherits from user if groupname empty)
+//   - err: lookup error if resolution fails and numeric fallback is invalid
 func (m *Manager) ResolveCredentials(username, groupname string) (uid, gid uint32, err error) {
-	// Check if a username was provided to resolve.
+	// Handle user resolution with numeric fallback.
 	if username != "" {
 		resolvedUser, lookupErr := m.LookupUser(username)
-		// Check if the user lookup failed.
+		// User lookup failed; try numeric fallback for scratch containers.
 		if lookupErr != nil {
-			// Try parsing the username as a numeric UID.
+			// Numeric string can be used directly as UID.
 			if id, parseErr := strconv.ParseUint(username, baseDecimal, bitSize32); parseErr == nil {
 				uid = uint32(id)
 			} else {
-				// Return an error if both lookup and parsing failed.
+				// Non-numeric and lookup failed.
 				return 0, 0, fmt.Errorf("looking up user %s: %w", username, lookupErr)
 			}
 		} else {
-			// Use the UID from the resolved user.
+			// User found via system lookup.
 			uid = resolvedUser.UID
-			// Check if no group was specified to use the user's primary group.
+			// Inherit primary group when no explicit group specified.
 			if groupname == "" {
 				gid = resolvedUser.GID
 			}
 		}
 	}
-
-	// Check if a groupname was provided to resolve.
+	// Handle group resolution with numeric fallback.
 	if groupname != "" {
 		resolvedGroup, lookupErr := m.LookupGroup(groupname)
-		// Check if the group lookup failed.
+		// Group lookup failed; try numeric fallback for scratch containers.
 		if lookupErr != nil {
-			// Try parsing the groupname as a numeric GID.
+			// Numeric string can be used directly as GID.
 			if id, parseErr := strconv.ParseUint(groupname, baseDecimal, bitSize32); parseErr == nil {
 				gid = uint32(id)
 			} else {
-				// Return an error if both lookup and parsing failed.
+				// Non-numeric and lookup failed.
 				return 0, 0, fmt.Errorf("looking up group %s: %w", groupname, lookupErr)
 			}
 		} else {
-			// Use the GID from the resolved group.
+			// Group found via system lookup.
 			gid = resolvedGroup.GID
 		}
 	}
-
-	// Return the resolved credentials.
 	return uid, gid, nil
 }
 
-// ApplyCredentials applies uid/gid credentials to a command.
+// ApplyCredentials sets syscall credentials on a command for privilege drop.
 //
 // Params:
-//   - cmd: the command to apply credentials to
-//   - uid: the user ID to set
-//   - gid: the group ID to set
+//   - cmd: exec.Cmd to configure with credentials
+//   - uid: user ID to run process as
+//   - gid: group ID to run process as
 //
 // Returns:
-//   - error: always nil for this implementation
+//   - error: always nil (interface compliance)
 func (m *Manager) ApplyCredentials(cmd *exec.Cmd, uid, gid uint32) error {
-	// Check if both uid and gid are zero (no credentials to apply).
+	// Skip credential setup when running as root (uid=0, gid=0).
 	if uid == 0 && gid == 0 {
-		// Return nil as there are no credentials to apply.
 		return nil
 	}
-
-	// Check if SysProcAttr is nil and initialize it.
+	// Initialize SysProcAttr if not already set by caller.
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
-
 	cmd.SysProcAttr.Credential = &syscall.Credential{
 		Uid: uid,
 		Gid: gid,
 	}
-
-	// Return nil indicating credentials were successfully applied.
 	return nil
 }

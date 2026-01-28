@@ -1,7 +1,10 @@
 package bootstrap
 
 import (
+	"context"
 	"testing"
+
+	domainmetrics "github.com/kodflow/daemon/internal/domain/metrics"
 )
 
 // mockReaperInternal is a test double for the reaper interface.
@@ -182,4 +185,35 @@ func TestMockReaperImplementsInterface_Internal(t *testing.T) {
 			}
 		})
 	}
+}
+
+// mockCollector is a test double for the Collector interface.
+type mockCollector struct{}
+
+// CollectCPU returns empty CPU metrics.
+//
+// Params:
+//   - ctx: the context (unused).
+//   - pid: the process ID (unused).
+//
+// Returns:
+//   - domainmetrics.ProcessCPU: empty CPU metrics.
+//   - error: nil.
+func (m *mockCollector) CollectCPU(_ context.Context, _ int) (domainmetrics.ProcessCPU, error) {
+	// Return empty CPU metrics.
+	return domainmetrics.ProcessCPU{}, nil
+}
+
+// CollectMemory returns empty memory metrics.
+//
+// Params:
+//   - ctx: the context (unused).
+//   - pid: the process ID (unused).
+//
+// Returns:
+//   - domainmetrics.ProcessMemory: empty memory metrics.
+//   - error: nil.
+func (m *mockCollector) CollectMemory(_ context.Context, _ int) (domainmetrics.ProcessMemory, error) {
+	// Return empty memory metrics.
+	return domainmetrics.ProcessMemory{}, nil
 }

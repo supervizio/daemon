@@ -34,7 +34,6 @@ type Listener struct {
 // Returns:
 //   - *Listener: a new listener in StateClosed state.
 func NewListener(name, protocol, address string, port int) *Listener {
-	// Return new listener with StateClosed state.
 	return &Listener{
 		Name:     name,
 		Protocol: protocol,
@@ -54,7 +53,6 @@ func NewListener(name, protocol, address string, port int) *Listener {
 // Returns:
 //   - *Listener: a new TCP listener in StateClosed state.
 func NewTCP(name, address string, port int) *Listener {
-	// Return new TCP listener.
 	return NewListener(name, "tcp", address, port)
 }
 
@@ -68,7 +66,6 @@ func NewTCP(name, address string, port int) *Listener {
 // Returns:
 //   - *Listener: a new UDP listener in StateClosed state.
 func NewUDP(name, address string, port int) *Listener {
-	// Return new UDP listener.
 	return NewListener(name, "udp", address, port)
 }
 
@@ -80,14 +77,10 @@ func NewUDP(name, address string, port int) *Listener {
 // Returns:
 //   - bool: true if the transition was valid and applied.
 func (l *Listener) SetState(state State) bool {
-	// Check if transition is valid.
 	if !l.State.CanTransitionTo(state) {
-		// Return false if transition is invalid.
 		return false
 	}
-	// Apply the new state.
 	l.State = state
-	// Return true for successful transition.
 	return true
 }
 

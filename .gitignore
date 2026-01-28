@@ -59,6 +59,7 @@ vendor/
 *.exe
 *.test
 *.out
+src/daemon
 
 # Generated Go files (optional - uncomment if you don't want to commit them)
 # Note: It's generally recommended to commit generated files for reproducible builds

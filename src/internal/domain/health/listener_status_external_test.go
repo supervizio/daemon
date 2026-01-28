@@ -996,43 +996,43 @@ func TestSubjectStatus_ResetCounters(t *testing.T) {
 // TestSubjectStatus_EvaluateAndApply_Integration tests the full evaluate-then-apply workflow.
 func TestSubjectStatus_EvaluateAndApply_Integration(t *testing.T) {
 	tests := []struct {
-		name              string
-		initialState      health.SubjectState
-		probeResults      []bool
-		successThreshold  int
-		failureThreshold  int
+		name               string
+		initialState       health.SubjectState
+		probeResults       []bool
+		successThreshold   int
+		failureThreshold   int
 		expectedFinalState health.SubjectState
 	}{
 		{
-			name:              "three_successes_triggers_ready",
-			initialState:      health.SubjectListening,
-			probeResults:      []bool{true, true, true},
-			successThreshold:  3,
-			failureThreshold:  3,
+			name:               "three_successes_triggers_ready",
+			initialState:       health.SubjectListening,
+			probeResults:       []bool{true, true, true},
+			successThreshold:   3,
+			failureThreshold:   3,
 			expectedFinalState: health.SubjectReady,
 		},
 		{
-			name:              "three_failures_triggers_listening",
-			initialState:      health.SubjectReady,
-			probeResults:      []bool{false, false, false},
-			successThreshold:  3,
-			failureThreshold:  3,
+			name:               "three_failures_triggers_listening",
+			initialState:       health.SubjectReady,
+			probeResults:       []bool{false, false, false},
+			successThreshold:   3,
+			failureThreshold:   3,
 			expectedFinalState: health.SubjectListening,
 		},
 		{
-			name:              "mixed_results_no_transition",
-			initialState:      health.SubjectListening,
-			probeResults:      []bool{true, true, false, true, true},
-			successThreshold:  3,
-			failureThreshold:  3,
+			name:               "mixed_results_no_transition",
+			initialState:       health.SubjectListening,
+			probeResults:       []bool{true, true, false, true, true},
+			successThreshold:   3,
+			failureThreshold:   3,
 			expectedFinalState: health.SubjectListening,
 		},
 		{
-			name:              "recovery_after_failures",
-			initialState:      health.SubjectListening,
-			probeResults:      []bool{false, false, true, true, true},
-			successThreshold:  3,
-			failureThreshold:  3,
+			name:               "recovery_after_failures",
+			initialState:       health.SubjectListening,
+			probeResults:       []bool{false, false, true, true, true},
+			successThreshold:   3,
+			failureThreshold:   3,
 			expectedFinalState: health.SubjectReady,
 		},
 	}
