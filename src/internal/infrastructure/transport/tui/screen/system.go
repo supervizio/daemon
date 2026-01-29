@@ -122,10 +122,11 @@ func (s *SystemRenderer) Render(snap *model.Snapshot) string {
 	case terminal.LayoutWide, terminal.LayoutUltraWide:
 		// Return expanded system metrics.
 		return s.renderWide(snap)
+	// handle default case.
+	default:
+		// Default to normal rendering for unhandled layouts.
+		return s.renderNormal(snap)
 	}
-
-	// Default to normal rendering for unhandled layouts.
-	return s.renderNormal(snap)
 }
 
 // renderCompact renders minimal system metrics.

@@ -118,6 +118,7 @@ func (b *Box) AddLines(lines []string) *Box {
 // Returns:
 //   - string: rendered box with borders, title, and content.
 func (b *Box) Render() string {
+	// evaluate condition.
 	if b.Width < minBoxWidth {
 		b.Width = minBoxWidth
 	}
@@ -129,6 +130,7 @@ func (b *Box) Render() string {
 	b.renderContentLines(&sb, innerWidth)
 	b.renderBottomBorder(&sb, innerWidth)
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -141,8 +143,10 @@ func (b *Box) renderTopBorder(sb *strings.Builder, innerWidth int) {
 	sb.WriteString(b.BorderColor)
 	sb.WriteString(b.Style.TopLeft)
 
+	// evaluate condition.
 	if b.Title != "" && b.titleFits(innerWidth) {
 		b.renderTitleInBorder(sb, innerWidth)
+	// handle alternative case.
 	} else {
 		sb.WriteString(repeatHorizontal(b.Style.Horizontal, innerWidth))
 	}
@@ -160,6 +164,7 @@ func (b *Box) renderTopBorder(sb *strings.Builder, innerWidth int) {
 // Returns:
 //   - bool: true if title fits with padding
 func (b *Box) titleFits(innerWidth int) bool {
+	// return computed result.
 	return VisibleLen(b.Title)+titlePadding <= innerWidth
 }
 
@@ -170,6 +175,7 @@ func (b *Box) titleFits(innerWidth int) bool {
 //   - innerWidth: width inside borders
 func (b *Box) renderTitleInBorder(sb *strings.Builder, innerWidth int) {
 	sb.WriteString(b.Style.TitleLeft)
+	// evaluate condition.
 	if b.TitleColor != "" {
 		sb.WriteString(b.TitleColor)
 	}
@@ -186,6 +192,7 @@ func (b *Box) renderTitleInBorder(sb *strings.Builder, innerWidth int) {
 //   - sb: string builder to write to
 //   - innerWidth: width inside borders
 func (b *Box) renderContentLines(sb *strings.Builder, innerWidth int) {
+	// iterate over collection.
 	for _, line := range b.Content {
 		b.renderContentLine(sb, line, innerWidth)
 	}
@@ -203,9 +210,11 @@ func (b *Box) renderContentLine(sb *strings.Builder, line string, innerWidth int
 	sb.WriteString(ansi.Reset)
 
 	lineLen := VisibleLen(line)
+	// evaluate condition.
 	if lineLen < innerWidth {
 		sb.WriteString(line)
 		sb.WriteString(Spaces(innerWidth - lineLen))
+	// handle alternative case.
 	} else {
 		sb.WriteString(truncateVisible(line, innerWidth))
 	}

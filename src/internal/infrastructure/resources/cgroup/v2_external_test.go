@@ -14,6 +14,27 @@ import (
 
 	"github.com/kodflow/daemon/internal/infrastructure/resources/cgroup"
 )
+// testCPUStatWithThrottling is a complete cpu.stat file content for v2 testing.
+const testCPUStatWithThrottling string = `usage_usec 1234567
+user_usec 800000
+system_usec 434567
+nr_periods 100
+nr_throttled 5
+throttled_usec 50000
+`
+
+// testMemoryStatComplete is a complete memory.stat file content for v2 testing.
+const testMemoryStatComplete string = `anon 52428800
+file 41943040
+kernel 8388608
+slab 2097152
+sock 1048576
+shmem 4194304
+mapped 10485760
+dirty 524288
+pgfault 12345
+pgmajfault 67
+`
 
 // === NewV2Reader Tests ===
 
@@ -99,13 +120,7 @@ func TestV2Reader_CPUUsage(t *testing.T) {
 	}{
 		{
 			name: "parses usage from cpu.stat",
-			cpuStat: `usage_usec 1234567
-user_usec 800000
-system_usec 434567
-nr_periods 100
-nr_throttled 5
-throttled_usec 50000
-`,
+			cpuStat: testCPUStatWithThrottling,
 			wantUsage: 1234567,
 			wantErr:   false,
 		},
@@ -366,17 +381,7 @@ func TestV2Reader_ReadMemoryStat(t *testing.T) {
 	}{
 		{
 			name: "parses all memory stat fields",
-			memoryStat: `anon 52428800
-file 41943040
-kernel 8388608
-slab 2097152
-sock 1048576
-shmem 4194304
-mapped 10485760
-dirty 524288
-pgfault 12345
-pgmajfault 67
-`,
+			memoryStat: testMemoryStatComplete,
 			wantAnon:    52428800,
 			wantFile:    41943040,
 			wantKernel:  8388608,
@@ -549,6 +554,8 @@ func TestV2Reader_Path(t *testing.T) {
 
 // createAllV2CgroupFiles creates all cgroup v2 files for testing.
 func createAllV2CgroupFiles(t *testing.T, dir string) {
+	t.Helper()
+
 	// Create cpu.stat file
 	cpuStatContent := "usage_usec 1234567\nuser_usec 500000\nsystem_usec 200000\n"
 	err := os.WriteFile(filepath.Join(dir, "cpu.stat"), []byte(cpuStatContent), 0o644)

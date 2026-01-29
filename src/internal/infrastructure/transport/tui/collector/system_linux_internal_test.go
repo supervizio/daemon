@@ -13,6 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// testTypicalMeminfoContent represents typical /proc/meminfo content for testing.
+const testTypicalMeminfoContent string = `MemTotal:       16384000 kB
+MemFree:         8192000 kB
+MemAvailable:   12288000 kB
+Buffers:          512000 kB
+Cached:          2048000 kB`
+
 func Test_parseCPUSample(t *testing.T) {
 	t.Parallel()
 
@@ -596,11 +603,7 @@ func Test_SystemCollector_parseMemInfo(t *testing.T) {
 	}{
 		{
 			name: "typical meminfo content",
-			content: `MemTotal:       16384000 kB
-MemFree:         8192000 kB
-MemAvailable:   12288000 kB
-Buffers:          512000 kB
-Cached:          2048000 kB`,
+			content: testTypicalMeminfoContent,
 			expectedKeys: []string{"MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached"},
 		},
 		{

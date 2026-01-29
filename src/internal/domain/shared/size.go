@@ -40,7 +40,9 @@ var (
 func ParseSize(s string) (int64, error) {
 	s = strings.TrimSpace(strings.ToUpper(s))
 
+	// reject empty input
 	if s == "" {
+		// return empty size error
 		return 0, ErrEmptySize
 	}
 
@@ -48,14 +50,19 @@ func ParseSize(s string) (int64, error) {
 	numStr = strings.TrimSpace(numStr)
 	num, err := strconv.ParseInt(numStr, Base10, BitSize64)
 
+	// validate numeric parsing
 	if err != nil {
+		// return parsing error
 		return 0, fmt.Errorf("invalid size number %q: %w", numStr, err)
 	}
 
+	// reject negative values
 	if num < 0 {
+		// return negative size error
 		return 0, fmt.Errorf("%w: %d", ErrNegativeSize, num)
 	}
 
+	// calculate final size in bytes
 	return num * multiplier, nil
 }
 
@@ -68,16 +75,27 @@ func ParseSize(s string) (int64, error) {
 //   - multiplier: the multiplier based on the unit suffix
 //   - numericPart: the numeric portion of the string
 func extractSizeComponents(s string) (multiplier int64, numericPart string) {
+	// match suffix to unit multiplier
 	switch {
+	// gigabyte suffix
 	case strings.HasSuffix(s, "GB"):
+		// return gigabyte multiplier
 		return Gigabyte, strings.TrimSuffix(s, "GB")
+	// megabyte suffix
 	case strings.HasSuffix(s, "MB"):
+		// return megabyte multiplier
 		return Megabyte, strings.TrimSuffix(s, "MB")
+	// kilobyte suffix
 	case strings.HasSuffix(s, "KB"):
+		// return kilobyte multiplier
 		return Kilobyte, strings.TrimSuffix(s, "KB")
+	// byte suffix
 	case strings.HasSuffix(s, "B"):
+		// return byte multiplier
 		return Byte, strings.TrimSuffix(s, "B")
+	// no suffix
 	default:
+		// return byte multiplier
 		return Byte, s
 	}
 }
@@ -90,14 +108,23 @@ func extractSizeComponents(s string) (multiplier int64, numericPart string) {
 // Returns:
 //   - string: human-readable size string
 func FormatSize(bytes int64) string {
+	// select appropriate unit for size
 	switch {
+	// format as gigabytes
 	case bytes >= Gigabyte:
+		// return gigabyte format
 		return strconv.FormatInt(bytes/Gigabyte, Base10) + "GB"
+	// format as megabytes
 	case bytes >= Megabyte:
+		// return megabyte format
 		return strconv.FormatInt(bytes/Megabyte, Base10) + "MB"
+	// format as kilobytes
 	case bytes >= Kilobyte:
+		// return kilobyte format
 		return strconv.FormatInt(bytes/Kilobyte, Base10) + "KB"
+	// format as bytes
 	default:
+		// return byte format
 		return strconv.FormatInt(bytes, Base10) + "B"
 	}
 }

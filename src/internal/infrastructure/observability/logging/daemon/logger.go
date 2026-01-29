@@ -23,6 +23,7 @@ type MultiLogger struct {
 // Returns:
 //   - *MultiLogger: the created multi-logger.
 func New(writers ...logging.Writer) *MultiLogger {
+	// create logger with provided writers
 	return &MultiLogger{
 		writers: writers,
 	}
@@ -37,6 +38,7 @@ func New(writers ...logging.Writer) *MultiLogger {
 // Returns:
 //   - *MultiLogger: the created multi-logger.
 func NewMultiLogger(writers ...logging.Writer) *MultiLogger {
+	// delegate to standard constructor
 	return New(writers...)
 }
 
@@ -49,6 +51,7 @@ func (l *MultiLogger) Log(event logging.LogEvent) {
 	defer l.mu.RUnlock()
 
 	// Write event to all writers (best effort, ignore individual errors).
+	// dispatch event to all writers
 	for _, w := range l.writers {
 		_ = w.Write(event)
 	}
@@ -126,12 +129,14 @@ func (l *MultiLogger) Close() error {
 	defer l.mu.Unlock()
 
 	var firstErr error
+	// close all writers and track first error
 	for _, w := range l.writers {
+		// track first error encountered
 		if err := w.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
-
+	// return first error or nil
 	return firstErr
 }
 

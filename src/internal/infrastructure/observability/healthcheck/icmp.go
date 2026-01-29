@@ -58,6 +58,7 @@ func NewICMPProber(timeout time.Duration) *ICMPProber {
 // Returns:
 //   - *ICMPProber: a configured ICMP prober with TCP fallback.
 func NewICMPProberWithTCPFallback(timeout time.Duration, tcpPort int) *ICMPProber {
+	// configure with custom tcp port for fallback
 	return &ICMPProber{
 		timeout:        timeout,
 		useTCPFallback: true,
@@ -70,6 +71,7 @@ func NewICMPProberWithTCPFallback(timeout time.Duration, tcpPort int) *ICMPProbe
 // Returns:
 //   - string: the constant "icmp" identifying the prober type.
 func (p *ICMPProber) Type() string {
+	// identify this prober as icmp type
 	return proberTypeICMP
 }
 
@@ -86,15 +88,19 @@ func (p *ICMPProber) Probe(ctx context.Context, target health.Target) health.Che
 	start := time.Now()
 
 	host := target.Address
+	// extract host from host:port format
 	if hostPart, _, err := net.SplitHostPort(host); err == nil {
 		host = hostPart
 	}
 
+	// use TCP fallback for probe
 	if p.useTCPFallback {
+		// tcp fallback avoids privilege requirements
 		return p.tcpPing(ctx, host, start)
 	}
 
 	// TODO: Implement real ICMP ping using golang.org/x/net/icmp
+	// icmp requires cap_net_raw capability not available in containers
 	return p.tcpPing(ctx, host, start)
 }
 
@@ -109,7 +115,9 @@ func (p *ICMPProber) Probe(ctx context.Context, target health.Target) health.Che
 // Returns:
 //   - health.CheckResult: the probe result with latency.
 func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) health.CheckResult {
+	// validate and normalize port number
 	tcpPort := p.tcpPort
+	// validate port is in valid range
 	if tcpPort <= 0 || tcpPort > shared.MaxValidPort {
 		tcpPort = defaultTCPFallbackPort
 	}
@@ -117,9 +125,12 @@ func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) 
 	dialer := &net.Dialer{Timeout: p.timeout}
 	conn, err := dialer.DialContext(ctx, "tcp", address)
 	latency := time.Since(start)
+	// handle connection failure
 	if err != nil {
+		// connection failure indicates host unreachable or port closed
 		return health.NewFailureCheckResult(latency, fmt.Sprintf("ping failed: %v", err), err)
 	}
 	_ = conn.Close()
+	// successful connection indicates host is reachable
 	return health.NewSuccessCheckResult(latency, fmt.Sprintf("ping %s: latency=%s (tcp fallback)", host, latency))
 }

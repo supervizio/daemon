@@ -28,6 +28,7 @@ type Result struct {
 // Returns:
 //   - Result: a new result with StatusHealthy and current timestamp
 func NewHealthyResult(message string, duration time.Duration) Result {
+	// create healthy result with current timestamp
 	return NewHealthyResultAt(message, duration, time.Now())
 }
 
@@ -42,6 +43,7 @@ func NewHealthyResult(message string, duration time.Duration) Result {
 // Returns:
 //   - Result: a new result with StatusHealthy and specified timestamp
 func NewHealthyResultAt(message string, duration time.Duration, timestamp time.Time) Result {
+	// return healthy result with all fields
 	return Result{
 		Status:    StatusHealthy,
 		Message:   message,
@@ -61,6 +63,7 @@ func NewHealthyResultAt(message string, duration time.Duration, timestamp time.T
 // Returns:
 //   - Result: a new result with StatusUnhealthy and current timestamp
 func NewUnhealthyResult(message string, duration time.Duration, err error) Result {
+	// create unhealthy result with current timestamp
 	return NewUnhealthyResultAt(message, duration, err, time.Now())
 }
 
@@ -76,6 +79,7 @@ func NewUnhealthyResult(message string, duration time.Duration, err error) Resul
 // Returns:
 //   - Result: a new result with StatusUnhealthy and specified timestamp
 func NewUnhealthyResultAt(message string, duration time.Duration, err error, timestamp time.Time) Result {
+	// return unhealthy result with all fields
 	return Result{
 		Status:    StatusUnhealthy,
 		Message:   message,

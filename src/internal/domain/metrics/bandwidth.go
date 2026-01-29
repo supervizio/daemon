@@ -38,6 +38,7 @@ type Bandwidth struct {
 // Returns:
 //   - Bandwidth: new bandwidth instance
 func NewBandwidth(iface string, timestamp time.Time) Bandwidth {
+	// initialize with interface and timestamp
 	return Bandwidth{
 		Interface: iface,
 		Timestamp: timestamp,
@@ -49,6 +50,7 @@ func NewBandwidth(iface string, timestamp time.Time) Bandwidth {
 // Returns:
 //   - float64: sum of transmit and receive bytes per second
 func (b Bandwidth) TotalBytesPerSec() float64 {
+	// sum transmit and receive rates
 	return b.TxBytesPerSec + b.RxBytesPerSec
 }
 
@@ -57,6 +59,7 @@ func (b Bandwidth) TotalBytesPerSec() float64 {
 // Returns:
 //   - float64: sum of transmit and receive packets per second
 func (b Bandwidth) TotalPacketsPerSec() float64 {
+	// sum transmit and receive packet rates
 	return b.TxPacketsPerSec + b.RxPacketsPerSec
 }
 
@@ -65,6 +68,7 @@ func (b Bandwidth) TotalPacketsPerSec() float64 {
 // Returns:
 //   - float64: transmit rate in bits per second
 func (b Bandwidth) TxBitsPerSec() float64 {
+	// convert bytes to bits
 	return b.TxBytesPerSec * bitsPerByte
 }
 
@@ -73,6 +77,7 @@ func (b Bandwidth) TxBitsPerSec() float64 {
 // Returns:
 //   - float64: receive rate in bits per second
 func (b Bandwidth) RxBitsPerSec() float64 {
+	// convert bytes to bits
 	return b.RxBytesPerSec * bitsPerByte
 }
 
@@ -86,7 +91,9 @@ func (b Bandwidth) RxBitsPerSec() float64 {
 //   - Bandwidth: calculated bandwidth metrics
 func CalculateBandwidth(prev, curr *NetStats) Bandwidth {
 	duration := curr.Timestamp.Sub(prev.Timestamp)
+	// return zero rates if duration is invalid
 	if duration <= 0 {
+		// return bandwidth with zero rates
 		return Bandwidth{
 			Interface: curr.Interface,
 			Timestamp: curr.Timestamp,
@@ -94,6 +101,7 @@ func CalculateBandwidth(prev, curr *NetStats) Bandwidth {
 	}
 
 	seconds := duration.Seconds()
+	// calculate rates by dividing deltas by elapsed time
 	return Bandwidth{
 		Interface:       curr.Interface,
 		TxBytesPerSec:   float64(curr.BytesSent-prev.BytesSent) / seconds,

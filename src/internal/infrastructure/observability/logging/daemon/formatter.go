@@ -44,6 +44,7 @@ func getBuilder() *strings.Builder {
 	// Get builder from pool (safe cast from pool).
 	sb, ok := builderPool.Get().(*strings.Builder)
 	// Create new builder if pool returned invalid type.
+	// handle invalid type from pool
 	if !ok {
 		sb = &strings.Builder{}
 	}
@@ -88,6 +89,7 @@ type TextFormatter struct {
 //   - *TextFormatter: the created formatter.
 func NewTextFormatter(timestampFormat string) *TextFormatter {
 	// Use RFC3339 if no format specified.
+	// use default format if not specified
 	if timestampFormat == "" {
 		timestampFormat = "2006-01-02T15:04:05Z07:00"
 	}
@@ -120,12 +122,14 @@ func (f *TextFormatter) Format(event logging.LogEvent) string {
 	sb.WriteString("] ")
 
 	// Service name.
+	// add service name if present
 	if event.Service != "" {
 		sb.WriteString(event.Service)
 		sb.WriteByte(' ')
 	}
 
 	// Use message if set, otherwise fall back to event type.
+	// use message or fall back to event type
 	if event.Message != "" {
 		sb.WriteString(event.Message)
 	} else {
@@ -134,6 +138,7 @@ func (f *TextFormatter) Format(event logging.LogEvent) string {
 	}
 
 	// Metadata.
+	// add metadata if present
 	if len(event.Metadata) > 0 {
 		sb.WriteByte(' ')
 		formatMetadataToBuilder(sb, event.Metadata)
@@ -155,8 +160,10 @@ func formatMetadataToBuilder(sb *strings.Builder, meta map[string]any) {
 	sort.Strings(keys)
 
 	// Format each key-value pair.
+	// write each metadata key-value pair
 	for i, k := range keys {
 		// Add space separator between pairs.
+		// add separator between pairs
 		if i > 0 {
 			sb.WriteByte(' ')
 		}
@@ -172,12 +179,10 @@ func formatMetadataToBuilder(sb *strings.Builder, meta map[string]any) {
 //   - sb: the string builder to write to.
 //   - v: the value to format (any type for log metadata flexibility).
 //
-// Note: any type required - log metadata values are runtime-determined and type-heterogeneous
-// (primitives, errors, custom types). Type switch handles common cases efficiently.
-//
-//nolint:ktn-interface-anyuse // any required: log metadata is runtime-determined, type switch for efficient handling
+// Note: any type required - log metadata values are runtime-determined and type-heterogeneous.
 func formatValue(sb *strings.Builder, v any) {
 	// Type switch for efficient formatting.
+	// format value based on type
 	switch val := v.(type) {
 	// String values are written directly.
 	case string:

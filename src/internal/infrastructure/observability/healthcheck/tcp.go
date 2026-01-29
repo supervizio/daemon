@@ -29,6 +29,7 @@ type TCPProber struct {
 // Returns:
 //   - *TCPProber: a configured TCP prober ready to perform probes.
 func NewTCPProber(timeout time.Duration) *TCPProber {
+	// simple constructor with timeout configuration
 	return &TCPProber{
 		timeout: timeout,
 	}
@@ -39,6 +40,7 @@ func NewTCPProber(timeout time.Duration) *TCPProber {
 // Returns:
 //   - string: the constant "tcp" identifying the prober type.
 func (p *TCPProber) Type() string {
+	// identify this prober as tcp type
 	return proberTypeTCP
 }
 
@@ -55,6 +57,7 @@ func (p *TCPProber) Probe(ctx context.Context, target health.Target) health.Chec
 	start := time.Now()
 
 	network := target.Network
+	// use default network if not specified
 	if network == "" {
 		network = "tcp"
 	}
@@ -66,7 +69,9 @@ func (p *TCPProber) Probe(ctx context.Context, target health.Target) health.Chec
 	conn, err := dialer.DialContext(ctx, network, target.Address)
 	latency := time.Since(start)
 
+	// handle connection failure
 	if err != nil {
+		// connection errors indicate service is not accepting connections
 		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("connection failed: %v", err),
@@ -75,6 +80,7 @@ func (p *TCPProber) Probe(ctx context.Context, target health.Target) health.Chec
 	}
 	_ = conn.Close()
 
+	// return successful connection result
 	return health.NewSuccessCheckResult(
 		latency,
 		fmt.Sprintf("connected to %s", target.Address),

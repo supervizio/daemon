@@ -15,6 +15,16 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/resources/cgroup"
 )
 
+// testMemoryStatDetailed is a detailed memory.stat file content for v1 testing.
+const testMemoryStatDetailed string = `total_rss 1048576
+total_cache 2097152
+total_shmem 4096
+total_mapped_file 8192
+total_dirty 16384
+total_pgfault 1000
+total_pgmajfault 10
+`
+
 // === Test Constants ===
 
 // testCPUUsageValue is the test CPU usage value in nanoseconds.
@@ -700,15 +710,7 @@ func createTestV1ReaderWithMemoryStat(t *testing.T) *cgroup.V1Reader {
 	require.NoError(t, err)
 
 	// Create detailed memory.stat file
-	statContent := `total_rss 1048576
-total_cache 2097152
-total_shmem 4096
-total_mapped_file 8192
-total_dirty 16384
-total_pgfault 1000
-total_pgmajfault 10
-`
-	err = os.WriteFile(filepath.Join(memDir, "memory.stat"), []byte(statContent), 0o644)
+	err = os.WriteFile(filepath.Join(memDir, "memory.stat"), []byte(testMemoryStatDetailed), 0o644)
 	require.NoError(t, err)
 
 	// Create reader

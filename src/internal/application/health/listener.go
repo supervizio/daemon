@@ -27,6 +27,7 @@ type ListenerProbe struct {
 // Returns:
 //   - *ListenerProbe: a new ListenerProbe instance.
 func NewListenerProbe(l *listener.Listener) *ListenerProbe {
+	// construct listener probe with listener field
 	return &ListenerProbe{
 		Listener: l,
 	}
@@ -41,6 +42,7 @@ func NewListenerProbe(l *listener.Listener) *ListenerProbe {
 // Returns:
 //   - *ListenerProbe: a new ListenerProbe instance.
 func NewListenerProbeWithBinding(l *listener.Listener, binding *ProbeBinding) *ListenerProbe {
+	// construct listener probe with listener and binding
 	return &ListenerProbe{
 		Listener: l,
 		Binding:  binding,
@@ -52,6 +54,7 @@ func NewListenerProbeWithBinding(l *listener.Listener, binding *ProbeBinding) *L
 // Returns:
 //   - bool: true if prober is configured.
 func (lp *ListenerProbe) HasProber() bool {
+	// check prober presence
 	return lp.Prober != nil
 }
 
@@ -60,6 +63,7 @@ func (lp *ListenerProbe) HasProber() bool {
 // Returns:
 //   - bool: true if binding is configured.
 func (lp *ListenerProbe) HasBinding() bool {
+	// check binding presence
 	return lp.Binding != nil
 }
 
@@ -71,8 +75,10 @@ func (lp *ListenerProbe) HasBinding() bool {
 func (lp *ListenerProbe) ProbeAddress() string {
 	// Use binding address if configured, otherwise fall back to listener address.
 	if lp.Binding != nil && lp.Binding.Target.Address != "" {
+		// return binding address when available
 		return lp.Binding.Target.Address
 	}
+	// return listener address as fallback
 	return lp.Listener.Address
 }
 
@@ -84,6 +90,7 @@ func (lp *ListenerProbe) ProbeAddress() string {
 func (lp *ListenerProbe) ProbeTarget() domain.Target {
 	// Return minimal target when no binding configured.
 	if lp.Binding == nil {
+		// construct minimal target from listener
 		return domain.Target{
 			Address: lp.ProbeAddress(),
 		}
@@ -108,6 +115,7 @@ func (lp *ListenerProbe) ProbeTarget() domain.Target {
 func (lp *ListenerProbe) ProbeConfig() domain.CheckConfig {
 	// Return domain defaults when no binding configured.
 	if lp.Binding == nil {
+		// construct default config from domain
 		return domain.CheckConfig{
 			Interval:         domain.DefaultInterval,
 			Timeout:          domain.DefaultTimeout,

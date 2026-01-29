@@ -69,6 +69,7 @@ type Model struct {
 // Returns:
 //   - Model: configured model instance.
 func NewModel(cfg ModelConfig) Model {
+	// return computed result.
 	return Model{
 		tui:           cfg.TUI,
 		width:         cfg.Width,
@@ -91,6 +92,7 @@ type logMsg model.LogEntry
 // Returns:
 //   - tea.Cmd: batch of initialization commands.
 func (m Model) Init() tea.Cmd {
+	// return computed result.
 	return tea.Batch(
 		m.tick(),
 		tea.EnterAltScreen,
@@ -102,7 +104,9 @@ func (m Model) Init() tea.Cmd {
 // Returns:
 //   - tea.Cmd: tick command.
 func (m Model) tick() tea.Cmd {
+	// return computed result.
 	return tea.Tick(m.tui.config.RefreshInterval, func(t time.Time) tea.Msg {
+		// return computed result.
 		return tickMsg(t)
 	})
 }
@@ -116,26 +120,37 @@ func (m Model) tick() tea.Cmd {
 //   - tea.Model: updated model.
 //   - tea.Cmd: command to execute.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// evaluate switch expression.
 	switch msg := msg.(type) {
+	// handle case condition.
 	case tea.KeyMsg:
+		// return computed result.
 		return m.handleKeyMsg(msg)
 
+	// handle case condition.
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m = m.updatePanelSizes()
+		// return nil to indicate no error.
 		return m, nil
 
+	// handle case condition.
 	case tea.MouseMsg:
+		// return computed result.
 		return m.handleMouseMsg(msg)
 
+	// handle case condition.
 	case tickMsg:
+		// return computed result.
 		return m.handleTickMsg()
 
+	// handle case condition.
 	case logMsg:
 		m.logsPanel.AddEntry(model.LogEntry(msg))
 	}
 
+	// return nil to indicate no error.
 	return m, nil
 }
 
@@ -148,23 +163,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 //   - tea.Model: updated model.
 //   - tea.Cmd: command to execute.
 func (m Model) handleKeyMsg(msg Stringer) (tea.Model, tea.Cmd) {
+	// evaluate switch expression.
 	switch msg.String() {
+	// handle case condition.
 	case "q", "ctrl+c":
 		m.quitting = true
+		// return computed result.
 		return m, tea.Quit
+	// handle case condition.
 	case "tab":
+		// return nil to indicate no error.
 		return m.toggleFocus(), nil
+	// handle case condition.
 	case "l":
+		// return nil to indicate no error.
 		return m.focusLogs(), nil
+	// handle case condition.
 	case "s":
+		// return nil to indicate no error.
 		return m.focusServices(), nil
+	// handle case condition.
 	case "esc":
+		// return computed result.
 		return m.handleEscKey()
+	// handle case condition.
 	case "G":
+		// return nil to indicate no error.
 		return m.scrollToBottom(), nil
+	// handle case condition.
 	case "g":
+		// return nil to indicate no error.
 		return m.scrollToTop(), nil
 	}
+	// return computed result.
 	return m.forwardKeyToPanel(msg)
 }
 
@@ -174,10 +205,13 @@ func (m Model) handleKeyMsg(msg Stringer) (tea.Model, tea.Cmd) {
 //   - tea.Model: updated model.
 //   - tea.Cmd: command to execute.
 func (m Model) handleEscKey() (tea.Model, tea.Cmd) {
+	// evaluate condition.
 	if m.focus == FocusLogs {
+		// return nil to indicate no error.
 		return m.focusServices(), nil
 	}
 	m.quitting = true
+	// return computed result.
 	return m, tea.Quit
 }
 
@@ -186,15 +220,18 @@ func (m Model) handleEscKey() (tea.Model, tea.Cmd) {
 // Returns:
 //   - Model: updated model with toggled focus.
 func (m Model) toggleFocus() Model {
+	// evaluate condition.
 	if m.focus == FocusServices {
 		m.focus = FocusLogs
 		m.servicesPanel.SetFocused(false)
 		m.logsPanel.SetFocused(true)
+	// handle alternative case.
 	} else {
 		m.focus = FocusServices
 		m.logsPanel.SetFocused(false)
 		m.servicesPanel.SetFocused(true)
 	}
+	// return computed result.
 	return m
 }
 
@@ -206,6 +243,7 @@ func (m Model) focusLogs() Model {
 	m.focus = FocusLogs
 	m.servicesPanel.SetFocused(false)
 	m.logsPanel.SetFocused(true)
+	// return computed result.
 	return m
 }
 
@@ -217,6 +255,7 @@ func (m Model) focusServices() Model {
 	m.focus = FocusServices
 	m.logsPanel.SetFocused(false)
 	m.servicesPanel.SetFocused(true)
+	// return computed result.
 	return m
 }
 
@@ -225,12 +264,16 @@ func (m Model) focusServices() Model {
 // Returns:
 //   - Model: updated model.
 func (m Model) scrollToBottom() Model {
+	// evaluate switch expression.
 	switch m.focus {
+	// handle case condition.
 	case FocusLogs:
 		m.logsPanel.ScrollToBottom()
+	// handle case condition.
 	case FocusServices:
 		m.servicesPanel.ScrollToBottom()
 	}
+	// return computed result.
 	return m
 }
 
@@ -239,12 +282,16 @@ func (m Model) scrollToBottom() Model {
 // Returns:
 //   - Model: updated model.
 func (m Model) scrollToTop() Model {
+	// evaluate switch expression.
 	switch m.focus {
+	// handle case condition.
 	case FocusLogs:
 		m.logsPanel.ScrollToTop()
+	// handle case condition.
 	case FocusServices:
 		m.servicesPanel.ScrollToTop()
 	}
+	// return computed result.
 	return m
 }
 
@@ -259,17 +306,21 @@ func (m Model) scrollToTop() Model {
 func (m Model) forwardKeyToPanel(msg Stringer) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
+	// evaluate switch expression.
 	switch m.focus {
+	// handle case condition.
 	case FocusLogs:
 		lp, c := m.logsPanel.Update(msg)
 		m.logsPanel = *lp
 		cmd = c
+	// handle case condition.
 	case FocusServices:
 		sp, c := m.servicesPanel.Update(msg)
 		m.servicesPanel = *sp
 		cmd = c
 	}
 
+	// return computed result.
 	return m, cmd
 }
 
@@ -282,11 +333,14 @@ func (m Model) forwardKeyToPanel(msg Stringer) (tea.Model, tea.Cmd) {
 //   - tea.Model: updated model.
 //   - tea.Cmd: command to execute.
 func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	// evaluate condition.
 	if m.focus == FocusLogs {
 		lp, cmd := m.logsPanel.Update(msg)
 		m.logsPanel = *lp
+		// return computed result.
 		return m, cmd
 	}
+	// return nil to indicate no error.
 	return m, nil
 }
 
@@ -297,10 +351,12 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 //   - tea.Cmd: next tick command.
 func (m Model) handleTickMsg() (tea.Model, tea.Cmd) {
 	m.tui.collectData()
+	// handle non-nil condition.
 	if m.tui.snapshot != nil {
 		m.logsPanel.SetEntries(m.tui.snapshot.Logs.RecentEntries)
 		m.servicesPanel.SetServices(m.tui.snapshot.Services)
 	}
+	// return computed result.
 	return m, m.tick()
 }
 
@@ -321,6 +377,7 @@ func (m Model) updatePanelSizes() Model {
 
 	// System section only rendered in non-compact modes.
 	var systemHeight int
+	// evaluate condition.
 	if layout != terminal.LayoutCompact {
 		systemHeight = layoutSystemSectionLines
 	}
@@ -333,6 +390,7 @@ func (m Model) updatePanelSizes() Model {
 
 	// Ensure services panel doesn't exceed available space minus minimum logs.
 	maxServicesHeight := availableHeight - layoutMinLogHeight
+	// check for positive value.
 	if maxServicesHeight > 0 && servicesHeight > maxServicesHeight {
 		servicesHeight = maxServicesHeight
 	}
@@ -343,6 +401,7 @@ func (m Model) updatePanelSizes() Model {
 	m.logsPanel.SetSize(m.width, logsHeight)
 	m.servicesPanel.SetSize(m.width, servicesHeight)
 
+	// return computed result.
 	return m
 }
 
@@ -351,12 +410,16 @@ func (m Model) updatePanelSizes() Model {
 // Returns:
 //   - string: rendered UI.
 func (m Model) View() string {
+	// evaluate condition.
 	if m.quitting {
+		// return computed result.
 		return ""
 	}
 
 	snap := m.tui.snapshot
+	// handle nil condition.
 	if snap == nil {
+		// return computed result.
 		return "Loading..."
 	}
 
@@ -375,17 +438,25 @@ func (m Model) View() string {
 	sb.WriteString(header.Render(snap))
 	sb.WriteString("\n")
 
+	// evaluate switch expression.
 	switch layout {
+	// handle case condition.
 	case terminal.LayoutCompact:
 		sb.WriteString(m.renderCompact())
+	// handle case condition.
 	case terminal.LayoutNormal:
 		sb.WriteString(m.renderNormal(snap))
+	// handle case condition.
 	case terminal.LayoutWide, terminal.LayoutUltraWide:
 		sb.WriteString(m.renderWide(snap))
+	// handle default case.
+	default:
+		sb.WriteString(m.renderNormal(snap))
 	}
 
 	sb.WriteString(m.renderStatusBar(snap))
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -404,6 +475,7 @@ func (m Model) renderCompact() string {
 
 	sb.WriteString(m.logsPanel.View())
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -427,6 +499,7 @@ func (m Model) renderNormal(snap *model.Snapshot) string {
 
 	sb.WriteString(m.logsPanel.View())
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -451,6 +524,7 @@ func (m Model) renderWide(snap *model.Snapshot) string {
 
 	sb.WriteString(m.logsPanel.View())
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -472,6 +546,7 @@ func (m Model) renderSystemNetworkSideBySide(snap *model.Snapshot) string {
 	systemLines := trimTrailingEmptyLines(strings.Split(systemContent, "\n"))
 	networkLines := trimTrailingEmptyLines(strings.Split(networkContent, "\n"))
 
+	// return computed result.
 	return mergeLinesSideBySide(systemLines, networkLines, halfWidth)
 }
 
@@ -483,9 +558,11 @@ func (m Model) renderSystemNetworkSideBySide(snap *model.Snapshot) string {
 // Returns:
 //   - []string: lines without trailing empty lines.
 func trimTrailingEmptyLines(lines []string) []string {
+	// execute loop.
 	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
 	}
+	// return computed result.
 	return lines
 }
 
@@ -502,12 +579,15 @@ func mergeLinesSideBySide(left, right []string, leftWidth int) string {
 	var sb strings.Builder
 	maxLines := max(len(left), len(right))
 
+	// iterate over collection.
 	for i := range maxLines {
 		leftLine := ""
 		rightLine := ""
+		// evaluate condition.
 		if i < len(left) {
 			leftLine = left[i]
 		}
+		// evaluate condition.
 		if i < len(right) {
 			rightLine = right[i]
 		}
@@ -519,6 +599,7 @@ func mergeLinesSideBySide(left, right []string, leftWidth int) string {
 		sb.WriteString("\n")
 	}
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -532,9 +613,12 @@ func mergeLinesSideBySide(left, right []string, leftWidth int) string {
 //   - string: padded string.
 func padToWidth(s string, width int) string {
 	visible := widget.VisibleLen(s)
+	// evaluate condition.
 	if visible >= width {
+		// return computed result.
 		return s
 	}
+	// return computed result.
 	return s + strings.Repeat(" ", width-visible)
 }
 
@@ -547,15 +631,19 @@ func padToWidth(s string, width int) string {
 //   - string: rendered status bar.
 func (m Model) renderStatusBar(snap *model.Snapshot) string {
 	var focusIndicator string
+	// evaluate condition.
 	if m.focus == FocusLogs {
 		focusIndicator = m.theme.Primary + "[LOGS]" + ansi.Reset
+	// handle alternative case.
 	} else {
 		focusIndicator = m.theme.Primary + "[SERVICES]" + ansi.Reset
 	}
 
 	var keys string
+	// evaluate condition.
 	if m.focus == FocusLogs {
 		keys = m.theme.Muted + "[↑↓] Scroll  [g/G] Top/Bottom  [s] Services  [Tab] Switch  [q] Quit" + ansi.Reset
+	// handle alternative case.
 	} else {
 		keys = m.theme.Muted + "[↑↓] Scroll  [g/G] Top/Bottom  [l] Logs  [Tab] Switch  [q] Quit" + ansi.Reset
 	}
@@ -568,6 +656,7 @@ func (m Model) renderStatusBar(snap *model.Snapshot) string {
 	badgeLen := widget.VisibleLen(badge)
 	padding := max(0, m.width-contentLen-badgeLen-statusBarBadgeSpacing)
 
+	// return computed result.
 	return statusContent + strings.Repeat(" ", padding) + badge + "  "
 }
 
@@ -583,6 +672,7 @@ func (t *TUI) runBubbleTea(ctx context.Context) error {
 
 	m := t.createInitialModel()
 
+	// return computed result.
 	return t.runTeaProgram(ctx, m)
 }
 
@@ -606,10 +696,12 @@ func (t *TUI) createInitialModel() Model {
 
 	m.servicesPanel.SetFocused(true)
 
+	// handle non-nil condition.
 	if t.snapshot != nil {
 		m.logsPanel.SetEntries(t.snapshot.Logs.RecentEntries)
 	}
 
+	// return computed result.
 	return m
 }
 
@@ -623,6 +715,7 @@ func (t *TUI) createInitialModel() Model {
 //   - component.LogsPanel: configured logs panel.
 func (t *TUI) createInitialPanels(size terminal.Size) (component.ServicesPanel, component.LogsPanel) {
 	servicesPanel := component.NewServicesPanel(size.Cols, panelInitialServicesHeight)
+	// handle non-nil condition.
 	if t.snapshot != nil {
 		servicesPanel.SetServices(t.snapshot.Services)
 	}
@@ -635,6 +728,7 @@ func (t *TUI) createInitialPanels(size terminal.Size) (component.ServicesPanel, 
 
 	servicesPanel.SetSize(size.Cols, servicesHeight)
 
+	// return computed result.
 	return servicesPanel, component.NewLogsPanel(size.Cols, logsHeight)
 }
 
@@ -660,17 +754,23 @@ func (t *TUI) runTeaProgram(ctx context.Context, m Model) error {
 	//   - Ends: Sends result to done channel, then exits
 	// Cleanup: Select below handles context cancellation or completion
 	done := make(chan error, 1)
+	// launch goroutine.
 	go func() {
 		// Goroutine exits when prg.Run() completes.
 		_, err := prg.Run()
 		done <- err
 	}()
 
+	// wait on channel operations.
 	select {
+	// handle case condition.
 	case <-ctx.Done():
 		prg.Quit()
+		// return computed result.
 		return ctx.Err()
+	// handle case condition.
 	case err := <-done:
+		// return computed result.
 		return err
 	}
 }

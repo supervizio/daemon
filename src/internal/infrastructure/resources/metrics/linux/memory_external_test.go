@@ -17,6 +17,64 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/resources/metrics/linux"
 )
 
+// testMeminfoContent contains sample /proc/meminfo for testing.
+const testMeminfoContent string = `MemTotal:       16384000 kB
+MemFree:         4096000 kB
+MemAvailable:    8192000 kB
+Buffers:          512000 kB
+Cached:          2048000 kB
+SwapCached:            0 kB
+Active:          6000000 kB
+Inactive:        4000000 kB
+Active(anon):    4000000 kB
+Inactive(anon):   500000 kB
+Active(file):    2000000 kB
+Inactive(file):  3500000 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:       4096000 kB
+SwapFree:        3072000 kB
+Dirty:               100 kB
+Writeback:             0 kB
+AnonPages:       4500000 kB
+Mapped:           500000 kB
+Shmem:            256000 kB
+`
+
+// testPidStatusContent contains sample /proc/[pid]/status for testing.
+const testPidStatusContent string = `Name:	test-daemon
+Umask:	0022
+State:	S (sleeping)
+Tgid:	1234
+Ngid:	0
+Pid:	1234
+PPid:	1
+TracerPid:	0
+Uid:	1000	1000	1000	1000
+Gid:	1000	1000	1000	1000
+FDSize:	256
+Groups:	4 24 27 30 46 120 131 132 1000
+NStgid:	1234
+NSpid:	1234
+NSpgid:	1234
+NSsid:	1234
+VmPeak:	   500000 kB
+VmSize:	   450000 kB
+VmLck:	        0 kB
+VmPin:	        0 kB
+VmHWM:	   100000 kB
+VmRSS:	    80000 kB
+RssAnon:	    60000 kB
+RssFile:	    15000 kB
+RssShmem:	     5000 kB
+VmData:	   200000 kB
+VmStk:	      136 kB
+VmExe:	       10 kB
+VmLib:	    10000 kB
+VmPTE:	      500 kB
+VmSwap:	     1000 kB
+`
+
 func TestMemoryCollector_CollectSystem(t *testing.T) {
 	t.Parallel()
 
@@ -53,29 +111,7 @@ func TestMemoryCollector_CollectSystem(t *testing.T) {
 			name: "parses mock /proc/meminfo correctly",
 			setupFS: func(t *testing.T) string {
 				mockProc := t.TempDir()
-				meminfoContent := `MemTotal:       16384000 kB
-MemFree:         4096000 kB
-MemAvailable:    8192000 kB
-Buffers:          512000 kB
-Cached:          2048000 kB
-SwapCached:            0 kB
-Active:          6000000 kB
-Inactive:        4000000 kB
-Active(anon):    4000000 kB
-Inactive(anon):   500000 kB
-Active(file):    2000000 kB
-Inactive(file):  3500000 kB
-Unevictable:           0 kB
-Mlocked:               0 kB
-SwapTotal:       4096000 kB
-SwapFree:        3072000 kB
-Dirty:               100 kB
-Writeback:             0 kB
-AnonPages:       4500000 kB
-Mapped:           500000 kB
-Shmem:            256000 kB
-`
-				require.NoError(t, os.WriteFile(filepath.Join(mockProc, "meminfo"), []byte(meminfoContent), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(mockProc, "meminfo"), []byte(testMeminfoContent), 0o644))
 				return mockProc
 			},
 			validate: func(t *testing.T, mem metrics.SystemMemory, err error) {
@@ -191,39 +227,7 @@ func TestMemoryCollector_CollectProcess(t *testing.T) {
 				mockProc := t.TempDir()
 				pidDir := filepath.Join(mockProc, "1234")
 				require.NoError(t, os.Mkdir(pidDir, 0o755))
-				statusContent := `Name:	test-daemon
-Umask:	0022
-State:	S (sleeping)
-Tgid:	1234
-Ngid:	0
-Pid:	1234
-PPid:	1
-TracerPid:	0
-Uid:	1000	1000	1000	1000
-Gid:	1000	1000	1000	1000
-FDSize:	256
-Groups:	4 24 27 30 46 120 131 132 1000
-NStgid:	1234
-NSpid:	1234
-NSpgid:	1234
-NSsid:	1234
-VmPeak:	   500000 kB
-VmSize:	   450000 kB
-VmLck:	        0 kB
-VmPin:	        0 kB
-VmHWM:	   100000 kB
-VmRSS:	    80000 kB
-RssAnon:	    60000 kB
-RssFile:	    15000 kB
-RssShmem:	     5000 kB
-VmData:	   200000 kB
-VmStk:	      136 kB
-VmExe:	       10 kB
-VmLib:	    10000 kB
-VmPTE:	      500 kB
-VmSwap:	     1000 kB
-`
-				require.NoError(t, os.WriteFile(filepath.Join(pidDir, "status"), []byte(statusContent), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(pidDir, "status"), []byte(testPidStatusContent), 0o644))
 				return mockProc
 			},
 			pid: 1234,

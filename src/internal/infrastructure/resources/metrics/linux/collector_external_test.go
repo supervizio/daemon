@@ -16,6 +16,23 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/resources/metrics/linux"
 )
 
+// testProcessStatusContent contains sample /proc/[pid]/status for testing.
+const testProcessStatusContent string = `Name:	test-memory
+State:	S (sleeping)
+Tgid:	5678
+Ngid:	0
+Pid:	5678
+PPid:	1
+VmPeak:	10000 kB
+VmSize:	8000 kB
+VmRSS:	4096 kB
+VmData:	2000 kB
+VmStk:	136 kB
+VmSwap:	100 kB
+RssShmem:	50 kB
+RssFile:	100 kB
+`
+
 func TestNewProcessCollector(t *testing.T) {
 	t.Parallel()
 
@@ -184,22 +201,7 @@ func TestProcessCollector_CollectMemory(t *testing.T) {
 				mockProc := t.TempDir()
 				pidDir := filepath.Join(mockProc, "5678")
 				require.NoError(t, os.MkdirAll(pidDir, 0o755))
-				statusContent := `Name:	test-memory
-State:	S (sleeping)
-Tgid:	5678
-Ngid:	0
-Pid:	5678
-PPid:	1
-VmPeak:	10000 kB
-VmSize:	8000 kB
-VmRSS:	4096 kB
-VmData:	2000 kB
-VmStk:	136 kB
-VmSwap:	100 kB
-RssShmem:	50 kB
-RssFile:	100 kB
-`
-				require.NoError(t, os.WriteFile(filepath.Join(pidDir, "status"), []byte(statusContent), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(pidDir, "status"), []byte(testProcessStatusContent), 0o644))
 				return mockProc
 			},
 			pid: 5678,

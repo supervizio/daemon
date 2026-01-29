@@ -12,6 +12,23 @@ import (
 
 	"github.com/kodflow/daemon/internal/domain/metrics"
 )
+const (
+	// testMeminfoStandardFormat contains sample /proc/meminfo content for testing.
+	testMeminfoStandardFormat string = `MemTotal:       16384000 kB
+MemFree:         4096000 kB
+MemAvailable:    8192000 kB
+Buffers:          512000 kB
+`
+
+	// testStatusStandardFormat contains sample /proc/[pid]/status content for testing.
+	testStatusStandardFormat string = `Name:	test-process
+State:	S (sleeping)
+VmSize:	  100000 kB
+VmRSS:	   50000 kB
+VmSwap:	    1000 kB
+`
+)
+
 
 // TestCollectSystemContextCancellation verifies context cancellation handling.
 //
@@ -201,11 +218,7 @@ func TestMemoryCollector_ReadMemInfo(t *testing.T) {
 	}{
 		{
 			name: "parses standard meminfo format",
-			meminfoContent: `MemTotal:       16384000 kB
-MemFree:         4096000 kB
-MemAvailable:    8192000 kB
-Buffers:          512000 kB
-`,
+			meminfoContent: testMeminfoStandardFormat,
 			wantKeys: []string{"MemTotal", "MemFree", "MemAvailable", "Buffers"},
 			wantValues: map[string]uint64{
 				"MemTotal":     16384000,
@@ -466,12 +479,7 @@ func TestMemoryCollector_ReadProcessStatus(t *testing.T) {
 	}{
 		{
 			name: "parses standard status format",
-			statusContent: `Name:	test-process
-State:	S (sleeping)
-VmSize:	  100000 kB
-VmRSS:	   50000 kB
-VmSwap:	    1000 kB
-`,
+			statusContent: testStatusStandardFormat,
 			pid:       1234,
 			wantName:  "test-process",
 			wantVMRSS: 50000,

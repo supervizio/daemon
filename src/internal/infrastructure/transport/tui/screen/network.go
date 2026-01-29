@@ -107,9 +107,11 @@ func (n *NetworkRenderer) Render(snap *model.Snapshot) string {
 	case terminal.LayoutNormal, terminal.LayoutWide, terminal.LayoutUltraWide:
 		// Return network view with throughput bars.
 		return n.renderWithBars(interfaces)
+	// handle default case.
+	default:
+		// Default to full network display.
+		return n.renderWithBars(interfaces)
 	}
-	// Default to full network display.
-	return n.renderWithBars(interfaces)
 }
 
 // filterInterfaces removes uninteresting interfaces.
@@ -246,8 +248,10 @@ func (n *NetworkRenderer) calculateBarWidth() int {
 	barWidth := (n.width - barCalculationOffset) / barDivider
 	// Ensure minimum bar width for readability.
 	if barWidth < networkMinBarWidth {
+		// return computed result.
 		return networkMinBarWidth
 	}
+	// return computed result.
 	return barWidth
 }
 
@@ -265,8 +269,10 @@ func (n *NetworkRenderer) formatInterfaceLine(iface model.NetworkInterface, barW
 
 	// Show progress bars when interface has speed info.
 	if iface.Speed > 0 {
+		// return computed result.
 		return n.formatInterfaceWithSpeed(iface, barWidth, rxRate, txRate)
 	}
+	// return computed result.
 	return n.formatInterfaceNoSpeed(iface, rxRate, txRate)
 }
 
@@ -300,6 +306,7 @@ func (n *NetworkRenderer) formatInterfaceWithSpeed(iface model.NetworkInterface,
 	sb.WriteString(widget.PadLeft(txRate, ratePaddingWidth))
 	sb.WriteString("  ")
 	sb.WriteString(speed)
+	// return computed result.
 	return sb.String()
 }
 
@@ -320,9 +327,11 @@ func (n *NetworkRenderer) calculatePercentages(iface model.NetworkInterface) (rx
 	if rxPercent > percentMax {
 		rxPercent = percentMax
 	}
+	// evaluate condition.
 	if txPercent > percentMax {
 		txPercent = percentMax
 	}
+	// return computed result.
 	return rxPercent, txPercent
 }
 
@@ -339,6 +348,7 @@ func (n *NetworkRenderer) createProgressBar(width int, percent float64) *widget.
 		SetLabel("").
 		SetColorByPercent()
 	bar.ShowValue = false
+	// return computed result.
 	return bar
 }
 
@@ -364,6 +374,7 @@ func (n *NetworkRenderer) formatInterfaceNoSpeed(iface model.NetworkInterface, r
 	sb.WriteString(n.theme.Muted)
 	sb.WriteString("(no limit)")
 	sb.WriteString(ansi.Reset)
+	// return computed result.
 	return sb.String()
 }
 

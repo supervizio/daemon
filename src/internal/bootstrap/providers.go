@@ -48,9 +48,12 @@ type supervisorConfigurer interface {
 // Returns:
 //   - lifecycle.Reaper: the reaper if PID 1, nil otherwise.
 func ProvideReaper(r ReaperMinimal) lifecycle.Reaper {
+	// check if process is PID 1
 	if r.IsPID1() {
+		// return reaper for PID 1
 		return r
 	}
+	// return nil for non-PID1 processes
 	return nil
 }
 
@@ -64,6 +67,7 @@ func ProvideReaper(r ReaperMinimal) lifecycle.Reaper {
 //   - *domainconfig.Config: the loaded configuration.
 //   - error: any error during loading.
 func LoadConfig(loader appconfig.Loader, configPath string) (*domainconfig.Config, error) {
+	// load config from path
 	return loader.Load(configPath)
 }
 
@@ -78,6 +82,7 @@ func LoadConfig(loader appconfig.Loader, configPath string) (*domainconfig.Confi
 //
 // Deprecated: Use NewAppWithHealth instead.
 func NewApp(sup AppSupervisor) *App {
+	// construct app with supervisor only
 	return &App{
 		Supervisor: sup,
 		Cleanup:    nil,
@@ -89,6 +94,7 @@ func NewApp(sup AppSupervisor) *App {
 // Returns:
 //   - *infrahealthcheck.Factory: the prober factory instance.
 func ProvideProberFactory() *infrahealthcheck.Factory {
+	// construct prober factory with default timeout
 	return infrahealthcheck.NewFactory(defaultProbeTimeout)
 }
 
@@ -100,6 +106,7 @@ func ProvideProberFactory() *infrahealthcheck.Factory {
 // Returns:
 //   - *appmetrics.Tracker: the metrics tracker instance.
 func ProvideMetricsTracker(collector appmetrics.Collector) *appmetrics.Tracker {
+	// construct tracker with platform collector
 	return appmetrics.NewTracker(collector)
 }
 
@@ -117,9 +124,12 @@ func ProvideMetricsTracker(collector appmetrics.Collector) *appmetrics.Tracker {
 // Returns:
 //   - *App: the application container with health monitoring and metrics enabled.
 func NewAppWithHealth(sup supervisorConfigurer, factory apphealth.Creator, tracker *appmetrics.Tracker, cfg *domainconfig.Config) *App {
+	// configure supervisor with prober factory
 	sup.SetProberFactory(factory)
+	// configure supervisor with metrics tracker
 	sup.SetMetricsTracker(tracker)
 
+	// construct app with all components
 	return &App{
 		Supervisor:     sup,
 		Config:         cfg,

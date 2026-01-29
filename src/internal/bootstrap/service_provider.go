@@ -31,16 +31,20 @@ func (p *supervisorServiceLister) ListServices() []model.ServiceSnapshot {
 
 	// Pre-calculate total listener count to avoid allocations in hot loop (KTN-VAR-HOTLOOP).
 	totalListeners := int(0)
+	// calculate total listener count across all services
 	for i := range snapshots {
 		totalListeners += len(snapshots[i].Listeners)
 	}
 
 	allListeners := make([]model.ListenerSnapshot, 0, totalListeners)
 
+	// convert supervisor snapshots to model snapshots
 	for _, snap := range snapshots {
 		listenerStart := len(allListeners)
 
+		// convert each listener to model format
 		for _, l := range snap.Listeners {
+			// append converted listener
 			allListeners = append(allListeners, model.ListenerSnapshot{
 				Name:      l.Name,
 				Port:      l.Port,
@@ -53,6 +57,7 @@ func (p *supervisorServiceLister) ListServices() []model.ServiceSnapshot {
 
 		listeners := allListeners[listenerStart:]
 
+		// append service snapshot with all fields
 		result = append(result, model.ServiceSnapshot{
 			Name:            snap.Name,
 			State:           domainprocess.State(snap.StateInt),
@@ -68,5 +73,6 @@ func (p *supervisorServiceLister) ListServices() []model.ServiceSnapshot {
 		})
 	}
 
+	// return all converted snapshots
 	return result
 }

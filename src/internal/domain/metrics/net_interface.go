@@ -31,6 +31,7 @@ type NetInterface struct {
 // Returns:
 //   - NetInterface: new network interface instance
 func NewNetInterface(name string, index int) NetInterface {
+	// initialize with name and index
 	return NetInterface{
 		Name:  name,
 		Index: index,
@@ -42,6 +43,7 @@ func NewNetInterface(name string, index int) NetInterface {
 // Returns:
 //   - bool: true if interface is up, false otherwise
 func (n NetInterface) IsUp() bool {
+	// check if up flag is present
 	return slices.Contains(n.Flags, "up")
 }
 
@@ -50,5 +52,6 @@ func (n NetInterface) IsUp() bool {
 // Returns:
 //   - bool: true if interface is loopback, false otherwise
 func (n NetInterface) IsLoopback() bool {
+	// check if loopback flag is present
 	return slices.Contains(n.Flags, "loopback")
 }

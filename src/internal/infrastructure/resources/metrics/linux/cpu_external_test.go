@@ -17,6 +17,18 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/resources/metrics/linux"
 )
 
+// testProcStatContent contains sample /proc/stat for testing.
+const testProcStatContent string = `cpu  10132153 290696 3084719 46828483 16683 0 25195 0 0 0
+cpu0 5066076 145348 1542359 23414241 8341 0 12597 0 0 0
+cpu1 5066077 145348 1542360 23414242 8342 0 12598 0 0 0
+intr 200450538 122 9 0 0 0 0 3 0 1 79 0 0 156 0 0 0
+ctxt 385016193
+btime 1234567890
+processes 39315
+procs_running 1
+procs_blocked 0
+`
+
 func TestNewCPUCollector(t *testing.T) {
 	t.Parallel()
 
@@ -128,17 +140,7 @@ func TestCPUCollector_CollectSystem(t *testing.T) {
 			name: "parses mock /proc/stat correctly",
 			setupFS: func(t *testing.T) string {
 				mockProc := t.TempDir()
-				statContent := `cpu  10132153 290696 3084719 46828483 16683 0 25195 0 0 0
-cpu0 5066076 145348 1542359 23414241 8341 0 12597 0 0 0
-cpu1 5066077 145348 1542360 23414242 8342 0 12598 0 0 0
-intr 200450538 122 9 0 0 0 0 3 0 1 79 0 0 156 0 0 0
-ctxt 385016193
-btime 1234567890
-processes 39315
-procs_running 1
-procs_blocked 0
-`
-				require.NoError(t, os.WriteFile(filepath.Join(mockProc, "stat"), []byte(statContent), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(mockProc, "stat"), []byte(testProcStatContent), 0o644))
 				return mockProc
 			},
 			validate: func(t *testing.T, cpu metrics.SystemCPU, err error) {
