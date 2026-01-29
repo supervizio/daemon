@@ -164,9 +164,11 @@ func parseCgroupV2CPUMax(cgroupPath string, limits *model.ResourceLimits) {
 func parseCgroupV2CPUSet(cgroupPath string, limits *model.ResourceLimits) {
 	// Try effective file first, fall back to regular file.
 	content, err := os.ReadFile(filepath.Join(cgroupPath, "cpuset.cpus.effective"))
+	// handle non-nil condition.
 	if err != nil {
 		// Fall back to regular cpuset file.
 		content, err = os.ReadFile(filepath.Join(cgroupPath, "cpuset.cpus"))
+		// handle non-nil condition.
 		if err != nil {
 			// Neither file readable.
 			return

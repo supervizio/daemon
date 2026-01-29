@@ -4,14 +4,14 @@ package supervisor
 
 import (
 	"context"
-	"time"
 	"testing"
+	"time"
 
-	"github.com/stretchr/testify/assert"
 	apphealth "github.com/kodflow/daemon/internal/application/health"
 	applifecycle "github.com/kodflow/daemon/internal/application/lifecycle"
 	appmetrics "github.com/kodflow/daemon/internal/application/metrics"
 	domainconfig "github.com/kodflow/daemon/internal/domain/config"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kodflow/daemon/internal/domain/health"
@@ -623,7 +623,6 @@ func (m *mockReaper) IsPID1() bool {
 	return false
 }
 
-
 func (m *mockReaper) ReapOnce() int {
 	return 0
 }
@@ -786,7 +785,6 @@ func Test_Supervisor_startHealthMonitors(t *testing.T) {
 		})
 	}
 }
-
 
 // Test_Supervisor_stopAll tests the stopAll method.
 //

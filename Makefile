@@ -34,10 +34,10 @@ build-e2e: build ## Build E2E test binaries (supervizio + crasher)
 lint: lint-golangci lint-ktn ## Run all linters
 
 lint-golangci: ## Run golangci-lint
-	@cd src && golangci-lint run
+	@cd src && golangci-lint run -c ../.golangci.yml
 
 lint-ktn: ## Run ktn-linter
-	@cd src && ktn-linter lint --no-cache ./...
+	@cd src && ktn-linter lint --no-cache -c ../.ktn-linter.yaml ./...
 
 fmt: ## Format code with gofmt
 	@cd src && go fmt ./...

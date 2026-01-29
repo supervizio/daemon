@@ -40,6 +40,7 @@ type InvalidFormatError struct {
 // Returns:
 //   - *InvalidFormatError: structured error with parsing context
 func NewInvalidFormatError(file, content string, expected, got int) *InvalidFormatError {
+	// construct error with all context fields.
 	return &InvalidFormatError{File: file, Content: content, Expected: expected, Got: got}
 }
 
@@ -48,6 +49,7 @@ func NewInvalidFormatError(file, content string, expected, got int) *InvalidForm
 // Returns:
 //   - string: formatted error message with file, content, and field counts
 func (e *InvalidFormatError) Error() string {
+	// format error with file name and field mismatch details.
 	return fmt.Sprintf("invalid %s format %q: expected %d fields, got %d", e.File, e.Content, e.Expected, e.Got)
 }
 

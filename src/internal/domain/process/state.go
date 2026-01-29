@@ -24,18 +24,31 @@ const (
 // Returns:
 //   - string: human-readable state name
 func (s State) String() string {
+	// map state to string representation
 	switch s {
+	// stopped state
 	case StateStopped:
+		// return stopped string
 		return "stopped"
+	// starting state
 	case StateStarting:
+		// return starting string
 		return "starting"
+	// running state
 	case StateRunning:
+		// return running string
 		return "running"
+	// stopping state
 	case StateStopping:
+		// return stopping string
 		return "stopping"
+	// failed state
 	case StateFailed:
+		// return failed string
 		return "failed"
+	// unknown state
 	default:
+		// return unknown string
 		return "unknown"
 	}
 }
@@ -45,6 +58,7 @@ func (s State) String() string {
 // Returns:
 //   - bool: true if the process has reached a terminal state
 func (s State) IsTerminal() bool {
+	// check if state is stopped or failed
 	return s == StateStopped || s == StateFailed
 }
 
@@ -53,6 +67,7 @@ func (s State) IsTerminal() bool {
 // Returns:
 //   - bool: true if the process is currently active
 func (s State) IsActive() bool {
+	// check if state is starting or running
 	return s == StateStarting || s == StateRunning
 }
 
@@ -61,6 +76,7 @@ func (s State) IsActive() bool {
 // Returns:
 //   - bool: true if the process is currently running
 func (s State) IsRunning() bool {
+	// check if state is running
 	return s == StateRunning
 }
 
@@ -69,6 +85,7 @@ func (s State) IsRunning() bool {
 // Returns:
 //   - bool: true if the process is currently stopping
 func (s State) IsStopping() bool {
+	// check if state is stopping
 	return s == StateStopping
 }
 
@@ -77,6 +94,7 @@ func (s State) IsStopping() bool {
 // Returns:
 //   - bool: true if the process is currently starting
 func (s State) IsStarting() bool {
+	// check if state is starting
 	return s == StateStarting
 }
 
@@ -85,6 +103,7 @@ func (s State) IsStarting() bool {
 // Returns:
 //   - bool: true if the process is in failed state
 func (s State) IsFailed() bool {
+	// check if state is failed
 	return s == StateFailed
 }
 
@@ -93,5 +112,6 @@ func (s State) IsFailed() bool {
 // Returns:
 //   - bool: true if the process is in stopped state
 func (s State) IsStopped() bool {
+	// check if state is stopped
 	return s == StateStopped
 }

@@ -55,8 +55,11 @@ func (m *MemoryStat) setField(key string, value uint64) bool {
 	setter, ok := fieldSetters[key]
 	// Unknown field; skip silently for forward compatibility.
 	if !ok {
+		// field not recognized, ignore.
 		return false
 	}
+	// apply the value to the matched field.
 	setter(m, value)
+	// successfully set the field.
 	return true
 }

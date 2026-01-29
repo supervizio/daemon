@@ -34,6 +34,7 @@ type MemoryPressure struct {
 // Returns:
 //   - MemoryPressure: the created MemoryPressure instance
 func NewMemoryPressure(params *MemoryPressureParams) MemoryPressure {
+	// initialize with all memory pressure metrics
 	return MemoryPressure{
 		SomeAvg10:  params.SomeAvg10,
 		SomeAvg60:  params.SomeAvg60,
@@ -52,5 +53,6 @@ func NewMemoryPressure(params *MemoryPressureParams) MemoryPressure {
 // Returns:
 //   - bool: true if memory pressure exceeds the threshold
 func (p *MemoryPressure) IsUnderPressure() bool {
+	// check if either some or full pressure exceeds threshold
 	return p.SomeAvg10 > PressureThreshold || p.FullAvg10 > PressureThreshold
 }

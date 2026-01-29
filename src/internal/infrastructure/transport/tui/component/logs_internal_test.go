@@ -395,7 +395,7 @@ func TestLogsPanel_updateContent(t *testing.T) {
 	}
 }
 
-func TestLogsPanel_writeMetadataValue(t *testing.T) {
+func TestLogsPanel_appendMetadataValue(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -418,7 +418,7 @@ func TestLogsPanel_writeMetadataValue(t *testing.T) {
 			t.Parallel()
 			panel := NewLogsPanel(80, 24)
 			var sb strings.Builder
-			panel.writeMetadataValue(&sb, tt.value)
+			panel.appendMetadataValue(&sb, tt.value)
 			result := sb.String()
 			assert.Contains(t, result, tt.want)
 		})

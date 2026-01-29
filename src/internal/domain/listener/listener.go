@@ -34,6 +34,7 @@ type Listener struct {
 // Returns:
 //   - *Listener: a new listener in StateClosed state.
 func NewListener(name, protocol, address string, port int) *Listener {
+	// return initialized listener
 	return &Listener{
 		Name:     name,
 		Protocol: protocol,
@@ -53,6 +54,7 @@ func NewListener(name, protocol, address string, port int) *Listener {
 // Returns:
 //   - *Listener: a new TCP listener in StateClosed state.
 func NewTCP(name, address string, port int) *Listener {
+	// create tcp listener via generic constructor
 	return NewListener(name, "tcp", address, port)
 }
 
@@ -66,6 +68,7 @@ func NewTCP(name, address string, port int) *Listener {
 // Returns:
 //   - *Listener: a new UDP listener in StateClosed state.
 func NewUDP(name, address string, port int) *Listener {
+	// create udp listener via generic constructor
 	return NewListener(name, "udp", address, port)
 }
 
@@ -77,10 +80,13 @@ func NewUDP(name, address string, port int) *Listener {
 // Returns:
 //   - bool: true if the transition was valid and applied.
 func (l *Listener) SetState(state State) bool {
+	// validate state transition is allowed
 	if !l.State.CanTransitionTo(state) {
+		// reject invalid transition
 		return false
 	}
 	l.State = state
+	// return success
 	return true
 }
 
@@ -89,7 +95,7 @@ func (l *Listener) SetState(state State) bool {
 // Returns:
 //   - bool: true if transition was successful.
 func (l *Listener) MarkListening() bool {
-	// Transition to StateListening state.
+	// transition to listening state
 	return l.SetState(StateListening)
 }
 
@@ -98,7 +104,7 @@ func (l *Listener) MarkListening() bool {
 // Returns:
 //   - bool: true if transition was successful.
 func (l *Listener) MarkReady() bool {
-	// Transition to StateReady state.
+	// transition to ready state
 	return l.SetState(StateReady)
 }
 
@@ -107,6 +113,6 @@ func (l *Listener) MarkReady() bool {
 // Returns:
 //   - bool: true if transition was successful.
 func (l *Listener) MarkClosed() bool {
-	// Transition to StateClosed state.
+	// transition to closed state
 	return l.SetState(StateClosed)
 }

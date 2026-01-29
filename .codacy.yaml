@@ -40,8 +40,8 @@ exclude_paths:
   - "e2e/behavioral/crasher/**"
 
   # Config files (linter configs, not code)
-  - "src/.golangci.yml"
-  - "src/.ktn-linter.yaml"
+  - ".golangci.yml"
+  - ".ktn-linter.yaml"
   - ".coderabbit.yaml"
   - ".qodo-merge.toml"
 

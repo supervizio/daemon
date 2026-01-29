@@ -14,6 +14,7 @@ type DaemonLogging struct {
 // Returns:
 //   - DaemonLogging: default daemon logging configuration.
 func DefaultDaemonLogging() DaemonLogging {
+	// return default with console writer at info level
 	return DaemonLogging{
 		Writers: []WriterConfig{
 			{Type: "console", Level: "info"},

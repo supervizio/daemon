@@ -385,10 +385,17 @@ func (l *LogsPanel) getLevelInfo(level string) (levelStr, color string) {
 //
 // Returns:
 //   - string: formatted metadata string
+// formatMetadata formats metadata as key=value pairs using strings.Builder.
+//
+// Params:
+//   - meta: metadata map to format (key to any value)
+//
+// Returns:
+//   - string: formatted metadata string
 func (l *LogsPanel) formatMetadata(meta map[string]any) string {
-	// Return empty string if no metadata.
+	// Return early if no metadata.
 	if len(meta) == 0 {
-		// Return empty for nil or empty map.
+		// Return empty string for nil or empty map.
 		return ""
 	}
 
@@ -398,55 +405,53 @@ func (l *LogsPanel) formatMetadata(meta map[string]any) string {
 	var sb strings.Builder
 	sb.Grow(len(keys) * metadataEstimatedSize)
 
-	// Format each key-value pair.
+	// Build key=value pairs for each metadata entry.
 	for i, k := range keys {
-		// Add separator between pairs.
+		// Add space separator between pairs.
 		if i > 0 {
 			sb.WriteByte(' ')
 		}
 		sb.WriteString(k)
 		sb.WriteByte('=')
-		l.writeMetadataValue(&sb, meta[k])
+		l.appendMetadataValue(&sb, meta[k])
 	}
 
-	// Return formatted metadata string.
+	// Return formatted string.
 	return sb.String()
 }
 
-// writeMetadataValue writes a typed value to the string builder.
+// appendMetadataValue writes a typed metadata value to the builder.
 //
 // Params:
 //   - sb: string builder to write to
-//   - val: value to format (any type for metadata flexibility)
-//
-//nolint:ktn-interface-anyuse // any required: log metadata is runtime-determined, type switch for efficient handling
-func (l *LogsPanel) writeMetadataValue(sb *strings.Builder, val any) {
-	// Handle common types efficiently.
+//   - val: metadata value to format (any type from log metadata)
+func (l *LogsPanel) appendMetadataValue(sb *strings.Builder, val any) {
+	// Type switch for efficient formatting of common types.
 	switch typed := val.(type) {
-	// Handle string values.
+	// Format string values directly.
 	case string:
 		sb.WriteString(typed)
-	// Handle int values.
+	// Format int values.
 	case int:
 		sb.WriteString(strconv.Itoa(typed))
-	// Handle int64 values.
+	// Format int64 values.
 	case int64:
 		sb.WriteString(strconv.FormatInt(typed, decimalBase))
-	// Handle uint64 values.
+	// Format uint64 values.
 	case uint64:
 		sb.WriteString(strconv.FormatUint(typed, decimalBase))
-	// Handle float64 values.
+	// Format float64 values.
 	case float64:
 		sb.WriteString(strconv.FormatFloat(typed, 'f', formatFloatPrecision, formatFloatBitSize))
-	// Handle bool values.
+	// Format bool values.
 	case bool:
 		sb.WriteString(strconv.FormatBool(typed))
-	// Handle complex types.
+	// Fallback to fmt for complex types.
 	default:
-		// Fallback for complex types.
 		fmt.Fprint(sb, typed)
 	}
 }
+
 
 // Init initializes the component.
 //

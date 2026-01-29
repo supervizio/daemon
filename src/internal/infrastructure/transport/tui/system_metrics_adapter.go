@@ -15,6 +15,7 @@ type SystemMetricsAdapter struct {
 // Returns:
 //   - *SystemMetricsAdapter: the created adapter.
 func NewSystemMetricsAdapter() *SystemMetricsAdapter {
+	// return computed result.
 	return &SystemMetricsAdapter{}
 }
 

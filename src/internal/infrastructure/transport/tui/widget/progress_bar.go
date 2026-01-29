@@ -135,6 +135,7 @@ func (p *ProgressBar) Render() string {
 	sb.WriteString(p.Style.Right)
 	p.writePercentValue(&sb)
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -143,6 +144,7 @@ func (p *ProgressBar) Render() string {
 // Params:
 //   - sb: string builder to write the label to.
 func (p *ProgressBar) writeLabel(sb *strings.Builder) {
+	// evaluate condition.
 	if p.Label != "" {
 		sb.WriteString(p.Label)
 		sb.WriteString(" ")
@@ -155,15 +157,19 @@ func (p *ProgressBar) writeLabel(sb *strings.Builder) {
 //   - int: inner width available for the bar content.
 func (p *ProgressBar) calculateBarWidth() int {
 	barWidth := p.Width
+	// evaluate condition.
 	if p.Style.Left != "" {
 		barWidth--
 	}
+	// evaluate condition.
 	if p.Style.Right != "" {
 		barWidth--
 	}
+	// evaluate condition.
 	if barWidth < 1 {
 		barWidth = 1
 	}
+	// return computed result.
 	return barWidth
 }
 
@@ -176,13 +182,16 @@ func (p *ProgressBar) writeBarContent(sb *strings.Builder, barWidth int) {
 	fullChars, partialEighths, emptyChars := p.calculateFillUnits(barWidth)
 
 	sb.WriteString(p.Color)
+	// check for positive value.
 	if fullChars > 0 {
 		sb.WriteString(strings.Repeat(p.Style.Full, fullChars))
 	}
+	// check for positive value.
 	if partialEighths > 0 {
 		sb.WriteString(SubBlockChars[partialEighths])
 	}
 	sb.WriteString(ansi.Reset)
+	// check for positive value.
 	if emptyChars > 0 {
 		sb.WriteString(strings.Repeat(p.Style.Empty, emptyChars))
 	}
@@ -204,9 +213,11 @@ func (p *ProgressBar) calculateFillUnits(barWidth int) (fullChars, partialEighth
 	fullChars = filledSubUnits / subBlockLevels
 	partialEighths = filledSubUnits % subBlockLevels
 	emptyChars = barWidth - fullChars
+	// check for positive value.
 	if partialEighths > 0 {
 		emptyChars--
 	}
+	// return computed result.
 	return fullChars, partialEighths, emptyChars
 }
 
@@ -215,13 +226,17 @@ func (p *ProgressBar) calculateFillUnits(barWidth int) (fullChars, partialEighth
 // Params:
 //   - sb: string builder to write the percentage to.
 func (p *ProgressBar) writePercentValue(sb *strings.Builder) {
+	// evaluate condition.
 	if !p.ShowValue {
+		// return early when value display is disabled.
 		return
 	}
 	sb.WriteByte(' ')
 	pct := int(p.Percent)
+	// evaluate condition.
 	if pct < percentDigitPadding1 {
 		sb.WriteString("  ")
+	// handle double-digit padding.
 	} else if pct < percentDigitPadding2 {
 		sb.WriteByte(' ')
 	}

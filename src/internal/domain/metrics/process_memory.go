@@ -42,9 +42,11 @@ type ProcessMemory struct {
 //   - *ProcessMemory: initialized process memory metrics with calculated UsagePercent.
 func NewProcessMemory(input *ProcessMemoryInput) *ProcessMemory {
 	var usagePercent float64
+	// calculate usage percentage if total system memory is non-zero
 	if input.TotalSystemMemory > 0 {
 		usagePercent = float64(input.RSS) / float64(input.TotalSystemMemory) * percentMultiplier
 	}
+	// initialize with all process memory fields
 	return &ProcessMemory{
 		PID:          input.PID,
 		Name:         input.Name,
@@ -64,5 +66,6 @@ func NewProcessMemory(input *ProcessMemoryInput) *ProcessMemory {
 // Returns:
 //   - uint64: total resident memory including swapped pages.
 func (p *ProcessMemory) TotalResident() uint64 {
+	// sum RSS and swap
 	return p.RSS + p.Swap
 }

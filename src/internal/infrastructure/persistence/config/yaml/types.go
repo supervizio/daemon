@@ -43,17 +43,23 @@ type Duration time.Duration
 func (d *Duration) UnmarshalYAML(unmarshal func(any) error) error {
 	var s string
 
+	// unmarshal string from YAML.
 	if err := unmarshal(&s); err != nil {
+		// return unmarshal error.
 		return err
 	}
 
+	// parse duration string.
 	parsed, err := time.ParseDuration(s)
+	// parsing failed.
 	if err != nil {
+		// return parse error.
 		return err
 	}
 
 	*d = Duration(parsed)
 
+	// duration successfully parsed.
 	return nil
 }
 
@@ -65,6 +71,7 @@ func (d *Duration) UnmarshalYAML(unmarshal func(any) error) error {
 //   - []byte: the duration as a formatted string in bytes
 //   - error: always nil for this implementation
 func (d *Duration) MarshalText() ([]byte, error) {
+	// convert duration to string and return as bytes.
 	return []byte(time.Duration(*d).String()), nil
 }
 
@@ -226,10 +233,12 @@ type LogStreamConfigDTO struct {
 func (c *ConfigDTO) ToDomain(configPath string) *config.Config {
 	services := make([]config.ServiceConfig, 0, len(c.Services))
 
+	// convert each service to domain model.
 	for i := range c.Services {
 		services = append(services, c.Services[i].ToDomain())
 	}
 
+	// return assembled domain configuration.
 	return &config.Config{
 		Version:    c.Version,
 		ConfigPath: configPath,
@@ -246,16 +255,19 @@ func (c *ConfigDTO) ToDomain(configPath string) *config.Config {
 func (s *ServiceConfigDTO) ToDomain() config.ServiceConfig {
 	healthChecks := make([]config.HealthCheckConfig, 0, len(s.HealthChecks))
 
+	// convert each health check to domain model.
 	for i := range s.HealthChecks {
 		healthChecks = append(healthChecks, s.HealthChecks[i].ToDomain())
 	}
 
 	listeners := make([]config.ListenerConfig, 0, len(s.Listeners))
 
+	// convert each listener to domain model.
 	for i := range s.Listeners {
 		listeners = append(listeners, s.Listeners[i].ToDomain())
 	}
 
+	// return assembled domain service config.
 	return config.ServiceConfig{
 		Name:             s.Name,
 		Command:          s.Command,
@@ -281,6 +293,7 @@ func (s *ServiceConfigDTO) ToDomain() config.ServiceConfig {
 func (l *ListenerDTO) ToDomain() config.ListenerConfig {
 	// Default to TCP when no protocol is specified.
 	protocol := l.Protocol
+	// apply default TCP protocol.
 	if protocol == "" {
 		protocol = "tcp"
 	}
@@ -293,11 +306,13 @@ func (l *ListenerDTO) ToDomain() config.ListenerConfig {
 		Exposed:  l.Exposed,
 	}
 
+	// add probe configuration if present.
 	if l.Probe.Type != "" {
 		probe := l.Probe.ToDomain()
 		listener.Probe = &probe
 	}
 
+	// return assembled listener config.
 	return listener
 }
 
@@ -311,6 +326,7 @@ func (p *ProbeDTO) ToDomain() config.ProbeConfig {
 	interval, timeout := p.getTimingDefaults()
 	method, statusCode := p.getHTTPDefaults()
 
+	// return assembled probe config with defaults applied.
 	return config.ProbeConfig{
 		Type:             p.Type,
 		Interval:         shared.FromTimeDuration(interval),
@@ -334,16 +350,19 @@ func (p *ProbeDTO) ToDomain() config.ProbeConfig {
 func (p *ProbeDTO) getThresholdDefaults() (successThreshold, failureThreshold int) {
 	// Require at least one success to mark healthy.
 	successThreshold = p.SuccessThreshold
+	// apply default success threshold.
 	if successThreshold <= 0 {
 		successThreshold = 1
 	}
 
 	// Allow three failures before marking unhealthy.
 	failureThreshold = p.FailureThreshold
+	// apply default failure threshold.
 	if failureThreshold <= 0 {
 		failureThreshold = defaultFailureThreshold
 	}
 
+	// return threshold values with defaults applied.
 	return successThreshold, failureThreshold
 }
 
@@ -354,15 +373,18 @@ func (p *ProbeDTO) getThresholdDefaults() (successThreshold, failureThreshold in
 //   - time.Duration: timeout (default 5s).
 func (p *ProbeDTO) getTimingDefaults() (interval, timeout time.Duration) {
 	interval = time.Duration(p.Interval)
+	// apply default probe interval.
 	if interval <= 0 {
 		interval = defaultProbeInterval
 	}
 
 	timeout = time.Duration(p.Timeout)
+	// apply default probe timeout.
 	if timeout <= 0 {
 		timeout = defaultProbeTimeout
 	}
 
+	// return timing values with defaults applied.
 	return interval, timeout
 }
 
@@ -374,16 +396,19 @@ func (p *ProbeDTO) getTimingDefaults() (interval, timeout time.Duration) {
 func (p *ProbeDTO) getHTTPDefaults() (method string, statusCode int) {
 	// GET is the standard HTTP method for health probes.
 	method = p.Method
+	// apply default HTTP method.
 	if method == "" {
 		method = "GET"
 	}
 
 	// HTTP 200 OK indicates a healthy response.
 	statusCode = p.StatusCode
+	// apply default status code.
 	if statusCode == 0 {
 		statusCode = defaultHTTPStatusCode
 	}
 
+	// return HTTP values with defaults applied.
 	return method, statusCode
 }
 
@@ -393,6 +418,7 @@ func (p *ProbeDTO) getHTTPDefaults() (method string, statusCode int) {
 // Returns:
 //   - config.RestartConfig: the converted domain restart configuration
 func (r *RestartConfigDTO) ToDomain() config.RestartConfig {
+	// return assembled restart config.
 	return config.RestartConfig{
 		Policy:          config.RestartPolicy(r.Policy),
 		MaxRetries:      r.MaxRetries,
@@ -408,6 +434,7 @@ func (r *RestartConfigDTO) ToDomain() config.RestartConfig {
 // Returns:
 //   - config.HealthCheckConfig: the converted domain health check configuration
 func (h *HealthCheckDTO) ToDomain() config.HealthCheckConfig {
+	// return assembled health check config.
 	return config.HealthCheckConfig{
 		Name:       h.Name,
 		Type:       config.HealthCheckType(h.Type),
@@ -429,6 +456,7 @@ func (h *HealthCheckDTO) ToDomain() config.HealthCheckConfig {
 // Returns:
 //   - config.LoggingConfig: the converted domain logging configuration
 func (l *LoggingConfigDTO) ToDomain() config.LoggingConfig {
+	// return assembled logging config.
 	return config.LoggingConfig{
 		BaseDir:  l.BaseDir,
 		Defaults: l.Defaults.ToDomain(),
@@ -444,10 +472,12 @@ func (l *LoggingConfigDTO) ToDomain() config.LoggingConfig {
 func (d *DaemonLoggingDTO) ToDomain() config.DaemonLogging {
 	writers := make([]config.WriterConfig, 0, len(d.Writers))
 
+	// convert each writer to domain model.
 	for i := range d.Writers {
 		writers = append(writers, d.Writers[i].ToDomain())
 	}
 
+	// return assembled daemon logging config.
 	return config.DaemonLogging{
 		Writers: writers,
 	}
@@ -459,6 +489,7 @@ func (d *DaemonLoggingDTO) ToDomain() config.DaemonLogging {
 // Returns:
 //   - config.WriterConfig: the converted domain writer configuration
 func (w *WriterConfigDTO) ToDomain() config.WriterConfig {
+	// return assembled writer config.
 	return config.WriterConfig{
 		Type:  w.Type,
 		Level: w.Level,
@@ -473,6 +504,7 @@ func (w *WriterConfigDTO) ToDomain() config.WriterConfig {
 // Returns:
 //   - config.FileWriterConfig: the converted domain file writer configuration
 func (f *FileWriterConfigDTO) ToDomain() config.FileWriterConfig {
+	// return assembled file writer config.
 	return config.FileWriterConfig{
 		Path:     f.Path,
 		Rotation: f.Rotation.ToDomain(),
@@ -485,6 +517,7 @@ func (f *FileWriterConfigDTO) ToDomain() config.FileWriterConfig {
 // Returns:
 //   - config.JSONWriterConfig: the converted domain JSON writer configuration
 func (j *JSONWriterConfigDTO) ToDomain() config.JSONWriterConfig {
+	// return assembled JSON writer config.
 	return config.JSONWriterConfig{
 		Path:     j.Path,
 		Rotation: j.Rotation.ToDomain(),
@@ -497,6 +530,7 @@ func (j *JSONWriterConfigDTO) ToDomain() config.JSONWriterConfig {
 // Returns:
 //   - config.LogDefaults: the converted domain log defaults
 func (l *LogDefaultsDTO) ToDomain() config.LogDefaults {
+	// return assembled log defaults.
 	return config.LogDefaults{
 		TimestampFormat: l.TimestampFormat,
 		Rotation:        l.Rotation.ToDomain(),
@@ -509,6 +543,7 @@ func (l *LogDefaultsDTO) ToDomain() config.LogDefaults {
 // Returns:
 //   - config.RotationConfig: the converted domain rotation configuration
 func (r *RotationConfigDTO) ToDomain() config.RotationConfig {
+	// return assembled rotation config.
 	return config.RotationConfig{
 		MaxSize:  r.MaxSize,
 		MaxAge:   r.MaxAge,
@@ -523,6 +558,7 @@ func (r *RotationConfigDTO) ToDomain() config.RotationConfig {
 // Returns:
 //   - config.ServiceLogging: the converted domain service logging configuration
 func (s *ServiceLoggingDTO) ToDomain() config.ServiceLogging {
+	// return assembled service logging config.
 	return config.ServiceLogging{
 		Stdout: s.Stdout.ToDomain(),
 		Stderr: s.Stderr.ToDomain(),
@@ -535,6 +571,7 @@ func (s *ServiceLoggingDTO) ToDomain() config.ServiceLogging {
 // Returns:
 //   - config.LogStreamConfig: the converted domain log stream configuration
 func (l *LogStreamConfigDTO) ToDomain() config.LogStreamConfig {
+	// return assembled log stream config.
 	return config.LogStreamConfig{
 		FilePath:       l.File,
 		Format:         l.TimestampFormat,
