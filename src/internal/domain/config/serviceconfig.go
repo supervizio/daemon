@@ -53,6 +53,7 @@ type ServiceConfig struct {
 // Returns:
 //   - ServiceConfig: service configuration with default restart policy
 func NewServiceConfig(name, command string) ServiceConfig {
+	// create service with on-failure restart policy
 	return ServiceConfig{
 		Name:    name,
 		Command: command,

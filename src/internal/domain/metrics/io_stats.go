@@ -30,6 +30,7 @@ type IOStats struct {
 // Returns:
 //   - IOStats: the created IOStats instance
 func NewIOStats(readBytes, writeBytes, readOps, writeOps uint64, timestamp time.Time) IOStats {
+	// initialize with all I/O statistics
 	return IOStats{
 		ReadBytesTotal:  readBytes,
 		WriteBytesTotal: writeBytes,
@@ -44,6 +45,7 @@ func NewIOStats(readBytes, writeBytes, readOps, writeOps uint64, timestamp time.
 // Returns:
 //   - uint64: the sum of read and write bytes
 func (i IOStats) TotalBytes() uint64 {
+	// sum read and write bytes
 	return i.ReadBytesTotal + i.WriteBytesTotal
 }
 
@@ -52,5 +54,6 @@ func (i IOStats) TotalBytes() uint64 {
 // Returns:
 //   - uint64: the sum of read and write operations
 func (i IOStats) TotalOps() uint64 {
+	// sum read and write operations
 	return i.ReadOpsTotal + i.WriteOpsTotal
 }

@@ -40,7 +40,9 @@ func NewSparkLine(values []float64, width int) *SparkLine {
 // Returns:
 //   - string: rendered sparkline with color and padding.
 func (s *SparkLine) Render() string {
+	// check for empty value.
 	if len(s.Values) == 0 {
+		// return computed result.
 		return strings.Repeat(" ", s.Width)
 	}
 
@@ -55,6 +57,7 @@ func (s *SparkLine) Render() string {
 	s.writePadding(&sb, start)
 	sb.WriteString(ansi.Reset)
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -65,14 +68,18 @@ func (s *SparkLine) Render() string {
 //   - max: largest value in the dataset.
 func (s *SparkLine) findMinMax() (min, max float64) {
 	min, max = s.Values[0], s.Values[0]
+	// iterate over collection.
 	for _, v := range s.Values {
+		// evaluate condition.
 		if v < min {
 			min = v
 		}
+		// evaluate condition.
 		if v > max {
 			max = v
 		}
 	}
+	// return computed result.
 	return min, max
 }
 
@@ -86,9 +93,11 @@ func (s *SparkLine) findMinMax() (min, max float64) {
 //   - float64: range between min and max, or 1 if equal.
 func (s *SparkLine) calculateRange(min, max float64) float64 {
 	valueRange := max - min
+	// check for empty value.
 	if valueRange == 0 {
 		valueRange = 1
 	}
+	// return computed result.
 	return valueRange
 }
 
@@ -97,9 +106,12 @@ func (s *SparkLine) calculateRange(min, max float64) float64 {
 // Returns:
 //   - int: index to start reading from to fit within width.
 func (s *SparkLine) calculateStartIndex() int {
+	// evaluate condition.
 	if len(s.Values) > s.Width {
+		// return computed result.
 		return len(s.Values) - s.Width
 	}
+	// return computed result.
 	return 0
 }
 
@@ -111,6 +123,7 @@ func (s *SparkLine) calculateStartIndex() int {
 //   - valueRange: range of values for normalization.
 //   - start: index to start reading values from.
 func (s *SparkLine) writeSparkChars(sb *strings.Builder, min, valueRange float64, start int) {
+	// execute loop.
 	for i := start; i < len(s.Values); i++ {
 		idx := s.valueToSparkIndex(s.Values[i], min, valueRange)
 		sb.WriteString(Sparks[idx])
@@ -130,9 +143,11 @@ func (s *SparkLine) valueToSparkIndex(value, min, valueRange float64) int {
 	normalized := (value - min) / valueRange
 	idx := int(normalized * float64(len(Sparks)-1))
 	idx = max(idx, 0)
+	// evaluate condition.
 	if idx >= len(Sparks) {
 		idx = len(Sparks) - 1
 	}
+	// return computed result.
 	return idx
 }
 
@@ -143,6 +158,7 @@ func (s *SparkLine) valueToSparkIndex(value, min, valueRange float64) int {
 //   - start: starting index used to calculate rendered count.
 func (s *SparkLine) writePadding(sb *strings.Builder, start int) {
 	rendered := len(s.Values) - start
+	// evaluate condition.
 	if rendered < s.Width {
 		sb.WriteString(strings.Repeat(" ", s.Width-rendered))
 	}

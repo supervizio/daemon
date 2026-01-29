@@ -26,14 +26,23 @@ const (
 // Returns:
 //   - string: the human-readable state name.
 func (s State) String() string {
+	// match state to string representation
 	switch s {
+	// closed state
 	case StateClosed:
+		// return closed state name
 		return "closed"
+	// listening state
 	case StateListening:
+		// return listening state name
 		return "listening"
+	// ready state
 	case StateReady:
+		// return ready state name
 		return "ready"
+	// unknown state
 	default:
+		// return unknown for unmapped states
 		return "unknown"
 	}
 }
@@ -43,6 +52,7 @@ func (s State) String() string {
 // Returns:
 //   - bool: true if state is Closed.
 func (s State) IsClosed() bool {
+	// return closed state check
 	return s == StateClosed
 }
 
@@ -51,6 +61,7 @@ func (s State) IsClosed() bool {
 // Returns:
 //   - bool: true if state is Listening or Ready.
 func (s State) IsListening() bool {
+	// return listening or ready state check
 	return s == StateListening || s == StateReady
 }
 
@@ -59,6 +70,7 @@ func (s State) IsListening() bool {
 // Returns:
 //   - bool: true if state is Ready.
 func (s State) IsReady() bool {
+	// return ready state check
 	return s == StateReady
 }
 
@@ -70,14 +82,23 @@ func (s State) IsReady() bool {
 // Returns:
 //   - bool: true if the transition is valid.
 func (s State) CanTransitionTo(target State) bool {
+	// check valid transitions based on current state
 	switch s {
+	// transitions from closed state
 	case StateClosed:
+		// from closed can only go to listening
 		return target == StateListening
+	// transitions from listening state
 	case StateListening:
+		// from listening can go to ready or closed
 		return target == StateReady || target == StateClosed
+	// transitions from ready state
 	case StateReady:
+		// from ready can go to listening or closed
 		return target == StateListening || target == StateClosed
+	// transitions from unknown state
 	default:
+		// unknown states cannot transition
 		return false
 	}
 }

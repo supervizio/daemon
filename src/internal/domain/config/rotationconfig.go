@@ -22,6 +22,7 @@ type RotationConfig struct {
 // Returns:
 //   - RotationConfig: a configuration with standard size limits and file retention.
 func DefaultRotationConfig() RotationConfig {
+	// create config with 100mb max size and 10 files
 	return RotationConfig{
 		MaxSize:  "100MB",
 		MaxFiles: defaultMaxFilesToRetain,

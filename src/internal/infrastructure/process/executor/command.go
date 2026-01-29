@@ -21,5 +21,6 @@ import (
 // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 // nosemgrep: go_subproc_rule-subproc
 func TrustedCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
+	// create command from trusted configuration source.
 	return exec.CommandContext(ctx, name, args...)
 }

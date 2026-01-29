@@ -17,6 +17,7 @@ type TUILogWriter struct {
 // Returns:
 //   - *TUILogWriter: the created writer.
 func NewTUILogWriter(adapter *LogAdapter) *TUILogWriter {
+	// return computed result.
 	return &TUILogWriter{
 		adapter: adapter,
 	}
@@ -30,9 +31,11 @@ func NewTUILogWriter(adapter *LogAdapter) *TUILogWriter {
 // Returns:
 //   - error: always nil (errors are ignored).
 func (w *TUILogWriter) Write(event domainlogging.LogEvent) error {
+	// handle non-nil condition.
 	if w.adapter != nil {
 		w.adapter.AddDomainEvent(event)
 	}
+	// return nil to indicate no error.
 	return nil
 }
 
@@ -41,5 +44,6 @@ func (w *TUILogWriter) Write(event domainlogging.LogEvent) error {
 // Returns:
 //   - error: always nil (no cleanup needed).
 func (w *TUILogWriter) Close() error {
+	// return nil to indicate no error.
 	return nil
 }

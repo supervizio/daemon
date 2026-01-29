@@ -147,6 +147,10 @@ rules:
     enabled: true
   KTN-INTERFACE-ANYUSE:
     enabled: true
+    exclude:
+      - "**/domain/logging/**"
+      - "**/observability/logging/**"
+      - "**/transport/tui/component/**"
   KTN-INTERFACE-ERNAME:
     enabled: true
   KTN-INTERFACE-UNUSED:

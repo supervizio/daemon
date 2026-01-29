@@ -32,8 +32,11 @@ var prctlSyscall prctlFunc = syscall.RawSyscall
 //nolint:gochecknoinits // Platform-specific signal registration requires init
 func init() {
 	// Add Linux-specific signals.
+	// create signal manager instance.
 	sm := New()
+	// register power failure signal.
 	sm.AddSignal("SIGPWR", syscall.SIGPWR)
+	// register stack fault signal.
 	sm.AddSignal("SIGSTKFLT", syscall.SIGSTKFLT)
 }
 
@@ -41,13 +44,19 @@ func init() {
 //
 // Returns:
 //   - error: syscall error if prctl fails
-func (m *Manager) SetSubreaper() error { return prctlSubreaper(1) }
+func (m *Manager) SetSubreaper() error {
+	// set subreaper flag to 1 (enabled).
+	return prctlSubreaper(1)
+}
 
 // ClearSubreaper disables orphan adoption.
 //
 // Returns:
 //   - error: syscall error if prctl fails
-func (m *Manager) ClearSubreaper() error { return prctlSubreaper(0) }
+func (m *Manager) ClearSubreaper() error {
+	// set subreaper flag to 0 (disabled).
+	return prctlSubreaper(0)
+}
 
 // IsSubreaper queries the subreaper flag via prctl.
 //
@@ -57,12 +66,15 @@ func (m *Manager) ClearSubreaper() error { return prctlSubreaper(0) }
 func (m *Manager) IsSubreaper() (bool, error) {
 	var flag int
 	// #nosec G103 - unsafe.Pointer required for prctl syscall interface
+	// query current subreaper status from kernel.
 	_, _, errno := prctlSyscall(syscall.SYS_PRCTL, prGetChildSubreaper, uintptr(unsafe.Pointer(&flag)), 0)
 	// prctl failed (unlikely on modern kernels).
 	if errno != 0 {
+		// return error with syscall context.
 		return false, os.NewSyscallError("prctl", errno)
 	}
 	// Flag is non-zero when subreaper is enabled.
+	// convert flag to boolean result.
 	return flag != 0, nil
 }
 
@@ -74,10 +86,13 @@ func (m *Manager) IsSubreaper() (bool, error) {
 // Returns:
 //   - error: syscall error if prctl fails
 func prctlSubreaper(flag int) error {
+	// execute prctl syscall to set subreaper flag.
 	_, _, errno := prctlSyscall(syscall.SYS_PRCTL, prSetChildSubreaper, uintptr(flag), 0)
 	// prctl failed (unlikely on modern kernels).
 	if errno != 0 {
+		// return error with syscall context.
 		return os.NewSyscallError("prctl", errno)
 	}
+	// subreaper flag successfully modified.
 	return nil
 }

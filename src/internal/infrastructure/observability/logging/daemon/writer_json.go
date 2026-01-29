@@ -58,6 +58,7 @@ type JSONWriter struct {
 func NewJSONWriter(path string) (*JSONWriter, error) {
 	// Create directory if it doesn't exist.
 	// nosemgrep: go.lang.correctness.permissions.file_permission.incorrect-default-permission
+	// create parent directories if needed
 	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
 		// Failed to create directory.
 		return nil, fmt.Errorf("creating log directory: %w", err)
@@ -69,6 +70,7 @@ func NewJSONWriter(path string) (*JSONWriter, error) {
 	// Cleanup via defer: On error, file is closed. On success, defer is disabled via nil assignment.
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, filePermissions)
 	// Failed to open file.
+	// handle file open failure
 	if err != nil {
 		// Failed to open log file.
 		return nil, fmt.Errorf("opening log file: %w", err)
@@ -76,6 +78,7 @@ func NewJSONWriter(path string) (*JSONWriter, error) {
 
 	// Defer cleanup for error paths - disabled on success by nil assignment.
 	defer func() {
+		// close file if not transferred to struct
 		if file != nil {
 			_ = file.Close()
 		}
@@ -110,6 +113,7 @@ func (w *JSONWriter) Write(event logging.LogEvent) error {
 	pooled := jsonMapPool.Get()
 	entry, ok := pooled.(map[string]any)
 	// Handle type assertion failure gracefully.
+	// handle invalid type from pool
 	if !ok {
 		// Type assertion failed - should never happen but handle gracefully.
 		entry = make(map[string]any, jsonMapInitialCapacity)
@@ -119,11 +123,13 @@ func (w *JSONWriter) Write(event logging.LogEvent) error {
 	entry["ts"] = event.Timestamp.Format("2006-01-02T15:04:05Z07:00")
 	entry["level"] = event.Level.String()
 	// Add service if present.
+	// add service field if present
 	if event.Service != "" {
 		entry["service"] = event.Service
 	}
 	entry["event"] = event.EventType
 	// Add message if present.
+	// add message field if present
 	if event.Message != "" {
 		entry["message"] = event.Message
 	}

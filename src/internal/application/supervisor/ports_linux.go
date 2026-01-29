@@ -111,6 +111,7 @@ func getListeningPorts(pid int) []int {
 	netFiles := []string{"/proc/net/tcp", "/proc/net/tcp6", "/proc/net/udp", "/proc/net/udp6"}
 	// Check each protocol file for listening ports.
 	for _, netFile := range netFiles {
+		// find ports in this network file
 		findListeningPorts(netFile, inodes, ports)
 	}
 
@@ -128,6 +129,7 @@ func getListeningPorts(pid int) []int {
 func mapToSortedSlice(ports map[int]struct{}) []int {
 	// Convert map keys to slice.
 	result := slices.Collect(maps.Keys(ports))
+	// sort ports for stable output
 	slices.Sort(result)
 
 	// Return sorted slice.
@@ -177,6 +179,7 @@ func getDockerPorts(pid int) []int {
 	containerName := findContainerName(args)
 	// No container name in args, try PID lookup.
 	if containerName == "" {
+		// attempt to find container by PID
 		containerName = findDockerContainerByPID(pid)
 	}
 
@@ -257,7 +260,9 @@ func findDockerContainerByPID(pid int) string {
 	// Iterate over running containers.
 	// Check each container for PID match.
 	for containerID := range strings.FieldsSeq(string(out)) {
+		// check if container matches PID
 		if matchesContainerPID(ctx, containerID, pid) {
+			// return matching container ID
 			return containerID
 		}
 	}
@@ -445,6 +450,7 @@ func parseDockerPortOutput(output string) []int {
 
 		// Only add valid ports.
 		if port > 0 {
+			// append valid port
 			ports = append(ports, port)
 		}
 	}
@@ -488,6 +494,7 @@ func getSocketInodes(pid int) map[uint64]struct{} {
 			if inodeStr, ok := strings.CutSuffix(after, "]"); ok {
 				// Parse inode as uint64.
 				if inode, err := strconv.ParseUint(inodeStr, decimalBase, bitSize64); err == nil {
+					// add inode to map
 					inodes[inode] = struct{}{}
 				}
 			}
@@ -530,6 +537,7 @@ func findListeningPorts(netFile string, inodes map[uint64]struct{}, ports map[in
 		port, ok := parseNetLine(scanner.Text(), inodes, isUDP)
 		// Add matching port.
 		if ok && port > 0 {
+			// add port to results
 			ports[port] = struct{}{}
 		}
 	}

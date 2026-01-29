@@ -34,6 +34,7 @@ type OperationError struct {
 // Returns:
 //   - *OperationError: wrapped error with operation context
 func NewOperationError(op string, err error) *OperationError {
+	// return wrapped error with operation context.
 	return &OperationError{Op: op, Err: err}
 }
 
@@ -44,9 +45,10 @@ func NewOperationError(op string, err error) *OperationError {
 func (e *OperationError) Error() string {
 	// Include underlying error when present.
 	if e.Err != nil {
+		// return formatted error with operation and underlying error.
 		return fmt.Sprintf("%s: %v", e.Op, e.Err)
 	}
-	// Operation-only message when no underlying error.
+	// operation-only message when no underlying error.
 	return e.Op
 }
 
@@ -67,7 +69,9 @@ func (e *OperationError) Unwrap() error { return e.Err }
 func WrapError(op string, err error) error {
 	// Preserve nil to allow clean conditional error handling.
 	if err == nil {
+		// nil input results in nil output.
 		return nil
 	}
+	// wrap with operation context.
 	return &OperationError{Op: op, Err: err}
 }

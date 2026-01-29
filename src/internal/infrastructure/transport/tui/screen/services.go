@@ -179,6 +179,7 @@ func (s *ServicesRenderer) renderCompact(snap *model.Snapshot) string {
 func (s *ServicesRenderer) renderNormal(snap *model.Snapshot) string {
 	table := s.createNormalTable()
 	s.populateNormalRows(table, snap.Services)
+	// return computed result.
 	return s.renderTableInBox(table, snap)
 }
 
@@ -209,6 +210,7 @@ func (s *ServicesRenderer) createNormalTable() *widget.Table {
 	)
 
 	tableWidth := max(s.width-boxBorderWidth, minTableWidth)
+	// return computed result.
 	return widget.NewTable(tableWidth).
 		AddColumn("", iconWidth, widget.AlignLeft).
 		AddFlexColumn("NAME", nameMinWidth, widget.AlignLeft).
@@ -225,6 +227,7 @@ func (s *ServicesRenderer) createNormalTable() *widget.Table {
 //   - table: target table to populate (uses AddRower interface)
 //   - services: services to add as rows
 func (s *ServicesRenderer) populateNormalRows(table AddRower, services []model.ServiceSnapshot) {
+	// iterate over collection.
 	for _, svc := range services {
 		icon := s.status.ProcessState(svc.State)
 		state := s.status.ProcessStateText(svc.State)
@@ -243,9 +246,12 @@ func (s *ServicesRenderer) populateNormalRows(table AddRower, services []model.S
 // Returns:
 //   - string: formatted PID or "-"
 func (s *ServicesRenderer) formatPID(pid int) string {
+	// check for positive value.
 	if pid > 0 {
+		// return computed result.
 		return strconv.Itoa(pid)
 	}
+	// return computed result.
 	return "-"
 }
 
@@ -258,9 +264,12 @@ func (s *ServicesRenderer) formatPID(pid int) string {
 // Returns:
 //   - string: formatted uptime or "-"
 func (s *ServicesRenderer) formatUptimeShort(state process.State, uptime time.Duration) string {
+	// evaluate condition.
 	if state == process.StateRunning || state == process.StateStarting {
+		// return computed result.
 		return widget.FormatDurationShort(uptime)
 	}
+	// return computed result.
 	return "-"
 }
 
@@ -275,9 +284,12 @@ func (s *ServicesRenderer) formatUptimeShort(state process.State, uptime time.Du
 //   - string: formatted CPU percentage or "-"
 //   - string: formatted memory or "-"
 func (s *ServicesRenderer) formatMetrics(state process.State, cpuPercent float64, memoryRSS uint64) (cpu, mem string) {
+	// evaluate condition.
 	if state == process.StateRunning {
+		// return computed result.
 		return widget.FormatPercent(cpuPercent), widget.FormatBytesShort(memoryRSS)
 	}
+	// return computed result.
 	return "-", "-"
 }
 
@@ -299,6 +311,7 @@ func (s *ServicesRenderer) renderTableInBox(table Renderer, snap *model.Snapshot
 		SetTitleColor(s.theme.Header).
 		AddLines(prefixLines(lines, "  "))
 
+	// return computed result.
 	return box.Render()
 }
 
@@ -312,6 +325,7 @@ func (s *ServicesRenderer) renderTableInBox(table Renderer, snap *model.Snapshot
 func (s *ServicesRenderer) renderWide(snap *model.Snapshot) string {
 	table := s.createWideTable()
 	s.populateWideRows(table, snap.Services)
+	// return computed result.
 	return s.renderTableInBox(table, snap)
 }
 
@@ -348,6 +362,7 @@ func (s *ServicesRenderer) createWideTable() *widget.Table {
 	)
 
 	tableWidth := max(s.width-boxBorderWidth, minTableWidth)
+	// return computed result.
 	return widget.NewTable(tableWidth).
 		AddColumn("", iconWidth, widget.AlignLeft).
 		AddFlexColumn("NAME", nameMinWidth, widget.AlignLeft).
@@ -367,6 +382,7 @@ func (s *ServicesRenderer) createWideTable() *widget.Table {
 //   - table: target table to populate (uses AddRower interface)
 //   - services: services to add as rows
 func (s *ServicesRenderer) populateWideRows(table AddRower, services []model.ServiceSnapshot) {
+	// iterate over collection.
 	for _, svc := range services {
 		icon := s.status.ProcessState(svc.State)
 		state := s.status.ProcessStateText(svc.State)
@@ -389,9 +405,12 @@ func (s *ServicesRenderer) populateWideRows(table AddRower, services []model.Ser
 // Returns:
 //   - string: formatted uptime or "-"
 func (s *ServicesRenderer) formatUptimeLong(state process.State, uptime time.Duration) string {
+	// evaluate condition.
 	if state == process.StateRunning || state == process.StateStarting {
+		// return computed result.
 		return widget.FormatDuration(uptime)
 	}
+	// return computed result.
 	return "-"
 }
 
@@ -403,9 +422,12 @@ func (s *ServicesRenderer) formatUptimeLong(state process.State, uptime time.Dur
 // Returns:
 //   - string: formatted count or "-"
 func (s *ServicesRenderer) formatRestarts(count int) string {
+	// check for positive value.
 	if count > 0 {
+		// return computed result.
 		return strconv.Itoa(count)
 	}
+	// return computed result.
 	return "-"
 }
 
@@ -532,11 +554,14 @@ func prefixLines(lines []string, prefix string) []string {
 // Returns:
 //   - string: service names with ports in column layout
 func (s *ServicesRenderer) RenderNamesOnly(snap *model.Snapshot) string {
+	// check for empty value.
 	if len(snap.Services) == 0 {
+		// return computed result.
 		return s.renderEmptyServices()
 	}
 	entries := s.buildServiceEntries(snap.Services)
 	lines := s.layoutEntriesInColumns(entries)
+	// return computed result.
 	return s.renderNamesOnlyBox(snap, lines)
 }
 
@@ -549,6 +574,7 @@ func (s *ServicesRenderer) renderEmptyServices() string {
 		SetTitle("Services (0 configured)").
 		SetTitleColor(s.theme.Header).
 		AddLine("  " + s.theme.Muted + "No services configured" + ansi.Reset)
+	// return computed result.
 	return box.Render()
 }
 
@@ -561,10 +587,12 @@ func (s *ServicesRenderer) renderEmptyServices() string {
 //   - []serviceEntry: formatted entries with visible lengths
 func (s *ServicesRenderer) buildServiceEntries(services []model.ServiceSnapshot) []serviceEntry {
 	entries := make([]serviceEntry, 0, len(services))
+	// iterate over collection.
 	for _, svc := range services {
 		display := s.formatServiceEntry(svc)
 		entries = append(entries, serviceEntry{display: display, visibleLen: len(display)})
 	}
+	// return computed result.
 	return entries
 }
 
@@ -578,9 +606,12 @@ func (s *ServicesRenderer) buildServiceEntries(services []model.ServiceSnapshot)
 func (s *ServicesRenderer) formatServiceEntry(svc model.ServiceSnapshot) string {
 	var sb strings.Builder
 	sb.WriteString(svc.Name)
+	// check for positive value.
 	if len(svc.Listeners) > 0 {
 		sb.WriteByte(' ')
+		// iterate over collection.
 		for i, l := range svc.Listeners {
+			// check for positive value.
 			if i > 0 {
 				sb.WriteByte(',')
 			}
@@ -588,6 +619,7 @@ func (s *ServicesRenderer) formatServiceEntry(svc model.ServiceSnapshot) string 
 			sb.WriteString(strconv.Itoa(l.Port))
 		}
 	}
+	// return computed result.
 	return sb.String()
 }
 
@@ -613,10 +645,13 @@ func (s *ServicesRenderer) layoutEntriesInColumns(entries []serviceEntry) []stri
 	lines := make([]string, 0, rows)
 	rowParts := make([]string, 0, cols)
 
+	// iterate over collection.
 	for row := range rows {
 		rowParts = rowParts[:0]
+		// iterate over collection.
 		for col := range cols {
 			idx := row*cols + col
+			// evaluate condition.
 			if idx < len(entries) {
 				entry := entries[idx]
 				padding := max(colWidth-entry.visibleLen, 0)
@@ -625,6 +660,7 @@ func (s *ServicesRenderer) layoutEntriesInColumns(entries []serviceEntry) []stri
 		}
 		lines = append(lines, "  "+strings.Join(rowParts, ""))
 	}
+	// return computed result.
 	return lines
 }
 
@@ -641,7 +677,9 @@ func (s *ServicesRenderer) layoutEntriesInColumns(entries []serviceEntry) []stri
 //   - int: number of columns
 func (s *ServicesRenderer) calculateColumnLayout(entries []serviceEntry, borderWidth, minWidth, padding int) (colWidth, cols int) {
 	maxLen := 0
+	// iterate over collection.
 	for _, e := range entries {
+		// evaluate condition.
 		if e.visibleLen > maxLen {
 			maxLen = e.visibleLen
 		}
@@ -649,6 +687,7 @@ func (s *ServicesRenderer) calculateColumnLayout(entries []serviceEntry, borderW
 	colWidth = max(maxLen+padding, minWidth)
 	usableWidth := s.width - borderWidth
 	cols = max(usableWidth/colWidth, 1)
+	// return computed result.
 	return colWidth, cols
 }
 
@@ -666,6 +705,7 @@ func (s *ServicesRenderer) renderNamesOnlyBox(snap *model.Snapshot, lines []stri
 		SetTitle(title).
 		SetTitleColor(s.theme.Header).
 		AddLines(lines)
+	// return computed result.
 	return box.Render()
 }
 

@@ -27,6 +27,7 @@ type Event struct {
 // Returns:
 //   - Event: a new event with the current timestamp
 func NewEvent(checker string, status Status, result Result) Event {
+	// create event with current timestamp
 	return NewEventAt(checker, status, result, time.Now())
 }
 
@@ -42,6 +43,7 @@ func NewEvent(checker string, status Status, result Result) Event {
 // Returns:
 //   - Event: a new event with the specified timestamp
 func NewEventAt(checker string, status Status, result Result, timestamp time.Time) Event {
+	// return event with all fields
 	return Event{
 		Checker:   checker,
 		Status:    status,

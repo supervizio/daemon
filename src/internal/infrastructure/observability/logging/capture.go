@@ -53,30 +53,38 @@ type Capture struct {
 func NewCapture(serviceName string, cfg GetServiceLogPather, svcCfg serviceLogging) (*Capture, error) {
 	c := &Capture{}
 
+	// create file writer for stdout if configured
 	if svcCfg.StdoutConfig().File() != "" {
 		path := cfg.GetServiceLogPath(serviceName, svcCfg.StdoutConfig().File())
 		writer, err := NewWriter(path, svcCfg.StdoutConfig())
+		// handle writer creation failure
 		if err != nil {
+			// propagate error to caller
 			return nil, err
 		}
 		c.stdout = writer
+	// use passthrough to os.Stdout when no file configured
 	} else {
 		c.stdout = &nopCloser{os.Stdout}
 	}
 
+	// create file writer for stderr if configured
 	if svcCfg.StderrConfig().File() != "" {
 		path := cfg.GetServiceLogPath(serviceName, svcCfg.StderrConfig().File())
 		writer, err := NewWriter(path, svcCfg.StderrConfig())
+		// handle writer creation failure
 		if err != nil {
 			_ = c.stdout.Close()
-
+			// propagate error after cleanup
 			return nil, err
 		}
 		c.stderr = writer
+	// use passthrough to os.Stderr when no file configured
 	} else {
 		c.stderr = &nopCloser{os.Stderr}
 	}
 
+	// return fully initialized capture
 	return c, nil
 }
 
@@ -86,6 +94,7 @@ func NewCapture(serviceName string, cfg GetServiceLogPather, svcCfg serviceLoggi
 // Returns:
 //   - io.Writer: the stdout writer instance.
 func (c *Capture) Stdout() io.Writer {
+	// expose stdout writer to caller
 	return c.stdout
 }
 
@@ -95,6 +104,7 @@ func (c *Capture) Stdout() io.Writer {
 // Returns:
 //   - io.Writer: the stderr writer instance.
 func (c *Capture) Stderr() io.Writer {
+	// expose stderr writer to caller
 	return c.stderr
 }
 
@@ -107,18 +117,23 @@ func (c *Capture) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// skip if already closed
 	if c.closed {
+		// return early for idempotent close
 		return nil
 	}
 	c.closed = true
 
 	var firstErr error
+	// close stdout and track first error
 	if err := c.stdout.Close(); err != nil && firstErr == nil {
 		firstErr = err
 	}
+	// close stderr and track first error
 	if err := c.stderr.Close(); err != nil && firstErr == nil {
 		firstErr = err
 	}
 
+	// return first error encountered or nil
 	return firstErr
 }

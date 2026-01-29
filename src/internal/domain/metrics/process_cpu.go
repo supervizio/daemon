@@ -39,6 +39,7 @@ type ProcessCPU struct {
 // Returns:
 //   - *ProcessCPU: initialized process CPU metrics struct.
 func NewProcessCPU(params *ProcessCPUParams) *ProcessCPU {
+	// initialize with all process CPU fields
 	return &ProcessCPU{
 		PID:            params.PID,
 		Name:           params.Name,
@@ -57,6 +58,7 @@ func NewProcessCPU(params *ProcessCPUParams) *ProcessCPU {
 // Returns:
 //   - uint64: sum of user and system time in jiffies.
 func (p *ProcessCPU) Total() uint64 {
+	// sum user and system time
 	return p.User + p.System
 }
 
@@ -65,5 +67,6 @@ func (p *ProcessCPU) Total() uint64 {
 // Returns:
 //   - uint64: sum of process and children CPU time in jiffies.
 func (p *ProcessCPU) TotalWithChildren() uint64 {
+	// sum process and children CPU times
 	return p.User + p.System + p.ChildrenUser + p.ChildrenSystem
 }
