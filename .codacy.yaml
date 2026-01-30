@@ -26,6 +26,7 @@ exclude_paths:
   - "dist/**"
   - "build/**"
   - "bin/**"
+  - "**/target/**"
 
   # Generated code (protobuf, wire, mocks)
   - "**/*.pb.go"
@@ -51,6 +52,8 @@ exclude_paths:
 languages:
   go:
     version: "1.25"
+  rust:
+    version: "1.86"
 
 # -----------------------------------------------------------------------------
 # Engines Configuration
@@ -74,6 +77,17 @@ engines:
   # staticcheck - Advanced Go analysis (via golangci-lint)
   staticcheck:
     enabled: false
+
+  # ---------------------------------------------------------------------------
+  # Rust Static Analysis
+  # ---------------------------------------------------------------------------
+  # clippy - Rust linter
+  clippy:
+    enabled: true
+
+  # rustfmt - Rust code formatter check
+  rustfmt:
+    enabled: true
 
   # ---------------------------------------------------------------------------
   # Security
@@ -185,3 +199,18 @@ tools:
       include:
         - "**/Dockerfile*"
         - "e2e/Dockerfile*"
+
+  clippy:
+    patterns:
+      include:
+        - "src/lib/**/*.rs"
+      exclude:
+        - "**/target/**"
+        - "**/build.rs"
+
+  rustfmt:
+    patterns:
+      include:
+        - "src/lib/**/*.rs"
+      exclude:
+        - "**/target/**"

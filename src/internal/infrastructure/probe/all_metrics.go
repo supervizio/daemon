@@ -606,14 +606,8 @@ func collectThermalMetricsJSON() *ThermalMetricsJSON {
 	if zones, err := CollectThermalZones(); err == nil {
 		thermal.Zones = make([]ThermalZoneJSON, len(zones))
 		for i, z := range zones {
-			info := ThermalZoneJSON{
-				Name:        z.Name,
-				Label:       z.Label,
-				TempCelsius: z.TempCelsius,
-				TempMax:     z.TempMax,
-				TempCrit:    z.TempCrit,
-			}
-			thermal.Zones[i] = info
+			// ThermalZone and ThermalZoneJSON have identical underlying types.
+			thermal.Zones[i] = ThermalZoneJSON(z)
 		}
 	}
 

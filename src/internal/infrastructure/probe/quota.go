@@ -117,6 +117,9 @@ const (
 	ContainerRuntimeUnknown    ContainerRuntime = 255
 )
 
+// containerRuntimeUnknownStr is the string representation for unknown runtimes.
+const containerRuntimeUnknownStr = "unknown"
+
 // String returns the string representation of the container runtime.
 func (r ContainerRuntime) String() string {
 	switch r {
@@ -133,9 +136,10 @@ func (r ContainerRuntime) String() string {
 	case ContainerRuntimeJail:
 		return "jail"
 	case ContainerRuntimeUnknown:
-		return "unknown"
+		return containerRuntimeUnknownStr
 	default:
-		return "unknown"
+		// Handle any future container runtime values.
+		return containerRuntimeUnknownStr
 	}
 }
 

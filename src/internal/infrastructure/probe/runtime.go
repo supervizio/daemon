@@ -89,12 +89,15 @@ func (r RuntimeType) String() string {
 }
 
 // IsOrchestrator returns whether this is an orchestrator (vs a container runtime).
+//
+//nolint:exhaustive // Only orchestrator cases return true; all other RuntimeType values return false.
 func (r RuntimeType) IsOrchestrator() bool {
 	switch r {
 	case RuntimeKubernetes, RuntimeNomad, RuntimeDockerSwarm, RuntimeOpenShift,
 		RuntimeAWSECS, RuntimeAWSFargate, RuntimeGoogleGKE, RuntimeAzureAKS:
 		return true
 	default:
+		// Container runtimes and unknown types are not orchestrators.
 		return false
 	}
 }

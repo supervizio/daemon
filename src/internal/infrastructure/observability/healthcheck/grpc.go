@@ -114,6 +114,8 @@ func (p *GRPCProber) connect(ctx context.Context, address string) (*grpc.ClientC
 	defer cancel()
 
 	// WithBlock provides blocking behavior required for health check probing.
+	// TODO: Migrate to grpc.NewClient when ready (requires API changes).
+	//nolint:staticcheck // SA1019: grpc.WithBlock is deprecated but required for blocking health checks.
 	opts := []grpc.DialOption{
 		grpc.WithBlock(),
 	}
@@ -122,6 +124,7 @@ func (p *GRPCProber) connect(ctx context.Context, address string) (*grpc.ClientC
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	// establish blocking connection with timeout
+	//nolint:staticcheck // SA1019: grpc.DialContext is deprecated but required for blocking health checks.
 	return grpc.DialContext(ctx, address, opts...)
 }
 

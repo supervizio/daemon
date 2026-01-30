@@ -33,6 +33,8 @@ const (
 // String returns the string representation of the socket state.
 func (s SocketState) String() string {
 	switch s {
+	case SocketStateUnknown:
+		return "UNKNOWN"
 	case SocketStateEstablished:
 		return "ESTABLISHED"
 	case SocketStateSynSent:
@@ -56,6 +58,7 @@ func (s SocketState) String() string {
 	case SocketStateClosing:
 		return "CLOSING"
 	default:
+		// Handle any future socket states.
 		return "UNKNOWN"
 	}
 }
