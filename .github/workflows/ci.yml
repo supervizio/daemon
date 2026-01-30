@@ -390,6 +390,23 @@ jobs:
         run: |
           docker run --rm supervizio-e2e:${{ matrix.name }} --config /etc/supervizio/config.yaml --version
 
+      - name: Test probe metrics
+        run: |
+          docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }} -c "
+            /usr/local/bin/supervizio --probe | jq -e '
+              .timestamp and
+              .platform and
+              .cpu.usage_percent != null and
+              .memory.total_bytes > 0 and
+              .load.load_1min != null and
+              .process.current_pid > 0 and
+              .thermal.supported != null and
+              .context_switches.system_total != null and
+              .connections.tcp_stats and
+              .quota.supported != null
+            ' && echo 'Probe validation passed'
+          "
+
       - name: Test uninstall
         run: |
           docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }} -c "${{ matrix.uninstall_cmd }} && test ! -x /usr/local/bin/supervizio"
@@ -437,6 +454,23 @@ jobs:
       - name: Test config validation
         run: |
           docker run --rm supervizio-e2e-script:${{ matrix.name }} --config /etc/supervizio/config.yaml --version
+
+      - name: Test probe metrics
+        run: |
+          docker run --rm --entrypoint sh supervizio-e2e-script:${{ matrix.name }} -c "
+            /usr/local/bin/supervizio --probe | jq -e '
+              .timestamp and
+              .platform and
+              .cpu.usage_percent != null and
+              .memory.total_bytes > 0 and
+              .load.load_1min != null and
+              .process.current_pid > 0 and
+              .thermal.supported != null and
+              .context_switches.system_total != null and
+              .connections.tcp_stats and
+              .quota.supported != null
+            ' && echo 'Probe validation passed'
+          "
 
   # =============================================================================
   # E2E Linux Packages - VM (full tests with real init systems)
