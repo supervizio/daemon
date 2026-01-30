@@ -473,8 +473,6 @@ reviews:
     # Rust
     clippy:
       enabled: true
-    rustfmt:
-      enabled: true
 
     # Protobuf
     buf:
