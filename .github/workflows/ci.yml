@@ -40,6 +40,8 @@ jobs:
 
       - name: Generate code
         working-directory: src
+        env:
+          GOWORK: off
         run: wire ./internal/bootstrap/
 
       - name: Install golangci-lint
@@ -50,6 +52,8 @@ jobs:
 
       - name: Run golangci-lint
         working-directory: src
+        env:
+          GOWORK: off
         run: golangci-lint run -c ../.golangci.yml --timeout 5m
 
   # =============================================================================
@@ -74,10 +78,14 @@ jobs:
 
       - name: Generate code
         working-directory: src
+        env:
+          GOWORK: off
         run: wire ./internal/bootstrap/
 
       - name: Run tests
         working-directory: src
+        env:
+          GOWORK: off
         run: go test -race -coverprofile=coverage.raw.out -covermode=atomic ./...
 
       - name: Filter coverage (exclude generated files)
