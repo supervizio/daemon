@@ -154,7 +154,7 @@ func NewConnectionCollector() *ConnectionCollector {
 
 // CollectTCP returns all TCP connections with process information.
 //
-//nolint:gocritic // dupSubExpr false positive from CGO list operations
+//nolint:gocritic,dupl // dupSubExpr false positive from CGO; similar structure to CollectUDP but different types.
 func (c *ConnectionCollector) CollectTCP(_ context.Context) ([]TcpConnection, error) {
 	if err := checkInitialized(); err != nil {
 		return nil, err
@@ -190,7 +190,7 @@ func (c *ConnectionCollector) CollectTCP(_ context.Context) ([]TcpConnection, er
 
 // CollectUDP returns all UDP sockets with process information.
 //
-//nolint:gocritic // dupSubExpr false positive from CGO list operations
+//nolint:gocritic,dupl // dupSubExpr false positive from CGO; similar structure to CollectTCP but different types.
 func (c *ConnectionCollector) CollectUDP(_ context.Context) ([]UdpConnection, error) {
 	if err := checkInitialized(); err != nil {
 		return nil, err

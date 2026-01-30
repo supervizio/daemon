@@ -278,6 +278,8 @@ func (s *Store) WriteProcessMetrics(ctx context.Context, m *metrics.ProcessMetri
 // Returns:
 //   - []metrics.SystemCPU: metrics within the time range
 //   - error: context cancellation or database read errors
+//
+//nolint:dupl // Type-specific implementation; same structure as GetSystemMemory but different types.
 func (s *Store) GetSystemCPU(ctx context.Context, since, until time.Time) ([]metrics.SystemCPU, error) {
 	// respect context cancellation before starting database transaction
 	if err := ctx.Err(); err != nil {
@@ -324,6 +326,8 @@ func (s *Store) GetSystemCPU(ctx context.Context, since, until time.Time) ([]met
 // Returns:
 //   - []metrics.SystemMemory: metrics within the time range
 //   - error: context cancellation or database read errors
+//
+//nolint:dupl // Type-specific implementation; same structure as GetSystemCPU but different types.
 func (s *Store) GetSystemMemory(ctx context.Context, since, until time.Time) ([]metrics.SystemMemory, error) {
 	// respect context cancellation before starting database transaction
 	if err := ctx.Err(); err != nil {
