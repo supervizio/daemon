@@ -76,4 +76,4 @@ Application layer defines these ports for infrastructure to implement:
 |------|---------|----------------|
 | `Loader` | `config` | `infrastructure/persistence/config/yaml` |
 | `Creator` | `health` | `infrastructure/observability/healthcheck` |
-| `Collector` | `metrics` | `infrastructure/resources/metrics/*` |
+| `Collector` | `metrics` | `infrastructure/probe` |

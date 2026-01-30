@@ -47,4 +47,4 @@ Linux 4.20+ provides PSI via `/proc/pressure/{cpu,memory,io}`.
 ## Dependencies
 
 - Depends on: `domain/process` (for State)
-- Used by: `application/metrics`, `infrastructure/resources/metrics/*`
+- Used by: `application/metrics`, `infrastructure/probe`

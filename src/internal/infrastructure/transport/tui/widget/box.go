@@ -146,7 +146,7 @@ func (b *Box) renderTopBorder(sb *strings.Builder, innerWidth int) {
 	// evaluate condition.
 	if b.Title != "" && b.titleFits(innerWidth) {
 		b.renderTitleInBorder(sb, innerWidth)
-	// handle alternative case.
+		// handle alternative case.
 	} else {
 		sb.WriteString(repeatHorizontal(b.Style.Horizontal, innerWidth))
 	}
@@ -214,7 +214,7 @@ func (b *Box) renderContentLine(sb *strings.Builder, line string, innerWidth int
 	if lineLen < innerWidth {
 		sb.WriteString(line)
 		sb.WriteString(Spaces(innerWidth - lineLen))
-	// handle alternative case.
+		// handle alternative case.
 	} else {
 		sb.WriteString(truncateVisible(line, innerWidth))
 	}

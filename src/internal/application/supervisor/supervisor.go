@@ -114,7 +114,7 @@ type Supervisor struct {
 func NewSupervisor(cfg *domainconfig.Config, loader appconfig.Loader, executor domain.Executor, reaper domainlifecycle.Reaper) (*Supervisor, error) {
 	// Validate the configuration before creating the supervisor.
 	if err := cfg.Validate(); err != nil {
-	// return error if configuration is invalid
+		// return error if configuration is invalid
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
@@ -155,7 +155,7 @@ func NewSupervisor(cfg *domainconfig.Config, loader appconfig.Loader, executor d
 func (s *Supervisor) Start(ctx context.Context) error {
 	// Initialize supervisor state and context.
 	if err := s.initializeStart(ctx); err != nil {
-	// initialize supervisor state and context
+		// initialize supervisor state and context
 		return err
 	}
 
@@ -164,7 +164,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 
 	// Start all managed services.
 	if err := s.startAllServices(); err != nil {
-	// start all managed services
+		// start all managed services
 		return err
 	}
 

@@ -385,6 +385,7 @@ func (l *LogsPanel) getLevelInfo(level string) (levelStr, color string) {
 //
 // Returns:
 //   - string: formatted metadata string
+//
 // formatMetadata formats metadata as key=value pairs using strings.Builder.
 //
 // Params:
@@ -451,7 +452,6 @@ func (l *LogsPanel) appendMetadataValue(sb *strings.Builder, val any) {
 		fmt.Fprint(sb, typed)
 	}
 }
-
 
 // Init initializes the component.
 //

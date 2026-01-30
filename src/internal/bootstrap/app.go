@@ -19,6 +19,7 @@ import (
 	domainlogging "github.com/kodflow/daemon/internal/domain/logging"
 	domainprocess "github.com/kodflow/daemon/internal/domain/process"
 	daemonlogger "github.com/kodflow/daemon/internal/infrastructure/observability/logging/daemon"
+	"github.com/kodflow/daemon/internal/infrastructure/probe"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui"
 )
 
@@ -92,6 +93,7 @@ func Run() int {
 	flag.StringVar(&configPath, "config", "/etc/daemon/config.yaml", "path to configuration file")
 	showVersion := flag.Bool("version", false, "show version and exit")
 	forceInteractive := flag.Bool("tui", false, "enable interactive TUI mode")
+	probeMode := flag.Bool("probe", false, "collect all system metrics and output as JSON")
 	flag.Parse()
 
 	// print version and exit early if requested
@@ -99,6 +101,12 @@ func Run() int {
 		fmt.Printf("supervizio %s\n", version)
 		// return success after showing version
 		return 0
+	}
+
+	// run probe mode if requested
+	if *probeMode {
+		// return exit code from probe mode
+		return runProbeMode()
 	}
 
 	tuiMode := determineTUIMode(*forceInteractive)
@@ -129,6 +137,35 @@ func determineTUIMode(forceInteractive bool) tui.Mode {
 	}
 	// return raw mode as default for minimal output
 	return tui.ModeRaw
+}
+
+// runProbeMode collects all system metrics and outputs them as JSON.
+// This is a standalone mode that doesn't start the supervisor.
+//
+// Returns:
+//   - int: exit code (0 for success, 1 for error).
+func runProbeMode() int {
+	// initialize the probe library
+	if err := probe.Init(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: failed to initialize probe: %v\n", err)
+		// return error code on probe init failure
+		return 1
+	}
+	defer probe.Shutdown()
+
+	// collect all metrics and output as JSON
+	ctx := context.Background()
+	jsonStr, err := probe.CollectAllMetricsJSON(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: failed to collect metrics: %v\n", err)
+		// return error code on collection failure
+		return 1
+	}
+
+	// output JSON to stdout
+	fmt.Println(jsonStr)
+	// return success code
+	return 0
 }
 
 // RunWithConfig executes the main application logic with a specified config path.

@@ -166,17 +166,17 @@ func TestNetworkRenderer_calculatePercentages(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		iface      model.NetworkInterface
-		wantRxPct  float64
-		wantTxPct  float64
+		name      string
+		iface     model.NetworkInterface
+		wantRxPct float64
+		wantTxPct float64
 	}{
 		{
 			name: "zero_speed",
 			iface: model.NetworkInterface{
-				Speed:          1000000000,
-				RxBytesPerSec:  0,
-				TxBytesPerSec:  0,
+				Speed:         1000000000,
+				RxBytesPerSec: 0,
+				TxBytesPerSec: 0,
 			},
 			wantRxPct: 0,
 			wantTxPct: 0,
@@ -184,9 +184,9 @@ func TestNetworkRenderer_calculatePercentages(t *testing.T) {
 		{
 			name: "half_speed",
 			iface: model.NetworkInterface{
-				Speed:          1000000000,
-				RxBytesPerSec:  62500000,
-				TxBytesPerSec:  31250000,
+				Speed:         1000000000,
+				RxBytesPerSec: 62500000,
+				TxBytesPerSec: 31250000,
 			},
 			wantRxPct: 50,
 			wantTxPct: 25,
@@ -194,9 +194,9 @@ func TestNetworkRenderer_calculatePercentages(t *testing.T) {
 		{
 			name: "over_capacity_capped",
 			iface: model.NetworkInterface{
-				Speed:          1000000000,
-				RxBytesPerSec:  200000000,
-				TxBytesPerSec:  150000000,
+				Speed:         1000000000,
+				RxBytesPerSec: 200000000,
+				TxBytesPerSec: 150000000,
 			},
 			wantRxPct: 100,
 			wantTxPct: 100,
@@ -268,10 +268,10 @@ func TestNetworkRenderer_formatInterfaceWithSpeed(t *testing.T) {
 		{
 			name: "basic_interface",
 			iface: model.NetworkInterface{
-				Name:           "eth0",
-				Speed:          1000000000,
-				RxBytesPerSec:  1024000,
-				TxBytesPerSec:  512000,
+				Name:          "eth0",
+				Speed:         1000000000,
+				RxBytesPerSec: 1024000,
+				TxBytesPerSec: 512000,
 			},
 			rxRate: "1.0 MB/s",
 			txRate: "512 KB/s",
@@ -304,9 +304,9 @@ func TestNetworkRenderer_formatInterfaceNoSpeed(t *testing.T) {
 		{
 			name: "loopback",
 			iface: model.NetworkInterface{
-				Name:           "lo",
-				RxBytesPerSec:  100,
-				TxBytesPerSec:  100,
+				Name:          "lo",
+				RxBytesPerSec: 100,
+				TxBytesPerSec: 100,
 			},
 			rxRate: "100 B/s",
 			txRate: "100 B/s",
@@ -337,19 +337,19 @@ func TestNetworkRenderer_formatInterfaceLine(t *testing.T) {
 		{
 			name: "with_speed",
 			iface: model.NetworkInterface{
-				Name:           "eth0",
-				Speed:          1000000000,
-				RxBytesPerSec:  1024,
-				TxBytesPerSec:  512,
+				Name:          "eth0",
+				Speed:         1000000000,
+				RxBytesPerSec: 1024,
+				TxBytesPerSec: 512,
 			},
 		},
 		{
 			name: "without_speed",
 			iface: model.NetworkInterface{
-				Name:           "lo",
-				Speed:          0,
-				RxBytesPerSec:  100,
-				TxBytesPerSec:  100,
+				Name:          "lo",
+				Speed:         0,
+				RxBytesPerSec: 100,
+				TxBytesPerSec: 100,
 			},
 		},
 	}

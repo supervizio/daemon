@@ -225,7 +225,7 @@ func (m Model) toggleFocus() Model {
 		m.focus = FocusLogs
 		m.servicesPanel.SetFocused(false)
 		m.logsPanel.SetFocused(true)
-	// handle alternative case.
+		// handle alternative case.
 	} else {
 		m.focus = FocusServices
 		m.logsPanel.SetFocused(false)
@@ -634,7 +634,7 @@ func (m Model) renderStatusBar(snap *model.Snapshot) string {
 	// evaluate condition.
 	if m.focus == FocusLogs {
 		focusIndicator = m.theme.Primary + "[LOGS]" + ansi.Reset
-	// handle alternative case.
+		// handle alternative case.
 	} else {
 		focusIndicator = m.theme.Primary + "[SERVICES]" + ansi.Reset
 	}
@@ -643,7 +643,7 @@ func (m Model) renderStatusBar(snap *model.Snapshot) string {
 	// evaluate condition.
 	if m.focus == FocusLogs {
 		keys = m.theme.Muted + "[↑↓] Scroll  [g/G] Top/Bottom  [s] Services  [Tab] Switch  [q] Quit" + ansi.Reset
-	// handle alternative case.
+		// handle alternative case.
 	} else {
 		keys = m.theme.Muted + "[↑↓] Scroll  [g/G] Top/Bottom  [l] Logs  [Tab] Switch  [q] Quit" + ansi.Reset
 	}

@@ -236,7 +236,7 @@ func (p *ProgressBar) writePercentValue(sb *strings.Builder) {
 	// evaluate condition.
 	if pct < percentDigitPadding1 {
 		sb.WriteString("  ")
-	// handle double-digit padding.
+		// handle double-digit padding.
 	} else if pct < percentDigitPadding2 {
 		sb.WriteByte(' ')
 	}

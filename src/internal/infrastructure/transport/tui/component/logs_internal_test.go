@@ -534,4 +534,3 @@ func TestLogsPanel_renderBottomBorder(t *testing.T) {
 		})
 	}
 }
-

@@ -890,4 +890,3 @@ func TestServicesPanel_countIndicator(t *testing.T) {
 		})
 	}
 }
-

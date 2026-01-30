@@ -6,7 +6,7 @@ Vérification de la santé des services via différents protocoles.
 
 Tester qu'un service est accessible et répond correctement.
 
-**Note** : Différent de `resources/metrics/` qui collecte des métriques système (CPU, RAM).
+**Note** : Différent de `../probe/` qui collecte des métriques système (CPU, RAM).
 
 ## Probers Disponibles
 

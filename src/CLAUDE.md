@@ -12,6 +12,7 @@ src/
 │   ├── application/          # Application layer (use cases)
 │   ├── domain/               # Domain layer (entities, ports)
 │   └── infrastructure/       # Infrastructure layer (adapters)
+├── lib/probe/                # Rust system metrics library (CGO)
 ├── api/proto/                # gRPC protobuf definitions
 ├── go.mod                    # Module github.com/kodflow/daemon
 └── go.sum                    # Dependency checksums
@@ -58,7 +59,7 @@ ktn-linter lint -c ../.ktn-linter.yaml ./...  # KTN convention linting
 ┌─────────────────────────────────────────────────────────────┐
 │                    Infrastructure Layer                      │
 │  persistence (yaml, boltdb), process (exec, signals, reaper)│
-│  observability (healthcheck, logging), resources (metrics)  │
+│  observability (healthcheck, logging), probe (metrics, CGO) │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -86,4 +87,5 @@ Checker.Check()                # Infrastructure: HTTP/TCP/cmd
 |-----------|-------------|-----|
 | `cmd/` | Entry point | `cmd/CLAUDE.md` |
 | `internal/` | Core logic | `internal/CLAUDE.md` |
+| `lib/` | Rust libraries | `lib/CLAUDE.md` |
 | `api/proto/` | gRPC definitions | `api/proto/v1/daemon/CLAUDE.md` |

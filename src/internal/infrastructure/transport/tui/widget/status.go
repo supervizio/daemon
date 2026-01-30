@@ -192,9 +192,13 @@ func (s *StatusIndicator) HealthStatusText(status health.Status) string {
 	case health.StatusDegraded:
 		// Return yellow text.
 		return s.Theme.Warning + "degraded" + ansi.Reset
-	// Unknown status.
+	// Unknown status - explicit case for exhaustive switch.
+	case health.StatusUnknown:
+		// Return muted "unknown" text.
+		return s.Theme.Muted + "unknown" + ansi.Reset
+	// Future status values default to unknown display.
 	default:
-		// Default fallback: muted "unknown".
+		// Fallback for any future status values.
 		return s.Theme.Muted + "unknown" + ansi.Reset
 	}
 }

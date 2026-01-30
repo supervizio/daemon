@@ -239,10 +239,10 @@ func TestSystemRenderer_renderNormal(t *testing.T) {
 					SwapTotal:     4096 * 1024 * 1024,
 				},
 				Limits: model.ResourceLimits{
-					HasLimits: true,
-					CPUQuota:  2.0,
-					MemoryMax: 1024 * 1024 * 1024,
-					PIDsMax:   1000,
+					HasLimits:   true,
+					CPUQuota:    2.0,
+					MemoryMax:   1024 * 1024 * 1024,
+					PIDsMax:     1000,
 					PIDsCurrent: 100,
 				},
 			},
@@ -308,8 +308,8 @@ func TestSystemRenderer_createInteractiveBars(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name   string
-		sys    model.SystemMetrics
+		name string
+		sys  model.SystemMetrics
 	}{
 		{
 			name: "basic_metrics",
@@ -353,8 +353,8 @@ func TestSystemRenderer_createRawBars(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name   string
-		sys    model.SystemMetrics
+		name string
+		sys  model.SystemMetrics
 	}{
 		{
 			name: "basic_metrics",

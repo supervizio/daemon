@@ -90,7 +90,7 @@ func (b *LogBuffer) Add(entry model.LogEntry) {
 	// evaluate condition.
 	if b.count < b.maxSize {
 		b.count++
-	// handle alternative case.
+		// handle alternative case.
 	} else {
 		b.head = (b.head + 1) % b.maxSize
 	}

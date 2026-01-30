@@ -131,8 +131,8 @@ func Test_getCgroupV2Path(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name            string
-		expectContains  string
+		name           string
+		expectContains string
 	}{
 		{
 			name:           "returns path containing /sys/fs/cgroup if v2 available",

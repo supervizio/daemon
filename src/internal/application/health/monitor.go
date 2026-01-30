@@ -479,7 +479,6 @@ func (m *ProbeMonitor) updateListenerState(lp *ListenerProbe, ls subjectStatus, 
 	// 4. Attempt state transition on listener.
 	accepted := m.attemptStateTransition(lp, eval.TargetState)
 
-
 	// 5. Apply evaluation only if Listener accepted the transition.
 	if accepted {
 		ls.ApplyProbeEvaluation(eval)
@@ -520,7 +519,6 @@ func (m *ProbeMonitor) attemptStateTransition(lp *ListenerProbe, targetState dom
 		return false
 	}
 }
-
 
 // storeProbeResult stores the probe result and updates latency.
 //

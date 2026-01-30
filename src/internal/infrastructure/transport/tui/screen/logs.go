@@ -142,7 +142,7 @@ func (l *LogsRenderer) appendWarnCount(sb *strings.Builder, logs model.LogSummar
 		sb.WriteString("WARN: ")
 		sb.WriteString(strconv.Itoa(logs.WarnCount))
 		sb.WriteString(ansi.Reset)
-	// handle alternative case.
+		// handle alternative case.
 	} else {
 		sb.WriteString("WARN: ")
 		sb.WriteString(strconv.Itoa(logs.WarnCount))
@@ -161,7 +161,7 @@ func (l *LogsRenderer) appendErrorCount(sb *strings.Builder, logs model.LogSumma
 		sb.WriteString("ERROR: ")
 		sb.WriteString(strconv.Itoa(logs.ErrorCount))
 		sb.WriteString(ansi.Reset)
-	// handle alternative case.
+		// handle alternative case.
 	} else {
 		sb.WriteString("ERROR: ")
 		sb.WriteString(strconv.Itoa(logs.ErrorCount))

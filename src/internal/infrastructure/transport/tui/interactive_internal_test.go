@@ -285,11 +285,11 @@ func Test_Model_handleMouseMsg(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		focus      FocusPanel
-		mouseType  tea.MouseEventType
-		mouseX     int
-		mouseY     int
+		name      string
+		focus     FocusPanel
+		mouseType tea.MouseEventType
+		mouseX    int
+		mouseY    int
 	}{
 		{
 			name:      "mouse wheel down in logs panel",
@@ -341,6 +341,7 @@ func Test_Model_handleMouseMsg(t *testing.T) {
 		})
 	}
 }
+
 // Test_Model_handleTickMsg verifies tick message handling with various scenarios.
 func Test_Model_handleTickMsg(t *testing.T) {
 	t.Parallel()
@@ -393,6 +394,7 @@ func Test_Model_handleTickMsg(t *testing.T) {
 		})
 	}
 }
+
 // Test_Model_updatePanelSizes verifies panel size calculation.
 func Test_Model_updatePanelSizes(t *testing.T) {
 	t.Parallel()
@@ -472,6 +474,7 @@ func Test_Model_renderCompact(t *testing.T) {
 		})
 	}
 }
+
 // Test_Model_renderNormal verifies normal layout rendering with edge cases.
 func Test_Model_renderNormal(t *testing.T) {
 	t.Parallel()
@@ -529,6 +532,7 @@ func Test_Model_renderNormal(t *testing.T) {
 		})
 	}
 }
+
 // Test_Model_renderWide verifies wide layout rendering with edge cases.
 func Test_Model_renderWide(t *testing.T) {
 	t.Parallel()
@@ -586,6 +590,7 @@ func Test_Model_renderWide(t *testing.T) {
 		})
 	}
 }
+
 // Test_Model_renderSystemNetworkSideBySide verifies side-by-side rendering with edge cases.
 func Test_Model_renderSystemNetworkSideBySide(t *testing.T) {
 	t.Parallel()
@@ -635,6 +640,7 @@ func Test_Model_renderSystemNetworkSideBySide(t *testing.T) {
 		})
 	}
 }
+
 // Test_trimTrailingEmptyLines verifies trailing empty line removal.
 func Test_trimTrailingEmptyLines(t *testing.T) {
 	t.Parallel()
@@ -812,6 +818,7 @@ func Test_Model_renderStatusBar(t *testing.T) {
 		})
 	}
 }
+
 // Helper functions for test setup.
 
 // createTestTUI creates a minimal TUI instance for testing.

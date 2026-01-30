@@ -63,7 +63,7 @@ func NewCapture(serviceName string, cfg GetServiceLogPather, svcCfg serviceLoggi
 			return nil, err
 		}
 		c.stdout = writer
-	// use passthrough to os.Stdout when no file configured
+		// use passthrough to os.Stdout when no file configured
 	} else {
 		c.stdout = &nopCloser{os.Stdout}
 	}
@@ -79,7 +79,7 @@ func NewCapture(serviceName string, cfg GetServiceLogPather, svcCfg serviceLoggi
 			return nil, err
 		}
 		c.stderr = writer
-	// use passthrough to os.Stderr when no file configured
+		// use passthrough to os.Stderr when no file configured
 	} else {
 		c.stderr = &nopCloser{os.Stderr}
 	}

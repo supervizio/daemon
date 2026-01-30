@@ -10,11 +10,11 @@ import (
 	domainprocess "github.com/kodflow/daemon/internal/domain/process"
 	infrahealthcheck "github.com/kodflow/daemon/internal/infrastructure/observability/healthcheck"
 	infraconfig "github.com/kodflow/daemon/internal/infrastructure/persistence/config/yaml"
+	infraprobe "github.com/kodflow/daemon/internal/infrastructure/probe"
 	"github.com/kodflow/daemon/internal/infrastructure/process/control"
 	"github.com/kodflow/daemon/internal/infrastructure/process/credentials"
 	"github.com/kodflow/daemon/internal/infrastructure/process/executor"
 	infrareaper "github.com/kodflow/daemon/internal/infrastructure/process/reaper"
-	inframetrics "github.com/kodflow/daemon/internal/infrastructure/resources/metrics"
 )
 
 // InitializeApp creates the application with all dependencies wired.
@@ -52,8 +52,8 @@ func InitializeApp(configPath string) (*App, error) {
 		ProvideProberFactory,
 		wire.Bind(new(apphealth.Creator), new(*infrahealthcheck.Factory)),
 
-		// Infrastructure: Process metrics collector (returns appmetrics.Collector interface).
-		inframetrics.NewProcessCollector,
+		// Infrastructure: Process metrics collector via Rust probe (cross-platform).
+		infraprobe.NewAppProcessCollector,
 
 		// Application: Metrics tracker.
 		ProvideMetricsTracker,

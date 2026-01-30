@@ -164,6 +164,8 @@ func (p *GRPCProber) handleRPCError(err error, latency time.Duration, service st
 	}
 
 	// handle specific error codes
+	// We only handle specific codes; all others fall through to default.
+	//nolint:exhaustive // intentionally not handling all gRPC codes
 	switch st.Code() {
 	// service not found means misconfiguration or service not registered
 	case codes.NotFound:
@@ -213,9 +215,13 @@ func (p *GRPCProber) handleHealthStatus(
 	case grpc_health_v1.HealthCheckResponse_SERVICE_UNKNOWN:
 		// service name unknown to health endpoint
 		return health.NewFailureCheckResult(latency, fmt.Sprintf("gRPC service %q unknown", target.Service), ErrGRPCServiceUnknown)
-	// unknown status should be treated as failure
+	// unknown status - explicit case for exhaustive switch
+	case grpc_health_v1.HealthCheckResponse_UNKNOWN:
+		// status not yet known, treat as failure
+		return health.NewFailureCheckResult(latency, fmt.Sprintf("gRPC service %q status unknown: %v", target.Service, resp.Status), ErrGRPCUnknownStatus)
+	// default handles any future status values
 	default:
-		// unexpected health status value
+		// unexpected health status value - treat as failure
 		return health.NewFailureCheckResult(latency, fmt.Sprintf("gRPC service %q status unknown: %v", target.Service, resp.Status), ErrGRPCUnknownStatus)
 	}
 }

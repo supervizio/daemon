@@ -2513,15 +2513,14 @@ func Test_ProbeMonitor_handleHealthyTransition(t *testing.T) {
 	}
 }
 
-
 // Test_ProbeMonitor_attemptStateTransition tests the attemptStateTransition method.
 func Test_ProbeMonitor_attemptStateTransition(t *testing.T) {
 	tests := []struct {
-		name                string
-		targetState         domain.SubjectState
+		name                 string
+		targetState          domain.SubjectState
 		listenerInitialState listener.State
-		expected            bool
-		expectedFinalState  listener.State
+		expected             bool
+		expectedFinalState   listener.State
 	}{
 		{
 			name:                 "transition to ready accepted",

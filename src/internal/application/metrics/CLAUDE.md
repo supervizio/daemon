@@ -71,7 +71,7 @@ type ProcessTracker interface {
 
 - Depends on: `domain/metrics`, `domain/process`
 - Used by: `cmd/daemon`, gRPC streaming
-- Implemented by: `infrastructure/resources/metrics/*`
+- Implemented by: `infrastructure/probe`
 
 ## Related Packages
 
@@ -79,4 +79,4 @@ type ProcessTracker interface {
 |---------|------|
 | `domain/metrics` | ProcessMetrics, ProcessCPU, ProcessMemory types |
 | `domain/process` | Process State enum |
-| `infrastructure/resources/metrics` | Platform-specific Collector implementations |
+| `infrastructure/probe` | Cross-platform Collector implementation (Rust FFI) |
