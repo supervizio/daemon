@@ -86,7 +86,8 @@ jobs:
         working-directory: src
         env:
           GOWORK: off
-        run: go test -race -coverprofile=coverage.raw.out -covermode=atomic ./...
+          CGO_ENABLED: 0
+        run: go test -coverprofile=coverage.raw.out -covermode=atomic ./...
 
       - name: Filter coverage (exclude generated files)
         working-directory: src
