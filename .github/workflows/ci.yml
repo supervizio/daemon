@@ -436,9 +436,8 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
-          # musl: pthread is in libc, -ldl doesn't exist (dlopen is in libc)
-          # -lm is still separate. Static linking via extldflags.
-          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lpthread -lm"
+          # musl: pthread/dl are in libc. Use -Wl,--whole-archive to link all probe symbols.
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -Wl,--whole-archive -lprobe -Wl,--no-whole-archive -lm -static"
         run: |
           go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
             -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon
@@ -692,7 +691,7 @@ jobs:
           path: bin/
 
       - name: Download crasher binary
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/dojwnload-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: crasher-linux-amd64
           path: bin/
