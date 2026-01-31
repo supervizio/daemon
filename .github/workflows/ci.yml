@@ -428,14 +428,16 @@ jobs:
         working-directory: src
         run: wire ./internal/bootstrap/
 
-      - name: Debug libprobe.a symbols
+      - name: Debug musl environment
         run: |
           echo "=== Checking libprobe.a ==="
           ls -la ${{ github.workspace }}/dist/lib/${{ matrix.platform }}/
-          nm ${{ github.workspace }}/dist/lib/${{ matrix.platform }}/libprobe.a | head -50 || true
-          echo "=== musl-gcc info ==="
-          which ${{ matrix.cc }}
-          ${{ matrix.cc }} --version || true
+          echo "=== musl library paths ==="
+          ${{ matrix.cc }} -print-search-dirs 2>/dev/null || true
+          echo "=== Looking for musl libc.a and libpthread.a ==="
+          find /usr -name 'libc.a' -o -name 'libpthread.a' 2>/dev/null | head -20 || true
+          echo "=== musl-gcc specs ==="
+          ${{ matrix.cc }} -v 2>&1 | head -20 || true
 
       - name: Build supervizio binary (static/musl)
         working-directory: src
@@ -445,13 +447,13 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
-          # musl: -lpthread required for libprobe, -ldl not needed (dlopen in musl libc)
-          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lpthread -lm"
+          # musl: static linking - pthread is in libc, no separate -lpthread needed
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lm"
         run: |
-          echo "=== Building with CGO_LDFLAGS: $CGO_LDFLAGS ==="
+          echo "=== Building static musl binary ==="
           go build -v -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
             -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon 2>&1 || {
-            echo "=== Build failed, showing linker output ==="
+            echo "=== Build failed ==="
             exit 1
           }
 
