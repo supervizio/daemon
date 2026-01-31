@@ -306,7 +306,7 @@ jobs:
   # =============================================================================
 
   # Build Linux binaries (glibc - standard)
-  build-linux:
+  matrix-unix:
     name: Build linux-${{ matrix.goarch }}
     runs-on: ubuntu-24.04
     needs: [go-test]
@@ -372,7 +372,7 @@ jobs:
 
   # Build Linux binaries (musl - static for Alpine/scratch)
   # Uses Docker with Alpine to ensure native musl libc
-  build-linux-musl:
+  matrix-unix-musl:
     name: Build linux-${{ matrix.goarch }}-musl
     runs-on: ubuntu-24.04
     needs: [go-test, build-probe-musl]
@@ -474,7 +474,7 @@ jobs:
   verify-artifacts:
     name: Verify Artifacts
     runs-on: ubuntu-24.04
-    needs: [build-linux, build-linux-musl]
+    needs: [matrix-unix, matrix-unix-musl]
     steps:
       - name: Download all binaries
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -656,7 +656,7 @@ jobs:
   e2e-testcontainer:
     name: E2E Testcontainer
     runs-on: ubuntu-24.04
-    needs: [build-linux, build-crasher]
+    needs: [matrix-unix, build-crasher]
     continue-on-error: true  # E2E tests may be flaky
     timeout-minutes: 15
     steps:
@@ -778,7 +778,7 @@ jobs:
   # E2E Docker Script tests (install.sh)
   e2e-docker-script:
     name: E2E Docker Script ${{ matrix.name }}
-    needs: [build-linux, build-linux-musl]
+    needs: [matrix-unix, matrix-unix-musl]
     runs-on: ubuntu-24.04
     continue-on-error: true  # E2E tests may have environmental issues
     timeout-minutes: 10
@@ -937,7 +937,7 @@ jobs:
   # E2E VM Script tests (install.sh on Linux)
   e2e-vm-script:
     name: E2E VM Script ${{ matrix.name }}
-    needs: [build-linux, build-linux-musl]
+    needs: [matrix-unix, matrix-unix-musl]
     runs-on: ubuntu-24.04
     continue-on-error: true  # VM E2E tests may have environmental issues
     timeout-minutes: 25
@@ -1032,7 +1032,7 @@ jobs:
         working-directory: e2e
         run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
 
-  # E2E VM BSD (native build in VM)
+  # E2E VM BSD (native build in VM with probe)
   e2e-vm-bsd:
     name: E2E VM BSD ${{ matrix.name }}
     needs: [rust-test, go-test]
