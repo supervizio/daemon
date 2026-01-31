@@ -436,9 +436,9 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
-          # Note: musl provides pthread and dl in libc (no separate libs needed)
-          # -lm is still separate on musl. -static links everything statically.
-          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lm -lpthread -static"
+          # musl: pthread is in libc, -ldl doesn't exist (dlopen is in libc)
+          # -lm is still separate. Static linking via extldflags.
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lpthread -lm"
         run: |
           go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
             -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon
