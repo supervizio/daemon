@@ -468,7 +468,7 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # PHASE 4.5: ARTIFACT SANITY CHECKS (needs: build-*)
+  # PHASE 5: ARTIFACT SANITY CHECKS (needs: build-*)
   # =============================================================================
 
   verify-artifacts:
@@ -546,110 +546,8 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # PHASE 5: PACKAGES (needs: verify-artifacts)
-  # =============================================================================
-
-  # Generate Linux Packages (.deb, .rpm) - glibc binaries
-  packages-glibc:
-    name: Package ${{ matrix.format }} (${{ matrix.arch }})
-    needs: [verify-artifacts]
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [amd64, arm64]
-        format: [deb, rpm]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: src/go.sum
-
-      - name: Download Linux binary (glibc)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: supervizio-linux-${{ matrix.arch }}
-
-      - name: Prepare binary
-        run: |
-          chmod +x supervizio-linux-${{ matrix.arch }}
-
-      - name: Install nfpm
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
-
-      - name: Build package
-        env:
-          VERSION: "0.0.0"
-          GOARCH: ${{ matrix.arch }}
-        run: |
-          set -euo pipefail
-          envsubst < nfpm.yaml > nfpm-resolved.yaml
-          nfpm package --config nfpm-resolved.yaml --packager ${{ matrix.format }} --target ./
-
-      - name: Upload package
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: supervizio-${{ matrix.arch }}.${{ matrix.format }}
-          path: "*.${{ matrix.format }}"
-          retention-days: 1
-
-  # Generate Linux Packages (.apk) - musl binaries for Alpine
-  packages-musl:
-    name: Package apk (${{ matrix.arch }})
-    needs: [verify-artifacts]
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [amd64, arm64]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: src/go.sum
-
-      - name: Download Linux binary (musl)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: supervizio-linux-${{ matrix.arch }}-musl
-
-      - name: Prepare binary
-        run: |
-          # Rename musl binary to standard name for nfpm
-          mv supervizio-linux-${{ matrix.arch }}-musl supervizio-linux-${{ matrix.arch }}
-          chmod +x supervizio-linux-${{ matrix.arch }}
-
-      - name: Install nfpm
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
-
-      - name: Build package
-        env:
-          VERSION: "0.0.0"
-          GOARCH: ${{ matrix.arch }}
-        run: |
-          set -euo pipefail
-          envsubst < nfpm.yaml > nfpm-resolved.yaml
-          nfpm package --config nfpm-resolved.yaml --packager apk --target ./
-
-      - name: Upload package
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: supervizio-${{ matrix.arch }}.apk
-          path: "*.apk"
-          retention-days: 1
-
-  # =============================================================================
-  # PHASE 6: E2E TESTS (needs: packages)
+  # PHASE 6: E2E SCRIPT TESTS (needs: matrix-unix) - NO PACKAGES
+  # Tests binary installation via script, run --probes, uninstall
   # =============================================================================
 
   # E2E Testcontainer (behavioral tests with testcontainers-go)
@@ -708,76 +606,9 @@ jobs:
           TESTCONTAINERS_RYUK_DISABLED: "true"
         run: go test -v -timeout 15m ./...
 
-  # E2E Docker Package tests
-  e2e-docker-pkg:
-    name: E2E Docker Pkg ${{ matrix.name }}
-    needs: [packages-glibc, packages-musl]
-    runs-on: ubuntu-24.04
-    continue-on-error: true  # E2E tests may have environmental issues
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Debian
-            dockerfile: Dockerfile.debian
-            package_format: deb
-            uninstall_cmd: "dpkg -r supervizio"
-          - name: Fedora
-            dockerfile: Dockerfile.fedora
-            package_format: rpm
-            uninstall_cmd: "rpm -e supervizio"
-          - name: Alpine
-            dockerfile: Dockerfile.alpine
-            package_format: apk
-            uninstall_cmd: "apk del supervizio"
-          - name: Devuan
-            dockerfile: Dockerfile.devuan
-            package_format: deb
-            uninstall_cmd: "dpkg -r supervizio"
-          - name: Alpine-runit
-            dockerfile: Dockerfile.alpine-runit
-            package_format: apk
-            uninstall_cmd: "apk del supervizio"
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Download package
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: supervizio-amd64.${{ matrix.package_format }}
-          path: bin
-
-      - name: Build container
-        run: docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-e2e:${{ matrix.name }} .
-
-      - name: Test version command
-        run: docker run --rm supervizio-e2e:${{ matrix.name }}
-
-      - name: Test help command
-        run: docker run --rm supervizio-e2e:${{ matrix.name }} --help || true
-
-      - name: Test config validation
-        run: docker run --rm supervizio-e2e:${{ matrix.name }} --config /etc/supervizio/config.yaml --version
-
-      - name: Test probe metrics
-        run: |
-          docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }} -c "
-            /usr/local/bin/supervizio --probe | jq -e '
-              .timestamp and
-              .platform and
-              .cpu.usage_percent != null and
-              .memory.total_bytes > 0
-            ' && echo 'Probe validation passed'
-          "
-
-      - name: Test uninstall
-        run: docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }} -c "${{ matrix.uninstall_cmd }} && test ! -x /usr/local/bin/supervizio"
-
-  # E2E Docker Script tests (install.sh)
-  e2e-docker-script:
-    name: E2E Docker Script ${{ matrix.name }}
+  # E2E Docker Script tests (Linux - install.sh)
+  e2e-docker-linux:
+    name: E2E Docker Linux ${{ matrix.name }}
     needs: [matrix-unix, matrix-unix-musl]
     runs-on: ubuntu-24.04
     continue-on-error: true  # E2E tests may have environmental issues
@@ -786,11 +617,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Debian
+          - name: Debian-glibc
             dockerfile: Dockerfile.debian-script
             artifact: supervizio-linux-amd64
             libc: glibc
-          - name: Alpine
+          - name: Alpine-musl
             dockerfile: Dockerfile.alpine-script
             artifact: supervizio-linux-amd64-musl
             libc: musl
@@ -815,128 +646,27 @@ jobs:
       - name: Test version command
         run: docker run --rm supervizio-e2e-script:${{ matrix.name }}
 
-      - name: Test probe metrics
+      - name: Test probe metrics (validate all expected fields)
         run: |
           docker run --rm --entrypoint sh supervizio-e2e-script:${{ matrix.name }} -c "
-            /usr/local/bin/supervizio --probe | jq -e '.timestamp and .platform' && echo 'Probe validation passed'
+            echo '=== Running --probes ===' &&
+            OUTPUT=\$(/usr/local/bin/supervizio --probe) &&
+            echo \"\$OUTPUT\" | jq . &&
+            echo '=== Validating probe metrics ===' &&
+            echo \"\$OUTPUT\" | jq -e '
+              .timestamp and
+              .platform and
+              .cpu.usage_percent != null and
+              .cpu.count > 0 and
+              .memory.total_bytes > 0 and
+              .memory.used_bytes >= 0 and
+              .memory.available_bytes >= 0
+            ' && echo 'All probe metrics validated successfully'
           "
 
-  # E2E VM Package tests (Linux with real init systems)
-  e2e-vm-pkg:
-    name: E2E VM Pkg ${{ matrix.name }}
-    needs: [packages-glibc, packages-musl]
-    runs-on: ubuntu-24.04
-    continue-on-error: true  # VM E2E tests may have environmental issues
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Debian
-            vm: debian13
-            init: systemd
-            package_format: deb
-            package_install: "sudo dpkg -i"
-          - name: Fedora
-            vm: fedora
-            init: systemd
-            package_format: rpm
-            package_install: "sudo rpm -i"
-          - name: Alpine
-            vm: alpine
-            init: openrc
-            package_format: apk
-            package_install: "sudo apk add --allow-untrusted"
-          - name: Devuan
-            vm: devuan
-            init: sysvinit
-            package_format: deb
-            package_install: "sudo dpkg -i"
-          - name: Alpine-runit
-            vm: alpine-runit
-            init: runit
-            package_format: apk
-            package_install: "sudo apk add --allow-untrusted"
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Download package
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: supervizio-amd64.${{ matrix.package_format }}
-          path: package
-
-      - name: Setup KVM
-        run: |
-          if [ -e /dev/kvm ]; then
-            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-            sudo udevadm control --reload-rules
-            sudo udevadm trigger --name-match=kvm
-          fi
-
-      - name: Install libvirt and Vagrant
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
-          sudo systemctl start libvirtd
-          sudo usermod -aG libvirt,kvm $USER
-          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
-          vagrant plugin install vagrant-libvirt
-
-      - name: Cache Vagrant box
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ~/.vagrant.d/boxes
-          key: vagrant-${{ matrix.vm }}-v1
-
-      - name: Start VM
-        working-directory: e2e
-        run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
-
-      - name: Sync folders and install
-        working-directory: e2e
-        run: |
-          set -uo pipefail
-          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
-          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
-
-          for i in $(seq 1 36); do
-            if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
-              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
-                break
-              fi
-            fi
-            [ "$i" = "36" ] && exit 1
-            sleep 5
-          done
-
-          sudo -E vagrant rsync ${{ matrix.vm }} 2>&1 || {
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /vagrant && sudo chmod 777 /setup /vagrant"
-            tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
-            tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup"
-          }
-
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /package && sudo chmod 755 /package"
-          tar -cv -C "$GITHUB_WORKSPACE" package | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /"
-          sudo -E vagrant ssh "${{ matrix.vm }}" -c '${{ matrix.package_install }} /package/*.${{ matrix.package_format }}'
-
-      - name: Run VM tests
-        working-directory: e2e
-        run: sudo -E vagrant ssh "${{ matrix.vm }}" -c "sudo /vagrant/test-install.sh --skip-install"
-
-      - name: Cleanup VM
-        if: always()
-        working-directory: e2e
-        run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
-
-  # E2E VM Script tests (install.sh on Linux)
-  e2e-vm-script:
-    name: E2E VM Script ${{ matrix.name }}
+  # E2E VM Script tests (Linux - install.sh)
+  e2e-vm-linux:
+    name: E2E VM Linux ${{ matrix.name }}
     needs: [matrix-unix, matrix-unix-musl]
     runs-on: ubuntu-24.04
     continue-on-error: true  # VM E2E tests may have environmental issues
@@ -945,11 +675,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Debian
+          - name: Debian-glibc
             vm: debian13
             artifact: supervizio-linux-amd64
             libc: glibc
-          - name: Alpine
+          - name: Alpine-musl
             vm: alpine
             artifact: supervizio-linux-amd64-musl
             libc: musl
@@ -1023,9 +753,22 @@ jobs:
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup /bin-local"
           }
 
-      - name: Run VM tests
+      - name: Run VM tests (install, probes, uninstall)
         working-directory: e2e
-        run: sudo -E vagrant ssh "${{ matrix.vm }}" -c "sudo /vagrant/test-install.sh"
+        run: |
+          echo "=== Install binary ==="
+          sudo -E vagrant ssh "${{ matrix.vm }}" -c "sudo /vagrant/test-install.sh"
+
+          echo "=== Test --probes output ==="
+          sudo -E vagrant ssh "${{ matrix.vm }}" -c "
+            OUTPUT=\$(/usr/local/bin/supervizio --probe)
+            echo \"\$OUTPUT\" | jq .
+            echo \"\$OUTPUT\" | jq -e '
+              .timestamp and .platform and
+              .cpu.usage_percent != null and .cpu.count > 0 and
+              .memory.total_bytes > 0
+            ' && echo 'Probe metrics validated'
+          "
 
       - name: Cleanup VM
         if: always()
@@ -1033,7 +776,6 @@ jobs:
         run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
 
   # E2E VM BSD (native build in VM with probe)
-  # Runs after Linux builds to stay in E2E phase, builds BSD natively with probe
   e2e-vm-bsd:
     name: E2E VM BSD ${{ matrix.name }}
     needs: [matrix-unix, matrix-unix-musl]
@@ -1153,7 +895,7 @@ jobs:
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup"
           echo "Sync complete"
 
-      - name: Build in VM (Rust + Go)
+      - name: Build in VM (Rust + Go with probe)
         working-directory: e2e
         timeout-minutes: 10
         run: |
@@ -1180,7 +922,22 @@ jobs:
           echo "=== Verify binary ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "/usr/local/bin/supervizio --version"
 
-      - name: Run VM tests
+      - name: Test probes (validate all expected metrics)
+        working-directory: e2e
+        timeout-minutes: 2
+        run: |
+          echo "=== Test --probes output ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            OUTPUT=\$(/usr/local/bin/supervizio --probe)
+            echo \"\$OUTPUT\" | jq .
+            echo \"\$OUTPUT\" | jq -e '
+              .timestamp and .platform and
+              .cpu.usage_percent != null and .cpu.count > 0 and
+              .memory.total_bytes > 0 and .memory.used_bytes >= 0
+            ' && echo 'All probe metrics validated successfully on ${{ matrix.name }}'
+          "
+
+      - name: Run VM tests (install, uninstall)
         working-directory: e2e
         timeout-minutes: 5
         run: |
@@ -1191,3 +948,629 @@ jobs:
         if: always()
         working-directory: e2e
         run: sudo vagrant destroy ${{ matrix.vm }} -f || true
+
+  # =============================================================================
+  # PHASE 7: PACKAGES (needs: verify-artifacts)
+  # =============================================================================
+
+  # Generate Linux Packages (.deb, .rpm) - glibc binaries
+  packages-glibc:
+    name: Package ${{ matrix.format }} (${{ matrix.arch }})
+    needs: [verify-artifacts]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        format: [deb, rpm]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download Linux binary (glibc)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-linux-${{ matrix.arch }}
+
+      - name: Prepare binary
+        run: |
+          chmod +x supervizio-linux-${{ matrix.arch }}
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
+
+      - name: Build package
+        env:
+          VERSION: "0.0.0"
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          envsubst < nfpm.yaml > nfpm-resolved.yaml
+          nfpm package --config nfpm-resolved.yaml --packager ${{ matrix.format }} --target ./
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.arch }}.${{ matrix.format }}
+          path: "*.${{ matrix.format }}"
+          retention-days: 1
+
+  # Generate Linux Packages (.apk) - musl binaries for Alpine
+  packages-musl:
+    name: Package apk (${{ matrix.arch }})
+    needs: [verify-artifacts]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download Linux binary (musl)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-linux-${{ matrix.arch }}-musl
+
+      - name: Prepare binary
+        run: |
+          # Rename musl binary to standard name for nfpm
+          mv supervizio-linux-${{ matrix.arch }}-musl supervizio-linux-${{ matrix.arch }}
+          chmod +x supervizio-linux-${{ matrix.arch }}
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
+
+      - name: Build package
+        env:
+          VERSION: "0.0.0"
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          envsubst < nfpm.yaml > nfpm-resolved.yaml
+          nfpm package --config nfpm-resolved.yaml --packager apk --target ./
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.arch }}.apk
+          path: "*.apk"
+          retention-days: 1
+
+  # Generate BSD Packages (native build in VMs)
+  # FreeBSD/DragonFly: .pkg (pkgng), OpenBSD/NetBSD: .tgz
+  packages-bsd:
+    name: Package BSD ${{ matrix.name }}
+    needs: [e2e-vm-bsd]  # Reuses VM setup patterns, runs after script tests
+    runs-on: ubuntu-24.04
+    continue-on-error: true  # BSD packaging is experimental
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: FreeBSD
+            vm: freebsd
+            os: freebsd
+            pkg_format: pkg
+            pkg_create: "pkg create -M /tmp/manifest.ucl -r /tmp/staging -o ."
+          - name: OpenBSD
+            vm: openbsd
+            os: openbsd
+            pkg_format: tgz
+            pkg_create: "pkg_create -d /tmp/description -f /tmp/packing-list -B /tmp/staging -p /usr/local supervizio-0.0.0.tgz"
+          - name: NetBSD
+            vm: netbsd
+            os: netbsd
+            pkg_format: tgz
+            pkg_create: "pkg_create -v -B /tmp/staging -I /usr/local -c 'Process supervisor' -d 'PID1-capable process supervisor' supervizio-0.0.0.tgz"
+          - name: DragonFlyBSD
+            vm: dragonfly
+            os: dragonfly
+            pkg_format: pkg
+            pkg_create: "pkg create -M /tmp/manifest.ucl -r /tmp/staging -o ."
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
+      - name: Install libvirt and Vagrant
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
+          vagrant plugin install vagrant-libvirt
+
+      - name: Cache Vagrant box
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-${{ matrix.vm }}-v1
+
+      - name: Start VM
+        working-directory: e2e
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+
+      - name: Wait for VM readiness
+        working-directory: e2e
+        timeout-minutes: 5
+        run: |
+          set -uo pipefail
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+          for i in $(seq 1 36); do
+            if timeout 5 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "command -v cargo && command -v go" 2>/dev/null; then
+                break
+              fi
+            fi
+            [ "$i" = "36" ] && exit 1
+            sleep 5
+          done
+
+      - name: Sync source code
+        working-directory: e2e
+        run: |
+          set -euo pipefail
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /vagrant/src /setup && sudo chmod 777 /vagrant /setup"
+          tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xf -"
+          tar -cf - -C .. src | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
+
+      - name: Build binary with probe (native)
+        working-directory: e2e
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          echo "=== Build Rust probe library ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            cd /vagrant/src/lib/probe
+            cargo build --release
+            mkdir -p /vagrant/dist/lib/bsd-amd64
+            cp target/release/libprobe.a /vagrant/dist/lib/bsd-amd64/
+          "
+
+          echo "=== Build Go binary with CGO ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            cd /vagrant/src
+            export CGO_ENABLED=1
+            export CGO_CFLAGS='-I/vagrant/src/lib/probe/include'
+            export CGO_LDFLAGS='-L/vagrant/dist/lib/bsd-amd64 -lprobe -lpthread -lm'
+            go generate ./internal/bootstrap/
+            go build -ldflags='-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci' \
+              -o /vagrant/supervizio ./cmd/daemon
+          "
+
+      - name: Create package staging
+        working-directory: e2e
+        run: |
+          set -euo pipefail
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            mkdir -p /tmp/staging/usr/local/bin
+            mkdir -p /tmp/staging/usr/local/etc/supervizio
+            mkdir -p /tmp/staging/usr/local/etc/rc.d
+
+            # Install binary
+            cp /vagrant/supervizio /tmp/staging/usr/local/bin/supervizio
+            chmod 755 /tmp/staging/usr/local/bin/supervizio
+
+            # Install config
+            echo '# supervizio configuration' > /tmp/staging/usr/local/etc/supervizio/config.yaml
+
+            # Install rc.d script
+            cp /setup/init/${{ matrix.os }}/supervizio /tmp/staging/usr/local/etc/rc.d/supervizio 2>/dev/null || \
+              cp /setup/init/freebsd/supervizio /tmp/staging/usr/local/etc/rc.d/supervizio
+            chmod 755 /tmp/staging/usr/local/etc/rc.d/supervizio
+          "
+
+      - name: Create package manifest (FreeBSD/DragonFly)
+        if: matrix.pkg_format == 'pkg'
+        working-directory: e2e
+        run: |
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            cat > /tmp/manifest.ucl << 'EOF'
+          name: supervizio
+          version: \"0.0.0\"
+          origin: sysutils/supervizio
+          comment: \"PID1-capable process supervisor\"
+          desc: \"Process supervisor for containers and Unix systems with health probes\"
+          maintainer: \"team@superviz.io\"
+          www: \"https://superviz.io\"
+          prefix: /usr/local
+          EOF
+          "
+
+      - name: Create package manifest (OpenBSD)
+        if: matrix.os == 'openbsd'
+        working-directory: e2e
+        run: |
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            echo 'PID1-capable process supervisor' > /tmp/description
+            cat > /tmp/packing-list << 'EOF'
+          @name supervizio-0.0.0
+          @cwd /tmp/staging
+          bin/supervizio
+          etc/supervizio/config.yaml
+          etc/rc.d/supervizio
+          EOF
+          "
+
+      - name: Build package
+        working-directory: e2e
+        run: |
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            cd /tmp
+            ${{ matrix.pkg_create }}
+            ls -la *.pkg *.tgz 2>/dev/null || true
+          "
+
+      - name: Extract package from VM
+        working-directory: e2e
+        run: |
+          mkdir -p ../packages
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "cat /tmp/supervizio*.${{ matrix.pkg_format }}" > ../packages/supervizio-${{ matrix.os }}-amd64.${{ matrix.pkg_format }}
+          ls -la ../packages/
+
+      - name: Upload BSD package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.os }}-amd64.${{ matrix.pkg_format }}
+          path: packages/supervizio-${{ matrix.os }}-amd64.${{ matrix.pkg_format }}
+          retention-days: 1
+
+      - name: Cleanup VM
+        if: always()
+        working-directory: e2e
+        run: sudo vagrant destroy ${{ matrix.vm }} -f || true
+
+  # =============================================================================
+  # PHASE 8: E2E PACKAGE TESTS (needs: packages)
+  # Tests package installation (.deb, .rpm, .apk, .pkg, .tgz) in containers and VMs
+  # =============================================================================
+
+  # E2E Docker Package tests (Linux)
+  e2e-docker-pkg-linux:
+    name: E2E Docker Pkg Linux ${{ matrix.name }}
+    needs: [packages-glibc, packages-musl]
+    runs-on: ubuntu-24.04
+    continue-on-error: true  # E2E tests may have environmental issues
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian
+            dockerfile: Dockerfile.debian
+            package_format: deb
+            uninstall_cmd: "dpkg -r supervizio"
+          - name: Fedora
+            dockerfile: Dockerfile.fedora
+            package_format: rpm
+            uninstall_cmd: "rpm -e supervizio"
+          - name: Alpine
+            dockerfile: Dockerfile.alpine
+            package_format: apk
+            uninstall_cmd: "apk del supervizio"
+          - name: Devuan
+            dockerfile: Dockerfile.devuan
+            package_format: deb
+            uninstall_cmd: "dpkg -r supervizio"
+          - name: Alpine-runit
+            dockerfile: Dockerfile.alpine-runit
+            package_format: apk
+            uninstall_cmd: "apk del supervizio"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-amd64.${{ matrix.package_format }}
+          path: bin
+
+      - name: Build container
+        run: docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-e2e:${{ matrix.name }} .
+
+      - name: Test version command
+        run: docker run --rm supervizio-e2e:${{ matrix.name }}
+
+      - name: Test help command
+        run: docker run --rm supervizio-e2e:${{ matrix.name }} --help || true
+
+      - name: Test config validation
+        run: docker run --rm supervizio-e2e:${{ matrix.name }} --config /etc/supervizio/config.yaml --version
+
+      - name: Test probe metrics
+        run: |
+          docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }} -c "
+            /usr/local/bin/supervizio --probe | jq -e '
+              .timestamp and
+              .platform and
+              .cpu.usage_percent != null and
+              .memory.total_bytes > 0
+            ' && echo 'Probe validation passed'
+          "
+
+      - name: Test uninstall
+        run: docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }} -c "${{ matrix.uninstall_cmd }} && test ! -x /usr/local/bin/supervizio"
+
+  # E2E VM Package tests (Linux with real init systems)
+  e2e-vm-pkg-linux:
+    name: E2E VM Pkg Linux ${{ matrix.name }}
+    needs: [packages-glibc, packages-musl]
+    runs-on: ubuntu-24.04
+    continue-on-error: true  # VM E2E tests may have environmental issues
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian
+            vm: debian13
+            init: systemd
+            package_format: deb
+            package_install: "sudo dpkg -i"
+          - name: Fedora
+            vm: fedora
+            init: systemd
+            package_format: rpm
+            package_install: "sudo rpm -i"
+          - name: Alpine
+            vm: alpine
+            init: openrc
+            package_format: apk
+            package_install: "sudo apk add --allow-untrusted"
+          - name: Devuan
+            vm: devuan
+            init: sysvinit
+            package_format: deb
+            package_install: "sudo dpkg -i"
+          - name: Alpine-runit
+            vm: alpine-runit
+            init: runit
+            package_format: apk
+            package_install: "sudo apk add --allow-untrusted"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-amd64.${{ matrix.package_format }}
+          path: package
+
+      - name: Setup KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
+      - name: Install libvirt and Vagrant
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
+          vagrant plugin install vagrant-libvirt
+
+      - name: Cache Vagrant box
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-${{ matrix.vm }}-v1
+
+      - name: Start VM
+        working-directory: e2e
+        run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+
+      - name: Sync folders and install
+        working-directory: e2e
+        run: |
+          set -uo pipefail
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+
+          for i in $(seq 1 36); do
+            if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+                break
+              fi
+            fi
+            [ "$i" = "36" ] && exit 1
+            sleep 5
+          done
+
+          sudo -E vagrant rsync ${{ matrix.vm }} 2>&1 || {
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /vagrant && sudo chmod 777 /setup /vagrant"
+            tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
+            tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup"
+          }
+
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /package && sudo chmod 755 /package"
+          tar -cv -C "$GITHUB_WORKSPACE" package | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /"
+          sudo -E vagrant ssh "${{ matrix.vm }}" -c '${{ matrix.package_install }} /package/*.${{ matrix.package_format }}'
+
+      - name: Run VM tests
+        working-directory: e2e
+        run: sudo -E vagrant ssh "${{ matrix.vm }}" -c "sudo /vagrant/test-install.sh --skip-install"
+
+      - name: Cleanup VM
+        if: always()
+        working-directory: e2e
+        run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
+
+  # E2E VM Package tests (BSD with native packages)
+  e2e-vm-pkg-bsd:
+    name: E2E VM Pkg BSD ${{ matrix.name }}
+    needs: [packages-bsd]
+    runs-on: ubuntu-24.04
+    continue-on-error: true  # BSD package tests are experimental
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: FreeBSD
+            vm: freebsd
+            os: freebsd
+            pkg_format: pkg
+            pkg_install: "pkg add -f"
+            pkg_uninstall: "pkg delete -y supervizio"
+          - name: OpenBSD
+            vm: openbsd
+            os: openbsd
+            pkg_format: tgz
+            pkg_install: "pkg_add"
+            pkg_uninstall: "pkg_delete supervizio"
+          - name: NetBSD
+            vm: netbsd
+            os: netbsd
+            pkg_format: tgz
+            pkg_install: "pkg_add"
+            pkg_uninstall: "pkg_delete supervizio"
+          - name: DragonFlyBSD
+            vm: dragonfly
+            os: dragonfly
+            pkg_format: pkg
+            pkg_install: "pkg add -f"
+            pkg_uninstall: "pkg delete -y supervizio"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download BSD package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-${{ matrix.os }}-amd64.${{ matrix.pkg_format }}
+          path: package
+
+      - name: Setup KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
+      - name: Install libvirt and Vagrant
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm ruby-dev ruby-libvirt build-essential
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
+          vagrant plugin install vagrant-libvirt
+
+      - name: Cache Vagrant box
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-${{ matrix.vm }}-v1
+
+      - name: Start VM
+        working-directory: e2e
+        timeout-minutes: 12
+        run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+
+      - name: Wait for VM readiness
+        working-directory: e2e
+        timeout-minutes: 3
+        run: |
+          set -uo pipefail
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+          for i in $(seq 1 36); do
+            if timeout 5 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'SSH ready'" 2>/dev/null; then
+                break
+              fi
+            fi
+            [ "$i" = "36" ] && exit 1
+            sleep 5
+          done
+
+      - name: Copy package to VM
+        working-directory: e2e
+        run: |
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /package && sudo chmod 777 /package"
+          tar -cv -C "$GITHUB_WORKSPACE" package | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /"
+
+      - name: Install package
+        working-directory: e2e
+        run: |
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            cd /package
+            sudo ${{ matrix.pkg_install }} supervizio-${{ matrix.os }}-amd64.${{ matrix.pkg_format }}
+          "
+
+      - name: Test version command
+        working-directory: e2e
+        run: |
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "/usr/local/bin/supervizio --version"
+
+      - name: Test probe metrics
+        working-directory: e2e
+        run: |
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            OUTPUT=\$(/usr/local/bin/supervizio --probe)
+            echo \"\$OUTPUT\" | jq .
+            echo \"\$OUTPUT\" | jq -e '
+              .timestamp and .platform and
+              .cpu.usage_percent != null and .cpu.count > 0 and
+              .memory.total_bytes > 0
+            ' && echo 'Probe metrics validated on ${{ matrix.name }}'
+          "
+
+      - name: Test uninstall
+        working-directory: e2e
+        run: |
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            sudo ${{ matrix.pkg_uninstall }}
+            test ! -x /usr/local/bin/supervizio && echo 'Uninstall successful'
+          "
+
+      - name: Cleanup VM
+        if: always()
+        working-directory: e2e
+        run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
