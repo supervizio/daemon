@@ -182,21 +182,17 @@ jobs:
           key: musl-cross-aarch64-v1
 
       - name: Install musl cross-compilation tools
+        timeout-minutes: 10
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq musl-tools
           if [ "${{ matrix.rust_target }}" = "aarch64-unknown-linux-musl" ]; then
             sudo apt-get install -y -qq gcc-aarch64-linux-gnu musl-dev
             if [ "${{ steps.cache-musl-cross.outputs.cache-hit }}" != "true" ]; then
-              # Download with retries
-              for i in 1 2 3; do
-                echo "Attempt $i: Downloading aarch64-linux-musl-cross toolchain..."
-                if curl -sSL --retry 3 --retry-delay 5 https://musl.cc/aarch64-linux-musl-cross.tgz | sudo tar -xz -C /opt; then
-                  break
-                fi
-                [ "$i" = "3" ] && exit 1
-                sleep 10
-              done
+              # Download with strict timeouts (musl.cc can be slow/unresponsive)
+              echo "Downloading aarch64-linux-musl-cross toolchain..."
+              curl -sSL --connect-timeout 30 --max-time 300 --retry 2 --retry-delay 10 \
+                https://musl.cc/aarch64-linux-musl-cross.tgz | sudo tar -xz -C /opt
             fi
             echo "/opt/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
           fi
@@ -413,20 +409,16 @@ jobs:
           key: musl-cross-aarch64-v1
 
       - name: Install musl cross-compilation tools
+        timeout-minutes: 10
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq musl-tools
           if [ "${{ matrix.goarch }}" = "arm64" ]; then
             if [ "${{ steps.cache-musl-cross.outputs.cache-hit }}" != "true" ]; then
-              # Download with retries
-              for i in 1 2 3; do
-                echo "Attempt $i: Downloading aarch64-linux-musl-cross toolchain..."
-                if curl -sSL --retry 3 --retry-delay 5 https://musl.cc/aarch64-linux-musl-cross.tgz | sudo tar -xz -C /opt; then
-                  break
-                fi
-                [ "$i" = "3" ] && exit 1
-                sleep 10
-              done
+              # Download with strict timeouts (musl.cc can be slow/unresponsive)
+              echo "Downloading aarch64-linux-musl-cross toolchain..."
+              curl -sSL --connect-timeout 30 --max-time 300 --retry 2 --retry-delay 10 \
+                https://musl.cc/aarch64-linux-musl-cross.tgz | sudo tar -xz -C /opt
             fi
             echo "/opt/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
           fi
@@ -1057,8 +1049,8 @@ jobs:
     name: E2E VM BSD ${{ matrix.name }}
     needs: [rust-test, go-test]
     runs-on: ubuntu-24.04
-    continue-on-error: true  # BSD VMs are experimental and may be flaky
-    timeout-minutes: 45
+    continue-on-error: true  # Keep for now, remove when all green
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -1103,22 +1095,25 @@ jobs:
 
       - name: Start VM
         working-directory: e2e
+        timeout-minutes: 10
         run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
 
       - name: Sync source code
         working-directory: e2e
+        timeout-minutes: 5
         run: |
           set -uo pipefail
           sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
           VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
 
-          for i in $(seq 1 36); do
+          # Wait for VM to be ready (max 2 minutes)
+          for i in $(seq 1 24); do
             if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
               if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
                 break
               fi
             fi
-            [ "$i" = "36" ] && exit 1
+            [ "$i" = "24" ] && { echo "ERROR: VM not ready after 2 minutes"; exit 1; }
             sleep 5
           done
 
