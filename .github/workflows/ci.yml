@@ -413,7 +413,7 @@ jobs:
             sh -c '
               set -euo pipefail
               echo "=== Installing build dependencies ==="
-              apk add --no-cache gcc musl-dev
+              apk add --no-cache gcc musl-dev file
               echo "=== Installing Wire ==="
               go install github.com/google/wire/cmd/wire@v0.7.0
               echo "=== Generating code ==="
