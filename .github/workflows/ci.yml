@@ -428,6 +428,15 @@ jobs:
         working-directory: src
         run: wire ./internal/bootstrap/
 
+      - name: Debug libprobe.a symbols
+        run: |
+          echo "=== Checking libprobe.a ==="
+          ls -la ${{ github.workspace }}/dist/lib/${{ matrix.platform }}/
+          nm ${{ github.workspace }}/dist/lib/${{ matrix.platform }}/libprobe.a | head -50 || true
+          echo "=== musl-gcc info ==="
+          which ${{ matrix.cc }}
+          ${{ matrix.cc }} --version || true
+
       - name: Build supervizio binary (static/musl)
         working-directory: src
         env:
@@ -436,11 +445,15 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
-          # musl: Use full path to libprobe.a for reliable static linking
-          CGO_LDFLAGS: "${{ github.workspace }}/dist/lib/${{ matrix.platform }}/libprobe.a -lm"
+          # musl: Use same flags as glibc but without -ldl (musl has dlopen in libc)
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lm -lc"
         run: |
-          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
-            -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon
+          echo "=== Building with CGO_LDFLAGS: $CGO_LDFLAGS ==="
+          go build -v -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
+            -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon 2>&1 || {
+            echo "=== Build failed, showing linker output ==="
+            exit 1
+          }
 
       - name: Upload binary
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
