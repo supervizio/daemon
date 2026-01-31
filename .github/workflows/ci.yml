@@ -112,10 +112,11 @@ jobs:
           GOWORK: off
           CGO_ENABLED: 0
         run: |
-          # First pass: syntax and import checks (no build required)
+          # First pass: syntax and import checks only (no build/vet required)
+          # govet is run in go-test job with CGO enabled
           golangci-lint run -c ../.golangci.yml --timeout 5m \
             --disable-all \
-            -E gofmt,goimports,misspell,unconvert,govet
+            -E gofmt,goimports,misspell,unconvert
 
   # =============================================================================
   # PHASE 2: BUILD LIBPROBE (needs: rust-test)
