@@ -371,6 +371,7 @@ jobs:
           retention-days: 1
 
   # Build Linux binaries (musl - static for Alpine/scratch)
+  # Uses Docker with Alpine to ensure native musl libc
   build-linux-musl:
     name: Build linux-${{ matrix.goarch }}-musl
     runs-on: ubuntu-24.04
@@ -381,38 +382,13 @@ jobs:
         include:
           - goarch: amd64
             platform: linux-amd64-musl
-            cc: musl-gcc
+            docker_platform: linux/amd64
           - goarch: arm64
             platform: linux-arm64-musl
-            cc: aarch64-linux-musl-gcc
+            docker_platform: linux/arm64
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: src/go.sum
-
-      - name: Install musl cross-compilation tools
-        timeout-minutes: 5
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq musl-tools
-          if [ "${{ matrix.goarch }}" = "arm64" ]; then
-            # Use zig for arm64 cross-compilation
-            ZIG_VERSION="0.13.0"
-            curl -sSfL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
-            sudo mkdir -p /opt/zig
-            sudo tar -xf zig.tar.xz -C /opt/zig --strip-components=1
-            rm zig.tar.xz
-            sudo mkdir -p /opt/zig-cc
-            printf '#!/bin/bash\nexec /opt/zig/zig cc -target aarch64-linux-musl "$@"\n' | sudo tee /opt/zig-cc/aarch64-linux-musl-gcc > /dev/null
-            sudo chmod +x /opt/zig-cc/*
-            echo "/opt/zig-cc" >> $GITHUB_PATH
-          fi
 
       - name: Download libprobe (musl)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -420,62 +396,42 @@ jobs:
           name: libprobe-${{ matrix.platform }}
           path: dist/lib/${{ matrix.platform }}/
 
-      - name: Install Wire
-        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
+      - name: Set up QEMU (for arm64)
+        if: matrix.goarch == 'arm64'
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3.2.0
 
-      - name: Generate code
-        working-directory: src
-        run: wire ./internal/bootstrap/
-
-      - name: Debug musl environment
+      - name: Build in Alpine container
         run: |
-          echo "=== Checking libprobe.a ==="
-          ls -la ${{ github.workspace }}/dist/lib/${{ matrix.platform }}/
-          nm ${{ github.workspace }}/dist/lib/${{ matrix.platform }}/libprobe.a 2>/dev/null | head -30 || true
-          echo "=== CC version ==="
-          ${{ matrix.cc }} --version 2>&1 || true
-          echo "=== CC library search paths ==="
-          ${{ matrix.cc }} -print-search-dirs 2>&1 | head -10 || true
-
-      - name: Build supervizio binary (static/musl)
-        working-directory: src
-        env:
-          CGO_ENABLED: 1
-          CC: ${{ matrix.cc }}
-          GOOS: linux
-          GOARCH: ${{ matrix.goarch }}
-          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
-          # musl: pthread/dl are in libc, only need probe and math
-          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lm"
-        run: |
-          set -euo pipefail
-          echo "=== Building static musl binary ==="
-          echo "CC: $CC"
-          echo "CGO_LDFLAGS: $CGO_LDFLAGS"
-          echo "=== Go build ==="
-          if go build -v -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
-            -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon 2>&1; then
-            echo "=== Build succeeded ==="
-            ls -la ../supervizio-linux-${{ matrix.goarch }}-musl
-          else
-            echo "=== Build FAILED - trying with verbose output ==="
-            go build -x -v -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static -v'" \
-              -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon 2>&1 || true
-            echo "=== END OF ERROR OUTPUT ==="
-            exit 1
-          fi
-
-      - name: Verify binary exists
-        run: |
-          echo "=== Verifying musl binary was created ==="
-          ls -la ${{ github.workspace }}/supervizio-linux-${{ matrix.goarch }}-musl
-          file ${{ github.workspace }}/supervizio-linux-${{ matrix.goarch }}-musl
+          docker run --rm \
+            --platform ${{ matrix.docker_platform }} \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace/src \
+            -e CGO_ENABLED=1 \
+            -e CGO_CFLAGS="-I/workspace/src/lib/probe/include" \
+            -e CGO_LDFLAGS="-L/workspace/dist/lib/${{ matrix.platform }} -lprobe -lm" \
+            golang:1.25-alpine \
+            sh -c '
+              set -euo pipefail
+              echo "=== Installing build dependencies ==="
+              apk add --no-cache gcc musl-dev
+              echo "=== Installing Wire ==="
+              go install github.com/google/wire/cmd/wire@v0.7.0
+              echo "=== Generating code ==="
+              wire ./internal/bootstrap/
+              echo "=== Building static binary ==="
+              go build -v \
+                -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags \"-static\"" \
+                -o /workspace/supervizio-linux-${{ matrix.goarch }}-musl \
+                ./cmd/daemon
+              echo "=== Verifying binary ==="
+              file /workspace/supervizio-linux-${{ matrix.goarch }}-musl
+            '
 
       - name: Upload binary
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: supervizio-linux-${{ matrix.goarch }}-musl
-          path: ${{ github.workspace }}/supervizio-linux-${{ matrix.goarch }}-musl
+          path: supervizio-linux-${{ matrix.goarch }}-musl
           retention-days: 1
           if-no-files-found: error
 
