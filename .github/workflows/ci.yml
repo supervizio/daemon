@@ -16,14 +16,76 @@ concurrency:
 env:
   GO_VERSION: '1.25.6'
   WIRE_VERSION: 'v0.7.0'
+  RUST_VERSION: 'stable'
 
 jobs:
   # =============================================================================
-  # Lint
+  # Build Rust Probe Library (required for CGO)
+  # =============================================================================
+  build-probe:
+    name: Build Probe
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust_target: x86_64-unknown-linux-gnu
+            go_platform: linux-amd64
+          - rust_target: aarch64-unknown-linux-gnu
+            go_platform: linux-arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install cross-compilation tools (ARM64)
+        if: matrix.rust_target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-aarch64-linux-gnu
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-probe-${{ matrix.rust_target }}-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-probe-${{ matrix.rust_target }}-
+
+      - name: Build libprobe.a
+        working-directory: src/lib/probe
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --release --target ${{ matrix.rust_target }}
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist/lib/${{ matrix.go_platform }}
+          cp src/lib/probe/target/${{ matrix.rust_target }}/release/libprobe.a dist/lib/${{ matrix.go_platform }}/
+
+      - name: Upload libprobe artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libprobe-${{ matrix.go_platform }}
+          path: dist/lib/${{ matrix.go_platform }}/libprobe.a
+          retention-days: 1
+
+
+  # =============================================================================
+  # Lint (requires probe library for CGO)
   # =============================================================================
   lint:
     name: Lint
     runs-on: ubuntu-24.04
+    needs: [build-probe]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -34,6 +96,12 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
           cache-dependency-path: src/go.sum
+
+      - name: Download libprobe (amd64)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-linux-amd64
+          path: dist/lib/linux-amd64/
 
       - name: Install Wire
         run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
@@ -54,14 +122,18 @@ jobs:
         working-directory: src
         env:
           GOWORK: off
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/linux-amd64 -lprobe -lpthread -ldl -lm"
         run: golangci-lint run -c ../.golangci.yml --timeout 5m
 
   # =============================================================================
-  # Test (parallel with lint)
+  # Test (requires probe library for CGO)
   # =============================================================================
   test:
     name: Test
     runs-on: ubuntu-24.04
+    needs: [build-probe]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -72,6 +144,12 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
           cache-dependency-path: src/go.sum
+
+      - name: Download libprobe (amd64)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-linux-amd64
+          path: dist/lib/linux-amd64/
 
       - name: Install Wire
         run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
@@ -86,8 +164,10 @@ jobs:
         working-directory: src
         env:
           GOWORK: off
-          CGO_ENABLED: 0
-        run: go test -coverprofile=coverage.raw.out -covermode=atomic ./...
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/linux-amd64 -lprobe -lpthread -ldl -lm"
+        run: go test -race -coverprofile=coverage.raw.out -covermode=atomic ./...
 
       - name: Filter coverage (exclude generated files)
         working-directory: src
@@ -117,11 +197,17 @@ jobs:
   build:
     name: Build linux/${{ matrix.goarch }}
     runs-on: ubuntu-24.04
-    needs: [lint, test]
+    needs: [build-probe, lint, test]
     strategy:
       fail-fast: false
       matrix:
-        goarch: [amd64, arm64]
+        include:
+          - goarch: amd64
+            platform: linux-amd64
+            cc: gcc
+          - goarch: arm64
+            platform: linux-arm64
+            cc: aarch64-linux-gnu-gcc
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -132,6 +218,18 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
           cache-dependency-path: src/go.sum
+
+      - name: Install cross-compilation tools (ARM64)
+        if: matrix.goarch == 'arm64'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-aarch64-linux-gnu
+
+      - name: Download libprobe
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-${{ matrix.platform }}
+          path: dist/lib/${{ matrix.platform }}/
 
       - name: Install Wire
         run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
@@ -143,9 +241,12 @@ jobs:
       - name: Build supervizio binary
         working-directory: src
         env:
-          CGO_ENABLED: 0
+          CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lpthread -ldl -lm"
         run: |
           go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" -o ../supervizio-linux-${{ matrix.goarch }} ./cmd/daemon
 
@@ -157,49 +258,43 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # Build BSD binaries (for e2e-bsd-vm tests)
+  # Rust Lint & Test (clippy, rustfmt, cargo test)
   # =============================================================================
-  build-bsd:
-    name: Build ${{ matrix.goos }}/amd64
+  rust-check:
+    name: Rust Check
     runs-on: ubuntu-24.04
-    needs: [lint, test]
-    strategy:
-      fail-fast: false
-      matrix:
-        goos: [freebsd, openbsd, netbsd, dragonfly]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
         with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: src/go.sum
+          toolchain: ${{ env.RUST_VERSION }}
+          components: clippy, rustfmt
 
-      - name: Install Wire
-        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
-
-      - name: Generate code
-        working-directory: src
-        run: wire ./internal/bootstrap/
-
-      - name: Build binary
-        working-directory: src
-        env:
-          CGO_ENABLED: 0
-          GOOS: ${{ matrix.goos }}
-          GOARCH: amd64
-        run: |
-          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" -o ../supervizio-${{ matrix.goos }}-amd64 ./cmd/daemon
-
-      - name: Upload binary
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          name: supervizio-${{ matrix.goos }}-amd64
-          path: supervizio-${{ matrix.goos }}-amd64
-          retention-days: 1
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-check-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-check-
+
+      - name: Check formatting
+        working-directory: src/lib/probe
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        working-directory: src/lib/probe
+        run: cargo clippy --all-features -- -D warnings
+
+      - name: Run tests
+        working-directory: src/lib/probe
+        run: cargo test
 
   # =============================================================================
   # Build crasher for E2E behavioral tests (amd64 only)
@@ -225,6 +320,7 @@ jobs:
           CGO_ENABLED: 0
           GOOS: linux
           GOARCH: amd64
+          GOWORK: off
         run: |
           go build -ldflags="-s -w" -o crasher .
 
@@ -730,44 +826,34 @@ jobs:
         run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
 
   # =============================================================================
-  # E2E BSD - VM (install via install.sh, full tests)
+  # E2E BSD - VM (native build + install.sh, full tests)
+  # BSD binaries are built natively in VMs since Rust cross-compilation to BSD
+  # is complex and unreliable. This ensures full probe support on all BSD variants.
   # =============================================================================
   e2e-bsd-vm:
     name: E2E VM ${{ matrix.name }}
-    needs: [build-bsd]
+    needs: [lint, test, rust-check]
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: FreeBSD
             vm: freebsd
-            goos: freebsd
+            rust_target: x86_64-unknown-freebsd
           - name: OpenBSD
             vm: openbsd
-            goos: openbsd
+            rust_target: x86_64-unknown-openbsd
           - name: NetBSD
             vm: netbsd
-            goos: netbsd
+            rust_target: x86_64-unknown-netbsd
           - name: DragonFlyBSD
             vm: dragonfly
-            goos: dragonfly
+            rust_target: x86_64-unknown-dragonfly
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Download BSD binary
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: supervizio-${{ matrix.goos }}-amd64
-          path: bin
-
-      - name: Prepare binary
-        run: |
-          mv bin/supervizio-${{ matrix.goos }}-amd64 bin/supervizio
-          chmod +x bin/supervizio
-          ls -la bin/
 
       - name: Setup KVM
         run: |
@@ -823,33 +909,51 @@ jobs:
             sleep 5
           done
 
-          echo "=== Attempting vagrant rsync ==="
-          if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
-            echo "=== Rsync succeeded ==="
-          else
-            echo "=== Rsync failed, using tar-over-ssh fallback ==="
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
-            tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
-            tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
-            tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
-            sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup /bin-local"
-          fi
+          echo "=== Syncing source code to VM ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /vagrant/src /setup && sudo chmod 777 /vagrant /setup"
+          tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
+          tar -cv -C .. src | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
+          tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup && ls -la /vagrant/src/"
 
-      - name: Run VM tests (full with install.sh)
+      - name: Build in VM (Rust + Go)
         working-directory: e2e
         run: |
           set -euo pipefail
           echo "=== Step 1: Verify synced folders ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /bin-local/ /setup/ /vagrant/"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /vagrant/src/ /setup/"
 
-          echo "=== Step 2: Copy binary to /usr/local/bin ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /usr/local/bin && sudo cp /bin-local/supervizio /usr/local/bin/ && sudo chmod +x /usr/local/bin/supervizio"
+          echo "=== Step 2: Build Rust library ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            cd /vagrant/src/lib/probe
+            cargo build --release
+            mkdir -p /vagrant/dist/lib/bsd-amd64
+            cp target/release/libprobe.a /vagrant/dist/lib/bsd-amd64/
+          "
 
-          echo "=== Step 3: Run install script ==="
+          echo "=== Step 3: Build Go binary with CGO ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            cd /vagrant/src
+            export CGO_ENABLED=1
+            export CGO_CFLAGS='-I/vagrant/src/lib/probe/include'
+            export CGO_LDFLAGS='-L/vagrant/dist/lib/bsd-amd64 -lprobe -lpthread -lm'
+            go generate ./internal/bootstrap/
+            go build -ldflags='-s -w' -o /usr/local/bin/supervizio ./cmd/daemon
+            chmod +x /usr/local/bin/supervizio
+          "
+
+          echo "=== Step 4: Verify binary ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "/usr/local/bin/supervizio --version"
+
+      - name: Run VM tests
+        working-directory: e2e
+        run: |
+          set -euo pipefail
+          echo "=== Run install script (config only, binary already installed) ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chmod +x /setup/*.sh && sudo /setup/install.sh"
 
-          echo "=== Step 4: Run test script ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh -x /vagrant/test-install.sh"
+          echo "=== Run test script ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh -x /vagrant/test-install.sh --skip-install"
 
       - name: Cleanup VM
         if: always()
