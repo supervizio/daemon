@@ -464,13 +464,19 @@ jobs:
             exit 1
           }
 
+      - name: Verify binary exists
+        run: |
+          echo "=== Verifying musl binary was created ==="
+          ls -la ${{ github.workspace }}/supervizio-linux-${{ matrix.goarch }}-musl
+          file ${{ github.workspace }}/supervizio-linux-${{ matrix.goarch }}-musl
+
       - name: Upload binary
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: supervizio-linux-${{ matrix.goarch }}-musl
-          # Binary is created in parent dir (github.workspace) not src/
           path: ${{ github.workspace }}/supervizio-linux-${{ matrix.goarch }}-musl
           retention-days: 1
+          if-no-files-found: error
 
   # Build crasher for E2E behavioral tests
   build-crasher:
