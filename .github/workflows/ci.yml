@@ -174,18 +174,21 @@ jobs:
           targets: ${{ matrix.rust_target }}
 
       - name: Install musl cross-compilation tools
+        timeout-minutes: 5
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq musl-tools
           if [ "${{ matrix.rust_target }}" = "aarch64-unknown-linux-musl" ]; then
-            # Use zig for cross-compilation (faster and more reliable than musl.cc)
-            sudo snap install zig --classic --beta
+            # Use zig for cross-compilation (direct download - much faster than snap)
+            ZIG_VERSION="0.13.0"
+            curl -sSfL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+            sudo mkdir -p /opt/zig
+            sudo tar -xf zig.tar.xz -C /opt/zig --strip-components=1
+            rm zig.tar.xz
             # Create wrapper scripts for cargo
             sudo mkdir -p /opt/zig-cc
-            echo '#!/bin/bash' | sudo tee /opt/zig-cc/aarch64-linux-musl-gcc
-            echo 'exec zig cc -target aarch64-linux-musl "$@"' | sudo tee -a /opt/zig-cc/aarch64-linux-musl-gcc
-            echo '#!/bin/bash' | sudo tee /opt/zig-cc/aarch64-linux-musl-ar
-            echo 'exec zig ar "$@"' | sudo tee -a /opt/zig-cc/aarch64-linux-musl-ar
+            printf '#!/bin/bash\nexec /opt/zig/zig cc -target aarch64-linux-musl "$@"\n' | sudo tee /opt/zig-cc/aarch64-linux-musl-gcc > /dev/null
+            printf '#!/bin/bash\nexec /opt/zig/zig ar "$@"\n' | sudo tee /opt/zig-cc/aarch64-linux-musl-ar > /dev/null
             sudo chmod +x /opt/zig-cc/*
             echo "/opt/zig-cc" >> $GITHUB_PATH
           fi
@@ -394,16 +397,20 @@ jobs:
           cache-dependency-path: src/go.sum
 
       - name: Install musl cross-compilation tools
+        timeout-minutes: 5
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq musl-tools
           if [ "${{ matrix.goarch }}" = "arm64" ]; then
-            # Use zig for cross-compilation (faster and more reliable than musl.cc)
-            sudo snap install zig --classic --beta
+            # Use zig for cross-compilation (direct download - much faster than snap)
+            ZIG_VERSION="0.13.0"
+            curl -sSfL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+            sudo mkdir -p /opt/zig
+            sudo tar -xf zig.tar.xz -C /opt/zig --strip-components=1
+            rm zig.tar.xz
             # Create wrapper scripts for Go CGO
             sudo mkdir -p /opt/zig-cc
-            echo '#!/bin/bash' | sudo tee /opt/zig-cc/aarch64-linux-musl-gcc
-            echo 'exec zig cc -target aarch64-linux-musl "$@"' | sudo tee -a /opt/zig-cc/aarch64-linux-musl-gcc
+            printf '#!/bin/bash\nexec /opt/zig/zig cc -target aarch64-linux-musl "$@"\n' | sudo tee /opt/zig-cc/aarch64-linux-musl-gcc > /dev/null
             sudo chmod +x /opt/zig-cc/*
             echo "/opt/zig-cc" >> $GITHUB_PATH
           fi
@@ -690,8 +697,16 @@ jobs:
 
       - name: Prepare binaries
         run: |
+          echo "=== Contents of bin/ before preparation ==="
+          ls -la bin/
           mv bin/supervizio-linux-amd64 bin/supervizio
+          # Crasher is downloaded as 'crasher' directly (artifact path preserves only filename)
           chmod +x bin/*
+          echo "=== Contents of bin/ after preparation ==="
+          ls -la bin/
+          echo "=== Verify binaries work ==="
+          bin/supervizio --version || true
+          file bin/supervizio bin/crasher
 
       - name: Download Go dependencies
         working-directory: e2e/behavioral
@@ -703,6 +718,7 @@ jobs:
         working-directory: e2e/behavioral
         env:
           GOWORK: off
+          TESTCONTAINERS_RYUK_DISABLED: "true"
         run: go test -v -timeout 15m ./...
 
   # E2E Docker Package tests
@@ -1080,36 +1096,78 @@ jobs:
 
       - name: Start VM
         working-directory: e2e
-        timeout-minutes: 10
-        run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          echo "=== Starting ${{ matrix.vm }} VM ==="
+          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt 2>&1 | tee /tmp/vagrant-up-${{ matrix.vm }}.log || {
+            echo "=== Vagrant up failed, showing last 50 lines ==="
+            tail -50 /tmp/vagrant-up-${{ matrix.vm }}.log
+            exit 1
+          }
+
+      - name: Wait for VM readiness
+        working-directory: e2e
+        timeout-minutes: 5
+        run: |
+          set -uo pipefail
+          echo "=== Waiting for SSH and provisioning ==="
+          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
+          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
+          echo "VM IP: $VM_IP"
+
+          # Wait for VM to be ready (max 3 minutes for SSH)
+          echo "Waiting for SSH..."
+          for i in $(seq 1 36); do
+            if timeout 5 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'SSH ready'" 2>/dev/null; then
+                echo "SSH is ready after $((i * 5)) seconds"
+                break
+              fi
+            fi
+            if [ "$i" = "36" ]; then
+              echo "ERROR: SSH not ready after 3 minutes"
+              sudo -E vagrant status ${{ matrix.vm }} || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+          # Wait for provisioning to complete (cargo + go must be available)
+          echo "Waiting for Rust and Go..."
+          for i in $(seq 1 30); do
+            if sudo -E vagrant ssh ${{ matrix.vm }} -c "command -v cargo && command -v go" 2>/dev/null; then
+              echo "Rust and Go ready after $((i * 5)) seconds"
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              echo "ERROR: Rust/Go not installed after 2.5 minutes"
+              sudo -E vagrant ssh ${{ matrix.vm }} -c "which cargo; which go; echo PATH=\$PATH" || true
+              exit 1
+            fi
+            sleep 5
+          done
 
       - name: Sync source code
         working-directory: e2e
         timeout-minutes: 5
         run: |
-          set -uo pipefail
-          sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
-          VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
-
-          # Wait for VM to be ready (max 2 minutes)
-          for i in $(seq 1 24); do
-            if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
-              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
-                break
-              fi
-            fi
-            [ "$i" = "24" ] && { echo "ERROR: VM not ready after 2 minutes"; exit 1; }
-            sleep 5
-          done
+          set -euo pipefail
+          echo "=== Syncing source code to ${{ matrix.vm }} ==="
 
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /vagrant/src /setup && sudo chmod 777 /vagrant /setup"
-          tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
-          tar -cv -C .. src | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
-          tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
+          echo "Syncing setup..."
+          tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xf -"
+          echo "Syncing src..."
+          tar -cf - -C .. src | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
+          echo "Syncing e2e..."
+          tar -cf - . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup"
+          echo "Sync complete"
 
       - name: Build in VM (Rust + Go)
         working-directory: e2e
+        timeout-minutes: 10
         run: |
           set -euo pipefail
           echo "=== Build Rust library ==="
@@ -1136,6 +1194,7 @@ jobs:
 
       - name: Run VM tests
         working-directory: e2e
+        timeout-minutes: 5
         run: |
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chmod +x /setup/*.sh && sudo /setup/install.sh"
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh -x /vagrant/test-install.sh --skip-install"
