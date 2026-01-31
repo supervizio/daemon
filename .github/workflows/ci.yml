@@ -450,19 +450,20 @@ jobs:
           # musl: -lpthread needed for probe, -ldl not needed (in musl libc)
           CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lpthread -lm"
         run: |
+          set -euo pipefail
           echo "=== Building static musl binary ==="
           echo "CC: $CC"
           echo "CGO_LDFLAGS: $CGO_LDFLAGS"
           echo "=== Testing musl-gcc can compile simple program ==="
           echo 'int main() { return 0; }' > /tmp/test.c
-          $CC -static /tmp/test.c -o /tmp/test 2>&1 || echo "Simple static compile failed"
+          if ! $CC -static /tmp/test.c -o /tmp/test 2>&1; then
+            echo "WARNING: Simple static compile failed"
+          fi
           echo "=== Go build with verbose linker output ==="
-          go build -x -v -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static -v'" \
-            -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon 2>&1 | tee /tmp/build.log || {
-            echo "=== Last 100 lines of build log ==="
-            tail -100 /tmp/build.log
-            exit 1
-          }
+          go build -v -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
+            -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon
+          echo "=== Build completed ==="
+          ls -la ../supervizio-linux-${{ matrix.goarch }}-musl
 
       - name: Verify binary exists
         run: |
