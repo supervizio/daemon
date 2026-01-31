@@ -447,16 +447,20 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
-          # musl: whole-archive ensures all probe symbols included, pthread in musl libc
-          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -Wl,--whole-archive -lprobe -Wl,--no-whole-archive -lm"
+          # musl: -lpthread needed for probe, -ldl not needed (in musl libc)
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lpthread -lm"
         run: |
           echo "=== Building static musl binary ==="
           echo "CC: $CC"
           echo "CGO_LDFLAGS: $CGO_LDFLAGS"
-          # Use external linkmode with static extldflags
-          go build -x -v -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
-            -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon 2>&1 || {
-            echo "=== Build failed ==="
+          echo "=== Testing musl-gcc can compile simple program ==="
+          echo 'int main() { return 0; }' > /tmp/test.c
+          $CC -static /tmp/test.c -o /tmp/test 2>&1 || echo "Simple static compile failed"
+          echo "=== Go build with verbose linker output ==="
+          go build -x -v -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static -v'" \
+            -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon 2>&1 | tee /tmp/build.log || {
+            echo "=== Last 100 lines of build log ==="
+            tail -100 /tmp/build.log
             exit 1
           }
 
