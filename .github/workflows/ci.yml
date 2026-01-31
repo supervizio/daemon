@@ -454,16 +454,18 @@ jobs:
           echo "=== Building static musl binary ==="
           echo "CC: $CC"
           echo "CGO_LDFLAGS: $CGO_LDFLAGS"
-          echo "=== Testing musl-gcc can compile simple program ==="
-          echo 'int main() { return 0; }' > /tmp/test.c
-          if ! $CC -static /tmp/test.c -o /tmp/test 2>&1; then
-            echo "WARNING: Simple static compile failed"
+          echo "=== Go build ==="
+          if go build -v -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
+            -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon 2>&1; then
+            echo "=== Build succeeded ==="
+            ls -la ../supervizio-linux-${{ matrix.goarch }}-musl
+          else
+            echo "=== Build FAILED - trying with verbose output ==="
+            go build -x -v -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static -v'" \
+              -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon 2>&1 || true
+            echo "=== END OF ERROR OUTPUT ==="
+            exit 1
           fi
-          echo "=== Go build with verbose linker output ==="
-          go build -v -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
-            -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon
-          echo "=== Build completed ==="
-          ls -la ../supervizio-linux-${{ matrix.goarch }}-musl
 
       - name: Verify binary exists
         run: |
