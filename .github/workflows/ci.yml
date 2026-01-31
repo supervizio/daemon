@@ -1033,9 +1033,10 @@ jobs:
         run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
 
   # E2E VM BSD (native build in VM with probe)
+  # Runs after Linux builds to stay in E2E phase, builds BSD natively with probe
   e2e-vm-bsd:
     name: E2E VM BSD ${{ matrix.name }}
-    needs: [rust-test, go-test]
+    needs: [matrix-unix, matrix-unix-musl]
     runs-on: ubuntu-24.04
     continue-on-error: true  # Keep for now, remove when all green
     timeout-minutes: 25
