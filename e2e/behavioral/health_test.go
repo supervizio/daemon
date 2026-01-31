@@ -1,9 +1,7 @@
 package behavioral_test
 
 import (
-	"fmt"
-	"net"
-	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +15,8 @@ func TestHTTPHealthProbe(t *testing.T) {
 		t.Skip("skipping E2E test in short mode")
 	}
 
-	tc := startContainerWithPorts(t, "health-http.yaml", "8080/tcp")
+	// No need to expose ports - we test from inside the container
+	tc := startContainer(t, "health-http.yaml")
 
 	// Wait for crasher to start
 	require.True(t, tc.waitForProcess("crasher", 10*time.Second),
@@ -26,19 +25,12 @@ func TestHTTPHealthProbe(t *testing.T) {
 	// Give the HTTP server time to start
 	time.Sleep(2 * time.Second)
 
-	// Get mapped port
-	host, err := tc.getHost()
-	require.NoError(t, err)
-	port, err := tc.getMappedPort("8080/tcp")
-	require.NoError(t, err)
+	// Verify health endpoint responds using curl inside the container
+	code, output, err := tc.exec("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:8080/health")
+	require.NoError(t, err, "curl should execute")
+	require.Equal(t, 0, code, "curl should succeed")
 
-	// Verify health endpoint responds
-	url := fmt.Sprintf("http://%s:%s/health", host, port)
-	resp, err := http.Get(url)
-	require.NoError(t, err, "health endpoint should be reachable")
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode,
+	assert.Equal(t, "200", strings.TrimSpace(output),
 		"health endpoint should return 200 OK")
 }
 
@@ -48,7 +40,8 @@ func TestTCPHealthProbe(t *testing.T) {
 		t.Skip("skipping E2E test in short mode")
 	}
 
-	tc := startContainerWithPorts(t, "health-tcp.yaml", "9090/tcp")
+	// No need to expose ports - we test from inside the container
+	tc := startContainer(t, "health-tcp.yaml")
 
 	// Wait for crasher to start
 	require.True(t, tc.waitForProcess("crasher", 10*time.Second),
@@ -57,18 +50,12 @@ func TestTCPHealthProbe(t *testing.T) {
 	// Give the TCP server time to start
 	time.Sleep(2 * time.Second)
 
-	// Get mapped port
-	host, err := tc.getHost()
-	require.NoError(t, err)
-	port, err := tc.getMappedPort("9090/tcp")
-	require.NoError(t, err)
+	// Verify TCP connection works using netcat inside the container
+	// nc -z tests if port is open without sending data
+	code, _, err := tc.exec("nc", "-z", "-w", "5", "localhost", "9090")
+	require.NoError(t, err, "netcat should execute")
 
-	// Verify TCP connection works
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%s", host, port), 5*time.Second)
-	require.NoError(t, err, "TCP connection should succeed")
-	defer conn.Close()
-
-	assert.NotNil(t, conn, "TCP connection should be established")
+	assert.Equal(t, 0, code, "TCP connection to port 9090 should succeed")
 }
 
 // TestHealthProbeFailureTriggersRestart verifies that when a health probe
@@ -156,7 +143,8 @@ func TestHealthProbeSuccessMarksHealthy(t *testing.T) {
 		t.Skip("skipping E2E test in short mode")
 	}
 
-	tc := startContainerWithPorts(t, "health-http.yaml", "8080/tcp")
+	// No need to expose ports - we test from inside the container
+	tc := startContainer(t, "health-http.yaml")
 
 	// Wait for crasher to start
 	require.True(t, tc.waitForProcess("crasher", 10*time.Second),
@@ -166,22 +154,14 @@ func TestHealthProbeSuccessMarksHealthy(t *testing.T) {
 	// Config has interval: 2s, success_threshold: 1
 	time.Sleep(5 * time.Second)
 
-	// Get mapped port and verify service is still running (healthy)
-	host, err := tc.getHost()
-	require.NoError(t, err)
-	port, err := tc.getMappedPort("8080/tcp")
-	require.NoError(t, err)
-
-	// Make multiple requests to verify stability
+	// Make multiple requests from inside the container to verify stability
 	for i := 0; i < 3; i++ {
-		url := fmt.Sprintf("http://%s:%s/health", host, port)
-		resp, err := http.Get(url)
-		if err != nil {
-			t.Logf("request %d failed: %v", i, err)
+		code, output, err := tc.exec("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:8080/health")
+		if err != nil || code != 0 {
+			t.Logf("request %d failed: code=%d, err=%v", i, code, err)
 			continue
 		}
-		resp.Body.Close()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, "200", strings.TrimSpace(output), "health endpoint should return 200")
 	}
 
 	// Verify crasher is still running (not killed due to health failure)
