@@ -3,7 +3,9 @@
 //! Parses /proc/net/tcp, /proc/net/tcp6, /proc/net/udp, /proc/net/udp6
 //! and resolves process ownership via /proc/[pid]/fd.
 
-use crate::{AddressFamily, Error, Result, SocketState, TcpConnection, TcpStats, UdpConnection, UnixSocket};
+use crate::{
+    AddressFamily, Error, Result, SocketState, TcpConnection, TcpStats, UdpConnection, UnixSocket,
+};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -104,10 +106,12 @@ pub fn build_socket_pid_map() -> HashMap<u64, (i32, String)> {
 
             let link_str = link.to_string_lossy();
             // Socket links look like: socket:[12345]
-            if let Some(inode_str) = link_str.strip_prefix("socket:[").and_then(|s| s.strip_suffix(']')) {
-                if let Ok(inode) = inode_str.parse::<u64>() {
-                    map.insert(inode, (pid, process_name.clone()));
-                }
+            if let Some(inode_str) = link_str
+                .strip_prefix("socket:[")
+                .and_then(|s| s.strip_suffix(']'))
+                && let Ok(inode) = inode_str.parse::<u64>()
+            {
+                map.insert(inode, (pid, process_name.clone()));
             }
         }
     }
@@ -116,7 +120,11 @@ pub fn build_socket_pid_map() -> HashMap<u64, (i32, String)> {
 }
 
 /// Parse /proc/net/tcp or /proc/net/tcp6 file.
-fn parse_tcp_file(path: &str, ipv6: bool, socket_map: &HashMap<u64, (i32, String)>) -> Result<Vec<TcpConnection>> {
+fn parse_tcp_file(
+    path: &str,
+    ipv6: bool,
+    socket_map: &HashMap<u64, (i32, String)>,
+) -> Result<Vec<TcpConnection>> {
     let content = fs::read_to_string(path)?;
     let mut connections = Vec::new();
 
@@ -136,10 +144,19 @@ fn parse_tcp_file(path: &str, ipv6: bool, socket_map: &HashMap<u64, (i32, String
 
         // Parse tx_queue:rx_queue
         let queue_parts: Vec<&str> = parts[4].split(':').collect();
-        let tx_queue = queue_parts.first().and_then(|s| u32::from_str_radix(s, 16).ok()).unwrap_or(0);
-        let rx_queue = queue_parts.get(1).and_then(|s| u32::from_str_radix(s, 16).ok()).unwrap_or(0);
+        let tx_queue = queue_parts
+            .first()
+            .and_then(|s| u32::from_str_radix(s, 16).ok())
+            .unwrap_or(0);
+        let rx_queue = queue_parts
+            .get(1)
+            .and_then(|s| u32::from_str_radix(s, 16).ok())
+            .unwrap_or(0);
 
-        let inode = parts.get(9).and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+        let inode = parts
+            .get(9)
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
 
         let (pid, process_name) = socket_map
             .get(&inode)
@@ -147,7 +164,11 @@ fn parse_tcp_file(path: &str, ipv6: bool, socket_map: &HashMap<u64, (i32, String
             .unwrap_or((-1, String::new()));
 
         connections.push(TcpConnection {
-            family: if ipv6 { AddressFamily::IPv6 } else { AddressFamily::IPv4 },
+            family: if ipv6 {
+                AddressFamily::IPv6
+            } else {
+                AddressFamily::IPv4
+            },
             local_addr,
             local_port,
             remote_addr,
@@ -165,7 +186,11 @@ fn parse_tcp_file(path: &str, ipv6: bool, socket_map: &HashMap<u64, (i32, String
 }
 
 /// Parse /proc/net/udp or /proc/net/udp6 file.
-fn parse_udp_file(path: &str, ipv6: bool, socket_map: &HashMap<u64, (i32, String)>) -> Result<Vec<UdpConnection>> {
+fn parse_udp_file(
+    path: &str,
+    ipv6: bool,
+    socket_map: &HashMap<u64, (i32, String)>,
+) -> Result<Vec<UdpConnection>> {
     let content = fs::read_to_string(path)?;
     let mut connections = Vec::new();
 
@@ -182,10 +207,19 @@ fn parse_udp_file(path: &str, ipv6: bool, socket_map: &HashMap<u64, (i32, String
         let state = SocketState::from_linux_state(state_hex);
 
         let queue_parts: Vec<&str> = parts[4].split(':').collect();
-        let tx_queue = queue_parts.first().and_then(|s| u32::from_str_radix(s, 16).ok()).unwrap_or(0);
-        let rx_queue = queue_parts.get(1).and_then(|s| u32::from_str_radix(s, 16).ok()).unwrap_or(0);
+        let tx_queue = queue_parts
+            .first()
+            .and_then(|s| u32::from_str_radix(s, 16).ok())
+            .unwrap_or(0);
+        let rx_queue = queue_parts
+            .get(1)
+            .and_then(|s| u32::from_str_radix(s, 16).ok())
+            .unwrap_or(0);
 
-        let inode = parts.get(9).and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+        let inode = parts
+            .get(9)
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
 
         let (pid, process_name) = socket_map
             .get(&inode)
@@ -193,7 +227,11 @@ fn parse_udp_file(path: &str, ipv6: bool, socket_map: &HashMap<u64, (i32, String
             .unwrap_or((-1, String::new()));
 
         connections.push(UdpConnection {
-            family: if ipv6 { AddressFamily::IPv6 } else { AddressFamily::IPv4 },
+            family: if ipv6 {
+                AddressFamily::IPv6
+            } else {
+                AddressFamily::IPv4
+            },
             local_addr,
             local_port,
             remote_addr,
@@ -347,10 +385,12 @@ pub fn collect_process_connections(pid: i32) -> Result<(Vec<TcpConnection>, Vec<
         for entry in entries.flatten() {
             if let Ok(link) = fs::read_link(entry.path()) {
                 let link_str = link.to_string_lossy();
-                if let Some(inode_str) = link_str.strip_prefix("socket:[").and_then(|s| s.strip_suffix(']')) {
-                    if let Ok(inode) = inode_str.parse::<u64>() {
-                        socket_map.insert(inode, (pid, process_name.clone()));
-                    }
+                if let Some(inode_str) = link_str
+                    .strip_prefix("socket:[")
+                    .and_then(|s| s.strip_suffix(']'))
+                    && let Ok(inode) = inode_str.parse::<u64>()
+                {
+                    socket_map.insert(inode, (pid, process_name.clone()));
                 }
             }
         }

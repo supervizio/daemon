@@ -20,8 +20,10 @@ use std::collections::HashMap;
 /// Container or orchestrator runtime type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum ContainerRuntime {
     /// Not containerized / no runtime.
+    #[default]
     None = 0,
 
     // Container runtimes (1-19)
@@ -139,12 +141,6 @@ pub struct InsideInfo {
 
     /// Additional runtime-specific metadata.
     pub metadata: HashMap<String, String>,
-}
-
-impl Default for ContainerRuntime {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 /// Information about a runtime available on the host.

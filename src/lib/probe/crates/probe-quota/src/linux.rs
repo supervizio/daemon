@@ -48,11 +48,11 @@ impl LinuxQuotaReader {
         let mut limits = QuotaLimits::default();
 
         // CPU limits from cpu.max: "quota period" or "max period"
-        if let Ok(content) = fs::read_to_string(cgroup_path.join("cpu.max")) {
-            if let Some((quota, period)) = parse_cpu_max(&content) {
-                limits.cpu_quota_us = Some(quota);
-                limits.cpu_period_us = Some(period);
-            }
+        if let Ok(content) = fs::read_to_string(cgroup_path.join("cpu.max"))
+            && let Some((quota, period)) = parse_cpu_max(&content)
+        {
+            limits.cpu_quota_us = Some(quota);
+            limits.cpu_period_us = Some(period);
         }
 
         // Memory limit from memory.max
@@ -86,23 +86,20 @@ impl LinuxQuotaReader {
         // memory controller: /sys/fs/cgroup/memory/...
 
         // CPU quota from cpu.cfs_quota_us and cpu.cfs_period_us
-        if let Ok(quota) = fs::read_to_string("/sys/fs/cgroup/cpu/cpu.cfs_quota_us") {
-            if let Ok(val) = quota.trim().parse::<i64>() {
-                if val > 0 {
-                    limits.cpu_quota_us = Some(val as u64);
-                }
-            }
+        if let Ok(quota) = fs::read_to_string("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")
+            && let Ok(val) = quota.trim().parse::<i64>()
+            && val > 0
+        {
+            limits.cpu_quota_us = Some(val as u64);
         }
-        if let Ok(period) = fs::read_to_string("/sys/fs/cgroup/cpu/cpu.cfs_period_us") {
-            if let Ok(val) = period.trim().parse::<u64>() {
-                limits.cpu_period_us = Some(val);
-            }
+        if let Ok(period) = fs::read_to_string("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
+            && let Ok(val) = period.trim().parse::<u64>()
+        {
+            limits.cpu_period_us = Some(val);
         }
 
         // Memory limit
-        if let Ok(content) =
-            fs::read_to_string("/sys/fs/cgroup/memory/memory.limit_in_bytes")
-        {
+        if let Ok(content) = fs::read_to_string("/sys/fs/cgroup/memory/memory.limit_in_bytes") {
             limits.memory_limit_bytes = parse_cgroup_value(&content);
         }
 
@@ -121,18 +118,18 @@ impl LinuxQuotaReader {
         let mut usage = QuotaUsage::default();
 
         // Memory usage from memory.current
-        if let Ok(content) = fs::read_to_string(cgroup_path.join("memory.current")) {
-            if let Ok(val) = content.trim().parse::<u64>() {
-                usage.memory_bytes = val;
-            }
+        if let Ok(content) = fs::read_to_string(cgroup_path.join("memory.current"))
+            && let Ok(val) = content.trim().parse::<u64>()
+        {
+            usage.memory_bytes = val;
         }
         usage.memory_limit_bytes = limits.memory_limit_bytes;
 
         // PIDs current from pids.current
-        if let Ok(content) = fs::read_to_string(cgroup_path.join("pids.current")) {
-            if let Ok(val) = content.trim().parse::<u64>() {
-                usage.pids_current = val;
-            }
+        if let Ok(content) = fs::read_to_string(cgroup_path.join("pids.current"))
+            && let Ok(val) = content.trim().parse::<u64>()
+        {
+            usage.pids_current = val;
         }
         usage.pids_limit = limits.pids_limit;
 
@@ -175,11 +172,12 @@ impl QuotaReader for LinuxQuotaReader {
             CgroupVersion::V2 => self.read_cgroup_v2_usage(&cgroup_path, &limits),
             CgroupVersion::V1 => {
                 // V1 usage reading - simplified
-                let mut usage = QuotaUsage::default();
-                usage.memory_limit_bytes = limits.memory_limit_bytes;
-                usage.pids_limit = limits.pids_limit;
-                usage.cpu_limit_percent = limits.cpu_limit_percent();
-                usage
+                QuotaUsage {
+                    memory_limit_bytes: limits.memory_limit_bytes,
+                    pids_limit: limits.pids_limit,
+                    cpu_limit_percent: limits.cpu_limit_percent(),
+                    ..Default::default()
+                }
             }
             CgroupVersion::Unknown => QuotaUsage::default(),
         };
@@ -196,9 +194,7 @@ fn detect_cgroup_version() -> CgroupVersion {
     }
 
     // Check for cgroups v1
-    if Path::new("/sys/fs/cgroup/cpu").exists()
-        || Path::new("/sys/fs/cgroup/memory").exists()
-    {
+    if Path::new("/sys/fs/cgroup/cpu").exists() || Path::new("/sys/fs/cgroup/memory").exists() {
         return CgroupVersion::V1;
     }
 
@@ -212,7 +208,8 @@ fn parse_cgroup_v2_path(content: &str) -> Result<PathBuf> {
         let parts: Vec<&str> = line.splitn(3, ':').collect();
         if parts.len() == 3 && parts[0] == "0" {
             let cgroup_relative = parts[2].trim();
-            let path = PathBuf::from("/sys/fs/cgroup").join(cgroup_relative.trim_start_matches('/'));
+            let path =
+                PathBuf::from("/sys/fs/cgroup").join(cgroup_relative.trim_start_matches('/'));
             if path.exists() {
                 return Ok(path);
             }
@@ -243,7 +240,7 @@ fn parse_cgroup_v1_path(content: &str) -> Result<PathBuf> {
 
 /// Parse cpu.max format: "quota period" or "max period".
 fn parse_cpu_max(content: &str) -> Option<(u64, u64)> {
-    let parts: Vec<&str> = content.trim().split_whitespace().collect();
+    let parts: Vec<&str> = content.split_whitespace().collect();
     if parts.len() >= 2 {
         let quota = if parts[0] == "max" {
             u64::MAX
@@ -294,7 +291,7 @@ fn parse_io_max(content: &str) -> (Option<u64>, Option<u64>) {
 
 /// Read rlimits into QuotaLimits.
 fn read_rlimits_into(limits: &mut QuotaLimits) {
-    use libc::{getrlimit, rlimit, RLIMIT_CPU, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_NPROC};
+    use libc::{RLIMIT_CPU, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_NPROC, getrlimit, rlimit};
 
     unsafe {
         let mut rl = rlimit {
@@ -330,14 +327,12 @@ fn read_rlimits_into(limits: &mut QuotaLimits) {
         }
 
         // RLIMIT_NPROC (if not already set from cgroups)
-        if limits.pids_limit.is_none() {
-            if getrlimit(RLIMIT_NPROC, &mut rl) == 0 {
-                limits.pids_limit = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
-                    u64::MAX
-                } else {
-                    rl.rlim_cur
-                });
-            }
+        if limits.pids_limit.is_none() && getrlimit(RLIMIT_NPROC, &mut rl) == 0 {
+            limits.pids_limit = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
+                u64::MAX
+            } else {
+                rl.rlim_cur
+            });
         }
     }
 }
@@ -430,14 +425,13 @@ fn extract_container_id(content: &str, hint: &str) -> Option<String> {
                     return Some(segment.to_string());
                 }
                 // Also check if segment contains the hint and has an ID after it
-                if !hint.is_empty() && segment.contains(hint) {
-                    if let Some(id_part) = segment.split('-').last() {
-                        if id_part.len() >= 12
-                            && id_part.chars().all(|c| c.is_ascii_hexdigit())
-                        {
-                            return Some(id_part.to_string());
-                        }
-                    }
+                if !hint.is_empty()
+                    && segment.contains(hint)
+                    && let Some(id_part) = segment.split('-').next_back()
+                    && id_part.len() >= 12
+                    && id_part.chars().all(|c| c.is_ascii_hexdigit())
+                {
+                    return Some(id_part.to_string());
                 }
             }
         }

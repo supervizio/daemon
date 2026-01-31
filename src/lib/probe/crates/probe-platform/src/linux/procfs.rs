@@ -762,6 +762,22 @@ pub fn read_self_context_switches() -> Result<ContextSwitches> {
     Ok(switches)
 }
 
+/// Read system-wide I/O statistics (aggregated from diskstats).
+pub fn read_io_stats() -> Result<IOStats> {
+    let diskstats = read_diskstats()?;
+
+    let mut stats = IOStats::default();
+
+    for disk in diskstats {
+        stats.read_ops += disk.reads_completed;
+        stats.read_bytes += disk.sectors_read * 512; // 512 bytes per sector
+        stats.write_ops += disk.writes_completed;
+        stats.write_bytes += disk.sectors_written * 512;
+    }
+
+    Ok(stats)
+}
+
 #[cfg(test)]
 mod context_switch_tests {
     use super::*;
@@ -792,20 +808,4 @@ mod context_switch_tests {
             assert!(switches.system_total > 0);
         }
     }
-}
-
-/// Read system-wide I/O statistics (aggregated from diskstats).
-pub fn read_io_stats() -> Result<IOStats> {
-    let diskstats = read_diskstats()?;
-
-    let mut stats = IOStats::default();
-
-    for disk in diskstats {
-        stats.read_ops += disk.reads_completed;
-        stats.read_bytes += disk.sectors_read * 512; // 512 bytes per sector
-        stats.write_ops += disk.writes_completed;
-        stats.write_bytes += disk.sectors_written * 512;
-    }
-
-    Ok(stats)
 }

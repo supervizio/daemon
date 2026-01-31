@@ -18,7 +18,10 @@ const SOCKET_PATHS: &[(&str, ContainerRuntime)] = &[
         "/var/run/containerd/containerd.sock",
         ContainerRuntime::Containerd,
     ),
-    ("/run/containerd/containerd.sock", ContainerRuntime::Containerd),
+    (
+        "/run/containerd/containerd.sock",
+        ContainerRuntime::Containerd,
+    ),
     // CRI-O
     ("/var/run/crio/crio.sock", ContainerRuntime::CriO),
     ("/run/crio/crio.sock", ContainerRuntime::CriO),
@@ -110,7 +113,10 @@ fn check_macos_docker() -> Option<AvailableRuntime> {
     // Docker Desktop locations
     let paths = [
         format!("{}/.docker/run/docker.sock", home),
-        format!("{}/Library/Containers/com.docker.docker/Data/docker.sock", home),
+        format!(
+            "{}/Library/Containers/com.docker.docker/Data/docker.sock",
+            home
+        ),
     ];
 
     for path in paths {

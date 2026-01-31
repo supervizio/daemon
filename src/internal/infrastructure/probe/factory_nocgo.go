@@ -12,6 +12,36 @@ import (
 
 var errNoCGO = fmt.Errorf("probe requires CGO: rebuild with CGO_ENABLED=1")
 
+// Init is a no-op when CGO is disabled.
+// The Rust probe requires CGO for FFI bindings.
+//
+// Returns:
+//   - error: always returns errNoCGO
+func Init() error {
+	// Return error indicating CGO is required.
+	return errNoCGO
+}
+
+// Shutdown is a no-op when CGO is disabled.
+// The Rust probe requires CGO for FFI bindings.
+func Shutdown() {
+	// No-op when CGO is disabled.
+}
+
+// CollectAllMetricsJSON returns an error when CGO is disabled.
+// The Rust probe requires CGO for FFI bindings.
+//
+// Params:
+//   - ctx: context for cancellation (unused)
+//
+// Returns:
+//   - string: empty string
+//   - error: always returns errNoCGO
+func CollectAllMetricsJSON(_ context.Context) (string, error) {
+	// Return error indicating CGO is required.
+	return "", errNoCGO
+}
+
 // NewSystemCollector returns an error collector when CGO is disabled.
 // The Rust probe requires CGO for FFI bindings.
 //

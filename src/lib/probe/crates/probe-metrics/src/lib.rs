@@ -608,7 +608,10 @@ pub trait ConnectionCollector: Send + Sync {
     fn collect_tcp_stats(&self) -> Result<TcpStats>;
 
     /// Collect connections for a specific process.
-    fn collect_process_connections(&self, pid: i32) -> Result<(Vec<TcpConnection>, Vec<UdpConnection>)>;
+    fn collect_process_connections(
+        &self,
+        pid: i32,
+    ) -> Result<(Vec<TcpConnection>, Vec<UdpConnection>)>;
 
     /// Find which process owns a specific port.
     fn find_process_by_port(&self, port: u16, tcp: bool) -> Result<Option<i32>>;

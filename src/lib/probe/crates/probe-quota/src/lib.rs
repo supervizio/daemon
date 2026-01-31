@@ -18,11 +18,7 @@ mod linux;
 #[cfg(target_os = "freebsd")]
 mod freebsd;
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "openbsd",
-    target_os = "netbsd"
-))]
+#[cfg(any(target_os = "macos", target_os = "openbsd", target_os = "netbsd"))]
 mod rlimit;
 
 // Re-exports
@@ -32,11 +28,7 @@ pub use linux::LinuxQuotaReader;
 #[cfg(target_os = "freebsd")]
 pub use freebsd::FreeBSDQuotaReader;
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "openbsd",
-    target_os = "netbsd"
-))]
+#[cfg(any(target_os = "macos", target_os = "openbsd", target_os = "netbsd"))]
 pub use rlimit::RlimitQuotaReader;
 
 /// Error types for quota operations.

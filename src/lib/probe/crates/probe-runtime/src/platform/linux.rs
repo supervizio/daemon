@@ -21,8 +21,8 @@ pub fn detect_cgroup_version() -> CgroupVersion {
     let v2_exists = fs::metadata("/sys/fs/cgroup/cgroup.controllers").is_ok();
 
     // Check for cgroup v1
-    let v1_exists = fs::metadata("/sys/fs/cgroup/memory").is_ok()
-        || fs::metadata("/sys/fs/cgroup/cpu").is_ok();
+    let v1_exists =
+        fs::metadata("/sys/fs/cgroup/memory").is_ok() || fs::metadata("/sys/fs/cgroup/cpu").is_ok();
 
     match (v2_exists, v1_exists) {
         (true, false) => CgroupVersion::V2,
@@ -43,17 +43,18 @@ pub fn get_cgroup_path() -> Option<String> {
 
     // For cgroup v2, look for the unified entry (0::)
     for line in content.lines() {
-        if line.starts_with("0::") {
-            return Some(line[3..].to_string());
+        if let Some(stripped) = line.strip_prefix("0::") {
+            return Some(stripped.to_string());
         }
     }
 
     // For cgroup v1, use any path (they should be similar)
     for line in content.lines() {
-        if let Some((_, path)) = line.rsplit_once(':') {
-            if !path.is_empty() && path != "/" {
-                return Some(path.to_string());
-            }
+        if let Some((_, path)) = line.rsplit_once(':')
+            && !path.is_empty()
+            && path != "/"
+        {
+            return Some(path.to_string());
         }
     }
 

@@ -10,7 +10,9 @@ pub use connections::{
     build_socket_pid_map, collect_process_connections, collect_tcp_connections, collect_tcp_stats,
     collect_udp_connections, collect_unix_sockets, find_process_by_port,
 };
-pub use procfs::{read_process_context_switches, read_self_context_switches, read_system_context_switches};
+pub use procfs::{
+    read_process_context_switches, read_self_context_switches, read_system_context_switches,
+};
 pub use thermal::{is_thermal_supported, read_thermal_zones};
 
 use crate::{
@@ -333,7 +335,10 @@ impl ConnectionCollector for LinuxConnectionCollector {
         connections::collect_tcp_stats()
     }
 
-    fn collect_process_connections(&self, pid: i32) -> Result<(Vec<TcpConnection>, Vec<UdpConnection>)> {
+    fn collect_process_connections(
+        &self,
+        pid: i32,
+    ) -> Result<(Vec<TcpConnection>, Vec<UdpConnection>)> {
         connections::collect_process_connections(pid)
     }
 

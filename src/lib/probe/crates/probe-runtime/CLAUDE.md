@@ -86,13 +86,7 @@ if is_containerized() {
 
 ## Platform Support
 
-| Platform | Inside Detection | Available Detection |
-|----------|-----------------|---------------------|
-| Linux | ✅ Full | ✅ Full |
-| macOS | ✅ VM-based* | ✅ Desktop sockets |
-| FreeBSD | ✅ Jail | ✅ jls |
-
-*macOS containers run in Linux VMs (Docker Desktop, Colima).
+Linux (full), macOS (VM-based*), FreeBSD (jail). *macOS containers run in Linux VMs.
 
 ## Related
 

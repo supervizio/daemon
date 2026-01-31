@@ -9,20 +9,24 @@ src/lib/probe/
 ├── Cargo.toml          # Workspace configuration
 ├── include/probe.h     # C header for FFI
 └── crates/
+    ├── probe-cache/    # Metrics caching with TTL policies
     ├── probe-ffi/      # C ABI exports (staticlib)
     ├── probe-metrics/  # Metrics collection (CPU, memory, disk, network, I/O)
     ├── probe-platform/ # Platform detection and abstractions
-    └── probe-quota/    # Resource quotas (cgroups, launchd, jail)
+    ├── probe-quota/    # Resource quotas (cgroups, launchd, jail)
+    └── probe-runtime/  # Container runtime detection (Docker, K8s, etc.)
 ```
 
 ## Crates
 
 | Crate | Purpose |
 |-------|---------|
+| `probe-cache` | Metrics caching with TTL policies |
 | `probe-ffi` | FFI layer exposing C ABI for Go CGO bindings |
 | `probe-metrics` | System and process metrics collection |
 | `probe-platform` | Platform detection, OS-specific implementations |
 | `probe-quota` | Resource quota management (cgroups v1/v2, launchd, jail) |
+| `probe-runtime` | Container/orchestrator runtime detection |
 
 ## Build
 

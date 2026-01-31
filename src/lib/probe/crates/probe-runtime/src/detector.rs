@@ -1,8 +1,8 @@
 //! Universal runtime detector - main entry point.
 
 use crate::{
-    available, inside, AvailableDetector, AvailableRuntime, ContainerRuntime, InsideDetector,
-    RuntimeInfo,
+    AvailableDetector, AvailableRuntime, ContainerRuntime, InsideDetector, RuntimeInfo, available,
+    inside,
 };
 
 /// Universal runtime detector that coordinates all detection methods.
@@ -45,7 +45,11 @@ impl UniversalRuntimeDetector {
         for detector in &self.inside_detectors {
             log::trace!("Running inside detector: {}", detector.name());
             if let Some(inside) = detector.detect() {
-                log::debug!("Inside detection matched: {} ({})", detector.name(), inside.runtime);
+                log::debug!(
+                    "Inside detection matched: {} ({})",
+                    detector.name(),
+                    inside.runtime
+                );
                 info.is_containerized = true;
                 info.container_runtime = Some(inside.runtime);
                 info.orchestrator = inside.orchestrator;
@@ -62,7 +66,11 @@ impl UniversalRuntimeDetector {
         for detector in &self.available_detectors {
             log::trace!("Running available detector: {}", detector.name());
             let detected = detector.detect();
-            log::debug!("Available detector {} found {} runtimes", detector.name(), detected.len());
+            log::debug!(
+                "Available detector {} found {} runtimes",
+                detector.name(),
+                detected.len()
+            );
             info.available_runtimes.extend(detected);
         }
 
@@ -118,17 +126,14 @@ pub fn detect() -> RuntimeInfo {
 
 /// Convenience function to check if containerized.
 pub fn is_containerized() -> bool {
-    UniversalRuntimeDetector::new()
-        .detect_inside()
-        .is_some()
+    UniversalRuntimeDetector::new().detect_inside().is_some()
 }
 
 /// Convenience function to get container runtime.
 pub fn get_container_runtime() -> Option<ContainerRuntime> {
     UniversalRuntimeDetector::new()
         .detect_inside()
-        .map(|info| info.container_runtime)
-        .flatten()
+        .and_then(|info| info.container_runtime)
 }
 
 #[cfg(test)]

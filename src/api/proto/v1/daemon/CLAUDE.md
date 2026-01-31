@@ -66,6 +66,6 @@ protoc --go_out=. --go_opt=paths=source_relative \
 
 | Package | Relation |
 |---------|----------|
-| `internal/infrastructure/grpc` | Server implementation |
-| `internal/domain/state` | Domain state types |
+| `internal/infrastructure/transport/grpc` | Server implementation |
+| `internal/domain/lifecycle` | Domain state types |
 | `internal/domain/metrics` | Domain metric types |

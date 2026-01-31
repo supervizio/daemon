@@ -85,10 +85,7 @@ fn check_cgroup_podman() -> Option<(String, HashMap<String, String>)> {
             let rest = &line[start..];
 
             // Extract 64-char hex ID
-            let id: String = rest
-                .chars()
-                .take_while(|c| c.is_ascii_hexdigit())
-                .collect();
+            let id: String = rest.chars().take_while(|c| c.is_ascii_hexdigit()).collect();
 
             if id.len() == 64 {
                 return Some((id, HashMap::new()));
@@ -110,10 +107,7 @@ fn get_container_id_from_cgroup() -> Option<String> {
                 let start = pos + pattern.len();
                 let rest = &line[start..];
 
-                let id: String = rest
-                    .chars()
-                    .take_while(|c| c.is_ascii_hexdigit())
-                    .collect();
+                let id: String = rest.chars().take_while(|c| c.is_ascii_hexdigit()).collect();
 
                 if id.len() == 64 {
                     return Some(id);

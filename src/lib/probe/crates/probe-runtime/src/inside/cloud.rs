@@ -9,15 +9,15 @@ pub struct AwsFargateDetector;
 impl InsideDetector for AwsFargateDetector {
     fn detect(&self) -> Option<InsideInfo> {
         // AWS_EXECUTION_ENV contains "Fargate" for Fargate tasks
-        if let Ok(env) = std::env::var("AWS_EXECUTION_ENV") {
-            if env.contains("Fargate") {
-                return Some(InsideInfo {
-                    runtime: ContainerRuntime::AwsFargate,
-                    orchestrator: Some(ContainerRuntime::AwsFargate),
-                    metadata: collect_ecs_metadata(),
-                    ..Default::default()
-                });
-            }
+        if let Ok(env) = std::env::var("AWS_EXECUTION_ENV")
+            && env.contains("Fargate")
+        {
+            return Some(InsideInfo {
+                runtime: ContainerRuntime::AwsFargate,
+                orchestrator: Some(ContainerRuntime::AwsFargate),
+                metadata: collect_ecs_metadata(),
+                ..Default::default()
+            });
         }
 
         None

@@ -1,5 +1,7 @@
 //go:build cgo
 
+// Package probe provides CGO bindings to the Rust probe library for unified
+// cross-platform system metrics and resource quota management.
 package probe
 
 /*
@@ -17,51 +19,84 @@ import (
 	"github.com/kodflow/daemon/internal/domain/metrics"
 )
 
+// sectorSize is the standard disk sector size in bytes.
+const sectorSize uint64 = 512
+
 // DiskCollector provides disk metrics via the Rust probe library.
+// It implements the metrics.DiskCollector interface for disk statistics.
 type DiskCollector struct{}
 
 // NewDiskCollector creates a new disk collector.
+//
+// Returns:
+//   - *DiskCollector: new disk collector instance
 func NewDiskCollector() *DiskCollector {
+	// Return a new empty collector instance.
 	return &DiskCollector{}
 }
 
 // ListPartitions returns all mounted partitions.
 //
+// Params:
+//   - ctx: context for cancellation (unused, reserved for future use)
+//
+// Returns:
+//   - []metrics.Partition: list of mounted partitions
+//   - error: nil on success, error if probe not initialized or collection fails
+//
 //nolint:gocritic // dupSubExpr false positive from CGO list operations
 func (d *DiskCollector) ListPartitions(_ context.Context) ([]metrics.Partition, error) {
+	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
+		// Return nil slice with initialization error.
 		return nil, err
 	}
 
 	var list C.PartitionList
 	result := C.probe_list_partitions(&list)
+	// Check if the FFI call succeeded.
 	if err := resultToError(result); err != nil {
+		// Return nil slice with collection error.
 		return nil, err
 	}
 	defer C.probe_free_partition_list(&list)
 
-	partitions := make([]metrics.Partition, list.count)
-	items := unsafe.Slice(list.items, list.count)
-	for i, item := range items {
+	count := int(list.count)
+	partitions := make([]metrics.Partition, 0, count)
+	items := unsafe.Slice(list.items, count)
+	// Iterate through each partition from the Rust library.
+	for _, item := range items {
 		optStr := cCharArrayToString(item.options[:])
 		var opts []string
+		// Parse mount options if present.
 		if optStr != "" {
 			opts = strings.Split(optStr, ",")
 		}
-		partitions[i] = metrics.Partition{
+		partitions = append(partitions, metrics.Partition{
 			Device:     cCharArrayToString(item.device[:]),
 			Mountpoint: cCharArrayToString(item.mount_point[:]),
 			FSType:     cCharArrayToString(item.fs_type[:]),
 			Options:    opts,
-		}
+		})
 	}
 
+	// Return collected partitions.
 	return partitions, nil
 }
 
 // CollectUsage collects disk usage for a specific path.
+//
+// Params:
+//   - ctx: context for cancellation (unused, reserved for future use)
+//   - path: filesystem path to collect usage for
+//
+// Returns:
+//   - metrics.DiskUsage: disk usage statistics for the path
+//   - error: nil on success, error if probe not initialized or collection fails
 func (d *DiskCollector) CollectUsage(_ context.Context, path string) (metrics.DiskUsage, error) {
+	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
+		// Return empty metrics with initialization error.
 		return metrics.DiskUsage{}, err
 	}
 
@@ -70,10 +105,13 @@ func (d *DiskCollector) CollectUsage(_ context.Context, path string) (metrics.Di
 
 	var usage C.DiskUsage
 	result := C.probe_collect_disk_usage(cPath, &usage)
+	// Check if the FFI call succeeded.
 	if err := resultToError(result); err != nil {
+		// Return empty metrics with collection error.
 		return metrics.DiskUsage{}, err
 	}
 
+	// Return collected disk usage with current timestamp.
 	return metrics.DiskUsage{
 		Path:         path,
 		Total:        uint64(usage.total_bytes),
@@ -88,45 +126,70 @@ func (d *DiskCollector) CollectUsage(_ context.Context, path string) (metrics.Di
 }
 
 // CollectAllUsage collects disk usage for all mounted partitions.
+//
+// Params:
+//   - ctx: context for cancellation
+//
+// Returns:
+//   - []metrics.DiskUsage: disk usage for all partitions
+//   - error: nil on success, error if listing partitions fails
 func (d *DiskCollector) CollectAllUsage(ctx context.Context) ([]metrics.DiskUsage, error) {
 	partitions, err := d.ListPartitions(ctx)
+	// Check if listing partitions failed.
 	if err != nil {
+		// Return nil slice with error.
 		return nil, err
 	}
 
 	usages := make([]metrics.DiskUsage, 0, len(partitions))
+	// Collect usage for each partition.
 	for _, p := range partitions {
 		usage, err := d.CollectUsage(ctx, p.Mountpoint)
+		// Only include successful collections.
 		if err == nil {
 			usages = append(usages, usage)
 		}
 	}
 
+	// Return collected disk usages.
 	return usages, nil
 }
 
 // CollectIO collects I/O statistics for all block devices.
 //
+// Params:
+//   - ctx: context for cancellation (unused, reserved for future use)
+//
+// Returns:
+//   - []metrics.DiskIOStats: I/O statistics for all block devices
+//   - error: nil on success, error if probe not initialized or collection fails
+//
 //nolint:gocritic // dupSubExpr false positive from CGO list operations
 func (d *DiskCollector) CollectIO(_ context.Context) ([]metrics.DiskIOStats, error) {
+	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
+		// Return nil slice with initialization error.
 		return nil, err
 	}
 
 	var list C.DiskIOStatsList
 	result := C.probe_collect_disk_io(&list)
+	// Check if the FFI call succeeded.
 	if err := resultToError(result); err != nil {
+		// Return nil slice with collection error.
 		return nil, err
 	}
 	defer C.probe_free_disk_io_list(&list)
 
-	stats := make([]metrics.DiskIOStats, list.count)
-	items := unsafe.Slice(list.items, list.count)
-	for i, item := range items {
-		stats[i] = metrics.DiskIOStats{
+	count := int(list.count)
+	stats := make([]metrics.DiskIOStats, 0, count)
+	items := unsafe.Slice(list.items, count)
+	// Iterate through each block device's I/O statistics.
+	for _, item := range items {
+		stats = append(stats, metrics.DiskIOStats{
 			Device:         cCharArrayToString(item.device[:]),
-			ReadBytes:      uint64(item.sectors_read) * 512,
-			WriteBytes:     uint64(item.sectors_written) * 512,
+			ReadBytes:      uint64(item.sectors_read) * sectorSize,
+			WriteBytes:     uint64(item.sectors_written) * sectorSize,
 			ReadCount:      uint64(item.reads_completed),
 			WriteCount:     uint64(item.writes_completed),
 			ReadTime:       time.Duration(item.read_time_ms) * time.Millisecond,
@@ -135,34 +198,61 @@ func (d *DiskCollector) CollectIO(_ context.Context) ([]metrics.DiskIOStats, err
 			IOTime:         time.Duration(item.io_time_ms) * time.Millisecond,
 			WeightedIOTime: time.Duration(item.weighted_io_time_ms) * time.Millisecond,
 			Timestamp:      time.Now(),
-		}
+		})
 	}
 
+	// Return collected I/O statistics.
 	return stats, nil
 }
 
 // CollectDeviceIO collects I/O statistics for a specific device.
+//
+// Params:
+//   - ctx: context for cancellation
+//   - device: device name to collect I/O stats for
+//
+// Returns:
+//   - metrics.DiskIOStats: I/O statistics for the device
+//   - error: nil on success, ErrNotFound if device not found
 func (d *DiskCollector) CollectDeviceIO(ctx context.Context, device string) (metrics.DiskIOStats, error) {
 	all, err := d.CollectIO(ctx)
+	// Check if collecting all I/O stats failed.
 	if err != nil {
+		// Return empty stats with error.
 		return metrics.DiskIOStats{}, err
 	}
 
+	// Search for the requested device in the collected stats.
 	for _, stat := range all {
+		// Check if this is the requested device.
 		if stat.Device == device {
+			// Return the matching device stats.
 			return stat, nil
 		}
 	}
 
+	// Return error if device was not found.
 	return metrics.DiskIOStats{}, ErrNotFound
 }
 
 // cCharArrayToString converts a C char array to a Go string.
+//
+// Params:
+//   - arr: C char array to convert
+//
+// Returns:
+//   - string: the converted Go string
 func cCharArrayToString(arr []C.char) string {
+	// Compute base pointer once for efficiency.
+	basePtr := (*byte)(unsafe.Pointer(&arr[0]))
+	// Find null terminator in the array.
 	for i, c := range arr {
+		// Check for null terminator.
 		if c == 0 {
-			return string(unsafe.Slice((*byte)(unsafe.Pointer(&arr[0])), i))
+			// Return string up to null terminator.
+			return string(unsafe.Slice(basePtr, i))
 		}
 	}
-	return string(unsafe.Slice((*byte)(unsafe.Pointer(&arr[0])), len(arr)))
+	// Return entire array if no null terminator found.
+	return string(unsafe.Slice(basePtr, len(arr)))
 }

@@ -1,5 +1,7 @@
 //go:build cgo
 
+// Package probe provides CGO bindings to the Rust probe library for
+// unified cross-platform system metrics and resource quota management.
 package probe
 
 import (
@@ -14,6 +16,7 @@ import (
 // Returns:
 //   - metrics.SystemCollector: cross-platform metrics collector
 func NewSystemCollector() metrics.SystemCollector {
+	// Create and return the unified collector implementation.
 	return NewCollector()
 }
 
@@ -23,6 +26,7 @@ func NewSystemCollector() metrics.SystemCollector {
 // Returns:
 //   - appmetrics.Collector: process metrics collector for application layer
 func NewAppProcessCollector() appmetrics.Collector {
+	// Create and return the process metrics collector.
 	return NewProcessCollector()
 }
 
@@ -32,5 +36,6 @@ func NewAppProcessCollector() appmetrics.Collector {
 // Returns:
 //   - string: platform identifier from the Rust probe
 func DetectedPlatform() string {
+	// Return platform identifier from the native probe.
 	return Platform()
 }

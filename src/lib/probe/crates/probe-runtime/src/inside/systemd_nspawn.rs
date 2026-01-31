@@ -10,16 +10,15 @@ pub struct SystemdNspawnInsideDetector;
 impl InsideDetector for SystemdNspawnInsideDetector {
     fn detect(&self) -> Option<InsideInfo> {
         // Method 1: Check /run/host/ which nspawn mounts
-        if Path::new("/run/host/container-manager").exists() {
-            if let Ok(manager) = fs::read_to_string("/run/host/container-manager") {
-                if manager.trim() == "systemd-nspawn" {
-                    return Some(InsideInfo {
-                        runtime: ContainerRuntime::SystemdNspawn,
-                        container_id: get_machine_name(),
-                        ..Default::default()
-                    });
-                }
-            }
+        if Path::new("/run/host/container-manager").exists()
+            && let Ok(manager) = fs::read_to_string("/run/host/container-manager")
+            && manager.trim() == "systemd-nspawn"
+        {
+            return Some(InsideInfo {
+                runtime: ContainerRuntime::SystemdNspawn,
+                container_id: get_machine_name(),
+                ..Default::default()
+            });
         }
 
         // Method 2: Check container= in /proc/1/environ

@@ -41,7 +41,11 @@ type Collector struct {
 
 // NewCollector creates a new system metrics collector backed by the Rust probe.
 // The probe library must be initialized via Init() before using the collector.
+//
+// Returns:
+//   - *Collector: new system metrics collector instance
 func NewCollector() *Collector {
+	// Initialize all sub-collectors for comprehensive metrics collection.
 	return &Collector{
 		cpu:        NewCPUCollector(),
 		memory:     NewMemoryCollector(),
@@ -53,33 +57,57 @@ func NewCollector() *Collector {
 }
 
 // CPU returns the CPU metrics collector.
-func (c *Collector) CPU() metrics.CPUCollector {
+//
+// Returns:
+//   - metrics.CPUCollector: collector for CPU metrics
+func (c *Collector) CPU() metrics.CPUCollector { //nolint:ktn-struct-accessor // Interface requires CPU() not Cpu()
+	// Return the pre-initialized CPU collector.
 	return c.cpu
 }
 
 // Memory returns the memory metrics collector.
+//
+// Returns:
+//   - metrics.MemoryCollector: collector for memory metrics
 func (c *Collector) Memory() metrics.MemoryCollector {
+	// Return the pre-initialized memory collector.
 	return c.memory
 }
 
 // Disk returns the disk metrics collector.
+//
+// Returns:
+//   - metrics.DiskCollector: collector for disk metrics
 func (c *Collector) Disk() metrics.DiskCollector {
+	// Return the pre-initialized disk collector.
 	return c.disk
 }
 
 // Network returns the network metrics collector.
+//
+// Returns:
+//   - metrics.NetworkCollector: collector for network metrics
 func (c *Collector) Network() metrics.NetworkCollector {
+	// Return the pre-initialized network collector.
 	return c.network
 }
 
 // IO returns the I/O metrics collector.
-func (c *Collector) IO() metrics.IOCollector {
+//
+// Returns:
+//   - metrics.IOCollector: collector for I/O metrics
+func (c *Collector) IO() metrics.IOCollector { //nolint:ktn-struct-accessor // Interface requires IO() not Io()
+	// Return the pre-initialized I/O collector.
 	return c.io
 }
 
 // Connection returns the network connection collector.
 // This provides TCP, UDP, and Unix socket enumeration with process resolution.
+//
+// Returns:
+//   - *ConnectionCollector: collector for network connections
 func (c *Collector) Connection() *ConnectionCollector {
+	// Return the pre-initialized connection collector.
 	return c.connection
 }
 

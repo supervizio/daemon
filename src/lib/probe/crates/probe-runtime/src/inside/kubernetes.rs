@@ -20,7 +20,6 @@ impl InsideDetector for KubernetesInsideDetector {
                 workload_id: std::env::var("POD_UID").ok(),
                 container_id: get_container_id_from_cgroup(),
                 metadata: collect_k8s_metadata(),
-                ..Default::default()
             };
 
             // Try to get namespace from file if not in env

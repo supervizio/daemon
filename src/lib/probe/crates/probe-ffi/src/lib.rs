@@ -211,6 +211,7 @@ impl From<probe_metrics::ProcessMetrics> for ProcessMetrics {
 
 /// Resource quota limits (read-only detection).
 #[repr(C)]
+#[derive(Default)]
 pub struct QuotaLimits {
     /// CPU quota in microseconds per period (0 = not set, u64::MAX = unlimited).
     pub cpu_quota_us: u64,
@@ -232,23 +233,6 @@ pub struct QuotaLimits {
     pub io_write_bps: u64,
     /// Flags indicating which fields are valid.
     pub flags: u32,
-}
-
-impl Default for QuotaLimits {
-    fn default() -> Self {
-        Self {
-            cpu_quota_us: 0,
-            cpu_period_us: 0,
-            memory_limit_bytes: 0,
-            pids_limit: 0,
-            nofile_limit: 0,
-            cpu_time_limit_secs: 0,
-            data_limit_bytes: 0,
-            io_read_bps: 0,
-            io_write_bps: 0,
-            flags: 0,
-        }
-    }
 }
 
 // QuotaLimits flags
@@ -1413,7 +1397,10 @@ pub unsafe extern "C" fn probe_collect_system_context_switches(out: *mut u64) ->
 
     #[cfg(not(target_os = "linux"))]
     {
-        ProbeResult::err(PROBE_ERR_NOT_SUPPORTED, c"context switches not supported on this platform".as_ptr())
+        ProbeResult::err(
+            PROBE_ERR_NOT_SUPPORTED,
+            c"context switches not supported on this platform".as_ptr(),
+        )
     }
 }
 
@@ -1444,7 +1431,10 @@ pub unsafe extern "C" fn probe_collect_process_context_switches(
     #[cfg(not(target_os = "linux"))]
     {
         let _ = pid;
-        ProbeResult::err(PROBE_ERR_NOT_SUPPORTED, c"context switches not supported on this platform".as_ptr())
+        ProbeResult::err(
+            PROBE_ERR_NOT_SUPPORTED,
+            c"context switches not supported on this platform".as_ptr(),
+        )
     }
 }
 
@@ -1453,7 +1443,9 @@ pub unsafe extern "C" fn probe_collect_process_context_switches(
 /// # Safety
 /// The `out` pointer must be valid.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn probe_collect_self_context_switches(out: *mut ContextSwitches) -> ProbeResult {
+pub unsafe extern "C" fn probe_collect_self_context_switches(
+    out: *mut ContextSwitches,
+) -> ProbeResult {
     if out.is_null() {
         return ProbeResult::err(PROBE_ERR_INVALID_PARAM, c"null pointer".as_ptr());
     }
@@ -1471,7 +1463,10 @@ pub unsafe extern "C" fn probe_collect_self_context_switches(out: *mut ContextSw
 
     #[cfg(not(target_os = "linux"))]
     {
-        ProbeResult::err(PROBE_ERR_NOT_SUPPORTED, c"context switches not supported on this platform".as_ptr())
+        ProbeResult::err(
+            PROBE_ERR_NOT_SUPPORTED,
+            c"context switches not supported on this platform".as_ptr(),
+        )
     }
 }
 
@@ -1581,7 +1576,10 @@ pub unsafe extern "C" fn probe_collect_thermal_zones(out: *mut ThermalZoneList) 
 
     #[cfg(not(target_os = "linux"))]
     {
-        ProbeResult::err(PROBE_ERR_NOT_SUPPORTED, c"thermal monitoring not supported on this platform".as_ptr())
+        ProbeResult::err(
+            PROBE_ERR_NOT_SUPPORTED,
+            c"thermal monitoring not supported on this platform".as_ptr(),
+        )
     }
 }
 
@@ -1808,7 +1806,12 @@ pub unsafe extern "C" fn probe_collect_all(out: *mut AllMetrics) -> ProbeResult 
             // Copy network interfaces
             let iface_count = metrics.net_interfaces.len().min(MAX_ALL_METRICS_ITEMS);
             result.net_interface_count = iface_count as u32;
-            for (i, iface) in metrics.net_interfaces.into_iter().take(iface_count).enumerate() {
+            for (i, iface) in metrics
+                .net_interfaces
+                .into_iter()
+                .take(iface_count)
+                .enumerate()
+            {
                 result.net_interfaces[i] = NetInterface::from(iface);
             }
 
@@ -1913,6 +1916,7 @@ impl Default for AvailableRuntimeInfo {
     }
 }
 
+#[allow(clippy::field_reassign_with_default)]
 impl From<probe_runtime::AvailableRuntime> for AvailableRuntimeInfo {
     fn from(r: probe_runtime::AvailableRuntime) -> Self {
         let mut result = Self::default();
@@ -1967,6 +1971,7 @@ impl Default for RuntimeInfo {
     }
 }
 
+#[allow(clippy::field_reassign_with_default)]
 impl From<probe_runtime::RuntimeInfo> for RuntimeInfo {
     fn from(info: probe_runtime::RuntimeInfo) -> Self {
         let mut result = Self::default();
@@ -2075,7 +2080,7 @@ pub extern "C" fn probe_get_runtime_name() -> *const c_char {
 // ============================================================================
 
 use parking_lot::RwLock;
-use probe_cache::{CachedCollector, CachePolicies, MetricType};
+use probe_cache::{CachePolicies, CachedCollector, MetricType};
 use std::time::Duration;
 
 /// Global cached collector instance.
@@ -2097,7 +2102,10 @@ pub extern "C" fn probe_cache_enable() -> ProbeResult {
         return ProbeResult::ok(); // Already enabled
     }
 
-    *guard = Some(CachedCollector::new(new_collector(), CachePolicies::default()));
+    *guard = Some(CachedCollector::new(
+        new_collector(),
+        CachePolicies::default(),
+    ));
     ProbeResult::ok()
 }
 
@@ -2411,6 +2419,7 @@ impl Default for TcpConnection {
     }
 }
 
+#[allow(clippy::field_reassign_with_default)]
 impl From<probe_metrics::TcpConnection> for TcpConnection {
     fn from(c: probe_metrics::TcpConnection) -> Self {
         let mut result = Self::default();
@@ -2475,6 +2484,7 @@ impl Default for UdpConnection {
     }
 }
 
+#[allow(clippy::field_reassign_with_default)]
 impl From<probe_metrics::UdpConnection> for UdpConnection {
     fn from(c: probe_metrics::UdpConnection) -> Self {
         let mut result = Self::default();
@@ -2621,7 +2631,8 @@ pub unsafe extern "C" fn probe_collect_tcp_connections(out: *mut TcpConnectionLi
     {
         match probe_platform::linux::collect_tcp_connections() {
             Ok(connections) => {
-                let mut items: Vec<TcpConnection> = connections.into_iter().map(|c| c.into()).collect();
+                let mut items: Vec<TcpConnection> =
+                    connections.into_iter().map(|c| c.into()).collect();
                 let count = items.len();
                 let capacity = items.capacity();
                 let ptr = items.as_mut_ptr();
@@ -2640,7 +2651,10 @@ pub unsafe extern "C" fn probe_collect_tcp_connections(out: *mut TcpConnectionLi
 
     #[cfg(not(target_os = "linux"))]
     {
-        ProbeResult::err(PROBE_ERR_NOT_SUPPORTED, c"TCP connections not supported on this platform".as_ptr())
+        ProbeResult::err(
+            PROBE_ERR_NOT_SUPPORTED,
+            c"TCP connections not supported on this platform".as_ptr(),
+        )
     }
 }
 
@@ -2678,7 +2692,8 @@ pub unsafe extern "C" fn probe_collect_udp_connections(out: *mut UdpConnectionLi
     {
         match probe_platform::linux::collect_udp_connections() {
             Ok(connections) => {
-                let mut items: Vec<UdpConnection> = connections.into_iter().map(|c| c.into()).collect();
+                let mut items: Vec<UdpConnection> =
+                    connections.into_iter().map(|c| c.into()).collect();
                 let count = items.len();
                 let capacity = items.capacity();
                 let ptr = items.as_mut_ptr();
@@ -2697,7 +2712,10 @@ pub unsafe extern "C" fn probe_collect_udp_connections(out: *mut UdpConnectionLi
 
     #[cfg(not(target_os = "linux"))]
     {
-        ProbeResult::err(PROBE_ERR_NOT_SUPPORTED, c"UDP connections not supported on this platform".as_ptr())
+        ProbeResult::err(
+            PROBE_ERR_NOT_SUPPORTED,
+            c"UDP connections not supported on this platform".as_ptr(),
+        )
     }
 }
 
@@ -2754,7 +2772,10 @@ pub unsafe extern "C" fn probe_collect_unix_sockets(out: *mut UnixSocketList) ->
 
     #[cfg(not(target_os = "linux"))]
     {
-        ProbeResult::err(PROBE_ERR_NOT_SUPPORTED, c"Unix sockets not supported on this platform".as_ptr())
+        ProbeResult::err(
+            PROBE_ERR_NOT_SUPPORTED,
+            c"Unix sockets not supported on this platform".as_ptr(),
+        )
     }
 }
 
@@ -2801,7 +2822,10 @@ pub unsafe extern "C" fn probe_collect_tcp_stats(out: *mut TcpStats) -> ProbeRes
 
     #[cfg(not(target_os = "linux"))]
     {
-        ProbeResult::err(PROBE_ERR_NOT_SUPPORTED, c"TCP stats not supported on this platform".as_ptr())
+        ProbeResult::err(
+            PROBE_ERR_NOT_SUPPORTED,
+            c"TCP stats not supported on this platform".as_ptr(),
+        )
     }
 }
 
@@ -2810,7 +2834,11 @@ pub unsafe extern "C" fn probe_collect_tcp_stats(out: *mut TcpStats) -> ProbeRes
 /// # Safety
 /// The `out` pointer must be valid. If no process is found, *out will be -1.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn probe_find_process_by_port(port: u16, tcp: bool, out: *mut i32) -> ProbeResult {
+pub unsafe extern "C" fn probe_find_process_by_port(
+    port: u16,
+    tcp: bool,
+    out: *mut i32,
+) -> ProbeResult {
     if out.is_null() {
         return ProbeResult::err(PROBE_ERR_INVALID_PARAM, c"null pointer".as_ptr());
     }
@@ -2833,6 +2861,9 @@ pub unsafe extern "C" fn probe_find_process_by_port(port: u16, tcp: bool, out: *
     #[cfg(not(target_os = "linux"))]
     {
         let _ = (port, tcp);
-        ProbeResult::err(PROBE_ERR_NOT_SUPPORTED, c"port lookup not supported on this platform".as_ptr())
+        ProbeResult::err(
+            PROBE_ERR_NOT_SUPPORTED,
+            c"port lookup not supported on this platform".as_ptr(),
+        )
     }
 }

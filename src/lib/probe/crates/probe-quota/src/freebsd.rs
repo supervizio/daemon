@@ -198,7 +198,7 @@ fn parse_rctl_amount(s: &str) -> std::result::Result<u64, std::num::ParseIntErro
 
 /// Read rlimits into QuotaLimits.
 fn read_rlimits_into(limits: &mut QuotaLimits) {
-    use libc::{getrlimit, rlimit, RLIMIT_CPU, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_NPROC};
+    use libc::{RLIMIT_CPU, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_NPROC, getrlimit, rlimit};
 
     unsafe {
         let mut rl = rlimit {

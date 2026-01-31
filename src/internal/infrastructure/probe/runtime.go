@@ -1,5 +1,9 @@
 //go:build cgo
 
+// Package probe provides CGO bindings to the Rust probe library for
+// unified cross-platform system metrics and resource quota management.
+//
+//nolint:ktn-struct-onefile // Runtime structs (AvailableRuntime, RuntimeInfo) are logically grouped
 package probe
 
 /*
@@ -42,67 +46,66 @@ const (
 	RuntimeUnknown RuntimeType = 254
 )
 
+// runtimeNames maps runtime types to their string representations.
+var runtimeNames map[RuntimeType]string = map[RuntimeType]string{
+	RuntimeNone:          "none",
+	RuntimeDocker:        "docker",
+	RuntimePodman:        "podman",
+	RuntimeContainerd:    "containerd",
+	RuntimeCriO:          "cri-o",
+	RuntimeLXC:           "lxc",
+	RuntimeLXD:           "lxd",
+	RuntimeSystemdNspawn: "systemd-nspawn",
+	RuntimeFirecracker:   "firecracker",
+	RuntimeFreeBSDJail:   "freebsd-jail",
+	RuntimeKubernetes:    "kubernetes",
+	RuntimeNomad:         "nomad",
+	RuntimeDockerSwarm:   "docker-swarm",
+	RuntimeOpenShift:     "openshift",
+	RuntimeAWSECS:        "aws-ecs",
+	RuntimeAWSFargate:    "aws-fargate",
+	RuntimeGoogleGKE:     "google-gke",
+	RuntimeAzureAKS:      "azure-aks",
+	RuntimeUnknown:       "unknown",
+}
+
 // String returns the string representation of the runtime type.
+//
+// Returns:
+//   - string: human-readable name of the runtime type
 func (r RuntimeType) String() string {
-	switch r {
-	case RuntimeNone:
-		return "none"
-	case RuntimeDocker:
-		return "docker"
-	case RuntimePodman:
-		return "podman"
-	case RuntimeContainerd:
-		return "containerd"
-	case RuntimeCriO:
-		return "cri-o"
-	case RuntimeLXC:
-		return "lxc"
-	case RuntimeLXD:
-		return "lxd"
-	case RuntimeSystemdNspawn:
-		return "systemd-nspawn"
-	case RuntimeFirecracker:
-		return "firecracker"
-	case RuntimeFreeBSDJail:
-		return "freebsd-jail"
-	case RuntimeKubernetes:
-		return "kubernetes"
-	case RuntimeNomad:
-		return "nomad"
-	case RuntimeDockerSwarm:
-		return "docker-swarm"
-	case RuntimeOpenShift:
-		return "openshift"
-	case RuntimeAWSECS:
-		return "aws-ecs"
-	case RuntimeAWSFargate:
-		return "aws-fargate"
-	case RuntimeGoogleGKE:
-		return "google-gke"
-	case RuntimeAzureAKS:
-		return "azure-aks"
-	case RuntimeUnknown:
-		return "unknown"
-	default:
-		return "unknown"
+	// Look up runtime name in the map
+	if name, ok := runtimeNames[r]; ok {
+		// Return the mapped name
+		return name
 	}
+	// Return unknown for any unrecognized value
+	return "unknown"
 }
 
 // IsOrchestrator returns whether this is an orchestrator (vs a container runtime).
 //
+// Returns:
+//   - bool: true if runtime type is an orchestrator, false otherwise
+//
 //nolint:exhaustive // Only orchestrator cases return true; all other RuntimeType values return false.
 func (r RuntimeType) IsOrchestrator() bool {
+	// Check if runtime type is in orchestrator range
 	switch r {
+	// Handle orchestrator runtime types
 	case RuntimeKubernetes, RuntimeNomad, RuntimeDockerSwarm, RuntimeOpenShift,
 		RuntimeAWSECS, RuntimeAWSFargate, RuntimeGoogleGKE, RuntimeAzureAKS:
+		// Return true for orchestrator types
 		return true
+	// Handle all other runtime types
 	default:
-		// Container runtimes and unknown types are not orchestrators.
+		// Return false for container runtimes and unknown types
 		return false
 	}
 }
 
 // AvailableRuntime describes a runtime available on the host.
+// It includes connection details and version information.
 type AvailableRuntime struct {
 	// Runtime type.
 	Runtime RuntimeType
@@ -118,6 +121,7 @@ type AvailableRuntime struct {
 }
 
 // RuntimeInfo contains full runtime environment detection results.
+// It describes containerization state and available runtimes.
 type RuntimeInfo struct {
 	// IsContainerized indicates whether running inside a container.
 	IsContainerized bool
@@ -145,27 +149,30 @@ type RuntimeInfo struct {
 }
 
 // DetectRuntime performs full runtime environment detection.
-//
-// This detects:
-// - Whether running inside a container
-// - The container runtime and orchestrator
-// - Container/workload IDs and names
-// - Available runtimes on the host
+// This detects whether running inside a container, the container runtime
+// and orchestrator, container/workload IDs and names, and available runtimes.
 //
 // Returns:
 //   - *RuntimeInfo: full runtime environment information
-//   - error: if the operation fails
+//   - error: nil on success, error if probe not initialized or detection fails
+//
+//nolint:ktn-comment-func // Returns section is present, no params needed
 func DetectRuntime() (*RuntimeInfo, error) {
+	// Check if probe is initialized
 	if err := checkInitialized(); err != nil {
+		// Return early if not initialized
 		return nil, err
 	}
 
 	var cInfo C.RuntimeInfo
 	result := C.probe_detect_runtime(&cInfo)
+	// Check detection result
 	if err := resultToError(result); err != nil {
+		// Return early on detection failure
 		return nil, err
 	}
 
+	// Build RuntimeInfo from C struct
 	info := &RuntimeInfo{
 		IsContainerized:  bool(cInfo.is_containerized),
 		ContainerRuntime: RuntimeType(cInfo.container_runtime),
@@ -176,34 +183,45 @@ func DetectRuntime() (*RuntimeInfo, error) {
 		Namespace:        C.GoString(&cInfo.namespace[0]),
 	}
 
-	// Convert available runtimes
+	// Convert available runtimes from C array
 	count := int(cInfo.available_count)
+	// Check if any runtimes are available
 	if count > 0 {
-		info.AvailableRuntimes = make([]AvailableRuntime, count)
-		for i := 0; i < count; i++ {
-			crt := cInfo.available_runtimes[i]
-			info.AvailableRuntimes[i] = AvailableRuntime{
+		info.AvailableRuntimes = make([]AvailableRuntime, 0, count)
+		// Iterate over available runtimes
+		for idx := range count {
+			crt := cInfo.available_runtimes[idx]
+			info.AvailableRuntimes = append(info.AvailableRuntimes, AvailableRuntime{
 				Runtime:    RuntimeType(crt.runtime),
 				SocketPath: C.GoString(&crt.socket_path[0]),
 				Version:    C.GoString(&crt.version[0]),
 				IsRunning:  bool(crt.is_running),
-			}
+			})
 		}
 	}
 
+	// Return the populated runtime info
 	return info, nil
 }
 
 // IsContainerized returns whether running inside a container (fast check).
-//
 // This only checks for containerization, not available runtimes.
+//
+// Returns:
+//   - bool: true if running inside a container, false otherwise
+//
+//nolint:ktn-comment-func // Returns section is present, no params needed
 func IsContainerized() bool {
 	return bool(C.probe_is_containerized())
 }
 
 // GetRuntimeName returns the container runtime name as a string.
-//
 // Returns "none" if not containerized.
+//
+// Returns:
+//   - string: name of the current container runtime or "none"
+//
+//nolint:ktn-comment-func // Returns section is present, no params needed
 func GetRuntimeName() string {
 	return C.GoString(C.probe_get_runtime_name())
 }

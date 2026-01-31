@@ -36,6 +36,7 @@ use probe_metrics::{
 use std::sync::Arc;
 
 /// Cached metrics storage.
+#[derive(Default)]
 struct MetricsCache {
     cpu_system: Option<CacheEntry<SystemCPU>>,
     cpu_pressure: Option<CacheEntry<CPUPressure>>,
@@ -49,25 +50,6 @@ struct MetricsCache {
     net_stats: Option<CacheEntry<Vec<NetStats>>>,
     io_stats: Option<CacheEntry<IOStats>>,
     io_pressure: Option<CacheEntry<IOPressure>>,
-}
-
-impl Default for MetricsCache {
-    fn default() -> Self {
-        Self {
-            cpu_system: None,
-            cpu_pressure: None,
-            memory_system: None,
-            memory_pressure: None,
-            load: None,
-            partitions: None,
-            disk_usage: None,
-            disk_io: None,
-            net_interfaces: None,
-            net_stats: None,
-            io_stats: None,
-            io_pressure: None,
-        }
-    }
 }
 
 /// A caching wrapper around a SystemCollector.
@@ -171,10 +153,10 @@ impl<T: SystemCollector + 'static> CPUCollector for CachedCollector<T> {
         // Check cache first (read lock)
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.cpu_system {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.cpu_system
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 
@@ -190,10 +172,10 @@ impl<T: SystemCollector + 'static> CPUCollector for CachedCollector<T> {
 
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.cpu_pressure {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.cpu_pressure
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 
@@ -211,10 +193,10 @@ impl<T: SystemCollector + 'static> MemoryCollector for CachedCollector<T> {
 
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.memory_system {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.memory_system
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 
@@ -229,10 +211,10 @@ impl<T: SystemCollector + 'static> MemoryCollector for CachedCollector<T> {
 
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.memory_pressure {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.memory_pressure
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 
@@ -250,10 +232,10 @@ impl<T: SystemCollector + 'static> LoadCollector for CachedCollector<T> {
 
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.load {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.load
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 
@@ -271,10 +253,10 @@ impl<T: SystemCollector + 'static> DiskCollector for CachedCollector<T> {
 
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.partitions {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.partitions
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 
@@ -294,10 +276,10 @@ impl<T: SystemCollector + 'static> DiskCollector for CachedCollector<T> {
 
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.disk_usage {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.disk_usage
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 
@@ -312,10 +294,10 @@ impl<T: SystemCollector + 'static> DiskCollector for CachedCollector<T> {
 
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.disk_io {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.disk_io
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 
@@ -338,10 +320,10 @@ impl<T: SystemCollector + 'static> NetworkCollector for CachedCollector<T> {
 
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.net_interfaces {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.net_interfaces
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 
@@ -361,10 +343,10 @@ impl<T: SystemCollector + 'static> NetworkCollector for CachedCollector<T> {
 
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.net_stats {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.net_stats
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 
@@ -382,10 +364,10 @@ impl<T: SystemCollector + 'static> IOCollector for CachedCollector<T> {
 
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.io_stats {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.io_stats
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 
@@ -400,10 +382,10 @@ impl<T: SystemCollector + 'static> IOCollector for CachedCollector<T> {
 
         {
             let cache = self.cache.read();
-            if let Some(entry) = &cache.io_pressure {
-                if entry.is_valid(ttl) {
-                    return Ok(entry.value.clone());
-                }
+            if let Some(entry) = &cache.io_pressure
+                && entry.is_valid(ttl)
+            {
+                return Ok(entry.value.clone());
             }
         }
 

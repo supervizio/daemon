@@ -259,9 +259,18 @@ mod tests {
     #[test]
     fn test_default_policies() {
         let policies = CachePolicies::default();
-        assert_eq!(policies.get_ttl(MetricType::CpuSystem), Duration::from_millis(100));
-        assert_eq!(policies.get_ttl(MetricType::MemorySystem), Duration::from_millis(500));
-        assert_eq!(policies.get_ttl(MetricType::DiskPartitions), Duration::from_secs(30));
+        assert_eq!(
+            policies.get_ttl(MetricType::CpuSystem),
+            Duration::from_millis(100)
+        );
+        assert_eq!(
+            policies.get_ttl(MetricType::MemorySystem),
+            Duration::from_millis(500)
+        );
+        assert_eq!(
+            policies.get_ttl(MetricType::DiskPartitions),
+            Duration::from_secs(30)
+        );
     }
 
     #[test]
@@ -294,9 +303,18 @@ mod tests {
             .with_cpu_ttl(Duration::from_millis(200))
             .with_memory_ttl(Duration::from_secs(1));
 
-        assert_eq!(policies.get_ttl(MetricType::CpuSystem), Duration::from_millis(200));
-        assert_eq!(policies.get_ttl(MetricType::CpuPressure), Duration::from_millis(200));
-        assert_eq!(policies.get_ttl(MetricType::MemorySystem), Duration::from_secs(1));
+        assert_eq!(
+            policies.get_ttl(MetricType::CpuSystem),
+            Duration::from_millis(200)
+        );
+        assert_eq!(
+            policies.get_ttl(MetricType::CpuPressure),
+            Duration::from_millis(200)
+        );
+        assert_eq!(
+            policies.get_ttl(MetricType::MemorySystem),
+            Duration::from_secs(1)
+        );
     }
 
     #[test]

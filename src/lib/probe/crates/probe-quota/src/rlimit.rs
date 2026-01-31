@@ -4,7 +4,7 @@
 //! Used on macOS, OpenBSD, and NetBSD where cgroups/rctl are not available.
 
 use crate::{Error, QuotaLimits, QuotaReader, QuotaUsage, Result};
-use libc::{getrlimit, rlimit, RLIMIT_CPU, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_NPROC};
+use libc::{RLIMIT_CPU, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_NPROC, getrlimit, rlimit};
 
 /// POSIX rlimit quota reader.
 pub struct RlimitQuotaReader;

@@ -34,7 +34,9 @@ type BusOption func(*Bus)
 // Returns:
 //   - BusOption: configuration option
 func WithBufferSize(size int) BusOption {
+	// Return closure that applies buffer size configuration.
 	return func(b *Bus) {
+		// Only apply if size is positive to maintain default behavior.
 		if size > 0 {
 			b.bufferSize = size
 		}
@@ -50,19 +52,19 @@ func WithBufferSize(size int) BusOption {
 //   - *Bus: new event bus instance
 func NewBus(opts ...BusOption) *Bus {
 	b := &Bus{
-		subscribers: make(map[<-chan lifecycle.Event]chan lifecycle.Event),
+		subscribers: make(map[<-chan lifecycle.Event]chan lifecycle.Event, 0),
 		bufferSize:  defaultBufferSize,
 	}
+	// Apply all provided options to configure the bus.
 	for _, opt := range opts {
 		opt(b)
 	}
+
+	// Return the fully configured bus instance.
 	return b
 }
 
-// Publish broadcasts an event to all subscribers.
-//
-// Events are sent non-blocking. If a subscriber's buffer is full,
-// the event is dropped for that subscriber.
+// Publish broadcasts an event to all subscribers (non-blocking; drops if buffer full).
 //
 // Params:
 //   - event: the event to publish
@@ -70,24 +72,24 @@ func (b *Bus) Publish(event lifecycle.Event) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
+	// Skip publishing if bus is already closed.
 	if b.closed {
+		// Silently return when closed to avoid panic.
 		return
 	}
 
+	// Send event to all active subscribers.
 	for _, ch := range b.subscribers {
 		select {
 		case ch <- event:
-			// sent successfully
+			// Event sent successfully to this subscriber.
 		default:
-			// subscriber buffer full, drop event
+			// Subscriber buffer full; drop event to avoid blocking.
 		}
 	}
 }
 
-// Subscribe creates a new subscription channel.
-//
-// The returned channel receives published events until Unsubscribe is called
-// or the bus is closed.
+// Subscribe creates a new subscription channel that receives events until Unsubscribe or Close.
 //
 // Returns:
 //   - <-chan lifecycle.Event: channel for receiving events
@@ -95,22 +97,24 @@ func (b *Bus) Subscribe() <-chan lifecycle.Event {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	// Return a closed channel if the bus is already closed.
 	if b.closed {
-		// return closed channel if bus is closed
 		ch := make(chan lifecycle.Event)
 		close(ch)
+
+		// Return closed channel to signal bus is unavailable.
 		return ch
 	}
 
+	// Create new subscriber channel with configured buffer size.
 	ch := make(chan lifecycle.Event, b.bufferSize)
 	b.subscribers[ch] = ch
+
+	// Return the new subscription channel.
 	return ch
 }
 
-// Unsubscribe removes a subscription.
-//
-// The channel will be closed and removed from the subscriber list.
-// Safe to call multiple times or with unknown channels.
+// Unsubscribe removes a subscription (idempotent; safe with unknown channels).
 //
 // Params:
 //   - ch: the subscription channel to remove
@@ -118,24 +122,28 @@ func (b *Bus) Unsubscribe(ch <-chan lifecycle.Event) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	// Close and remove the subscription if it exists.
 	if writeCh, ok := b.subscribers[ch]; ok {
 		delete(b.subscribers, ch)
 		close(writeCh)
 	}
 }
 
-// Close shuts down the event bus and closes all subscriber channels.
-//
-// After Close, Publish becomes a no-op and Subscribe returns closed channels.
+// Close shuts down the event bus and closes all subscriber channels (Publish becomes no-op).
 func (b *Bus) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	// Prevent multiple close operations.
 	if b.closed {
+		// Already closed, nothing to do.
 		return
 	}
 
+	// Mark bus as closed and close all subscriber channels.
 	b.closed = true
+
+	// Iterate over all subscribers to close and remove them.
 	for readCh, writeCh := range b.subscribers {
 		delete(b.subscribers, readCh)
 		close(writeCh)
@@ -149,6 +157,8 @@ func (b *Bus) Close() {
 func (b *Bus) SubscriberCount() int {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
+
+	// Return the count of active subscribers.
 	return len(b.subscribers)
 }
 

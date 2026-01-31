@@ -62,7 +62,7 @@ pub fn all_detectors() -> Vec<Box<dyn InsideDetector>> {
     detectors.push(Box::new(FreeBsdJailInsideDetector));
 
     // Sort by priority (highest first)
-    detectors.sort_by(|a, b| b.priority().cmp(&a.priority()));
+    detectors.sort_by_key(|b| std::cmp::Reverse(b.priority()));
 
     detectors
 }

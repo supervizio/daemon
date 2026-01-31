@@ -92,10 +92,7 @@ fn extract_docker_id(line: &str) -> Option<String> {
             let rest = &line[start..];
 
             // Extract 64-char hex ID
-            let id: String = rest
-                .chars()
-                .take_while(|c| c.is_ascii_hexdigit())
-                .collect();
+            let id: String = rest.chars().take_while(|c| c.is_ascii_hexdigit()).collect();
 
             if id.len() == 64 {
                 return Some(id);

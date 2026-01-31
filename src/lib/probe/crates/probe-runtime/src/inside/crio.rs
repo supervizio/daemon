@@ -67,10 +67,7 @@ fn extract_crio_id(line: &str) -> Option<String> {
             let start = pos + pattern.len();
             let rest = &line[start..];
 
-            let id: String = rest
-                .chars()
-                .take_while(|c| c.is_ascii_hexdigit())
-                .collect();
+            let id: String = rest.chars().take_while(|c| c.is_ascii_hexdigit()).collect();
 
             if id.len() == 64 {
                 return Some(id);

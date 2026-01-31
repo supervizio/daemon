@@ -156,6 +156,7 @@ func runProbeMode() int {
 	// collect all metrics and output as JSON
 	ctx := context.Background()
 	jsonStr, err := probe.CollectAllMetricsJSON(ctx)
+	// return early if metrics collection failed
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: failed to collect metrics: %v\n", err)
 		// return error code on collection failure

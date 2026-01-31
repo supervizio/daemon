@@ -9,8 +9,9 @@ pub use probe_metrics::{
     AddressFamily, CPUCollector, CPUPressure, ConnectionCollector, ContextSwitches, DiskCollector,
     DiskIOStats, DiskUsage, Error, IOCollector, IOPressure, IOStats, LoadAverage, LoadCollector,
     MemoryCollector, MemoryPressure, NetInterface, NetStats, NetworkCollector, Partition,
-    ProcessCollector, ProcessMetrics, ProcessState, Result, SocketState, SystemCPU, SystemCollector,
-    SystemMemory, TcpConnection, TcpStats, ThermalCollector, ThermalZone, UdpConnection, UnixSocket,
+    ProcessCollector, ProcessMetrics, ProcessState, Result, SocketState, SystemCPU,
+    SystemCollector, SystemMemory, TcpConnection, TcpStats, ThermalCollector, ThermalZone,
+    UdpConnection, UnixSocket,
 };
 
 // Platform-specific modules

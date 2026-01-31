@@ -1,5 +1,7 @@
 //go:build cgo
 
+// Package probe provides CGO bindings to the Rust probe library for unified
+// cross-platform system metrics and resource quota management.
 package probe
 
 /*
@@ -14,12 +16,19 @@ import (
 	"github.com/kodflow/daemon/internal/domain/metrics"
 )
 
+// fullPercent represents 100% for percentage calculations.
+const fullPercent float64 = 100.0
+
 // CPUCollector collects CPU metrics via the Rust probe library.
 // It implements the metrics.CPUCollector interface.
 type CPUCollector struct{}
 
 // NewCPUCollector creates a new CPU collector backed by the Rust probe.
+//
+// Returns:
+//   - *CPUCollector: new CPU collector instance
 func NewCPUCollector() *CPUCollector {
+	// Return a new empty collector instance.
 	return &CPUCollector{}
 }
 
@@ -27,25 +36,38 @@ func NewCPUCollector() *CPUCollector {
 // Note: The Rust probe provides percentages directly, not raw jiffies.
 // Fields like IRQ, SoftIRQ, Guest, GuestNice will be zero as they are
 // Linux-specific and not available cross-platform.
+//
+// Params:
+//   - ctx: context for cancellation (unused, reserved for future use)
+//
+// Returns:
+//   - metrics.SystemCPU: system-wide CPU statistics
+//   - error: nil on success, error if probe not initialized or collection fails
 func (c *CPUCollector) CollectSystem(_ context.Context) (metrics.SystemCPU, error) {
+	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
+		// Return empty metrics with initialization error.
 		return metrics.SystemCPU{}, err
 	}
 
 	var cCPU C.SystemCPU
 	result := C.probe_collect_cpu(&cCPU)
+	// Check if the FFI call succeeded.
 	if err := resultToError(result); err != nil {
+		// Return empty metrics with collection error.
 		return metrics.SystemCPU{}, err
 	}
 
 	// The Rust probe provides percentages, not jiffies.
 	// We set UsagePercent directly and leave jiffies fields as zero.
 	// The UsagePercent is calculated as 100 - idle_percent.
-	usagePercent := 100.0 - float64(cCPU.idle_percent)
+	usagePercent := fullPercent - float64(cCPU.idle_percent)
+	// Clamp negative values to zero.
 	if usagePercent < 0 {
 		usagePercent = 0
 	}
 
+	// Return collected CPU metrics with current timestamp.
 	return metrics.SystemCPU{
 		UsagePercent: usagePercent,
 		Timestamp:    time.Now(),
@@ -56,17 +78,30 @@ func (c *CPUCollector) CollectSystem(_ context.Context) (metrics.SystemCPU, erro
 
 // CollectProcess collects CPU metrics for a specific process.
 // Note: The Rust probe provides a percentage, not raw jiffies.
+//
+// Params:
+//   - ctx: context for cancellation (unused, reserved for future use)
+//   - pid: process ID to collect metrics for
+//
+// Returns:
+//   - metrics.ProcessCPU: CPU metrics for the process
+//   - error: nil on success, error if probe not initialized or collection fails
 func (c *CPUCollector) CollectProcess(_ context.Context, pid int) (metrics.ProcessCPU, error) {
+	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
+		// Return empty metrics with initialization error.
 		return metrics.ProcessCPU{}, err
 	}
 
 	var cProc C.ProcessMetrics
 	result := C.probe_collect_process(C.int32_t(pid), &cProc)
+	// Check if the FFI call succeeded.
 	if err := resultToError(result); err != nil {
+		// Return empty metrics with collection error.
 		return metrics.ProcessCPU{}, err
 	}
 
+	// Return collected process CPU metrics with current timestamp.
 	return metrics.ProcessCPU{
 		PID:          int(cProc.pid),
 		UsagePercent: float64(cProc.cpu_percent),
@@ -77,6 +112,13 @@ func (c *CPUCollector) CollectProcess(_ context.Context, pid int) (metrics.Proce
 
 // CollectAllProcesses is not implemented by the Rust probe.
 // Returns an empty slice and no error.
+//
+// Params:
+//   - ctx: context for cancellation (unused)
+//
+// Returns:
+//   - []metrics.ProcessCPU: always nil
+//   - error: always ErrNotSupported
 func (c *CPUCollector) CollectAllProcesses(_ context.Context) ([]metrics.ProcessCPU, error) {
 	// The Rust probe does not support enumerating all processes.
 	// This would require iterating /proc on Linux, which is platform-specific.
@@ -84,17 +126,29 @@ func (c *CPUCollector) CollectAllProcesses(_ context.Context) ([]metrics.Process
 }
 
 // CollectLoadAverage collects system load average.
+//
+// Params:
+//   - ctx: context for cancellation (unused, reserved for future use)
+//
+// Returns:
+//   - metrics.LoadAverage: system load averages (1, 5, 15 minutes)
+//   - error: nil on success, error if probe not initialized or collection fails
 func (c *CPUCollector) CollectLoadAverage(_ context.Context) (metrics.LoadAverage, error) {
+	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
+		// Return empty metrics with initialization error.
 		return metrics.LoadAverage{}, err
 	}
 
 	var cLoad C.LoadAverage
 	result := C.probe_collect_load(&cLoad)
+	// Check if the FFI call succeeded.
 	if err := resultToError(result); err != nil {
+		// Return empty metrics with collection error.
 		return metrics.LoadAverage{}, err
 	}
 
+	// Return collected load average with current timestamp.
 	return metrics.LoadAverage{
 		Load1:     float64(cLoad.load_1min),
 		Load5:     float64(cLoad.load_5min),
@@ -107,17 +161,29 @@ func (c *CPUCollector) CollectLoadAverage(_ context.Context) (metrics.LoadAverag
 
 // CollectPressure collects CPU pressure metrics (PSI).
 // Note: PSI is a Linux 4.20+ feature, not available cross-platform.
+//
+// Params:
+//   - ctx: context for cancellation (unused, reserved for future use)
+//
+// Returns:
+//   - metrics.CPUPressure: CPU pressure statistics
+//   - error: nil on success, error if probe not initialized or collection fails
 func (c *CPUCollector) CollectPressure(_ context.Context) (metrics.CPUPressure, error) {
+	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
+		// Return empty metrics with initialization error.
 		return metrics.CPUPressure{}, err
 	}
 
 	var pressure C.CPUPressure
 	result := C.probe_collect_cpu_pressure(&pressure)
+	// Check if the FFI call succeeded.
 	if err := resultToError(result); err != nil {
+		// Return empty metrics with collection error.
 		return metrics.CPUPressure{}, err
 	}
 
+	// Return collected CPU pressure metrics with current timestamp.
 	return metrics.CPUPressure{
 		SomeAvg10:  float64(pressure.some_avg10),
 		SomeAvg60:  float64(pressure.some_avg60),
