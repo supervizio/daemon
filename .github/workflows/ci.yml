@@ -468,7 +468,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: supervizio-linux-${{ matrix.goarch }}-musl
-          path: supervizio-linux-${{ matrix.goarch }}-musl
+          # Binary is created in parent dir (github.workspace) not src/
+          path: ${{ github.workspace }}/supervizio-linux-${{ matrix.goarch }}-musl
           retention-days: 1
 
   # Build crasher for E2E behavioral tests
