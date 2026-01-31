@@ -447,8 +447,8 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
-          # musl: -lpthread needed for probe, -ldl not needed (in musl libc)
-          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lpthread -lm"
+          # musl: pthread/dl are in libc, only need probe and math
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lm"
         run: |
           set -euo pipefail
           echo "=== Building static musl binary ==="
