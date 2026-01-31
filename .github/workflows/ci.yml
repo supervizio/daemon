@@ -85,38 +85,8 @@ jobs:
         working-directory: src/lib/probe
         run: cargo test
 
-  # Go linting (can run in parallel with Rust)
-  go-lint:
-    name: Go Lint
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: src/go.sum
-
-      - name: Install golangci-lint
-        run: |
-          set -euo pipefail
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
-            sh -s -- -b $(go env GOPATH)/bin v2.8.0
-
-      - name: Run golangci-lint (syntax only, no CGO)
-        working-directory: src
-        env:
-          GOWORK: off
-          CGO_ENABLED: 0
-        run: |
-          # First pass: syntax and import checks only (no build/vet required)
-          # govet is run in go-test job with CGO enabled
-          golangci-lint run -c ../.golangci.yml --timeout 5m \
-            --disable-all \
-            -E gofmt,goimports,misspell,unconvert
+  # NOTE: Go lint is done in go-test job with CGO enabled
+  # No standalone go-lint job because probe package requires CGO
 
   # =============================================================================
   # PHASE 2: BUILD LIBPROBE (needs: rust-test)
@@ -246,13 +216,13 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # PHASE 3: GO TESTS (needs: build-probe, go-lint)
+  # PHASE 3: GO TESTS (needs: build-probe)
   # =============================================================================
 
   go-test:
     name: Go Test
     runs-on: ubuntu-24.04
-    needs: [build-probe, go-lint]
+    needs: [build-probe]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
