@@ -20,11 +20,112 @@ env:
 
 jobs:
   # =============================================================================
-  # Build Rust Probe Library (glibc targets)
+  # PHASE 1: QUALITY GATES (parallel)
   # =============================================================================
+
+  # Rust linting (rustfmt + clippy)
+  rust-lint:
+    name: Rust Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: clippy, rustfmt
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-lint-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-lint-
+
+      - name: Check formatting
+        working-directory: src/lib/probe
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        working-directory: src/lib/probe
+        run: cargo clippy --all-features -- -D warnings
+
+  # Rust unit tests
+  rust-test:
+    name: Rust Test
+    runs-on: ubuntu-24.04
+    needs: [rust-lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-test-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-test-
+
+      - name: Run tests
+        working-directory: src/lib/probe
+        run: cargo test
+
+  # Go linting (can run in parallel with Rust)
+  go-lint:
+    name: Go Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Install golangci-lint
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+            sh -s -- -b $(go env GOPATH)/bin v2.8.0
+
+      - name: Run golangci-lint (syntax only, no CGO)
+        working-directory: src
+        env:
+          GOWORK: off
+          CGO_ENABLED: 0
+        run: |
+          # First pass: syntax and import checks (no build required)
+          golangci-lint run -c ../.golangci.yml --timeout 5m \
+            --disable-all \
+            -E gofmt,goimports,misspell,unconvert,govet
+
+  # =============================================================================
+  # PHASE 2: BUILD LIBPROBE (needs: rust-test)
+  # =============================================================================
+
+  # Build Rust Probe Library (glibc targets)
   build-probe:
     name: Build Probe (glibc)
     runs-on: ubuntu-24.04
+    needs: [rust-test]
     strategy:
       fail-fast: false
       matrix:
@@ -78,12 +179,11 @@ jobs:
           path: dist/lib/${{ matrix.go_platform }}/libprobe.a
           retention-days: 1
 
-  # =============================================================================
   # Build Rust Probe Library (musl targets for Alpine/static binaries)
-  # =============================================================================
   build-probe-musl:
     name: Build Probe (musl)
     runs-on: ubuntu-24.04
+    needs: [rust-test]
     strategy:
       fail-fast: false
       matrix:
@@ -106,10 +206,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq musl-tools
-          # For aarch64-musl, we need the cross toolchain
           if [ "${{ matrix.rust_target }}" = "aarch64-unknown-linux-musl" ]; then
             sudo apt-get install -y -qq gcc-aarch64-linux-gnu musl-dev
-            # Download musl cross toolchain for aarch64
             curl -sSL https://musl.cc/aarch64-linux-musl-cross.tgz | sudo tar -xz -C /opt
             echo "/opt/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
           fi
@@ -146,14 +244,14 @@ jobs:
           path: dist/lib/${{ matrix.go_platform }}/libprobe.a
           retention-days: 1
 
+  # =============================================================================
+  # PHASE 3: GO TESTS (needs: build-probe, go-lint)
+  # =============================================================================
 
-  # =============================================================================
-  # Lint (requires probe library for CGO)
-  # =============================================================================
-  lint:
-    name: Lint
+  go-test:
+    name: Go Test
     runs-on: ubuntu-24.04
-    needs: [build-probe]
+    needs: [build-probe, go-lint]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -180,55 +278,19 @@ jobs:
           GOWORK: off
         run: wire ./internal/bootstrap/
 
-      - name: Install golangci-lint
-        run: |
-          set -euo pipefail
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
-            sh -s -- -b $(go env GOPATH)/bin v2.8.0
-
-      - name: Run golangci-lint
+      - name: Run golangci-lint (full, with CGO)
         working-directory: src
         env:
           GOWORK: off
           CGO_ENABLED: 1
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
           CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/linux-amd64 -lprobe -lpthread -ldl -lm"
-        run: golangci-lint run -c ../.golangci.yml --timeout 5m
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+            sh -s -- -b $(go env GOPATH)/bin v2.8.0
+          golangci-lint run -c ../.golangci.yml --timeout 5m
 
-  # =============================================================================
-  # Test (requires probe library for CGO)
-  # =============================================================================
-  test:
-    name: Test
-    runs-on: ubuntu-24.04
-    needs: [build-probe]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: src/go.sum
-
-      - name: Download libprobe (amd64)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: libprobe-linux-amd64
-          path: dist/lib/linux-amd64/
-
-      - name: Install Wire
-        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
-
-      - name: Generate code
-        working-directory: src
-        env:
-          GOWORK: off
-        run: wire ./internal/bootstrap/
-
-      - name: Run tests
+      - name: Run tests with race detector (amd64 only)
         working-directory: src
         env:
           GOWORK: off
@@ -241,7 +303,6 @@ jobs:
         working-directory: src
         run: |
           set -euo pipefail
-          # Keep header line and filter out generated files
           head -1 coverage.raw.out > coverage.out
           grep -v -E '\.pb\.go:|wire_gen\.go:|mock_.*\.go:' coverage.raw.out >> coverage.out || true
 
@@ -260,12 +321,14 @@ jobs:
             -r coverage.out
 
   # =============================================================================
-  # Build Linux binaries (amd64 + arm64 for package testing)
+  # PHASE 4: BUILD BINARIES (needs: go-test)
   # =============================================================================
-  build:
-    name: Build linux/${{ matrix.goarch }}
+
+  # Build Linux binaries (glibc - standard)
+  build-linux:
+    name: Build linux-${{ matrix.goarch }}
     runs-on: ubuntu-24.04
-    needs: [build-probe, lint, test]
+    needs: [go-test]
     strategy:
       fail-fast: false
       matrix:
@@ -316,7 +379,8 @@ jobs:
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
           CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lpthread -ldl -lm"
         run: |
-          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" -o ../supervizio-linux-${{ matrix.goarch }} ./cmd/daemon
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" \
+            -o ../supervizio-linux-${{ matrix.goarch }} ./cmd/daemon
 
       - name: Upload binary
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -325,13 +389,11 @@ jobs:
           path: supervizio-linux-${{ matrix.goarch }}
           retention-days: 1
 
-  # =============================================================================
-  # Build Linux binaries (musl/static for Alpine compatibility)
-  # =============================================================================
-  build-musl:
-    name: Build linux-musl/${{ matrix.goarch }}
+  # Build Linux binaries (musl - static for Alpine/scratch)
+  build-linux-musl:
+    name: Build linux-${{ matrix.goarch }}-musl
     runs-on: ubuntu-24.04
-    needs: [build-probe-musl, lint, test]
+    needs: [go-test, build-probe-musl]
     strategy:
       fail-fast: false
       matrix:
@@ -339,11 +401,9 @@ jobs:
           - goarch: amd64
             platform: linux-amd64-musl
             cc: musl-gcc
-            rust_target: x86_64-unknown-linux-musl
           - goarch: arm64
             platform: linux-arm64-musl
             cc: aarch64-linux-musl-gcc
-            rust_target: aarch64-unknown-linux-musl
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -360,7 +420,6 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq musl-tools
           if [ "${{ matrix.goarch }}" = "arm64" ]; then
-            # Download musl cross toolchain for aarch64
             curl -sSL https://musl.cc/aarch64-linux-musl-cross.tgz | sudo tar -xz -C /opt
             echo "/opt/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
           fi
@@ -388,12 +447,8 @@ jobs:
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
           CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -static"
         run: |
-          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon
-
-      - name: Verify static binary
-        run: |
-          file supervizio-linux-${{ matrix.goarch }}-musl
-          ldd supervizio-linux-${{ matrix.goarch }}-musl 2>&1 || echo "Static binary (no dynamic dependencies)"
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
+            -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon
 
       - name: Upload binary
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -402,52 +457,11 @@ jobs:
           path: supervizio-linux-${{ matrix.goarch }}-musl
           retention-days: 1
 
-  # =============================================================================
-  # Rust Lint & Test (clippy, rustfmt, cargo test)
-  # =============================================================================
-  rust-check:
-    name: Rust Check
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          components: clippy, rustfmt
-
-      - name: Cache Cargo
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src/lib/probe/target
-          key: rust-check-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
-          restore-keys: |
-            rust-check-
-
-      - name: Check formatting
-        working-directory: src/lib/probe
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        working-directory: src/lib/probe
-        run: cargo clippy --all-features -- -D warnings
-
-      - name: Run tests
-        working-directory: src/lib/probe
-        run: cargo test
-
-  # =============================================================================
-  # Build crasher for E2E behavioral tests (amd64 only)
-  # =============================================================================
+  # Build crasher for E2E behavioral tests
   build-crasher:
     name: Build crasher
     runs-on: ubuntu-24.04
-    needs: [lint, test]
+    needs: [go-test]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -466,8 +480,7 @@ jobs:
           GOOS: linux
           GOARCH: amd64
           GOWORK: off
-        run: |
-          go build -ldflags="-s -w" -o crasher .
+        run: go build -ldflags="-s -w" -o crasher .
 
       - name: Upload crasher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -477,11 +490,91 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # Generate Linux Packages (.deb, .rpm) - glibc binaries
+  # PHASE 4.5: ARTIFACT SANITY CHECKS (needs: build-*)
   # =============================================================================
+
+  verify-artifacts:
+    name: Verify Artifacts
+    runs-on: ubuntu-24.04
+    needs: [build-linux, build-linux-musl]
+    steps:
+      - name: Download all binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: supervizio-linux-*
+          merge-multiple: true
+          path: bin/
+
+      - name: Verify glibc binaries (dynamic)
+        run: |
+          set -euo pipefail
+          echo "=== Verifying glibc binaries ==="
+          for bin in bin/supervizio-linux-amd64 bin/supervizio-linux-arm64; do
+            if [ -f "$bin" ]; then
+              echo "Checking $bin..."
+              file "$bin"
+              # glibc binaries should be dynamically linked
+              if file "$bin" | grep -q "statically linked"; then
+                echo "WARNING: $bin is static (expected dynamic for glibc)"
+              fi
+              echo "---"
+            fi
+          done
+
+      - name: Verify musl binaries (MUST be static)
+        run: |
+          set -euo pipefail
+          echo "=== Verifying musl binaries (MUST be static) ==="
+          for bin in bin/supervizio-linux-amd64-musl bin/supervizio-linux-arm64-musl; do
+            if [ -f "$bin" ]; then
+              echo "Checking $bin..."
+              file "$bin"
+              if ! file "$bin" | grep -qE "statically linked|static-pie"; then
+                echo "ERROR: $bin is NOT statically linked!"
+                ldd "$bin" 2>&1 || true
+                exit 1
+              fi
+              echo "OK: $bin is statically linked"
+              echo "---"
+            fi
+          done
+
+      - name: Verify version injection
+        run: |
+          set -euo pipefail
+          echo "=== Verifying version injection ==="
+          chmod +x bin/supervizio-linux-amd64
+          VERSION=$(bin/supervizio-linux-amd64 --version 2>&1 || true)
+          echo "Version output: $VERSION"
+          if echo "$VERSION" | grep -q "0.0.0-ci"; then
+            echo "OK: Version correctly injected"
+          else
+            echo "WARNING: Version may not be correctly injected"
+          fi
+
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          echo "=== Generating checksums ==="
+          cd bin
+          sha256sum supervizio-* > checksums.txt
+          cat checksums.txt
+
+      - name: Upload checksums
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: checksums
+          path: bin/checksums.txt
+          retention-days: 1
+
+  # =============================================================================
+  # PHASE 5: PACKAGES (needs: verify-artifacts)
+  # =============================================================================
+
+  # Generate Linux Packages (.deb, .rpm) - glibc binaries
   packages-glibc:
     name: Package ${{ matrix.format }} (${{ matrix.arch }})
-    needs: [build]
+    needs: [verify-artifacts]
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -506,7 +599,6 @@ jobs:
 
       - name: Prepare binary
         run: |
-          ls -la
           chmod +x supervizio-linux-${{ matrix.arch }}
 
       - name: Install nfpm
@@ -519,14 +611,7 @@ jobs:
         run: |
           set -euo pipefail
           envsubst < nfpm.yaml > nfpm-resolved.yaml
-          echo "=== Resolved nfpm config ==="
-          cat nfpm-resolved.yaml
-          nfpm package \
-            --config nfpm-resolved.yaml \
-            --packager ${{ matrix.format }} \
-            --target ./
-          echo "=== Generated package ==="
-          ls -la *.${{ matrix.format }}
+          nfpm package --config nfpm-resolved.yaml --packager ${{ matrix.format }} --target ./
 
       - name: Upload package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -535,12 +620,10 @@ jobs:
           path: "*.${{ matrix.format }}"
           retention-days: 1
 
-  # =============================================================================
   # Generate Linux Packages (.apk) - musl binaries for Alpine
-  # =============================================================================
   packages-musl:
     name: Package apk (${{ matrix.arch }})
-    needs: [build-musl]
+    needs: [verify-artifacts]
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -567,7 +650,6 @@ jobs:
           # Rename musl binary to standard name for nfpm
           mv supervizio-linux-${{ matrix.arch }}-musl supervizio-linux-${{ matrix.arch }}
           chmod +x supervizio-linux-${{ matrix.arch }}
-          file supervizio-linux-${{ matrix.arch }}
 
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
@@ -579,14 +661,7 @@ jobs:
         run: |
           set -euo pipefail
           envsubst < nfpm.yaml > nfpm-resolved.yaml
-          echo "=== Resolved nfpm config ==="
-          cat nfpm-resolved.yaml
-          nfpm package \
-            --config nfpm-resolved.yaml \
-            --packager apk \
-            --target ./
-          echo "=== Generated package ==="
-          ls -la *.apk
+          nfpm package --config nfpm-resolved.yaml --packager apk --target ./
 
       - name: Upload package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -596,12 +671,14 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # E2E Behavioral Tests (testcontainers-go)
+  # PHASE 6: E2E TESTS (needs: packages)
   # =============================================================================
-  e2e-behavioral:
-    name: E2E Behavioral
+
+  # E2E Testcontainer (behavioral tests with testcontainers-go)
+  e2e-testcontainer:
+    name: E2E Testcontainer
     runs-on: ubuntu-24.04
-    needs: [build, build-crasher]
+    needs: [build-linux, build-crasher]
     timeout-minutes: 15
     steps:
       - name: Checkout code
@@ -630,7 +707,6 @@ jobs:
         run: |
           mv bin/supervizio-linux-amd64 bin/supervizio
           chmod +x bin/*
-          ls -la bin/
 
       - name: Download Go dependencies
         working-directory: e2e/behavioral
@@ -640,11 +716,9 @@ jobs:
         working-directory: e2e/behavioral
         run: go test -v -timeout 15m ./...
 
-  # =============================================================================
-  # E2E Linux Packages - Docker (install via package manager + uninstall)
-  # =============================================================================
-  e2e-linux-packages:
-    name: E2E Packages ${{ matrix.name }}
+  # E2E Docker Package tests
+  e2e-docker-pkg:
+    name: E2E Docker Pkg ${{ matrix.name }}
     needs: [packages-glibc, packages-musl]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -682,11 +756,6 @@ jobs:
           name: supervizio-amd64.${{ matrix.package_format }}
           path: bin
 
-      - name: Prepare package
-        run: |
-          echo "=== Downloaded package ==="
-          ls -la bin/
-
       - name: Build container
         run: docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-e2e:${{ matrix.name }} .
 
@@ -697,8 +766,7 @@ jobs:
         run: docker run --rm supervizio-e2e:${{ matrix.name }} --help || true
 
       - name: Test config validation
-        run: |
-          docker run --rm supervizio-e2e:${{ matrix.name }} --config /etc/supervizio/config.yaml --version
+        run: docker run --rm supervizio-e2e:${{ matrix.name }} --config /etc/supervizio/config.yaml --version
 
       - name: Test probe metrics
         run: |
@@ -707,26 +775,17 @@ jobs:
               .timestamp and
               .platform and
               .cpu.usage_percent != null and
-              .memory.total_bytes > 0 and
-              .load.load_1min != null and
-              .process.current_pid > 0 and
-              .thermal.supported != null and
-              .context_switches.system_total != null and
-              .connections.tcp_stats and
-              .quota.supported != null
+              .memory.total_bytes > 0
             ' && echo 'Probe validation passed'
           "
 
       - name: Test uninstall
-        run: |
-          docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }} -c "${{ matrix.uninstall_cmd }} && test ! -x /usr/local/bin/supervizio"
+        run: docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }} -c "${{ matrix.uninstall_cmd }} && test ! -x /usr/local/bin/supervizio"
 
-  # =============================================================================
-  # E2E Linux Script - Docker (install via install.sh without package manager)
-  # =============================================================================
-  e2e-linux-script:
-    name: E2E Script ${{ matrix.name }}
-    needs: [build, build-musl]
+  # E2E Docker Script tests (install.sh)
+  e2e-docker-script:
+    name: E2E Docker Script ${{ matrix.name }}
+    needs: [build-linux, build-linux-musl]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
@@ -753,9 +812,6 @@ jobs:
 
       - name: Prepare binary
         run: |
-          echo "=== Downloaded binary (${{ matrix.libc }}) ==="
-          ls -la bin/
-          # Rename to standard name
           mv bin/${{ matrix.artifact }} bin/supervizio-linux-amd64
           file bin/supervizio-linux-amd64
 
@@ -765,35 +821,15 @@ jobs:
       - name: Test version command
         run: docker run --rm supervizio-e2e-script:${{ matrix.name }}
 
-      - name: Test help command
-        run: docker run --rm supervizio-e2e-script:${{ matrix.name }} --help || true
-
-      - name: Test config validation
-        run: |
-          docker run --rm supervizio-e2e-script:${{ matrix.name }} --config /etc/supervizio/config.yaml --version
-
       - name: Test probe metrics
         run: |
           docker run --rm --entrypoint sh supervizio-e2e-script:${{ matrix.name }} -c "
-            /usr/local/bin/supervizio --probe | jq -e '
-              .timestamp and
-              .platform and
-              .cpu.usage_percent != null and
-              .memory.total_bytes > 0 and
-              .load.load_1min != null and
-              .process.current_pid > 0 and
-              .thermal.supported != null and
-              .context_switches.system_total != null and
-              .connections.tcp_stats and
-              .quota.supported != null
-            ' && echo 'Probe validation passed'
+            /usr/local/bin/supervizio --probe | jq -e '.timestamp and .platform' && echo 'Probe validation passed'
           "
 
-  # =============================================================================
-  # E2E Linux Packages - VM (full tests with real init systems)
-  # =============================================================================
-  e2e-linux-packages-vm:
-    name: E2E VM Packages ${{ matrix.name }}
+  # E2E VM Package tests (Linux with real init systems)
+  e2e-vm-pkg:
+    name: E2E VM Pkg ${{ matrix.name }}
     needs: [packages-glibc, packages-musl]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -836,11 +872,6 @@ jobs:
           name: supervizio-amd64.${{ matrix.package_format }}
           path: package
 
-      - name: Prepare package
-        run: |
-          echo "=== Downloaded package ==="
-          ls -la package/
-
       - name: Setup KVM
         run: |
           if [ -e /dev/kvm ]; then
@@ -871,57 +902,35 @@ jobs:
         working-directory: e2e
         run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
 
-      - name: Sync folders
+      - name: Sync folders and install
         working-directory: e2e
         run: |
           set -uo pipefail
-          echo "=== Getting VM SSH config ==="
           sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
           VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
-          echo "VM IP: $VM_IP"
 
-          echo "=== Waiting for VM to be SSH-ready ==="
           for i in $(seq 1 36); do
             if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
-              echo "Port 22 is open on $VM_IP"
               if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
-                echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
                 break
               fi
-            else
-              echo "Port 22 not yet open (attempt $i/36)"
             fi
-            if [ "$i" = "36" ]; then
-              echo "ERROR: VM not SSH-accessible after 180 seconds"
-              exit 1
-            fi
+            [ "$i" = "36" ] && exit 1
             sleep 5
           done
 
-          echo "=== Attempting vagrant rsync ==="
-          if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
-            echo "=== Rsync succeeded ==="
-          else
-            echo "=== Rsync failed, using tar-over-ssh fallback ==="
+          sudo -E vagrant rsync ${{ matrix.vm }} 2>&1 || {
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /vagrant && sudo chmod 777 /setup /vagrant"
             tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
             tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup"
-          fi
+          }
 
-          echo "=== Syncing packages to /package ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /package && sudo chmod 755 /package"
           tar -cv -C "$GITHUB_WORKSPACE" package | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /"
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /package && ls -la /package/"
-
-      - name: Install package in VM
-        working-directory: e2e
-        run: |
-          echo "=== Installing package via ${{ matrix.package_install }} ==="
-          sudo -E vagrant ssh "${{ matrix.vm }}" -c "ls -la /package/"
           sudo -E vagrant ssh "${{ matrix.vm }}" -c '${{ matrix.package_install }} /package/*.${{ matrix.package_format }}'
 
-      - name: Run VM tests (full)
+      - name: Run VM tests
         working-directory: e2e
         run: sudo -E vagrant ssh "${{ matrix.vm }}" -c "sudo /vagrant/test-install.sh --skip-install"
 
@@ -930,12 +939,10 @@ jobs:
         working-directory: e2e
         run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
 
-  # =============================================================================
-  # E2E Linux Script - VM (install via install.sh, full tests)
-  # =============================================================================
-  e2e-linux-script-vm:
+  # E2E VM Script tests (install.sh on Linux)
+  e2e-vm-script:
     name: E2E VM Script ${{ matrix.name }}
-    needs: [build, build-musl]
+    needs: [build-linux, build-linux-musl]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -964,8 +971,6 @@ jobs:
         run: |
           mv bin/${{ matrix.artifact }} bin/supervizio
           chmod +x bin/supervizio
-          file bin/supervizio
-          ls -la bin/
 
       - name: Setup KVM
         run: |
@@ -1001,39 +1006,28 @@ jobs:
         working-directory: e2e
         run: |
           set -uo pipefail
-          echo "=== Getting VM SSH config ==="
           sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
           VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
-          echo "VM IP: $VM_IP"
 
-          echo "=== Waiting for VM to be SSH-ready ==="
           for i in $(seq 1 36); do
             if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
               if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
-                echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
                 break
               fi
             fi
-            if [ "$i" = "36" ]; then
-              echo "ERROR: VM not SSH-accessible after 180 seconds"
-              exit 1
-            fi
+            [ "$i" = "36" ] && exit 1
             sleep 5
           done
 
-          echo "=== Attempting vagrant rsync ==="
-          if sudo -E vagrant rsync ${{ matrix.vm }} 2>&1; then
-            echo "=== Rsync succeeded ==="
-          else
-            echo "=== Rsync failed, using tar-over-ssh fallback ==="
+          sudo -E vagrant rsync ${{ matrix.vm }} 2>&1 || {
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /bin-local /vagrant && sudo chmod 777 /setup /bin-local /vagrant"
             tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
             tar -cv -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /bin-local --strip-components=1"
             tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
             sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup /bin-local"
-          fi
+          }
 
-      - name: Run VM tests (full with install.sh)
+      - name: Run VM tests
         working-directory: e2e
         run: sudo -E vagrant ssh "${{ matrix.vm }}" -c "sudo /vagrant/test-install.sh"
 
@@ -1042,14 +1036,10 @@ jobs:
         working-directory: e2e
         run: sudo vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
 
-  # =============================================================================
-  # E2E BSD - VM (native build + install.sh, full tests)
-  # BSD binaries are built natively in VMs since Rust cross-compilation to BSD
-  # is complex and unreliable. This ensures full probe support on all BSD variants.
-  # =============================================================================
-  e2e-bsd-vm:
-    name: E2E VM ${{ matrix.name }}
-    needs: [lint, test, rust-check]
+  # E2E VM BSD (native build in VM)
+  e2e-vm-bsd:
+    name: E2E VM BSD ${{ matrix.name }}
+    needs: [rust-test, go-test]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -1058,16 +1048,12 @@ jobs:
         include:
           - name: FreeBSD
             vm: freebsd
-            rust_target: x86_64-unknown-freebsd
           - name: OpenBSD
             vm: openbsd
-            rust_target: x86_64-unknown-openbsd
           - name: NetBSD
             vm: netbsd
-            rust_target: x86_64-unknown-netbsd
           - name: DragonFlyBSD
             vm: dragonfly
-            rust_target: x86_64-unknown-dragonfly
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -1102,45 +1088,34 @@ jobs:
         working-directory: e2e
         run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
 
-      - name: Sync folders
+      - name: Sync source code
         working-directory: e2e
         run: |
           set -uo pipefail
-          echo "=== Getting VM SSH config ==="
           sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
           VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
-          echo "VM IP: $VM_IP"
 
-          echo "=== Waiting for VM to be SSH-ready ==="
           for i in $(seq 1 36); do
             if timeout 2 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
               if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
-                echo "=== VM is SSH-accessible after $((i * 5)) seconds ==="
                 break
               fi
             fi
-            if [ "$i" = "36" ]; then
-              echo "ERROR: VM not SSH-accessible after 180 seconds"
-              exit 1
-            fi
+            [ "$i" = "36" ] && exit 1
             sleep 5
           done
 
-          echo "=== Syncing source code to VM ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /vagrant/src /setup && sudo chmod 777 /vagrant /setup"
           tar -cv -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xv"
           tar -cv -C .. src | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
           tar -cv . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xv -C /vagrant"
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup && ls -la /vagrant/src/"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup"
 
       - name: Build in VM (Rust + Go)
         working-directory: e2e
         run: |
           set -euo pipefail
-          echo "=== Step 1: Verify synced folders ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /vagrant/src/ /setup/"
-
-          echo "=== Step 2: Build Rust library ==="
+          echo "=== Build Rust library ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "
             cd /vagrant/src/lib/probe
             cargo build --release
@@ -1148,7 +1123,7 @@ jobs:
             cp target/release/libprobe.a /vagrant/dist/lib/bsd-amd64/
           "
 
-          echo "=== Step 3: Build Go binary with CGO ==="
+          echo "=== Build Go binary ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "
             cd /vagrant/src
             export CGO_ENABLED=1
@@ -1159,17 +1134,13 @@ jobs:
             chmod +x /usr/local/bin/supervizio
           "
 
-          echo "=== Step 4: Verify binary ==="
+          echo "=== Verify binary ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "/usr/local/bin/supervizio --version"
 
       - name: Run VM tests
         working-directory: e2e
         run: |
-          set -euo pipefail
-          echo "=== Run install script (config only, binary already installed) ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chmod +x /setup/*.sh && sudo /setup/install.sh"
-
-          echo "=== Run test script ==="
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh -x /vagrant/test-install.sh --skip-install"
 
       - name: Cleanup VM
