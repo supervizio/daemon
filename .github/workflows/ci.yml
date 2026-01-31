@@ -436,8 +436,8 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
-          # musl: pthread/dl are in libc. Use -Wl,--whole-archive to link all probe symbols.
-          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -Wl,--whole-archive -lprobe -Wl,--no-whole-archive -lm -static"
+          # musl: Use full path to libprobe.a for reliable static linking
+          CGO_LDFLAGS: "${{ github.workspace }}/dist/lib/${{ matrix.platform }}/libprobe.a -lm"
         run: |
           go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" \
             -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon
