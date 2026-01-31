@@ -381,10 +381,10 @@ jobs:
         include:
           - goarch: amd64
             platform: linux-amd64-musl
-            cc: zig-musl-cc
+            cc: musl-gcc
           - goarch: arm64
             platform: linux-arm64-musl
-            cc: zig-musl-cc
+            cc: aarch64-linux-musl-gcc
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -396,24 +396,23 @@ jobs:
           cache: true
           cache-dependency-path: src/go.sum
 
-      - name: Install zig for musl cross-compilation
+      - name: Install musl cross-compilation tools
         timeout-minutes: 5
         run: |
-          # Use zig for both amd64 and arm64 musl builds (more reliable than musl-gcc)
-          ZIG_VERSION="0.13.0"
-          curl -sSfL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
-          sudo mkdir -p /opt/zig
-          sudo tar -xf zig.tar.xz -C /opt/zig --strip-components=1
-          rm zig.tar.xz
-          # Create wrapper scripts for Go CGO
-          sudo mkdir -p /opt/zig-cc
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools
           if [ "${{ matrix.goarch }}" = "arm64" ]; then
-            printf '#!/bin/bash\nexec /opt/zig/zig cc -target aarch64-linux-musl "$@"\n' | sudo tee /opt/zig-cc/zig-musl-cc > /dev/null
-          else
-            printf '#!/bin/bash\nexec /opt/zig/zig cc -target x86_64-linux-musl "$@"\n' | sudo tee /opt/zig-cc/zig-musl-cc > /dev/null
+            # Use zig for arm64 cross-compilation
+            ZIG_VERSION="0.13.0"
+            curl -sSfL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+            sudo mkdir -p /opt/zig
+            sudo tar -xf zig.tar.xz -C /opt/zig --strip-components=1
+            rm zig.tar.xz
+            sudo mkdir -p /opt/zig-cc
+            printf '#!/bin/bash\nexec /opt/zig/zig cc -target aarch64-linux-musl "$@"\n' | sudo tee /opt/zig-cc/aarch64-linux-musl-gcc > /dev/null
+            sudo chmod +x /opt/zig-cc/*
+            echo "/opt/zig-cc" >> $GITHUB_PATH
           fi
-          sudo chmod +x /opt/zig-cc/*
-          echo "/opt/zig-cc" >> $GITHUB_PATH
 
       - name: Download libprobe (musl)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -432,12 +431,11 @@ jobs:
         run: |
           echo "=== Checking libprobe.a ==="
           ls -la ${{ github.workspace }}/dist/lib/${{ matrix.platform }}/
-          echo "=== Zig version ==="
-          /opt/zig/zig version
-          echo "=== CC wrapper ==="
-          cat /opt/zig-cc/zig-musl-cc
-          echo "=== Testing CC ==="
-          zig-musl-cc --version 2>&1 || true
+          nm ${{ github.workspace }}/dist/lib/${{ matrix.platform }}/libprobe.a 2>/dev/null | head -30 || true
+          echo "=== CC version ==="
+          ${{ matrix.cc }} --version 2>&1 || true
+          echo "=== CC library search paths ==="
+          ${{ matrix.cc }} -print-search-dirs 2>&1 | head -10 || true
 
       - name: Build supervizio binary (static/musl)
         working-directory: src
