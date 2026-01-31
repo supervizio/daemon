@@ -20,10 +20,10 @@ env:
 
 jobs:
   # =============================================================================
-  # Build Rust Probe Library (required for CGO)
+  # Build Rust Probe Library (glibc targets)
   # =============================================================================
   build-probe:
-    name: Build Probe
+    name: Build Probe (glibc)
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -64,6 +64,74 @@ jobs:
         working-directory: src/lib/probe
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --release --target ${{ matrix.rust_target }}
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist/lib/${{ matrix.go_platform }}
+          cp src/lib/probe/target/${{ matrix.rust_target }}/release/libprobe.a dist/lib/${{ matrix.go_platform }}/
+
+      - name: Upload libprobe artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libprobe-${{ matrix.go_platform }}
+          path: dist/lib/${{ matrix.go_platform }}/libprobe.a
+          retention-days: 1
+
+  # =============================================================================
+  # Build Rust Probe Library (musl targets for Alpine/static binaries)
+  # =============================================================================
+  build-probe-musl:
+    name: Build Probe (musl)
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust_target: x86_64-unknown-linux-musl
+            go_platform: linux-amd64-musl
+          - rust_target: aarch64-unknown-linux-musl
+            go_platform: linux-arm64-musl
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install musl cross-compilation tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools
+          # For aarch64-musl, we need the cross toolchain
+          if [ "${{ matrix.rust_target }}" = "aarch64-unknown-linux-musl" ]; then
+            sudo apt-get install -y -qq gcc-aarch64-linux-gnu musl-dev
+            # Download musl cross toolchain for aarch64
+            curl -sSL https://musl.cc/aarch64-linux-musl-cross.tgz | sudo tar -xz -C /opt
+            echo "/opt/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-probe-${{ matrix.rust_target }}-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-probe-${{ matrix.rust_target }}-
+
+      - name: Build libprobe.a
+        working-directory: src/lib/probe
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CC_aarch64_unknown_linux_musl: aarch64-linux-musl-gcc
         run: cargo build --release --target ${{ matrix.rust_target }}
 
       - name: Prepare artifact
@@ -258,6 +326,83 @@ jobs:
           retention-days: 1
 
   # =============================================================================
+  # Build Linux binaries (musl/static for Alpine compatibility)
+  # =============================================================================
+  build-musl:
+    name: Build linux-musl/${{ matrix.goarch }}
+    runs-on: ubuntu-24.04
+    needs: [build-probe-musl, lint, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            platform: linux-amd64-musl
+            cc: musl-gcc
+            rust_target: x86_64-unknown-linux-musl
+          - goarch: arm64
+            platform: linux-arm64-musl
+            cc: aarch64-linux-musl-gcc
+            rust_target: aarch64-unknown-linux-musl
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Install musl cross-compilation tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools
+          if [ "${{ matrix.goarch }}" = "arm64" ]; then
+            # Download musl cross toolchain for aarch64
+            curl -sSL https://musl.cc/aarch64-linux-musl-cross.tgz | sudo tar -xz -C /opt
+            echo "/opt/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Download libprobe (musl)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-${{ matrix.platform }}
+          path: dist/lib/${{ matrix.platform }}/
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build supervizio binary (static/musl)
+        working-directory: src
+        env:
+          CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -static"
+        run: |
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags '-static'" -o ../supervizio-linux-${{ matrix.goarch }}-musl ./cmd/daemon
+
+      - name: Verify static binary
+        run: |
+          file supervizio-linux-${{ matrix.goarch }}-musl
+          ldd supervizio-linux-${{ matrix.goarch }}-musl 2>&1 || echo "Static binary (no dynamic dependencies)"
+
+      - name: Upload binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-linux-${{ matrix.goarch }}-musl
+          path: supervizio-linux-${{ matrix.goarch }}-musl
+          retention-days: 1
+
+  # =============================================================================
   # Rust Lint & Test (clippy, rustfmt, cargo test)
   # =============================================================================
   rust-check:
@@ -332,9 +477,9 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # Generate Linux Packages (.deb, .rpm, .apk)
+  # Generate Linux Packages (.deb, .rpm) - glibc binaries
   # =============================================================================
-  packages:
+  packages-glibc:
     name: Package ${{ matrix.format }} (${{ matrix.arch }})
     needs: [build]
     runs-on: ubuntu-24.04
@@ -342,7 +487,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [amd64, arm64]
-        format: [deb, rpm, apk]
+        format: [deb, rpm]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -354,7 +499,7 @@ jobs:
           cache: true
           cache-dependency-path: src/go.sum
 
-      - name: Download Linux binary
+      - name: Download Linux binary (glibc)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: supervizio-linux-${{ matrix.arch }}
@@ -388,6 +533,66 @@ jobs:
         with:
           name: supervizio-${{ matrix.arch }}.${{ matrix.format }}
           path: "*.${{ matrix.format }}"
+          retention-days: 1
+
+  # =============================================================================
+  # Generate Linux Packages (.apk) - musl binaries for Alpine
+  # =============================================================================
+  packages-musl:
+    name: Package apk (${{ matrix.arch }})
+    needs: [build-musl]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download Linux binary (musl)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-linux-${{ matrix.arch }}-musl
+
+      - name: Prepare binary
+        run: |
+          # Rename musl binary to standard name for nfpm
+          mv supervizio-linux-${{ matrix.arch }}-musl supervizio-linux-${{ matrix.arch }}
+          chmod +x supervizio-linux-${{ matrix.arch }}
+          file supervizio-linux-${{ matrix.arch }}
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
+
+      - name: Build package
+        env:
+          VERSION: "0.0.0"
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          envsubst < nfpm.yaml > nfpm-resolved.yaml
+          echo "=== Resolved nfpm config ==="
+          cat nfpm-resolved.yaml
+          nfpm package \
+            --config nfpm-resolved.yaml \
+            --packager apk \
+            --target ./
+          echo "=== Generated package ==="
+          ls -la *.apk
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.arch }}.apk
+          path: "*.apk"
           retention-days: 1
 
   # =============================================================================
@@ -440,7 +645,7 @@ jobs:
   # =============================================================================
   e2e-linux-packages:
     name: E2E Packages ${{ matrix.name }}
-    needs: [packages]
+    needs: [packages-glibc, packages-musl]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
@@ -521,7 +726,7 @@ jobs:
   # =============================================================================
   e2e-linux-script:
     name: E2E Script ${{ matrix.name }}
-    needs: [build]
+    needs: [build, build-musl]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
@@ -530,22 +735,29 @@ jobs:
         include:
           - name: Debian
             dockerfile: Dockerfile.debian-script
+            artifact: supervizio-linux-amd64
+            libc: glibc
           - name: Alpine
             dockerfile: Dockerfile.alpine-script
+            artifact: supervizio-linux-amd64-musl
+            libc: musl
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Download binary
+      - name: Download binary (${{ matrix.libc }})
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: supervizio-linux-amd64
+          name: ${{ matrix.artifact }}
           path: bin
 
       - name: Prepare binary
         run: |
-          echo "=== Downloaded binary ==="
+          echo "=== Downloaded binary (${{ matrix.libc }}) ==="
           ls -la bin/
+          # Rename to standard name
+          mv bin/${{ matrix.artifact }} bin/supervizio-linux-amd64
+          file bin/supervizio-linux-amd64
 
       - name: Build container
         run: docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-e2e-script:${{ matrix.name }} .
@@ -582,7 +794,7 @@ jobs:
   # =============================================================================
   e2e-linux-packages-vm:
     name: E2E VM Packages ${{ matrix.name }}
-    needs: [packages]
+    needs: [packages-glibc, packages-musl]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -723,7 +935,7 @@ jobs:
   # =============================================================================
   e2e-linux-script-vm:
     name: E2E VM Script ${{ matrix.name }}
-    needs: [build]
+    needs: [build, build-musl]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -732,22 +944,27 @@ jobs:
         include:
           - name: Debian
             vm: debian13
+            artifact: supervizio-linux-amd64
+            libc: glibc
           - name: Alpine
             vm: alpine
+            artifact: supervizio-linux-amd64-musl
+            libc: musl
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Download binary
+      - name: Download binary (${{ matrix.libc }})
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: supervizio-linux-amd64
+          name: ${{ matrix.artifact }}
           path: bin
 
       - name: Prepare binary
         run: |
-          mv bin/supervizio-linux-amd64 bin/supervizio
+          mv bin/${{ matrix.artifact }} bin/supervizio
           chmod +x bin/supervizio
+          file bin/supervizio
           ls -la bin/
 
       - name: Setup KVM
