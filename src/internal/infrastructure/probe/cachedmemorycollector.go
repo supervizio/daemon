@@ -37,7 +37,12 @@ func NewCachedMemoryCollector() *CachedMemoryCollector {
 // Returns:
 //   - metrics.SystemMemory: cached system-wide memory statistics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *CachedMemoryCollector) CollectSystem(_ context.Context) (metrics.SystemMemory, error) {
+func (c *CachedMemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemory, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return metrics.SystemMemory{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -89,7 +94,12 @@ func (c *CachedMemoryCollector) CollectProcess(ctx context.Context, pid int) (me
 // Returns:
 //   - []metrics.ProcessMemory: always nil
 //   - error: always ErrNotSupported
-func (c *CachedMemoryCollector) CollectAllProcesses(_ context.Context) ([]metrics.ProcessMemory, error) {
+func (c *CachedMemoryCollector) CollectAllProcesses(ctx context.Context) ([]metrics.ProcessMemory, error) {
+	// Check if context has been cancelled.
+	if err := checkContext(ctx); err != nil {
+		// Return nil slice with context error.
+		return nil, err
+	}
 	// Return not supported error.
 	return nil, ErrNotSupported
 }

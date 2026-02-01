@@ -43,9 +43,12 @@ func NewDiskCollector() *DiskCollector {
 // Returns:
 //   - []metrics.Partition: list of mounted partitions
 //   - error: nil on success, error if probe not initialized or collection fails
-//
-//nolint:gocritic // dupSubExpr false positive from CGO list operations
-func (d *DiskCollector) ListPartitions(_ context.Context) ([]metrics.Partition, error) {
+func (d *DiskCollector) ListPartitions(ctx context.Context) ([]metrics.Partition, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return nil slice with context error.
+		return nil, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return nil slice with initialization error.
@@ -93,7 +96,12 @@ func (d *DiskCollector) ListPartitions(_ context.Context) ([]metrics.Partition, 
 // Returns:
 //   - metrics.DiskUsage: disk usage statistics for the path
 //   - error: nil on success, error if probe not initialized or collection fails
-func (d *DiskCollector) CollectUsage(_ context.Context, path string) (metrics.DiskUsage, error) {
+func (d *DiskCollector) CollectUsage(ctx context.Context, path string) (metrics.DiskUsage, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return metrics.DiskUsage{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -163,9 +171,12 @@ func (d *DiskCollector) CollectAllUsage(ctx context.Context) ([]metrics.DiskUsag
 // Returns:
 //   - []metrics.DiskIOStats: I/O statistics for all block devices
 //   - error: nil on success, error if probe not initialized or collection fails
-//
-//nolint:gocritic // dupSubExpr false positive from CGO list operations
-func (d *DiskCollector) CollectIO(_ context.Context) ([]metrics.DiskIOStats, error) {
+func (d *DiskCollector) CollectIO(ctx context.Context) ([]metrics.DiskIOStats, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return nil slice with context error.
+		return nil, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return nil slice with initialization error.

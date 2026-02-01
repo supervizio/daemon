@@ -129,9 +129,12 @@ func NewConnectionCollector() *ConnectionCollector {
 // Returns:
 //   - []TcpConnection: list of TCP connections
 //   - error: nil on success, error if probe not initialized or collection fails
-//
-//nolint:gocritic,dupl // dupSubExpr false positive from CGO; similar structure to CollectUDP but different types.
-func (c *ConnectionCollector) CollectTCP(_ context.Context) ([]TcpConnection, error) {
+func (c *ConnectionCollector) CollectTCP(ctx context.Context) ([]TcpConnection, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return nil slice with context error.
+		return nil, err
+	}
 	// Check if probe is initialized
 	if err := checkInitialized(); err != nil {
 		// Return early if not initialized
@@ -179,9 +182,12 @@ func (c *ConnectionCollector) CollectTCP(_ context.Context) ([]TcpConnection, er
 // Returns:
 //   - []UdpConnection: list of UDP connections
 //   - error: nil on success, error if probe not initialized or collection fails
-//
-//nolint:gocritic,dupl // dupSubExpr false positive from CGO; similar structure to CollectTCP but different types.
-func (c *ConnectionCollector) CollectUDP(_ context.Context) ([]UdpConnection, error) {
+func (c *ConnectionCollector) CollectUDP(ctx context.Context) ([]UdpConnection, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return nil slice with context error.
+		return nil, err
+	}
 	// Check if probe is initialized
 	if err := checkInitialized(); err != nil {
 		// Return early if not initialized
@@ -229,9 +235,12 @@ func (c *ConnectionCollector) CollectUDP(_ context.Context) ([]UdpConnection, er
 // Returns:
 //   - []UnixSocket: list of Unix sockets
 //   - error: nil on success, error if probe not initialized or collection fails
-//
-//nolint:gocritic // dupSubExpr false positive from CGO list operations
-func (c *ConnectionCollector) CollectUnix(_ context.Context) ([]UnixSocket, error) {
+func (c *ConnectionCollector) CollectUnix(ctx context.Context) ([]UnixSocket, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return nil slice with context error.
+		return nil, err
+	}
 	// Check if probe is initialized
 	if err := checkInitialized(); err != nil {
 		// Return early if not initialized
@@ -274,7 +283,12 @@ func (c *ConnectionCollector) CollectUnix(_ context.Context) ([]UnixSocket, erro
 // Returns:
 //   - *TcpStats: aggregated TCP statistics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ConnectionCollector) CollectTCPStats(_ context.Context) (*TcpStats, error) {
+func (c *ConnectionCollector) CollectTCPStats(ctx context.Context) (*TcpStats, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return nil with context error.
+		return nil, err
+	}
 	// Check if probe is initialized
 	if err := checkInitialized(); err != nil {
 		// Return early if not initialized
@@ -316,7 +330,12 @@ func (c *ConnectionCollector) CollectTCPStats(_ context.Context) (*TcpStats, err
 // Returns:
 //   - int32: process ID owning the port, or -1 if not found
 //   - error: nil on success, error if probe not initialized or lookup fails
-func (c *ConnectionCollector) FindProcessByPort(_ context.Context, port uint16, tcp bool) (int32, error) {
+func (c *ConnectionCollector) FindProcessByPort(ctx context.Context, port uint16, tcp bool) (int32, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return not found with context error.
+		return notFoundPID, err
+	}
 	// Check if probe is initialized
 	if err := checkInitialized(); err != nil {
 		// Return not found with error if not initialized

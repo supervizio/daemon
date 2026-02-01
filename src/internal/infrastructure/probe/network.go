@@ -38,9 +38,12 @@ func NewNetworkCollector() *NetworkCollector {
 // Returns:
 //   - []metrics.NetInterface: list of network interfaces
 //   - error: nil on success, error if probe not initialized or collection fails
-//
-//nolint:gocritic // dupSubExpr false positive from CGO list operations
-func (n *NetworkCollector) ListInterfaces(_ context.Context) ([]metrics.NetInterface, error) {
+func (n *NetworkCollector) ListInterfaces(ctx context.Context) ([]metrics.NetInterface, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return nil slice with context error.
+		return nil, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return nil slice with initialization error.
@@ -121,9 +124,12 @@ func (n *NetworkCollector) CollectStats(ctx context.Context, iface string) (metr
 // Returns:
 //   - []metrics.NetStats: statistics for all network interfaces
 //   - error: nil on success, error if probe not initialized or collection fails
-//
-//nolint:gocritic // dupSubExpr false positive from CGO list operations
-func (n *NetworkCollector) CollectAllStats(_ context.Context) ([]metrics.NetStats, error) {
+func (n *NetworkCollector) CollectAllStats(ctx context.Context) ([]metrics.NetStats, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return nil slice with context error.
+		return nil, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return nil slice with initialization error.

@@ -13,6 +13,111 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestNewProcessCollector(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{name: "ReturnsNonNilCollector"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := probe.NewProcessCollector()
+			assert.NotNil(t, collector)
+		})
+	}
+}
+
+func TestProcessCollector_CollectCPU(t *testing.T) {
+	tests := []struct {
+		name        string
+		initProbe   bool
+		pid         int
+		expectError bool
+	}{
+		{
+			name:        "ValidPID",
+			initProbe:   true,
+			pid:         os.Getpid(),
+			expectError: false,
+		},
+		{
+			name:        "NotInitialized",
+			initProbe:   false,
+			pid:         os.Getpid(),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.initProbe {
+				err := probe.Init()
+				require.NoError(t, err)
+				defer probe.Shutdown()
+			}
+
+			collector := probe.NewProcessCollector()
+			ctx := context.Background()
+
+			cpu, err := collector.CollectCPU(ctx, tt.pid)
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.pid, cpu.PID)
+				t.Logf("Process %d CPU: %.2f%%", tt.pid, cpu.UsagePercent)
+			}
+		})
+	}
+}
+
+func TestProcessCollector_CollectMemory(t *testing.T) {
+	tests := []struct {
+		name        string
+		initProbe   bool
+		pid         int
+		expectError bool
+	}{
+		{
+			name:        "ValidPID",
+			initProbe:   true,
+			pid:         os.Getpid(),
+			expectError: false,
+		},
+		{
+			name:        "NotInitialized",
+			initProbe:   false,
+			pid:         os.Getpid(),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.initProbe {
+				err := probe.Init()
+				require.NoError(t, err)
+				defer probe.Shutdown()
+			}
+
+			collector := probe.NewProcessCollector()
+			ctx := context.Background()
+
+			mem, err := collector.CollectMemory(ctx, tt.pid)
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.pid, mem.PID)
+				t.Logf("Process %d Memory: RSS=%d bytes (%.2f%%)", tt.pid, mem.RSS, mem.UsagePercent)
+			}
+		})
+	}
+}
+
 func TestProcessCollector_CollectFDs(t *testing.T) {
 	tests := []struct {
 		name        string

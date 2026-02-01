@@ -40,7 +40,12 @@ func NewMemoryCollector() *MemoryCollector {
 // Returns:
 //   - metrics.SystemMemory: system-wide memory statistics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (m *MemoryCollector) CollectSystem(_ context.Context) (metrics.SystemMemory, error) {
+func (m *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemory, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return metrics.SystemMemory{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -93,7 +98,12 @@ func (m *MemoryCollector) CollectSystem(_ context.Context) (metrics.SystemMemory
 // Returns:
 //   - metrics.ProcessMemory: memory metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (m *MemoryCollector) CollectProcess(_ context.Context, pid int) (metrics.ProcessMemory, error) {
+func (m *MemoryCollector) CollectProcess(ctx context.Context, pid int) (metrics.ProcessMemory, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return metrics.ProcessMemory{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -128,7 +138,12 @@ func (m *MemoryCollector) CollectProcess(_ context.Context, pid int) (metrics.Pr
 // Returns:
 //   - []metrics.ProcessMemory: always nil
 //   - error: always ErrNotSupported
-func (m *MemoryCollector) CollectAllProcesses(_ context.Context) ([]metrics.ProcessMemory, error) {
+func (m *MemoryCollector) CollectAllProcesses(ctx context.Context) ([]metrics.ProcessMemory, error) {
+	// Check if context has been cancelled.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return nil, err
+	}
 	// The Rust probe does not support enumerating all processes.
 	return nil, ErrNotSupported
 }
@@ -142,7 +157,12 @@ func (m *MemoryCollector) CollectAllProcesses(_ context.Context) ([]metrics.Proc
 // Returns:
 //   - metrics.MemoryPressure: memory pressure statistics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (m *MemoryCollector) CollectPressure(_ context.Context) (metrics.MemoryPressure, error) {
+func (m *MemoryCollector) CollectPressure(ctx context.Context) (metrics.MemoryPressure, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return metrics.MemoryPressure{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.

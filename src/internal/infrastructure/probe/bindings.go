@@ -18,7 +18,26 @@ package probe
 import "C"
 
 import (
+	"context"
 	"sync"
+)
+
+// Go-only error code constants matching probe.h.
+const (
+	// probeCodeOK indicates success.
+	probeCodeOK int = 0
+	// probeCodeNotSupported indicates the operation is not supported.
+	probeCodeNotSupported int = 1
+	// probeCodePermission indicates permission denied.
+	probeCodePermission int = 2
+	// probeCodeNotFound indicates resource not found.
+	probeCodeNotFound int = 3
+	// probeCodeInvalidParam indicates invalid parameter.
+	probeCodeInvalidParam int = 4
+	// probeCodeIO indicates I/O error.
+	probeCodeIO int = 5
+	// probeCodeInternal indicates internal error.
+	probeCodeInternal int = 99
 )
 
 var (
@@ -26,16 +45,6 @@ var (
 	initialized bool
 	// initMu protects access to the initialized flag.
 	initMu sync.Mutex
-	// probeErrorMap maps C error codes to Go sentinel errors.
-	probeErrorMap map[C.int]error = map[C.int]error{
-		probeOK:            nil,
-		probeErrNotSupport: ErrNotSupported,
-		probeErrPermission: ErrPermission,
-		probeErrNotFound:   ErrNotFound,
-		probeErrInvalidPar: ErrInvalidParam,
-		probeErrIO:         ErrIO,
-		probeErrInternal:   ErrInternal,
-	}
 )
 
 // Init initializes the Rust probe library.
@@ -120,40 +129,90 @@ func QuotaSupported() bool {
 // Returns:
 //   - error: nil on success, appropriate error on failure
 func resultToError(r C.ProbeResult) error {
-	// Return nil for successful operations.
+	// Check if the result indicates success.
 	if r.success {
-		// Success case.
+		// Return nil for successful operations.
 		return nil
 	}
 
-	// Look up error in map.
-	if err, ok := probeErrorMap[r.error_code]; ok {
+	// Map error code to Go error using the Go-only function.
+	code := int(r.error_code)
+	// Check if the error code maps to a known error.
+	if err := mapProbeErrorCode(code); err != nil {
 		// Return known error.
 		return err
 	}
 
 	// Handle unknown error codes with message.
-	return buildUnknownError(r)
-}
-
-// buildUnknownError creates an error for unknown error codes.
-//
-// Params:
-//   - r: the C ProbeResult with unknown error code
-//
-// Returns:
-//   - error: the constructed error
-func buildUnknownError(r C.ProbeResult) error {
-	// Return error with message if available.
 	if r.error_message != nil {
 		// Build error with code and message.
-		return &probeError{
-			code:    int(r.error_code),
-			message: C.GoString(r.error_message),
-		}
+		return newProbeError(code, C.GoString(r.error_message))
 	}
 	// Fallback to generic internal error.
 	return ErrInternal
+}
+
+// mapProbeErrorCode maps a probe error code to a Go sentinel error.
+// This is a Go-only function that can be tested without CGO.
+//
+// Params:
+//   - code: the error code from the probe library
+//
+// Returns:
+//   - error: the mapped error, or nil if code is unknown
+func mapProbeErrorCode(code int) error {
+	// Map error code to Go sentinel error.
+	switch code {
+	// Success case.
+	case probeCodeOK:
+		// Return nil for success.
+		return nil
+	// Not supported error.
+	case probeCodeNotSupported:
+		// Return not supported error.
+		return ErrNotSupported
+	// Permission error.
+	case probeCodePermission:
+		// Return permission error.
+		return ErrPermission
+	// Not found error.
+	case probeCodeNotFound:
+		// Return not found error.
+		return ErrNotFound
+	// Invalid parameter error.
+	case probeCodeInvalidParam:
+		// Return invalid parameter error.
+		return ErrInvalidParam
+	// I/O error.
+	case probeCodeIO:
+		// Return I/O error.
+		return ErrIO
+	// Internal error.
+	case probeCodeInternal:
+		// Return internal error.
+		return ErrInternal
+	// Unknown error code.
+	default:
+		// Return nil for unknown codes.
+		return nil
+	}
+}
+
+// newProbeError creates a new probeError with the given code and message.
+// This is a Go-only function that can be tested without CGO.
+//
+// Params:
+//   - code: the error code
+//   - message: the error message
+//
+// Returns:
+//   - error: the constructed error
+func newProbeError(code int, message string) error {
+	// Construct and return the probe error.
+	return &probeError{
+		code:    code,
+		message: message,
+	}
 }
 
 // probeError wraps an error code and message from the probe library.
@@ -186,4 +245,24 @@ func checkInitialized() error {
 	}
 	// Return nil if initialized.
 	return nil
+}
+
+// checkContext verifies the context has not been cancelled.
+// This should be called before expensive FFI operations to allow cancellation.
+//
+// Params:
+//   - ctx: the context to check
+//
+// Returns:
+//   - error: nil if context is active, context error if cancelled/deadline exceeded
+func checkContext(ctx context.Context) error {
+	// Check if context was cancelled or deadline exceeded.
+	select {
+	case <-ctx.Done():
+		// Return the context error.
+		return ctx.Err()
+	default:
+		// Context is still active.
+		return nil
+	}
 }

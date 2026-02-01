@@ -12,6 +12,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestCacheIsEnabled verifies cache status check.
+func TestCacheIsEnabled(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{name: "ReturnsBoolean"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := probe.Init()
+			require.NoError(t, err)
+			defer probe.Shutdown()
+
+			// Initially disabled
+			assert.False(t, probe.CacheIsEnabled())
+
+			// Enable cache
+			err = probe.CacheEnable()
+			require.NoError(t, err)
+
+			// Should be enabled now
+			assert.True(t, probe.CacheIsEnabled())
+
+			// Disable cache
+			err = probe.CacheDisable()
+			require.NoError(t, err)
+
+			// Should be disabled again
+			assert.False(t, probe.CacheIsEnabled())
+		})
+	}
+}
+
 // TestCacheEnable verifies cache enabling.
 func TestCacheEnable(t *testing.T) {
 	tests := []struct {

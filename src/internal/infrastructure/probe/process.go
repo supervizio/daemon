@@ -38,7 +38,12 @@ func NewProcessCollector() *ProcessCollector {
 // Returns:
 //   - metrics.ProcessCPU: CPU metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectCPU(_ context.Context, pid int) (metrics.ProcessCPU, error) {
+func (c *ProcessCollector) CollectCPU(ctx context.Context, pid int) (metrics.ProcessCPU, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return metrics.ProcessCPU{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -72,7 +77,12 @@ func (c *ProcessCollector) CollectCPU(_ context.Context, pid int) (metrics.Proce
 // Returns:
 //   - metrics.ProcessMemory: memory metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectMemory(_ context.Context, pid int) (metrics.ProcessMemory, error) {
+func (c *ProcessCollector) CollectMemory(ctx context.Context, pid int) (metrics.ProcessMemory, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return metrics.ProcessMemory{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -107,7 +117,12 @@ func (c *ProcessCollector) CollectMemory(_ context.Context, pid int) (metrics.Pr
 // Returns:
 //   - ProcessFDs: file descriptor metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectFDs(_ context.Context, pid int) (ProcessFDs, error) {
+func (c *ProcessCollector) CollectFDs(ctx context.Context, pid int) (ProcessFDs, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return ProcessFDs{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -138,7 +153,12 @@ func (c *ProcessCollector) CollectFDs(_ context.Context, pid int) (ProcessFDs, e
 // Returns:
 //   - ProcessIO: I/O statistics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectIO(_ context.Context, pid int) (ProcessIO, error) {
+func (c *ProcessCollector) CollectIO(ctx context.Context, pid int) (ProcessIO, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return ProcessIO{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.

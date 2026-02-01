@@ -43,7 +43,12 @@ func NewCPUCollector() *CPUCollector {
 // Returns:
 //   - metrics.SystemCPU: system-wide CPU statistics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *CPUCollector) CollectSystem(_ context.Context) (metrics.SystemCPU, error) {
+func (c *CPUCollector) CollectSystem(ctx context.Context) (metrics.SystemCPU, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return metrics.SystemCPU{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -86,7 +91,12 @@ func (c *CPUCollector) CollectSystem(_ context.Context) (metrics.SystemCPU, erro
 // Returns:
 //   - metrics.ProcessCPU: CPU metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *CPUCollector) CollectProcess(_ context.Context, pid int) (metrics.ProcessCPU, error) {
+func (c *CPUCollector) CollectProcess(ctx context.Context, pid int) (metrics.ProcessCPU, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return metrics.ProcessCPU{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -119,7 +129,12 @@ func (c *CPUCollector) CollectProcess(_ context.Context, pid int) (metrics.Proce
 // Returns:
 //   - []metrics.ProcessCPU: always nil
 //   - error: always ErrNotSupported
-func (c *CPUCollector) CollectAllProcesses(_ context.Context) ([]metrics.ProcessCPU, error) {
+func (c *CPUCollector) CollectAllProcesses(ctx context.Context) ([]metrics.ProcessCPU, error) {
+	// Check if context has been cancelled.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return nil, err
+	}
 	// The Rust probe does not support enumerating all processes.
 	// This would require iterating /proc on Linux, which is platform-specific.
 	return nil, ErrNotSupported
@@ -133,7 +148,12 @@ func (c *CPUCollector) CollectAllProcesses(_ context.Context) ([]metrics.Process
 // Returns:
 //   - metrics.LoadAverage: system load averages (1, 5, 15 minutes)
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *CPUCollector) CollectLoadAverage(_ context.Context) (metrics.LoadAverage, error) {
+func (c *CPUCollector) CollectLoadAverage(ctx context.Context) (metrics.LoadAverage, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return metrics.LoadAverage{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -168,7 +188,12 @@ func (c *CPUCollector) CollectLoadAverage(_ context.Context) (metrics.LoadAverag
 // Returns:
 //   - metrics.CPUPressure: CPU pressure statistics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *CPUCollector) CollectPressure(_ context.Context) (metrics.CPUPressure, error) {
+func (c *CPUCollector) CollectPressure(ctx context.Context) (metrics.CPUPressure, error) {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return empty metrics with context error.
+		return metrics.CPUPressure{}, err
+	}
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
