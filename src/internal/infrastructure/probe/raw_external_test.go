@@ -396,10 +396,10 @@ func TestRawNetInterfaceData(t *testing.T) {
 func TestRawNetStatsData(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name      string
-		iface     string
-		rxBytes   uint64
-		txBytes   uint64
+		name    string
+		iface   string
+		rxBytes uint64
+		txBytes uint64
 	}{
 		{
 			name:    "eth0_stats",

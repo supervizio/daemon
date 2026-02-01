@@ -11,9 +11,9 @@ import (
 func TestBuildCPUMetricsFromRaw(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name         string
-		raw          *RawCPUData
-		wantUsage    float64
+		name      string
+		raw       *RawCPUData
+		wantUsage float64
 	}{
 		{
 			name:      "zero_idle",
@@ -425,24 +425,24 @@ func TestBuildNetStatsFromRaw(t *testing.T) {
 func TestBuildAllMetricsFromRaw(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name             string
-		raw              *RawAllMetrics
-		wantPressure     bool
+		name         string
+		raw          *RawAllMetrics
+		wantPressure bool
 	}{
 		{
 			name: "full_metrics",
 			raw: &RawAllMetrics{
-				TimestampNs: 1000000000,
-				CPU:         RawCPUData{IdlePercent: 50},
-				Memory:      RawMemoryData{TotalBytes: 16000000000},
-				Load:        RawLoadData{Load1Min: 1.0},
-				IOStats:     RawIOStatsData{ReadOps: 100},
-				Pressure:    RawPressureMetrics{Available: true},
-				Partitions:  []RawPartitionData{{Device: "/dev/sda1"}},
-				DiskUsage:   []RawDiskUsageData{{Path: "/"}},
-				DiskIO:      []RawDiskIOData{{Device: "sda"}},
+				TimestampNs:   1000000000,
+				CPU:           RawCPUData{IdlePercent: 50},
+				Memory:        RawMemoryData{TotalBytes: 16000000000},
+				Load:          RawLoadData{Load1Min: 1.0},
+				IOStats:       RawIOStatsData{ReadOps: 100},
+				Pressure:      RawPressureMetrics{Available: true},
+				Partitions:    []RawPartitionData{{Device: "/dev/sda1"}},
+				DiskUsage:     []RawDiskUsageData{{Path: "/"}},
+				DiskIO:        []RawDiskIOData{{Device: "sda"}},
 				NetInterfaces: []RawNetInterfaceData{{Name: "eth0"}},
-				NetStats:    []RawNetStatsData{{Interface: "eth0"}},
+				NetStats:      []RawNetStatsData{{Interface: "eth0"}},
 			},
 			wantPressure: true,
 		},
@@ -477,4 +477,3 @@ func TestBuildAllMetricsFromRaw(t *testing.T) {
 		})
 	}
 }
-

@@ -38,25 +38,19 @@ func NewIOCollector() *IOCollector {
 //   - metrics.IOStats: system-wide I/O statistics
 //   - error: nil on success, error if probe not initialized or collection fails
 func (i *IOCollector) CollectStats(ctx context.Context) (metrics.IOStats, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return empty stats with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return empty stats on validation failure.
 		return metrics.IOStats{}, err
 	}
-	// Verify probe library is initialized before collecting.
-	if err := checkInitialized(); err != nil {
-		// Return empty stats with initialization error.
-		return metrics.IOStats{}, err
-	}
-
+	// Collect I/O statistics from C library.
 	var stats C.IOStats
 	result := C.probe_collect_io_stats(&stats)
-	// Check if the FFI call succeeded.
+	// Check if collection failed.
 	if err := resultToError(result); err != nil {
-		// Return empty stats with collection error.
+		// Return empty stats on collection failure.
 		return metrics.IOStats{}, err
 	}
-
 	// Return collected I/O statistics with current timestamp.
 	return metrics.IOStats{
 		ReadOpsTotal:    uint64(stats.read_ops),
@@ -77,25 +71,19 @@ func (i *IOCollector) CollectStats(ctx context.Context) (metrics.IOStats, error)
 //   - metrics.IOPressure: I/O pressure metrics
 //   - error: nil on success, error if probe not initialized or collection fails
 func (i *IOCollector) CollectPressure(ctx context.Context) (metrics.IOPressure, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return empty pressure metrics with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return empty pressure on validation failure.
 		return metrics.IOPressure{}, err
 	}
-	// Verify probe library is initialized before collecting.
-	if err := checkInitialized(); err != nil {
-		// Return empty pressure metrics with initialization error.
-		return metrics.IOPressure{}, err
-	}
-
+	// Collect I/O pressure from C library.
 	var pressure C.IOPressure
 	result := C.probe_collect_io_pressure(&pressure)
-	// Check if the FFI call succeeded.
+	// Check if collection failed.
 	if err := resultToError(result); err != nil {
-		// Return empty pressure metrics with collection error.
+		// Return empty pressure on collection failure.
 		return metrics.IOPressure{}, err
 	}
-
 	// Return collected I/O pressure metrics with current timestamp.
 	return metrics.IOPressure{
 		SomeAvg10:  float64(pressure.some_avg10),

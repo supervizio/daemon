@@ -39,30 +39,25 @@ func NewNetworkCollector() *NetworkCollector {
 //   - []metrics.NetInterface: list of network interfaces
 //   - error: nil on success, error if probe not initialized or collection fails
 func (n *NetworkCollector) ListInterfaces(ctx context.Context) ([]metrics.NetInterface, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return nil slice with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return nil on validation failure.
 		return nil, err
 	}
-	// Verify probe library is initialized before collecting.
-	if err := checkInitialized(); err != nil {
-		// Return nil slice with initialization error.
-		return nil, err
-	}
-
+	// List interfaces from C library.
 	var list C.NetInterfaceList
 	result := C.probe_list_net_interfaces(&list)
-	// Check if the FFI call succeeded.
+	// Check if listing failed.
 	if err := resultToError(result); err != nil {
-		// Return nil slice with collection error.
+		// Return nil on listing failure.
 		return nil, err
 	}
 	defer C.probe_free_net_interface_list(&list)
-
+	// Convert C list to Go slice.
 	count := int(list.count)
 	ifaces := make([]metrics.NetInterface, 0, count)
 	items := unsafe.Slice(list.items, count)
-	// Iterate through each network interface from the Rust library.
+	// Iterate over each interface item.
 	for _, item := range items {
 		var flags []string
 		// Check if interface is up.
@@ -73,7 +68,6 @@ func (n *NetworkCollector) ListInterfaces(ctx context.Context) ([]metrics.NetInt
 		if item.is_loopback {
 			flags = append(flags, "loopback")
 		}
-
 		ifaces = append(ifaces, metrics.NetInterface{
 			Name:         cCharArrayToString(item.name[:]),
 			HardwareAddr: cCharArrayToString(item.mac_address[:]),
@@ -81,8 +75,7 @@ func (n *NetworkCollector) ListInterfaces(ctx context.Context) ([]metrics.NetInt
 			Flags:        flags,
 		})
 	}
-
-	// Return collected network interfaces.
+	// Return the collected interfaces.
 	return ifaces, nil
 }
 
@@ -125,32 +118,26 @@ func (n *NetworkCollector) CollectStats(ctx context.Context, iface string) (metr
 //   - []metrics.NetStats: statistics for all network interfaces
 //   - error: nil on success, error if probe not initialized or collection fails
 func (n *NetworkCollector) CollectAllStats(ctx context.Context) ([]metrics.NetStats, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return nil slice with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return nil on validation failure.
 		return nil, err
 	}
-	// Verify probe library is initialized before collecting.
-	if err := checkInitialized(); err != nil {
-		// Return nil slice with initialization error.
-		return nil, err
-	}
-
+	// Collect network stats from C library.
 	var list C.NetStatsList
 	result := C.probe_collect_net_stats(&list)
-	// Check if the FFI call succeeded.
+	// Check if collection failed.
 	if err := resultToError(result); err != nil {
-		// Return nil slice with collection error.
+		// Return nil on collection failure.
 		return nil, err
 	}
 	defer C.probe_free_net_stats_list(&list)
-
+	// Convert C list to Go slice.
 	count := int(list.count)
 	stats := make([]metrics.NetStats, 0, count)
 	items := unsafe.Slice(list.items, count)
-	// Iterate through each interface's statistics.
+	// Iterate over each interface's statistics.
 	for _, item := range items {
-		// C struct uses 'interface' which is renamed to '_interface' by CGO
 		stats = append(stats, metrics.NetStats{
 			Interface:   cCharArrayToString(item._interface[:]),
 			BytesRecv:   uint64(item.rx_bytes),
@@ -164,7 +151,6 @@ func (n *NetworkCollector) CollectAllStats(ctx context.Context) ([]metrics.NetSt
 			Timestamp:   time.Now(),
 		})
 	}
-
-	// Return collected network statistics.
+	// Return the collected statistics.
 	return stats, nil
 }

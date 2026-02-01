@@ -41,43 +41,37 @@ func NewMemoryCollector() *MemoryCollector {
 //   - metrics.SystemMemory: system-wide memory statistics
 //   - error: nil on success, error if probe not initialized or collection fails
 func (m *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemory, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return empty metrics with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return empty metrics on validation failure.
 		return metrics.SystemMemory{}, err
 	}
-	// Verify probe library is initialized before collecting.
-	if err := checkInitialized(); err != nil {
-		// Return empty metrics with initialization error.
-		return metrics.SystemMemory{}, err
-	}
-
+	// Collect memory metrics from C library.
 	var cMem C.SystemMemory
 	result := C.probe_collect_memory(&cMem)
-	// Check if the FFI call succeeded.
+	// Check if collection failed.
 	if err := resultToError(result); err != nil {
-		// Return empty metrics with collection error.
+		// Return empty metrics on collection failure.
 		return metrics.SystemMemory{}, err
 	}
-
+	// Extract values for calculation.
 	total := uint64(cMem.total_bytes)
 	available := uint64(cMem.available_bytes)
 	used := uint64(cMem.used_bytes)
 	swapTotal := uint64(cMem.swap_total_bytes)
 	swapUsed := uint64(cMem.swap_used_bytes)
-
-	var usagePercent float64
 	// Calculate usage percentage if total memory is available.
+	var usagePercent float64
+	// Avoid division by zero if total is zero.
 	if total > 0 {
 		usagePercent = float64(used) / float64(total) * percentMultiplier
 	}
-
 	// Return collected memory metrics with current timestamp.
 	return metrics.SystemMemory{
 		Total:        total,
 		Available:    available,
 		Used:         used,
-		Free:         available, // Free is approximated as Available
+		Free:         available,
 		Cached:       uint64(cMem.cached_bytes),
 		Buffers:      uint64(cMem.buffers_bytes),
 		SwapTotal:    swapTotal,
@@ -85,7 +79,6 @@ func (m *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemo
 		SwapFree:     swapTotal - swapUsed,
 		UsagePercent: usagePercent,
 		Timestamp:    time.Now(),
-		// Note: Shared memory is not available from the Rust probe.
 	}, nil
 }
 
@@ -99,25 +92,19 @@ func (m *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemo
 //   - metrics.ProcessMemory: memory metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
 func (m *MemoryCollector) CollectProcess(ctx context.Context, pid int) (metrics.ProcessMemory, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return empty metrics with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return empty metrics on validation failure.
 		return metrics.ProcessMemory{}, err
 	}
-	// Verify probe library is initialized before collecting.
-	if err := checkInitialized(); err != nil {
-		// Return empty metrics with initialization error.
-		return metrics.ProcessMemory{}, err
-	}
-
+	// Collect process metrics from C library.
 	var cProc C.ProcessMetrics
 	result := C.probe_collect_process(C.int32_t(pid), &cProc)
-	// Check if the FFI call succeeded.
+	// Check if collection failed.
 	if err := resultToError(result); err != nil {
-		// Return empty metrics with collection error.
+		// Return empty metrics on collection failure.
 		return metrics.ProcessMemory{}, err
 	}
-
 	// Return collected process memory metrics with current timestamp.
 	return metrics.ProcessMemory{
 		PID:          int(cProc.pid),
@@ -125,7 +112,6 @@ func (m *MemoryCollector) CollectProcess(ctx context.Context, pid int) (metrics.
 		VMS:          uint64(cProc.memory_vms_bytes),
 		UsagePercent: float64(cProc.memory_percent),
 		Timestamp:    time.Now(),
-		// Note: Shared, Swap, Data, Stack are not available cross-platform.
 	}, nil
 }
 
@@ -158,25 +144,19 @@ func (m *MemoryCollector) CollectAllProcesses(ctx context.Context) ([]metrics.Pr
 //   - metrics.MemoryPressure: memory pressure statistics
 //   - error: nil on success, error if probe not initialized or collection fails
 func (m *MemoryCollector) CollectPressure(ctx context.Context) (metrics.MemoryPressure, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return empty metrics with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return empty pressure on validation failure.
 		return metrics.MemoryPressure{}, err
 	}
-	// Verify probe library is initialized before collecting.
-	if err := checkInitialized(); err != nil {
-		// Return empty metrics with initialization error.
-		return metrics.MemoryPressure{}, err
-	}
-
+	// Collect memory pressure from C library.
 	var pressure C.MemoryPressure
 	result := C.probe_collect_memory_pressure(&pressure)
-	// Check if the FFI call succeeded.
+	// Check if collection failed.
 	if err := resultToError(result); err != nil {
-		// Return empty metrics with collection error.
+		// Return empty pressure on collection failure.
 		return metrics.MemoryPressure{}, err
 	}
-
 	// Return collected memory pressure metrics with current timestamp.
 	return metrics.MemoryPressure{
 		SomeAvg10:  float64(pressure.some_avg10),

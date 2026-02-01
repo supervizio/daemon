@@ -130,30 +130,36 @@ func NewConnectionCollector() *ConnectionCollector {
 //   - []TcpConnection: list of TCP connections
 //   - error: nil on success, error if probe not initialized or collection fails
 func (c *ConnectionCollector) CollectTCP(ctx context.Context) ([]TcpConnection, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return nil slice with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return nil on validation failure.
 		return nil, err
 	}
-	// Check if probe is initialized
-	if err := checkInitialized(); err != nil {
-		// Return early if not initialized
-		return nil, err
-	}
-
+	// Collect TCP connections from C library.
 	var list C.TcpConnectionList
 	result := C.probe_collect_tcp_connections(&list)
-	// Check collection result
+	// Check if collection failed.
 	if err := resultToError(result); err != nil {
-		// Return early on collection failure
+		// Return nil on collection failure.
 		return nil, err
 	}
 	defer C.probe_free_tcp_connection_list(&list)
+	// Convert C list to Go slice and return.
+	return convertTCPConnections(&list), nil
+}
 
-	// Convert C list to Go slice with capacity
+// convertTCPConnections converts a C TCP connection list to Go slice.
+//
+// Params:
+//   - list: pointer to the C TCP connection list
+//
+// Returns:
+//   - []TcpConnection: the converted Go slice
+func convertTCPConnections(list *C.TcpConnectionList) []TcpConnection {
+	// Allocate slice with capacity matching list count.
 	connections := make([]TcpConnection, 0, list.count)
 	items := unsafe.Slice(list.items, list.count)
-	// Iterate over each connection item
+	// Iterate over each connection item.
 	for _, item := range items {
 		connections = append(connections, TcpConnection{
 			Family:      AddressFamily(item.family),
@@ -169,9 +175,8 @@ func (c *ConnectionCollector) CollectTCP(ctx context.Context) ([]TcpConnection, 
 			TxQueue:     uint32(item.tx_queue),
 		})
 	}
-
-	// Return the collected connections
-	return connections, nil
+	// Return the converted connections.
+	return connections
 }
 
 // CollectUDP returns all UDP sockets with process information.
@@ -183,30 +188,36 @@ func (c *ConnectionCollector) CollectTCP(ctx context.Context) ([]TcpConnection, 
 //   - []UdpConnection: list of UDP connections
 //   - error: nil on success, error if probe not initialized or collection fails
 func (c *ConnectionCollector) CollectUDP(ctx context.Context) ([]UdpConnection, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return nil slice with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return nil on validation failure.
 		return nil, err
 	}
-	// Check if probe is initialized
-	if err := checkInitialized(); err != nil {
-		// Return early if not initialized
-		return nil, err
-	}
-
+	// Collect UDP connections from C library.
 	var list C.UdpConnectionList
 	result := C.probe_collect_udp_connections(&list)
-	// Check collection result
+	// Check if collection failed.
 	if err := resultToError(result); err != nil {
-		// Return early on collection failure
+		// Return nil on collection failure.
 		return nil, err
 	}
 	defer C.probe_free_udp_connection_list(&list)
+	// Convert C list to Go slice and return.
+	return convertUDPConnections(&list), nil
+}
 
-	// Convert C list to Go slice with capacity
+// convertUDPConnections converts a C UDP connection list to Go slice.
+//
+// Params:
+//   - list: pointer to the C UDP connection list
+//
+// Returns:
+//   - []UdpConnection: the converted Go slice
+func convertUDPConnections(list *C.UdpConnectionList) []UdpConnection {
+	// Allocate slice with capacity matching list count.
 	connections := make([]UdpConnection, 0, list.count)
 	items := unsafe.Slice(list.items, list.count)
-	// Iterate over each connection item
+	// Iterate over each connection item.
 	for _, item := range items {
 		connections = append(connections, UdpConnection{
 			Family:      AddressFamily(item.family),
@@ -222,9 +233,8 @@ func (c *ConnectionCollector) CollectUDP(ctx context.Context) ([]UdpConnection, 
 			TxQueue:     uint32(item.tx_queue),
 		})
 	}
-
-	// Return the collected connections
-	return connections, nil
+	// Return the converted connections.
+	return connections
 }
 
 // CollectUnix returns all Unix domain sockets with process information.

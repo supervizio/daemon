@@ -44,30 +44,25 @@ func NewDiskCollector() *DiskCollector {
 //   - []metrics.Partition: list of mounted partitions
 //   - error: nil on success, error if probe not initialized or collection fails
 func (d *DiskCollector) ListPartitions(ctx context.Context) ([]metrics.Partition, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return nil slice with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return nil on validation failure.
 		return nil, err
 	}
-	// Verify probe library is initialized before collecting.
-	if err := checkInitialized(); err != nil {
-		// Return nil slice with initialization error.
-		return nil, err
-	}
-
+	// List partitions from C library.
 	var list C.PartitionList
 	result := C.probe_list_partitions(&list)
-	// Check if the FFI call succeeded.
+	// Check if listing failed.
 	if err := resultToError(result); err != nil {
-		// Return nil slice with collection error.
+		// Return nil on listing failure.
 		return nil, err
 	}
 	defer C.probe_free_partition_list(&list)
-
+	// Convert C list to Go slice.
 	count := int(list.count)
 	partitions := make([]metrics.Partition, 0, count)
 	items := unsafe.Slice(list.items, count)
-	// Iterate through each partition from the Rust library.
+	// Iterate over each partition item.
 	for _, item := range items {
 		optStr := cCharArrayToString(item.options[:])
 		var opts []string
@@ -82,8 +77,7 @@ func (d *DiskCollector) ListPartitions(ctx context.Context) ([]metrics.Partition
 			Options:    opts,
 		})
 	}
-
-	// Return collected partitions.
+	// Return the collected partitions.
 	return partitions, nil
 }
 
@@ -97,28 +91,21 @@ func (d *DiskCollector) ListPartitions(ctx context.Context) ([]metrics.Partition
 //   - metrics.DiskUsage: disk usage statistics for the path
 //   - error: nil on success, error if probe not initialized or collection fails
 func (d *DiskCollector) CollectUsage(ctx context.Context, path string) (metrics.DiskUsage, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return empty metrics with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return empty metrics on validation failure.
 		return metrics.DiskUsage{}, err
 	}
-	// Verify probe library is initialized before collecting.
-	if err := checkInitialized(); err != nil {
-		// Return empty metrics with initialization error.
-		return metrics.DiskUsage{}, err
-	}
-
+	// Collect disk usage from C library.
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-
 	var usage C.DiskUsage
 	result := C.probe_collect_disk_usage(cPath, &usage)
-	// Check if the FFI call succeeded.
+	// Check if collection failed.
 	if err := resultToError(result); err != nil {
-		// Return empty metrics with collection error.
+		// Return empty metrics on collection failure.
 		return metrics.DiskUsage{}, err
 	}
-
 	// Return collected disk usage with current timestamp.
 	return metrics.DiskUsage{
 		Path:         path,
@@ -172,30 +159,25 @@ func (d *DiskCollector) CollectAllUsage(ctx context.Context) ([]metrics.DiskUsag
 //   - []metrics.DiskIOStats: I/O statistics for all block devices
 //   - error: nil on success, error if probe not initialized or collection fails
 func (d *DiskCollector) CollectIO(ctx context.Context) ([]metrics.DiskIOStats, error) {
-	// Check if context has been cancelled before expensive FFI call.
-	if err := checkContext(ctx); err != nil {
-		// Return nil slice with context error.
+	// Validate context and initialization state.
+	if err := validateCollectionContext(ctx); err != nil {
+		// Return nil on validation failure.
 		return nil, err
 	}
-	// Verify probe library is initialized before collecting.
-	if err := checkInitialized(); err != nil {
-		// Return nil slice with initialization error.
-		return nil, err
-	}
-
+	// Collect disk I/O from C library.
 	var list C.DiskIOStatsList
 	result := C.probe_collect_disk_io(&list)
-	// Check if the FFI call succeeded.
+	// Check if collection failed.
 	if err := resultToError(result); err != nil {
-		// Return nil slice with collection error.
+		// Return nil on collection failure.
 		return nil, err
 	}
 	defer C.probe_free_disk_io_list(&list)
-
+	// Convert C list to Go slice.
 	count := int(list.count)
 	stats := make([]metrics.DiskIOStats, 0, count)
 	items := unsafe.Slice(list.items, count)
-	// Iterate through each block device's I/O statistics.
+	// Iterate over each block device.
 	for _, item := range items {
 		stats = append(stats, metrics.DiskIOStats{
 			Device:         cCharArrayToString(item.device[:]),
@@ -211,7 +193,6 @@ func (d *DiskCollector) CollectIO(ctx context.Context) ([]metrics.DiskIOStats, e
 			Timestamp:      time.Now(),
 		})
 	}
-
 	// Return collected I/O statistics.
 	return stats, nil
 }

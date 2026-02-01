@@ -139,12 +139,7 @@ func buildPartitionsFromRaw(raw []RawPartitionData) []PartitionInfo {
 	partitions := make([]PartitionInfo, 0, len(raw))
 	// Convert each raw partition to Go struct.
 	for _, pt := range raw {
-		partitions = append(partitions, PartitionInfo{
-			Device:     pt.Device,
-			MountPoint: pt.MountPoint,
-			FSType:     pt.FSType,
-			Options:    pt.Options,
-		})
+		partitions = append(partitions, PartitionInfo(pt))
 	}
 	// Return collected partitions.
 	return partitions
@@ -162,16 +157,7 @@ func buildDiskUsageFromRaw(raw []RawDiskUsageData) []DiskUsageInfo {
 	usage := make([]DiskUsageInfo, 0, len(raw))
 	// Convert each raw disk usage to Go struct.
 	for _, du := range raw {
-		usage = append(usage, DiskUsageInfo{
-			Path:        du.Path,
-			TotalBytes:  du.TotalBytes,
-			UsedBytes:   du.UsedBytes,
-			FreeBytes:   du.FreeBytes,
-			UsedPercent: du.UsedPercent,
-			InodesTotal: du.InodesTotal,
-			InodesUsed:  du.InodesUsed,
-			InodesFree:  du.InodesFree,
-		})
+		usage = append(usage, DiskUsageInfo(du))
 	}
 	// Return collected disk usage.
 	return usage
@@ -189,18 +175,7 @@ func buildDiskIOFromRaw(raw []RawDiskIOData) []DiskIOInfo {
 	diskIO := make([]DiskIOInfo, 0, len(raw))
 	// Convert each raw disk I/O to Go struct.
 	for _, dio := range raw {
-		diskIO = append(diskIO, DiskIOInfo{
-			Device:           dio.Device,
-			ReadsCompleted:   dio.ReadsCompleted,
-			SectorsRead:      dio.SectorsRead,
-			ReadTimeMs:       dio.ReadTimeMs,
-			WritesCompleted:  dio.WritesCompleted,
-			SectorsWritten:   dio.SectorsWritten,
-			WriteTimeMs:      dio.WriteTimeMs,
-			IOInProgress:     dio.IOInProgress,
-			IOTimeMs:         dio.IOTimeMs,
-			WeightedIOTimeMs: dio.WeightedIOTimeMs,
-		})
+		diskIO = append(diskIO, DiskIOInfo(dio))
 	}
 	// Return collected disk I/O.
 	return diskIO
@@ -218,13 +193,7 @@ func buildNetInterfacesFromRaw(raw []RawNetInterfaceData) []NetInterfaceInfo {
 	interfaces := make([]NetInterfaceInfo, 0, len(raw))
 	// Convert each raw network interface to Go struct.
 	for _, iface := range raw {
-		interfaces = append(interfaces, NetInterfaceInfo{
-			Name:       iface.Name,
-			MACAddress: iface.MACAddress,
-			MTU:        iface.MTU,
-			IsUp:       iface.IsUp,
-			IsLoopback: iface.IsLoopback,
-		})
+		interfaces = append(interfaces, NetInterfaceInfo(iface))
 	}
 	// Return collected interfaces.
 	return interfaces
@@ -242,17 +211,7 @@ func buildNetStatsFromRaw(raw []RawNetStatsData) []NetStatsInfo {
 	stats := make([]NetStatsInfo, 0, len(raw))
 	// Convert each raw network stat to Go struct.
 	for _, ns := range raw {
-		stats = append(stats, NetStatsInfo{
-			Interface: ns.Interface,
-			RxBytes:   ns.RxBytes,
-			RxPackets: ns.RxPackets,
-			RxErrors:  ns.RxErrors,
-			RxDrops:   ns.RxDrops,
-			TxBytes:   ns.TxBytes,
-			TxPackets: ns.TxPackets,
-			TxErrors:  ns.TxErrors,
-			TxDrops:   ns.TxDrops,
-		})
+		stats = append(stats, NetStatsInfo(ns))
 	}
 	// Return collected network stats.
 	return stats

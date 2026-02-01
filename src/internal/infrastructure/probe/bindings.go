@@ -236,3 +236,21 @@ func checkContext(ctx context.Context) error {
 		return nil
 	}
 }
+
+// validateCollectionContext validates context and initialization state.
+// Combines checkContext and checkInitialized for collector methods.
+//
+// Params:
+//   - ctx: the context to check
+//
+// Returns:
+//   - error: nil if valid, context error or ErrNotInitialized otherwise
+func validateCollectionContext(ctx context.Context) error {
+	// Check if context has been cancelled before expensive FFI call.
+	if err := checkContext(ctx); err != nil {
+		// Return the context error.
+		return err
+	}
+	// Verify probe library is initialized.
+	return checkInitialized()
+}
