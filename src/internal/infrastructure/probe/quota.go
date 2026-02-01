@@ -164,15 +164,15 @@ func (u *QuotaUsage) MemoryUsagePercent() float64 {
 	return float64(u.MemoryBytes) / float64(u.MemoryLimitBytes) * percentMultiplierQuota
 }
 
-// containerRuntimeUnknownStr is the string representation for unknown runtimes.
-const containerRuntimeUnknownStr string = "unknown" //nolint:ktn-const-order // Placed near ContainerRuntime type for readability
+// containerRuntimeUnknownStr is the string for unknown runtimes.
+const containerRuntimeUnknownStr string = "unknown" //nolint:ktn-const-order // Placed near type
 
 // ContainerRuntime represents a container runtime type.
 // It identifies the orchestration platform or isolation mechanism.
 type ContainerRuntime int
 
-// Container runtime constants for identifying the execution environment.
-const ( //nolint:ktn-const-order // Typed constants must follow their type definition
+// Container runtime constants.
+const ( //nolint:ktn-const-order // Typed constants follow their type definition
 	// ContainerRuntimeNone indicates no containerization.
 	ContainerRuntimeNone ContainerRuntime = 0
 	// ContainerRuntimeDocker indicates Docker runtime.

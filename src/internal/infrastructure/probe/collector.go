@@ -22,6 +22,8 @@
 //   - Some detailed metrics (jiffies) are not available cross-platform
 //   - PSI metrics are Linux-only (returns ErrNotSupported on other platforms)
 //   - Process enumeration is not supported (use platform-specific collectors)
+//
+//nolint:ktn-struct-accessor // Interface requires CPU() and IO() not Cpu() and Io()
 package probe
 
 import (
@@ -60,7 +62,9 @@ func NewCollector() *Collector {
 //
 // Returns:
 //   - metrics.CPUCollector: collector for CPU metrics
-func (c *Collector) CPU() metrics.CPUCollector { //nolint:ktn-struct-accessor // Interface requires CPU() not Cpu()
+//
+//nolint:ktn-struct-accessor // Interface requires CPU() not Cpu()
+func (c *Collector) CPU() metrics.CPUCollector {
 	// Return the pre-initialized CPU collector.
 	return c.cpu
 }
@@ -96,7 +100,9 @@ func (c *Collector) Network() metrics.NetworkCollector {
 //
 // Returns:
 //   - metrics.IOCollector: collector for I/O metrics
-func (c *Collector) IO() metrics.IOCollector { //nolint:ktn-struct-accessor // Interface requires IO() not Io()
+//
+//nolint:ktn-struct-accessor // Interface requires IO() not Io()
+func (c *Collector) IO() metrics.IOCollector {
 	// Return the pre-initialized I/O collector.
 	return c.io
 }

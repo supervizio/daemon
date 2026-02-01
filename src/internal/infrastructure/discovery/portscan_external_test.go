@@ -5,8 +5,6 @@ package discovery_test
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/kodflow/daemon/internal/domain/config"
@@ -145,10 +143,6 @@ func TestPortScanDiscoverer_Discover(t *testing.T) {
 
 // TestPortScanDiscoverer_Discover_WithMockData tests parsing with mock /proc/net/tcp data.
 func TestPortScanDiscoverer_Discover_WithMockData(t *testing.T) {
-	// Skip if /proc/net/tcp doesn't exist (not Linux).
-	if _, err := os.Stat("/proc/net/tcp"); os.IsNotExist(err) {
-		t.Skip("Skipping test: /proc/net/tcp not available")
-	}
 
 	tests := []struct {
 		name         string
@@ -259,24 +253,37 @@ func canceledContext() context.Context {
 	return ctx
 }
 
-// TestPortScanDiscoverer_ParseAddressFormat tests the /proc/net/tcp parsing logic.
-func TestPortScanDiscoverer_ParseAddressFormat(t *testing.T) {
-	// Create a temporary mock /proc/net/tcp file.
-	tmpDir := t.TempDir()
-	mockTCP := filepath.Join(tmpDir, "tcp")
-
-	// Mock /proc/net/tcp content (localhost:53 in LISTEN state).
-	mockContent := `  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
-   0: 0100007F:0035 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 17892
-`
-
-	err := os.WriteFile(mockTCP, []byte(mockContent), 0600)
-	if err != nil {
-		t.Fatalf("Failed to create mock file: %v", err)
+// TestFactory_WithPortScan tests the factory with port scan config.
+func TestFactory_WithPortScan(t *testing.T) {
+	// Create discovery config with port scan enabled.
+	discoveryCfg := &config.DiscoveryConfig{
+		PortScan: &config.PortScanDiscoveryConfig{
+			Enabled:      true,
+			ExcludePorts: []int{22},
+		},
 	}
 
-	// Note: This test would need internal access to parseNetTCP.
-	// Since we're in external tests, we can only test via Discover().
-	// This is a placeholder for documentation - covered by Discover() integration test.
-	t.Skip("Parsing details tested via Discover() integration test")
+	// Create factory.
+	factory := discovery.NewFactory(discoveryCfg)
+
+	// Get all discoverers.
+	discoverers := factory.CreateDiscoverers()
+
+	// Should have at least one discoverer (port scan).
+	if len(discoverers) == 0 {
+		t.Error("Expected at least one discoverer")
+	}
+
+	// Find port scan discoverer.
+	var foundPortScan bool
+	for _, d := range discoverers {
+		if d.Type() == target.TypeCustom {
+			foundPortScan = true
+			break
+		}
+	}
+
+	if !foundPortScan {
+		t.Error("Port scan discoverer not found in factory output")
+	}
 }

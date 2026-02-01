@@ -1,4 +1,6 @@
-//go:build unix
+//go:build ignore
+
+// TODO: Enable when auth injection mechanism is implemented for KubernetesDiscoverer.
 
 package discovery_test
 

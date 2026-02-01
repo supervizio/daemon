@@ -2,6 +2,8 @@
 
 // Package probe provides CGO bindings to the Rust probe library for
 // unified cross-platform system metrics and resource quota management.
+//
+//nolint:ktn-const-order // AddressFamily constants must follow their type definition
 package probe
 
 /*
@@ -46,9 +48,7 @@ const (
 )
 
 // Address family constants.
-//
-//nolint:ktn-const-order // Typed constants must follow their type definition
-const (
+const ( //nolint:ktn-const-order // Typed constants must follow their type definition
 	// AddressFamilyIPv4 indicates IPv4 address family.
 	AddressFamilyIPv4 AddressFamily = 4
 	// AddressFamilyIPv6 indicates IPv6 address family.
@@ -56,9 +56,7 @@ const (
 )
 
 // notFoundPID represents the PID value returned when no process is found.
-//
-//nolint:ktn-const-order // Placed with related connection code for readability
-const notFoundPID int32 = -1
+const notFoundPID int32 = -1 //nolint:ktn-const-order // Placed with related connection code
 
 // socketStateNames maps socket states to their string representations.
 var socketStateNames map[SocketState]string = map[SocketState]string{

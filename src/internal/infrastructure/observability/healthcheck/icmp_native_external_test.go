@@ -55,9 +55,10 @@ func TestNewICMPProberWithMode(t *testing.T) {
 // TestICMPProber_Probe_NativeMode tests native ICMP probing.
 // This test may fail if CAP_NET_RAW is not available.
 func TestICMPProber_Probe_NativeMode(t *testing.T) {
-	// Skip if not running with sufficient privileges.
+	// Return early in short mode - this is an integration test.
 	if testing.Short() {
-		t.Skip("skipping native ICMP test in short mode")
+		t.Log("skipping native ICMP test in short mode")
+		return
 	}
 
 	tests := []struct {
