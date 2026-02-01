@@ -2,8 +2,6 @@
 
 // Package probe provides CGO bindings to the Rust probe library for
 // unified cross-platform system metrics and resource quota management.
-//
-//nolint:ktn-struct-onefile // Data transfer structs are logically grouped for CollectAll functionality
 package probe
 
 /*
@@ -11,7 +9,6 @@ package probe
 */
 import "C"
 import (
-	"strings"
 	"time"
 
 	"github.com/kodflow/daemon/internal/domain/metrics"
@@ -19,113 +16,6 @@ import (
 
 // fullPercentage represents 100% as a constant for percentage calculations.
 const fullPercentage float64 = 100.0
-
-// AllMetrics contains all system metrics collected in one call.
-// It provides a unified snapshot of CPU, memory, I/O, disk, and network data.
-type AllMetrics struct {
-	// CPU metrics.
-	CPU metrics.SystemCPU
-	// Memory metrics.
-	Memory metrics.SystemMemory
-	// Load average.
-	Load metrics.LoadAverage
-	// I/O statistics.
-	IOStats IOStatsSummary
-	// Pressure metrics (nil on non-Linux platforms).
-	Pressure *AllPressure
-	// Timestamp when metrics were collected.
-	Timestamp time.Time
-
-	// Disk partitions.
-	Partitions []PartitionInfo
-	// Disk usage for all partitions.
-	DiskUsage []DiskUsageInfo
-	// Disk I/O statistics.
-	DiskIO []DiskIOInfo
-	// Network interfaces.
-	NetInterfaces []NetInterfaceInfo
-	// Network statistics.
-	NetStats []NetStatsInfo
-}
-
-// AllPressure contains all pressure metrics (Linux PSI).
-// It groups CPU, memory, and I/O pressure data from the kernel.
-type AllPressure struct {
-	CPU    metrics.CPUPressure
-	Memory metrics.MemoryPressure
-	IO     metrics.IOPressure
-}
-
-// IOStatsSummary contains system-wide I/O statistics.
-// It tracks read/write operations and bytes transferred.
-type IOStatsSummary struct {
-	ReadOps    uint64
-	ReadBytes  uint64
-	WriteOps   uint64
-	WriteBytes uint64
-	Timestamp  time.Time
-}
-
-// PartitionInfo contains partition information.
-// It describes a mounted filesystem including device, mount point, and type.
-type PartitionInfo struct {
-	Device     string
-	MountPoint string
-	FSType     string
-	Options    string
-}
-
-// DiskUsageInfo contains disk usage information.
-// It provides capacity, usage, and inode statistics for a filesystem path.
-type DiskUsageInfo struct {
-	Path        string
-	TotalBytes  uint64
-	UsedBytes   uint64
-	FreeBytes   uint64
-	UsedPercent float64
-	InodesTotal uint64
-	InodesUsed  uint64
-	InodesFree  uint64
-}
-
-// DiskIOInfo contains disk I/O statistics.
-// It tracks read/write operations, timing, and queue depth per device.
-type DiskIOInfo struct {
-	Device           string
-	ReadsCompleted   uint64
-	SectorsRead      uint64
-	ReadTimeMs       uint64
-	WritesCompleted  uint64
-	SectorsWritten   uint64
-	WriteTimeMs      uint64
-	IOInProgress     uint64
-	IOTimeMs         uint64
-	WeightedIOTimeMs uint64
-}
-
-// NetInterfaceInfo contains network interface information.
-// It describes interface properties including name, MAC address, and status.
-type NetInterfaceInfo struct {
-	Name       string
-	MACAddress string
-	MTU        uint32
-	IsUp       bool
-	IsLoopback bool
-}
-
-// NetStatsInfo contains network interface statistics.
-// It tracks bytes, packets, errors, and drops for both RX and TX.
-type NetStatsInfo struct {
-	Interface string
-	RxBytes   uint64
-	RxPackets uint64
-	RxErrors  uint64
-	RxDrops   uint64
-	TxBytes   uint64
-	TxPackets uint64
-	TxErrors  uint64
-	TxDrops   uint64
-}
 
 // CollectAll collects all system metrics in one call.
 // This is more efficient than calling each collector individually
@@ -311,40 +201,4 @@ func CollectAll() (*AllMetrics, error) {
 
 	// Return the collected metrics
 	return all, nil
-}
-
-// ToPartition converts PartitionInfo to domain Partition.
-//
-// Returns:
-//   - metrics.Partition: domain representation of the partition
-func (p *PartitionInfo) ToPartition() metrics.Partition {
-	// Split options string into slice
-	options := strings.Split(p.Options, ",")
-	// Return domain partition with converted fields
-	return metrics.Partition{
-		Device:     p.Device,
-		Mountpoint: p.MountPoint,
-		FSType:     p.FSType,
-		Options:    options,
-	}
-}
-
-// ToNetStats converts NetStatsInfo to domain NetStats.
-//
-// Returns:
-//   - metrics.NetStats: domain representation of network statistics
-func (n *NetStatsInfo) ToNetStats() metrics.NetStats {
-	// Return domain net stats with converted fields
-	return metrics.NetStats{
-		Interface:   n.Interface,
-		BytesSent:   n.TxBytes,
-		BytesRecv:   n.RxBytes,
-		PacketsSent: n.TxPackets,
-		PacketsRecv: n.RxPackets,
-		ErrorsIn:    n.RxErrors,
-		ErrorsOut:   n.TxErrors,
-		DropsIn:     n.RxDrops,
-		DropsOut:    n.TxDrops,
-		Timestamp:   time.Now(),
-	}
 }

@@ -366,16 +366,11 @@ type AvailableRuntimeInfoJSON struct {
 // Returns:
 //   - *AllSystemMetrics: collected system metrics
 //   - error: nil on success, error if probe not initialized
-//
-//nolint:cyclop,funlen,ktn-func-maxloc // Comprehensive metrics collection requires many collection calls
 func CollectAllMetrics(ctx context.Context) (*AllSystemMetrics, error) {
-	// Check if probe is initialized
 	if err := checkInitialized(); err != nil {
-		// Return early if not initialized
 		return nil, err
 	}
 
-	// Build initial result with metadata
 	now := time.Now()
 	hostname, _ := os.Hostname()
 	result := &AllSystemMetrics{
@@ -385,17 +380,28 @@ func CollectAllMetrics(ctx context.Context) (*AllSystemMetrics, error) {
 		CollectedAt: now.UnixNano(),
 	}
 
-	// Create collector instance
 	collector := NewCollector()
+	collectBasicMetrics(ctx, collector, result)
+	collectResourceMetrics(ctx, collector, result)
+	collectSystemMetrics(ctx, result)
 
+	return result, nil
+}
+
+// collectBasicMetrics collects CPU, memory, and load metrics.
+//
+// Params:
+//   - ctx: context for cancellation
+//   - collector: collector instance
+//   - result: result structure to populate
+func collectBasicMetrics(ctx context.Context, collector *Collector, result *AllSystemMetrics) {
 	// Collect CPU metrics
-	if cpu, err := collector.CPU().CollectSystem(ctx); err == nil {
+	if cpu, err := collector.Cpu().CollectSystem(ctx); err == nil {
 		result.CPU = &CPUMetricsJSON{
 			UsagePercent: cpu.UsagePercent,
 			Cores:        uint32(runtime.NumCPU()),
 		}
-		// Try to get pressure metrics (Linux only)
-		if pressure, err := collector.CPU().CollectPressure(ctx); err == nil {
+		if pressure, err := collector.Cpu().CollectPressure(ctx); err == nil {
 			result.CPU.Pressure = &CPUPressureJSON{
 				SomeAvg10:   pressure.SomeAvg10,
 				SomeAvg60:   pressure.SomeAvg60,
@@ -417,7 +423,6 @@ func CollectAllMetrics(ctx context.Context) (*AllSystemMetrics, error) {
 			SwapUsedBytes:  mem.SwapUsed,
 			UsedPercent:    mem.UsagePercent,
 		}
-		// Try to get pressure metrics (Linux only)
 		if pressure, err := collector.Memory().CollectPressure(ctx); err == nil {
 			result.Memory.Pressure = &MemoryPressureJSON{
 				SomeAvg10:   pressure.SomeAvg10,
@@ -440,37 +445,33 @@ func CollectAllMetrics(ctx context.Context) (*AllSystemMetrics, error) {
 			Load15Min: load.Load15,
 		}
 	}
+}
 
-	// Collect Disk metrics
+// collectResourceMetrics collects disk, network, and I/O metrics.
+//
+// Params:
+//   - ctx: context for cancellation
+//   - collector: collector instance
+//   - result: result structure to populate
+func collectResourceMetrics(ctx context.Context, collector *Collector, result *AllSystemMetrics) {
 	result.Disk = collectDiskMetricsJSON(ctx, collector)
-
-	// Collect Network metrics
 	result.Network = collectNetworkMetricsJSON(ctx, collector)
-
-	// Collect I/O metrics
 	result.IO = collectIOMetricsJSON(ctx, collector)
+}
 
-	// Collect Process metrics
+// collectSystemMetrics collects process, thermal, and connection metrics.
+//
+// Params:
+//   - ctx: context for cancellation
+//   - result: result structure to populate
+func collectSystemMetrics(ctx context.Context, result *AllSystemMetrics) {
 	result.Process = collectProcessMetricsJSON(ctx)
-
-	// Collect Thermal metrics (Linux only)
 	result.Thermal = collectThermalMetricsJSON()
-
-	// Collect Context switches (Linux only)
 	result.ContextSwitches = collectContextSwitchMetricsJSON()
-
-	// Collect Network connections (Linux only)
 	result.Connections = collectConnectionMetricsJSON(ctx)
-
-	// Collect Quota metrics
 	result.Quota = collectQuotaMetricsJSON()
-
-	// Collect Container/Runtime metrics
 	result.Container = collectContainerMetricsJSON()
 	result.Runtime = collectRuntimeMetricsJSON()
-
-	// Return the collected metrics
-	return result, nil
 }
 
 // collectDiskMetricsJSON collects all disk-related metrics.
@@ -481,66 +482,100 @@ func CollectAllMetrics(ctx context.Context) (*AllSystemMetrics, error) {
 //
 // Returns:
 //   - *DiskMetricsJSON: collected disk metrics
-//
-//nolint:funlen,ktn-func-maxloc // Disk metrics collection requires gathering partition, usage, and I/O data
 func collectDiskMetricsJSON(ctx context.Context, coll *Collector) *DiskMetricsJSON {
-	// Initialize disk metrics struct
 	disk := &DiskMetricsJSON{}
-
-	// Collect partition information
-	if partitions, err := coll.Disk().ListPartitions(ctx); err == nil {
-		disk.Partitions = make([]PartitionInfo, 0, len(partitions))
-		// Iterate over each partition
-		for _, pt := range partitions {
-			disk.Partitions = append(disk.Partitions, PartitionInfo{
-				Device:     pt.Device,
-				MountPoint: pt.Mountpoint,
-				FSType:     pt.FSType,
-				Options:    joinOptions(pt.Options),
-			})
-		}
-	}
-
-	// Collect disk usage information
-	if usage, err := coll.Disk().CollectAllUsage(ctx); err == nil {
-		disk.Usage = make([]DiskUsageInfo, 0, len(usage))
-		// Iterate over each usage entry
-		for _, us := range usage {
-			disk.Usage = append(disk.Usage, DiskUsageInfo{
-				Path:        us.Path,
-				TotalBytes:  us.Total,
-				UsedBytes:   us.Used,
-				FreeBytes:   us.Free,
-				UsedPercent: us.UsagePercent,
-				InodesTotal: us.InodesTotal,
-				InodesUsed:  us.InodesUsed,
-				InodesFree:  us.InodesFree,
-			})
-		}
-	}
-
-	// Collect disk I/O information
-	if ioStats, err := coll.Disk().CollectIO(ctx); err == nil {
-		disk.IO = make([]DiskIOInfo, 0, len(ioStats))
-		// Iterate over each I/O entry
-		for _, io := range ioStats {
-			disk.IO = append(disk.IO, DiskIOInfo{
-				Device:           io.Device,
-				ReadsCompleted:   io.ReadCount,
-				SectorsRead:      io.ReadBytes / sectorSize,
-				ReadTimeMs:       uint64(io.ReadTime.Milliseconds()),
-				WritesCompleted:  io.WriteCount,
-				SectorsWritten:   io.WriteBytes / sectorSize,
-				WriteTimeMs:      uint64(io.WriteTime.Milliseconds()),
-				IOInProgress:     io.IOInProgress,
-				IOTimeMs:         uint64(io.IOTime.Milliseconds()),
-				WeightedIOTimeMs: uint64(io.WeightedIOTime.Milliseconds()),
-			})
-		}
-	}
-
-	// Return the collected disk metrics
+	disk.Partitions = extractPartitionInfo(ctx, coll)
+	disk.Usage = extractDiskUsageInfo(ctx, coll)
+	disk.IO = extractDiskIOInfo(ctx, coll)
 	return disk
+}
+
+// extractPartitionInfo extracts partition information.
+//
+// Params:
+//   - ctx: context for cancellation
+//   - coll: collector instance
+//
+// Returns:
+//   - []PartitionInfo: partition information
+func extractPartitionInfo(ctx context.Context, coll *Collector) []PartitionInfo {
+	partitions, err := coll.Disk().ListPartitions(ctx)
+	if err != nil {
+		return nil
+	}
+
+	result := make([]PartitionInfo, 0, len(partitions))
+	for _, pt := range partitions {
+		result = append(result, PartitionInfo{
+			Device:     pt.Device,
+			MountPoint: pt.Mountpoint,
+			FSType:     pt.FSType,
+			Options:    joinOptions(pt.Options),
+		})
+	}
+	return result
+}
+
+// extractDiskUsageInfo extracts disk usage information.
+//
+// Params:
+//   - ctx: context for cancellation
+//   - coll: collector instance
+//
+// Returns:
+//   - []DiskUsageInfo: disk usage information
+func extractDiskUsageInfo(ctx context.Context, coll *Collector) []DiskUsageInfo {
+	usage, err := coll.Disk().CollectAllUsage(ctx)
+	if err != nil {
+		return nil
+	}
+
+	result := make([]DiskUsageInfo, 0, len(usage))
+	for _, us := range usage {
+		result = append(result, DiskUsageInfo{
+			Path:        us.Path,
+			TotalBytes:  us.Total,
+			UsedBytes:   us.Used,
+			FreeBytes:   us.Free,
+			UsedPercent: us.UsagePercent,
+			InodesTotal: us.InodesTotal,
+			InodesUsed:  us.InodesUsed,
+			InodesFree:  us.InodesFree,
+		})
+	}
+	return result
+}
+
+// extractDiskIOInfo extracts disk I/O information.
+//
+// Params:
+//   - ctx: context for cancellation
+//   - coll: collector instance
+//
+// Returns:
+//   - []DiskIOInfo: disk I/O information
+func extractDiskIOInfo(ctx context.Context, coll *Collector) []DiskIOInfo {
+	ioStats, err := coll.Disk().CollectIO(ctx)
+	if err != nil {
+		return nil
+	}
+
+	result := make([]DiskIOInfo, 0, len(ioStats))
+	for _, io := range ioStats {
+		result = append(result, DiskIOInfo{
+			Device:           io.Device,
+			ReadsCompleted:   io.ReadCount,
+			SectorsRead:      io.ReadBytes / sectorSize,
+			ReadTimeMs:       uint64(io.ReadTime.Milliseconds()),
+			WritesCompleted:  io.WriteCount,
+			SectorsWritten:   io.WriteBytes / sectorSize,
+			WriteTimeMs:      uint64(io.WriteTime.Milliseconds()),
+			IOInProgress:     io.IOInProgress,
+			IOTimeMs:         uint64(io.IOTime.Milliseconds()),
+			WeightedIOTimeMs: uint64(io.WeightedIOTime.Milliseconds()),
+		})
+	}
+	return result
 }
 
 // joinOptions joins slice of options into a comma-separated string.
@@ -761,8 +796,6 @@ func collectContextSwitchMetricsJSON() *ContextSwitchMetricsJSON {
 //
 // Returns:
 //   - *ConnectionMetricsJSON: collected connection metrics
-//
-//nolint:cyclop,funlen,ktn-func-maxloc,ktn-func-cyclo // Connection metrics collection requires gathering data from multiple sources
 func collectConnectionMetricsJSON(ctx context.Context) *ConnectionMetricsJSON {
 	// Initialize connection metrics struct
 	conn := &ConnectionMetricsJSON{}

@@ -69,13 +69,9 @@ const (
 	MetricIOPressure MetricType = 11
 )
 
-// CacheEnable enables caching with default policies.
-//
-// After calling this, all metric collection calls will use caching.
 // CacheEnable enables caching for probe metrics.
 //
-// Params:
-//   - none
+// After calling this, all metric collection calls will use caching.
 //
 // Returns:
 //   - error: nil on success, error if operation fails

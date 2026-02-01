@@ -200,11 +200,11 @@ func TestBus_Close(t *testing.T) {
 //   - Synchronization: WaitGroup coordinates completion of all goroutines.
 func TestBus_ConcurrentAccess(t *testing.T) {
 	tests := []struct {
-		name              string
-		numSubscribers    int
-		numPublishers     int
-		eventsPerPub      int
-		timeoutMs         int
+		name           string
+		numSubscribers int
+		numPublishers  int
+		eventsPerPub   int
+		timeoutMs      int
 	}{
 		{
 			name:           "MultipleSubscribersAndPublishers",
