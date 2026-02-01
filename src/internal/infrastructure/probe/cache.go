@@ -70,7 +70,6 @@ const (
 )
 
 // CacheEnable enables caching for probe metrics.
-//
 // After calling this, all metric collection calls will use caching.
 //
 // Returns:

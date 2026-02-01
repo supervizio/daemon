@@ -1,12 +1,15 @@
 //go:build linux
 
 // Package discovery provides infrastructure adapters for target discovery.
+//
+//nolint:ktn-struct-onefile // listeningPort is internal helper type for PortScanDiscoverer
 package discovery
 
 import (
 	"bufio"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -18,17 +21,61 @@ import (
 	"github.com/kodflow/daemon/internal/domain/target"
 )
 
+// portscan parsing constants.
+const (
+	// ipv4ByteLength is the expected byte length for an IPv4 address.
+	ipv4ByteLength int = 4
+
+	// ipv6ByteLength is the expected byte length for an IPv6 address.
+	ipv6ByteLength int = 16
+
+	// minTCPFields is the minimum number of fields expected in a /proc/net/tcp line.
+	minTCPFields int = 4
+
+	// addressPartCount is the expected number of parts in a hex address (IP:port).
+	addressPartCount int = 2
+
+	// byteReversalDivisor divides byte length to find midpoint for reversal.
+	byteReversalDivisor int = 2
+
+	// portScanLabelCount is the number of labels added to port scan targets.
+	portScanLabelCount int = 3
+
+	// tcpStateFieldIndex is the index of the state field in /proc/net/tcp lines.
+	tcpStateFieldIndex int = 3
+
+	// hexBase is the base for hexadecimal number parsing.
+	hexBase int = 16
+
+	// portBitSize is the bit size for port numbers (16-bit).
+	portBitSize int = 16
+)
+
+// Sentinel errors for port scan parsing.
+var (
+	// errInvalidAddressFormat is returned when address format is invalid.
+	errInvalidAddressFormat error = errors.New("invalid address format")
+
+	// errInvalidIPv4Length is returned when IPv4 address has wrong length.
+	errInvalidIPv4Length error = errors.New("invalid IPv4 length")
+
+	// errInvalidIPv6Length is returned when IPv6 address has wrong length.
+	errInvalidIPv6Length error = errors.New("invalid IPv6 length")
+)
+
 // listeningPort represents a port in LISTEN state from /proc/net/tcp.
 type listeningPort struct {
-	Protocol  string // "tcp" or "udp"
-	LocalAddr string // IP address
-	LocalPort int    // Port number
-	State     string // Socket state (hex)
+	Protocol  string `dto:"out,priv,pub" json:"protocol"`  // "tcp" or "udp"
+	LocalAddr string `dto:"out,priv,pub" json:"localAddr"` // IP address
+	LocalPort int    `dto:"out,priv,pub" json:"localPort"` // Port number
+	State     string `dto:"out,priv,pub" json:"state"`     // Socket state (hex)
 }
 
 // PortScanDiscoverer discovers listening ports by parsing /proc/net/tcp.
 // It scans local network interfaces for services listening on TCP ports
 // and creates monitoring targets for them.
+//
+//nolint:ktn-struct-onefile // listeningPort is internal helper
 type PortScanDiscoverer struct {
 	// interfaces maps interface names to true for fast lookup.
 	interfaces map[string]bool
@@ -40,6 +87,11 @@ type PortScanDiscoverer struct {
 	includePorts map[int]bool
 }
 
+// Addrser provides network address listing capability.
+type Addrser interface {
+	Addrs() ([]net.Addr, error)
+}
+
 // NewPortScanDiscoverer creates a new port scan discoverer.
 //
 // Params:
@@ -48,7 +100,7 @@ type PortScanDiscoverer struct {
 // Returns:
 //   - *PortScanDiscoverer: a new port scan discoverer.
 func NewPortScanDiscoverer(cfg *config.PortScanDiscoveryConfig) *PortScanDiscoverer {
-	d := &PortScanDiscoverer{
+	discoverer := &PortScanDiscoverer{
 		interfaces:   make(map[string]bool, len(cfg.Interfaces)),
 		excludePorts: make(map[int]bool, len(cfg.ExcludePorts)),
 		includePorts: make(map[int]bool, len(cfg.IncludePorts)),
@@ -56,21 +108,21 @@ func NewPortScanDiscoverer(cfg *config.PortScanDiscoveryConfig) *PortScanDiscove
 
 	// Build interface lookup map for fast filtering.
 	for _, iface := range cfg.Interfaces {
-		d.interfaces[iface] = true
+		discoverer.interfaces[iface] = true
 	}
 
 	// Build exclude ports lookup map.
 	for _, port := range cfg.ExcludePorts {
-		d.excludePorts[port] = true
+		discoverer.excludePorts[port] = true
 	}
 
 	// Build include ports lookup map.
 	for _, port := range cfg.IncludePorts {
-		d.includePorts[port] = true
+		discoverer.includePorts[port] = true
 	}
 
 	// Return configured discoverer.
-	return d
+	return discoverer
 }
 
 // Type returns the target type for port scan discovery.
@@ -94,67 +146,91 @@ func (d *PortScanDiscoverer) Type() target.Type {
 func (d *PortScanDiscoverer) Discover(ctx context.Context) ([]target.ExternalTarget, error) {
 	// Check for context cancellation before starting.
 	if err := ctx.Err(); err != nil {
+		// Return early if context is cancelled.
 		return nil, err
 	}
 
+	// Collect all listening ports from proc files.
+	allPorts, err := d.collectAllListeningPorts()
+	// Check for port collection error.
+	if err != nil {
+		// Return error from collection.
+		return nil, err
+	}
+
+	// Filter and convert to external targets.
+	return d.filterAndConvertPorts(allPorts), nil
+}
+
+// collectAllListeningPorts parses TCP and TCP6 proc files.
+//
+// Returns:
+//   - []listeningPort: all discovered listening ports.
+//   - error: any error during parsing.
+func (d *PortScanDiscoverer) collectAllListeningPorts() ([]listeningPort, error) {
 	var allPorts []listeningPort
 
 	// Parse IPv4 TCP connections.
 	tcp4Ports, err := d.parseNetTCP("/proc/net/tcp", "tcp4")
+	// Check for TCP4 parsing error.
 	if err != nil {
-		// Return error when IPv4 TCP parsing fails.
+		// Return error with file context.
 		return nil, fmt.Errorf("parsing /proc/net/tcp: %w", err)
 	}
 	allPorts = append(allPorts, tcp4Ports...)
 
 	// Parse IPv6 TCP connections.
 	tcp6Ports, err := d.parseNetTCP("/proc/net/tcp6", "tcp6")
+	// Check for TCP6 parsing error.
 	if err != nil {
-		// Return error when IPv6 TCP parsing fails.
+		// Return error with file context.
 		return nil, fmt.Errorf("parsing /proc/net/tcp6: %w", err)
 	}
 	allPorts = append(allPorts, tcp6Ports...)
 
-	// Filter and convert to external targets.
-	targets := make([]target.ExternalTarget, 0)
+	// Return all collected ports.
+	return allPorts, nil
+}
+
+// filterAndConvertPorts filters ports and converts them to targets.
+//
+// Params:
+//   - allPorts: the ports to filter and convert.
+//
+// Returns:
+//   - []target.ExternalTarget: the filtered and converted targets.
+func (d *PortScanDiscoverer) filterAndConvertPorts(allPorts []listeningPort) []target.ExternalTarget {
+	var targets []target.ExternalTarget
 	seenPorts := make(map[string]bool, len(allPorts))
 
-	// Iterate over all discovered ports.
+	// Iterate through each listening port.
 	for _, port := range allPorts {
 		// Skip if already processed this port.
 		key := fmt.Sprintf("%s:%d", port.LocalAddr, port.LocalPort)
+		// Check if port was already seen.
 		if seenPorts[key] {
 			continue
 		}
 
-		// Apply port filters.
+		// Apply port and interface filters.
 		if !d.shouldIncludePort(port.LocalPort) {
 			continue
 		}
-
-		// Apply interface filters if configured.
+		// Check interface filter if interfaces are configured.
 		if len(d.interfaces) > 0 && !d.matchesInterface(port.LocalAddr) {
 			continue
 		}
 
-		// Mark port as seen.
+		// Mark port as seen and convert to target.
 		seenPorts[key] = true
-
-		// Create external target for this listening port.
-		t := d.portToTarget(port)
-		targets = append(targets, t)
+		targets = append(targets, d.portToTarget(port))
 	}
 
-	// Return discovered targets.
-	return targets, nil
+	// Return filtered targets.
+	return targets
 }
 
 // parseNetTCP parses /proc/net/tcp format and extracts listening ports.
-//
-// Format of /proc/net/tcp:
-//
-//	sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
-//	0: 0100007F:0035 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 17892
 //
 // Params:
 //   - path: path to the file (/proc/net/tcp or /proc/net/tcp6).
@@ -166,70 +242,107 @@ func (d *PortScanDiscoverer) Discover(ctx context.Context) ([]target.ExternalTar
 func (d *PortScanDiscoverer) parseNetTCP(path, protocol string) ([]listeningPort, error) {
 	// Open /proc/net/tcp file.
 	f, err := os.Open(path)
+	// Check for file open error.
 	if err != nil {
-		// Ignore missing file (might not have IPv6 support).
+		// Return nil for non-existent files.
 		if os.IsNotExist(err) {
+			// Return empty result for missing file.
 			return nil, nil
 		}
-		// Return error when file cannot be opened.
+		// Return error for other file errors.
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
+	// Parse file content into listening ports.
+	ports, err := d.scanNetTCPFile(f, protocol)
+	// Check for scanning error.
+	if err != nil {
+		// Return error with scan context.
+		return nil, fmt.Errorf("scanning %s: %w", path, err)
+	}
+
+	// Return parsed ports.
+	return ports, nil
+}
+
+// scanNetTCPFile scans lines from a /proc/net/tcp file.
+//
+// Params:
+//   - f: the file to scan.
+//   - protocol: protocol name ("tcp4" or "tcp6").
+//
+// Returns:
+//   - []listeningPort: list of ports in LISTEN state.
+//   - error: any scanner error.
+func (d *PortScanDiscoverer) scanNetTCPFile(f *os.File, protocol string) ([]listeningPort, error) {
 	var ports []listeningPort
 	scanner := bufio.NewScanner(f)
 
 	// Skip header line.
-	if scanner.Scan() {
-		// Header line skipped.
-	}
+	_ = scanner.Scan()
 
 	// Parse each line.
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		// Skip empty lines.
-		if line == "" {
-			continue
+		port, ok := d.parseNetTCPLine(scanner.Text(), protocol)
+		// Append port if parsing succeeded.
+		if ok {
+			ports = append(ports, port)
 		}
-
-		// Split line into fields.
-		fields := strings.Fields(line)
-		// Need at least 4 fields: sl, local_address, rem_address, st.
-		if len(fields) < 4 {
-			continue
-		}
-
-		// Extract state (field 3).
-		state := fields[3]
-		// Only interested in LISTEN state (0A in hex).
-		if state != "0A" {
-			continue
-		}
-
-		// Parse local address (field 1).
-		localAddr := fields[1]
-		addr, port, err := d.parseAddress(localAddr, protocol)
-		if err != nil {
-			// Skip malformed addresses.
-			continue
-		}
-
-		// Add to ports list.
-		ports = append(ports, listeningPort{
-			Protocol:  protocol,
-			LocalAddr: addr,
-			LocalPort: port,
-			State:     state,
-		})
 	}
 
-	// Check for scanner errors.
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scanning %s: %w", path, err)
+	// Return parsed ports with any scanner error.
+	return ports, scanner.Err()
+}
+
+// parseNetTCPLine parses a single line from /proc/net/tcp.
+//
+// Params:
+//   - line: the line to parse.
+//   - protocol: protocol name ("tcp4" or "tcp6").
+//
+// Returns:
+//   - listeningPort: the parsed port (if valid).
+//   - bool: true if the line was a valid listening port.
+func (d *PortScanDiscoverer) parseNetTCPLine(line, protocol string) (listeningPort, bool) {
+	line = strings.TrimSpace(line)
+	// Skip empty lines.
+	if line == "" {
+		// Return false for empty line.
+		return listeningPort{}, false
 	}
 
-	// Return parsed listening ports.
-	return ports, nil
+	// Split line into fields.
+	fields := strings.Fields(line)
+	// Check for minimum required fields.
+	if len(fields) < minTCPFields {
+		// Return false for malformed line.
+		return listeningPort{}, false
+	}
+
+	// Only interested in LISTEN state (0A in hex).
+	state := fields[tcpStateFieldIndex]
+	// Check if socket is in LISTEN state.
+	if state != "0A" {
+		// Return false for non-listening socket.
+		return listeningPort{}, false
+	}
+
+	// Parse local address (field 1).
+	addr, port, err := d.parseAddress(fields[1], protocol)
+	// Check for address parsing error.
+	if err != nil {
+		// Return false for invalid address.
+		return listeningPort{}, false
+	}
+
+	// Return parsed listening port.
+	return listeningPort{
+		Protocol:  protocol,
+		LocalAddr: addr,
+		LocalPort: port,
+		State:     state,
+	}, true
 }
 
 // parseAddress parses hex-encoded address from /proc/net/tcp.
@@ -246,46 +359,116 @@ func (d *PortScanDiscoverer) parseNetTCP(path, protocol string) ([]listeningPort
 func (d *PortScanDiscoverer) parseAddress(hexAddr, protocol string) (string, int, error) {
 	// Split address into IP and port.
 	parts := strings.Split(hexAddr, ":")
-	if len(parts) != 2 {
-		return "", 0, fmt.Errorf("invalid address format: %s", hexAddr)
+	// Check for valid address format.
+	if len(parts) != addressPartCount {
+		// Return error for invalid format.
+		return "", 0, fmt.Errorf("%w: %s", errInvalidAddressFormat, hexAddr)
 	}
 
 	// Parse port (always big-endian hex).
-	portHex := parts[1]
-	portVal, err := strconv.ParseUint(portHex, 16, 16)
+	portVal, err := parseHexPort(parts[1])
+	// Check for port parsing error.
 	if err != nil {
-		return "", 0, fmt.Errorf("parsing port %s: %w", portHex, err)
+		// Return error from port parsing.
+		return "", 0, err
 	}
 
-	// Parse IP address (little-endian for IPv4, big-endian for IPv6).
-	ipHex := parts[0]
+	// Parse IP address based on protocol.
+	ipAddr, err := parseHexIP(parts[0], protocol)
+	// Check for IP parsing error.
+	if err != nil {
+		// Return error from IP parsing.
+		return "", 0, err
+	}
+
+	// Return parsed address components.
+	return ipAddr, portVal, nil
+}
+
+// parseHexPort parses a hex-encoded port number.
+//
+// Params:
+//   - portHex: hex-encoded port string.
+//
+// Returns:
+//   - int: port number.
+//   - error: any parsing error.
+func parseHexPort(portHex string) (int, error) {
+	portVal, err := strconv.ParseUint(portHex, hexBase, portBitSize)
+	// Check for parsing error.
+	if err != nil {
+		// Return error with context.
+		return 0, fmt.Errorf("parsing port %s: %w", portHex, err)
+	}
+	// Return parsed port value.
+	return int(portVal), nil
+}
+
+// parseHexIP parses a hex-encoded IP address.
+//
+// Params:
+//   - ipHex: hex-encoded IP string.
+//   - protocol: protocol name ("tcp4" or "tcp6").
+//
+// Returns:
+//   - string: IP address string.
+//   - error: any parsing error.
+func parseHexIP(ipHex, protocol string) (string, error) {
 	ipBytes, err := hex.DecodeString(ipHex)
+	// Check for hex decoding error.
 	if err != nil {
-		return "", 0, fmt.Errorf("decoding IP %s: %w", ipHex, err)
+		// Return error with context.
+		return "", fmt.Errorf("decoding IP %s: %w", ipHex, err)
 	}
 
-	var ipAddr string
+	// Handle protocol-specific IP parsing.
 	if protocol == "tcp4" {
-		// IPv4: reverse byte order (little-endian).
-		if len(ipBytes) != 4 {
-			return "", 0, fmt.Errorf("invalid IPv4 length: %d", len(ipBytes))
-		}
-		// Reverse bytes for little-endian.
-		for i := 0; i < len(ipBytes)/2; i++ {
-			j := len(ipBytes) - 1 - i
-			ipBytes[i], ipBytes[j] = ipBytes[j], ipBytes[i]
-		}
-		ipAddr = net.IP(ipBytes).String()
-	} else {
-		// IPv6: already in correct byte order.
-		if len(ipBytes) != 16 {
-			return "", 0, fmt.Errorf("invalid IPv6 length: %d", len(ipBytes))
-		}
-		ipAddr = net.IP(ipBytes).String()
+		// Return IPv4 parsing result.
+		return parseIPv4Bytes(ipBytes)
 	}
+	// Return IPv6 parsing result.
+	return parseIPv6Bytes(ipBytes)
+}
 
-	// Return parsed IP and port.
-	return ipAddr, int(portVal), nil
+// parseIPv4Bytes converts IPv4 bytes to string (little-endian).
+//
+// Params:
+//   - ipBytes: byte slice containing IPv4 address.
+//
+// Returns:
+//   - string: IP address string representation.
+//   - error: any parsing error.
+func parseIPv4Bytes(ipBytes []byte) (string, error) {
+	// Check for valid IPv4 length.
+	if len(ipBytes) != ipv4ByteLength {
+		// Return error for invalid length.
+		return "", fmt.Errorf("%w: %d", errInvalidIPv4Length, len(ipBytes))
+	}
+	// Reverse bytes for little-endian.
+	for i := range len(ipBytes) / byteReversalDivisor {
+		j := len(ipBytes) - 1 - i
+		ipBytes[i], ipBytes[j] = ipBytes[j], ipBytes[i]
+	}
+	// Return string representation of IP.
+	return net.IP(ipBytes).String(), nil
+}
+
+// parseIPv6Bytes converts IPv6 bytes to string.
+//
+// Params:
+//   - ipBytes: byte slice containing IPv6 address.
+//
+// Returns:
+//   - string: IP address string representation.
+//   - error: any parsing error.
+func parseIPv6Bytes(ipBytes []byte) (string, error) {
+	// Check for valid IPv6 length.
+	if len(ipBytes) != ipv6ByteLength {
+		// Return error for invalid length.
+		return "", fmt.Errorf("%w: %d", errInvalidIPv6Length, len(ipBytes))
+	}
+	// Return string representation of IP.
+	return net.IP(ipBytes).String(), nil
 }
 
 // shouldIncludePort checks if a port should be included based on filters.
@@ -298,6 +481,7 @@ func (d *PortScanDiscoverer) parseAddress(hexAddr, protocol string) (string, int
 func (d *PortScanDiscoverer) shouldIncludePort(port int) bool {
 	// If IncludePorts is set, only include those ports.
 	if len(d.includePorts) > 0 {
+		// Return true if port is in include list.
 		return d.includePorts[port]
 	}
 
@@ -315,47 +499,64 @@ func (d *PortScanDiscoverer) shouldIncludePort(port int) bool {
 func (d *PortScanDiscoverer) matchesInterface(addr string) bool {
 	// Get all network interfaces.
 	interfaces, err := net.Interfaces()
+	// Allow address if interface listing fails.
 	if err != nil {
-		// Cannot verify interfaces - include all.
+		// Return true on error to allow the address.
 		return true
 	}
 
 	// Parse target IP.
 	targetIP := net.ParseIP(addr)
+	// Reject if address cannot be parsed.
 	if targetIP == nil {
-		// Invalid IP - exclude.
+		// Return false for invalid IP.
 		return false
 	}
 
-	// Check each interface.
+	// Check each configured interface.
 	for _, iface := range interfaces {
-		// Skip if not in configured interfaces.
+		// Skip interface if not in configured set.
 		if !d.interfaces[iface.Name] {
 			continue
 		}
-
-		// Get addresses for this interface.
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-
-		// Check if target IP matches any address on this interface.
-		for _, ifaceAddr := range addrs {
-			// Parse interface address.
-			ipNet, ok := ifaceAddr.(*net.IPNet)
-			if !ok {
-				continue
-			}
-
-			// Check if target IP matches.
-			if ipNet.IP.Equal(targetIP) {
-				return true
-			}
+		// Check if interface has the target IP.
+		if d.interfaceContainsIP(&iface, targetIP) {
+			// Return true when IP is found.
+			return true
 		}
 	}
 
-	// No interface matched.
+	// Return false when no interface matches.
+	return false
+}
+
+// interfaceContainsIP checks if an interface has the given IP address.
+//
+// Params:
+//   - iface: the network interface to check.
+//   - targetIP: the IP address to find.
+//
+// Returns:
+//   - bool: true if the interface has the target IP.
+func (d *PortScanDiscoverer) interfaceContainsIP(iface Addrser, targetIP net.IP) bool {
+	addrs, err := iface.Addrs()
+	// Return false if addresses cannot be retrieved.
+	if err != nil {
+		// Return false on error.
+		return false
+	}
+
+	// Check each address on the interface.
+	for _, ifaceAddr := range addrs {
+		ipNet, ok := ifaceAddr.(*net.IPNet)
+		// Check if address matches target.
+		if ok && ipNet.IP.Equal(targetIP) {
+			// Return true when IP matches.
+			return true
+		}
+	}
+
+	// Return false when no address matches.
 	return false
 }
 
@@ -383,7 +584,7 @@ func (d *PortScanDiscoverer) portToTarget(port listeningPort) target.ExternalTar
 		Name:             name,
 		Type:             target.TypeCustom,
 		Source:           target.SourceDiscovered,
-		Labels:           make(map[string]string, 3),
+		Labels:           make(map[string]string, portScanLabelCount),
 		ProbeType:        "tcp",
 		ProbeTarget:      health.NewTCPTarget(address),
 		Interval:         defaultProbeInterval,

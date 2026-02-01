@@ -26,6 +26,16 @@ var (
 	initialized bool
 	// initMu protects access to the initialized flag.
 	initMu sync.Mutex
+	// probeErrorMap maps C error codes to Go sentinel errors.
+	probeErrorMap map[C.int]error = map[C.int]error{
+		probeOK:            nil,
+		probeErrNotSupport: ErrNotSupported,
+		probeErrPermission: ErrPermission,
+		probeErrNotFound:   ErrNotFound,
+		probeErrInvalidPar: ErrInvalidParam,
+		probeErrIO:         ErrIO,
+		probeErrInternal:   ErrInternal,
+	}
 )
 
 // Init initializes the Rust probe library.
@@ -109,56 +119,41 @@ func QuotaSupported() bool {
 //
 // Returns:
 //   - error: nil on success, appropriate error on failure
-func resultToError(r C.ProbeResult) error { //nolint:cyclop // Switch-based error code mapping
-	// Check if operation was successful.
+func resultToError(r C.ProbeResult) error {
+	// Return nil for successful operations.
 	if r.success {
-		// Return nil for success.
+		// Success case.
 		return nil
 	}
 
-	// Map error codes to sentinel errors.
-	switch r.error_code {
-	// Success case - operation completed without error.
-	case probeOK:
-		// Return nil for successful operation.
-		return nil
-	// Operation not supported on this platform.
-	case probeErrNotSupport:
-		// Return not supported error.
-		return ErrNotSupported
-	// Permission denied for the operation.
-	case probeErrPermission:
-		// Return permission error.
-		return ErrPermission
-	// Resource not found.
-	case probeErrNotFound:
-		// Return not found error.
-		return ErrNotFound
-	// Invalid parameter provided.
-	case probeErrInvalidPar:
-		// Return invalid parameter error.
-		return ErrInvalidParam
-	// I/O error occurred during operation.
-	case probeErrIO:
-		// Return I/O error.
-		return ErrIO
-	// Internal library error.
-	case probeErrInternal:
-		// Return internal error.
-		return ErrInternal
-	// Unknown error code with message.
-	default:
-		// Check if there's an error message available.
-		if r.error_message != nil {
-			// Return wrapped error with message.
-			return &probeError{
-				code:    int(r.error_code),
-				message: C.GoString(r.error_message),
-			}
-		}
-		// Return generic internal error.
-		return ErrInternal
+	// Look up error in map.
+	if err, ok := probeErrorMap[r.error_code]; ok {
+		// Return known error.
+		return err
 	}
+
+	// Handle unknown error codes with message.
+	return buildUnknownError(r)
+}
+
+// buildUnknownError creates an error for unknown error codes.
+//
+// Params:
+//   - r: the C ProbeResult with unknown error code
+//
+// Returns:
+//   - error: the constructed error
+func buildUnknownError(r C.ProbeResult) error {
+	// Return error with message if available.
+	if r.error_message != nil {
+		// Build error with code and message.
+		return &probeError{
+			code:    int(r.error_code),
+			message: C.GoString(r.error_message),
+		}
+	}
+	// Fallback to generic internal error.
+	return ErrInternal
 }
 
 // probeError wraps an error code and message from the probe library.

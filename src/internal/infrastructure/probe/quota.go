@@ -3,7 +3,7 @@
 // Package probe provides CGO bindings to the Rust probe library for unified
 // cross-platform system metrics and resource quota management.
 //
-//nolint:ktn-struct-onefile // Quota structs (QuotaLimits, QuotaUsage, ContainerInfo) are logically grouped
+//nolint:ktn-struct-onefile,ktn-const-order // Quota structs logically grouped; ContainerRuntime constants follow type
 package probe
 
 /*
@@ -76,6 +76,15 @@ type QuotaLimits struct {
 	Flags uint32
 }
 
+// NewQuotaLimits creates a new QuotaLimits with all limits initialized to zero.
+//
+// Returns:
+//   - *QuotaLimits: new quota limits instance with no limits set
+func NewQuotaLimits() *QuotaLimits {
+	// Return empty limits struct with zero values.
+	return &QuotaLimits{}
+}
+
 // HasCPULimit returns whether a CPU limit is set.
 //
 // Returns:
@@ -111,7 +120,7 @@ func (l *QuotaLimits) CPULimitPercent() float64 {
 
 // QuotaUsage represents current resource usage for a process.
 // It provides a snapshot of memory, PIDs, and CPU utilization.
-type QuotaUsage struct {
+type QuotaUsage struct { //nolint:ktn-struct-onefile // grouped with quota types
 	// MemoryBytes is the current memory usage in bytes.
 	MemoryBytes uint64
 
@@ -131,6 +140,15 @@ type QuotaUsage struct {
 	CPULimitPercent float64
 }
 
+// NewQuotaUsage creates a new QuotaUsage with all usage values initialized to zero.
+//
+// Returns:
+//   - *QuotaUsage: new quota usage instance
+func NewQuotaUsage() *QuotaUsage {
+	// Return empty usage struct with zero values.
+	return &QuotaUsage{}
+}
+
 // MemoryUsagePercent calculates memory usage as percentage of limit.
 // Returns 0 if no limit is set.
 //
@@ -146,17 +164,15 @@ func (u *QuotaUsage) MemoryUsagePercent() float64 {
 	return float64(u.MemoryBytes) / float64(u.MemoryLimitBytes) * percentMultiplierQuota
 }
 
+// containerRuntimeUnknownStr is the string representation for unknown runtimes.
+const containerRuntimeUnknownStr string = "unknown" //nolint:ktn-const-order // Placed near ContainerRuntime type for readability
+
 // ContainerRuntime represents a container runtime type.
 // It identifies the orchestration platform or isolation mechanism.
 type ContainerRuntime int
 
-// containerRuntimeUnknownStr is the string representation for unknown runtimes.
-const containerRuntimeUnknownStr string = "unknown"
-
 // Container runtime constants for identifying the execution environment.
-//
-//nolint:ktn-const-order // Typed constants must follow their type definition
-const (
+const ( //nolint:ktn-const-order // Typed constants must follow their type definition
 	// ContainerRuntimeNone indicates no containerization.
 	ContainerRuntimeNone ContainerRuntime = 0
 	// ContainerRuntimeDocker indicates Docker runtime.
@@ -219,7 +235,7 @@ func (r ContainerRuntime) String() string {
 
 // ContainerInfo represents container detection results.
 // It provides information about the containerized execution environment.
-type ContainerInfo struct {
+type ContainerInfo struct { //nolint:ktn-struct-onefile // grouped with quota types
 	// IsContainerized indicates whether running in a container.
 	IsContainerized bool
 

@@ -6,14 +6,16 @@ package discovery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/kodflow/daemon/internal/domain/config"
-	"github.com/kodflow/daemon/internal/domain/health"
-	"github.com/kodflow/daemon/internal/domain/target"
 	"maps"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/kodflow/daemon/internal/domain/config"
+	"github.com/kodflow/daemon/internal/domain/health"
+	"github.com/kodflow/daemon/internal/domain/target"
 )
 
 // Kubernetes probe and pod phase constants.
@@ -24,6 +26,9 @@ const (
 	// kubernetesPodPhaseRunning is the pod phase for running pods.
 	kubernetesPodPhaseRunning string = "Running"
 )
+
+// errUnexpectedK8sStatus is returned when Kubernetes API returns non-OK status.
+var errUnexpectedK8sStatus error = errors.New("unexpected status code")
 
 // KubernetesDiscoverer discovers Kubernetes pods via the Kubernetes API.
 // It connects to the K8s API server and queries pods across namespaces.
@@ -54,13 +59,17 @@ type KubernetesDiscoverer struct {
 func NewKubernetesDiscoverer(cfg *config.KubernetesDiscoveryConfig) (*KubernetesDiscoverer, error) {
 	// Load authentication from kubeconfig or in-cluster.
 	auth, err := loadKubeconfigOrInCluster(cfg.KubeconfigPath)
+	// Check for authentication loading error.
 	if err != nil {
+		// Return error with authentication context.
 		return nil, fmt.Errorf("load kubernetes auth: %w", err)
 	}
 
 	// Create HTTP client with TLS configuration.
 	client, err := newHTTPClient(auth)
+	// Check for HTTP client creation error.
 	if err != nil {
+		// Return error with client context.
 		return nil, fmt.Errorf("create kubernetes http client: %w", err)
 	}
 
@@ -94,6 +103,7 @@ func (d *KubernetesDiscoverer) Type() target.Type {
 func (d *KubernetesDiscoverer) Discover(ctx context.Context) ([]target.ExternalTarget, error) {
 	// Use all namespaces if none specified.
 	namespaces := d.namespaces
+	// Check if no namespaces were configured.
 	if len(namespaces) == 0 {
 		namespaces = []string{"default"}
 	}
@@ -104,7 +114,9 @@ func (d *KubernetesDiscoverer) Discover(ctx context.Context) ([]target.ExternalT
 	// Query each namespace sequentially.
 	for _, ns := range namespaces {
 		targets, err := d.discoverNamespace(ctx, ns)
+		// Check for namespace discovery error.
 		if err != nil {
+			// Return error with namespace context.
 			return nil, fmt.Errorf("discover namespace %s: %w", ns, err)
 		}
 		allTargets = append(allTargets, targets...)
@@ -125,6 +137,29 @@ func (d *KubernetesDiscoverer) Discover(ctx context.Context) ([]target.ExternalT
 //   - error: any error during discovery.
 func (d *KubernetesDiscoverer) discoverNamespace(ctx context.Context, namespace string) ([]target.ExternalTarget, error) {
 	// Build API URL for pod list.
+	apiURL := d.buildPodListURL(namespace)
+
+	// Fetch pods from K8s API.
+	podList, err := d.fetchPods(ctx, apiURL)
+	// Check for pod fetch error.
+	if err != nil {
+		// Return error from pod fetch.
+		return nil, err
+	}
+
+	// Convert pods to external targets.
+	return d.filterAndConvertPods(podList), nil
+}
+
+// buildPodListURL constructs the API URL for listing pods in a namespace.
+//
+// Params:
+//   - namespace: the namespace to query.
+//
+// Returns:
+//   - string: the full API URL with optional label selector.
+func (d *KubernetesDiscoverer) buildPodListURL(namespace string) string {
+	// Build base API URL for pod list.
 	apiURL := fmt.Sprintf("%s/api/v1/namespaces/%s/pods", d.auth.apiServer, namespace)
 
 	// Add label selector query parameter if set.
@@ -134,9 +169,25 @@ func (d *KubernetesDiscoverer) discoverNamespace(ctx context.Context, namespace 
 		apiURL = fmt.Sprintf("%s?%s", apiURL, params.Encode())
 	}
 
+	// Return the constructed API URL.
+	return apiURL
+}
+
+// fetchPods retrieves the pod list from the Kubernetes API.
+//
+// Params:
+//   - ctx: context for cancellation.
+//   - apiURL: the API endpoint URL.
+//
+// Returns:
+//   - *k8sPodList: the retrieved pod list.
+//   - error: any error during fetch.
+func (d *KubernetesDiscoverer) fetchPods(ctx context.Context, apiURL string) (*k8sPodList, error) {
 	// Build HTTP request with bearer token.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	// Check for request creation error.
 	if err != nil {
+		// Return error with request context.
 		return nil, fmt.Errorf("create kubernetes request: %w", err)
 	}
 
@@ -146,24 +197,42 @@ func (d *KubernetesDiscoverer) discoverNamespace(ctx context.Context, namespace 
 
 	// Execute request against K8s API.
 	resp, err := d.client.Do(req)
+	// Check for API request error.
 	if err != nil {
+		// Return error with API context.
 		return nil, fmt.Errorf("kubernetes api request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	// Verify successful response from K8s API.
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("kubernetes api returned status %d", resp.StatusCode)
+		// Return error for unexpected status code.
+		return nil, fmt.Errorf("kubernetes api: %w (status %d)", errUnexpectedK8sStatus, resp.StatusCode)
 	}
 
 	// Parse JSON response into pod list.
 	var podList k8sPodList
+	// Check for JSON decode error.
 	if err := json.NewDecoder(resp.Body).Decode(&podList); err != nil {
+		// Return error with decode context.
 		return nil, fmt.Errorf("decode kubernetes response: %w", err)
 	}
 
-	// Convert pods to external targets.
+	// Return the parsed pod list.
+	return &podList, nil
+}
+
+// filterAndConvertPods filters running pods with IPs and converts them to targets.
+//
+// Params:
+//   - podList: the pod list to filter and convert.
+//
+// Returns:
+//   - []target.ExternalTarget: the filtered and converted targets.
+func (d *KubernetesDiscoverer) filterAndConvertPods(podList *k8sPodList) []target.ExternalTarget {
 	var targets []target.ExternalTarget
+
+	// Iterate through each pod in the list.
 	for _, pod := range podList.Items {
 		// Skip non-running pods.
 		if pod.Status.Phase != kubernetesPodPhaseRunning {
@@ -179,8 +248,8 @@ func (d *KubernetesDiscoverer) discoverNamespace(ctx context.Context, namespace 
 		targets = append(targets, t)
 	}
 
-	// Return all discovered and converted targets.
-	return targets, nil
+	// Return filtered and converted targets.
+	return targets
 }
 
 // podToTarget converts a Kubernetes pod to an ExternalTarget.
@@ -232,9 +301,11 @@ func (d *KubernetesDiscoverer) podToTarget(pod k8sPod) target.ExternalTarget {
 func (d *KubernetesDiscoverer) configureProbe(t *target.ExternalTarget, pod k8sPod) {
 	// Find first TCP port across all containers.
 	for _, container := range pod.Spec.Containers {
+		// Iterate through ports for this container.
 		for _, port := range container.Ports {
 			// Check for TCP port (default if protocol not specified).
 			protocol := strings.ToUpper(port.Protocol)
+			// Configure probe if this is a TCP port.
 			if protocol == "" || protocol == "TCP" {
 				addr := fmt.Sprintf("%s:%d", pod.Status.PodIP, port.ContainerPort)
 				t.ProbeType = kubernetesProbeTypeTCP

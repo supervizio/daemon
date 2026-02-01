@@ -260,5 +260,6 @@ func cCharArrayToString(arr []C.char) string {
 	}
 	// Convert to string once with determined length.
 	bytes := unsafe.Slice(basePtr, length)
+	// Return the converted string.
 	return string(bytes)
 }

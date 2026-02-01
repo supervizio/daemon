@@ -51,11 +51,11 @@ func TestBSDRCDiscoverer_Type(t *testing.T) {
 // TestBSDRCDiscoverer_Discover tests the Discover method.
 func TestBSDRCDiscoverer_Discover(t *testing.T) {
 	tests := []struct {
-		name        string
-		patterns    []string
-		wantErr     bool
-		minTargets  int
-		validateFn  func(*testing.T, []target.ExternalTarget)
+		name       string
+		patterns   []string
+		wantErr    bool
+		minTargets int
+		validateFn func(*testing.T, []target.ExternalTarget)
 	}{
 		{
 			name:       "discovers all services without patterns",

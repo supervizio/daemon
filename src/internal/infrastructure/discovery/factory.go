@@ -52,6 +52,7 @@ func (f *Factory) CreateDiscoverers() []target.Discoverer {
 	discoverers = f.addOpenRCDiscoverer(discoverers)
 	discoverers = f.addBSDRCDiscoverer(discoverers)
 	discoverers = f.addDockerDiscoverer(discoverers)
+	discoverers = f.addPodmanDiscoverer(discoverers)
 	discoverers = f.addKubernetesDiscoverer(discoverers)
 	discoverers = f.addNomadDiscoverer(discoverers)
 	discoverers = f.addPortScanDiscoverer(discoverers)
@@ -91,6 +92,25 @@ func (f *Factory) addDockerDiscoverer(discoverers []target.Discoverer) []target.
 	if f.config.Docker != nil && f.config.Docker.Enabled {
 		// Create Docker discoverer instance.
 		if discoverer := f.createDockerDiscoverer(); discoverer != nil {
+			discoverers = append(discoverers, discoverer)
+		}
+	}
+	// Return updated list.
+	return discoverers
+}
+
+// addPodmanDiscoverer adds Podman discoverer if enabled.
+//
+// Params:
+//   - discoverers: existing discoverer list.
+//
+// Returns:
+//   - []target.Discoverer: updated discoverer list.
+func (f *Factory) addPodmanDiscoverer(discoverers []target.Discoverer) []target.Discoverer {
+	// Check if Podman discovery is configured and enabled.
+	if f.config.Podman != nil && f.config.Podman.Enabled {
+		// Create Podman discoverer instance.
+		if discoverer := f.createPodmanDiscoverer(); discoverer != nil {
 			discoverers = append(discoverers, discoverer)
 		}
 	}

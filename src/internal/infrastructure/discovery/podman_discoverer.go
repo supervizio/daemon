@@ -5,7 +5,6 @@ package discovery
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"maps"
 	"net"
@@ -82,35 +81,12 @@ func NewPodmanDiscoverer(socketPath string, labels map[string]string) *PodmanDis
 //   - []target.ExternalTarget: the discovered containers.
 //   - error: any error during discovery.
 func (d *PodmanDiscoverer) Discover(ctx context.Context) ([]target.ExternalTarget, error) {
-	// Build API request for container list (Podman-compatible endpoint).
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://podman/containers/json", nil)
-	// Check for request creation error.
+	// Fetch containers using shared helper for Docker-compatible APIs.
+	containers, err := fetchContainers(ctx, d.client, "http://podman/containers/json", "podman")
+	// Check for fetch error.
 	if err != nil {
-		// Return error with request context.
-		return nil, fmt.Errorf("create podman request: %w", err)
-	}
-
-	// Execute request against Podman API.
-	resp, err := d.client.Do(req)
-	// Check for API communication error.
-	if err != nil {
-		// Return error with API context.
-		return nil, fmt.Errorf("podman api request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Verify successful response from Podman API.
-	if resp.StatusCode != http.StatusOK {
-		// Return error for non-OK status.
-		return nil, fmt.Errorf("podman api returned status %d: %w", resp.StatusCode, err)
-	}
-
-	// Parse JSON response into container structs (reuse Docker types for API compatibility).
-	var containers []dockerContainer
-	// Check for JSON decoding error.
-	if err := json.NewDecoder(resp.Body).Decode(&containers); err != nil {
-		// Return error with decode context.
-		return nil, fmt.Errorf("decode podman response: %w", err)
+		// Return error from fetch operation.
+		return nil, err
 	}
 
 	// Convert matching containers to external targets.

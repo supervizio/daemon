@@ -86,18 +86,21 @@ func TestProcessCollector_CollectIO(t *testing.T) {
 	t.Logf("Process %d I/O: read=%d B/s, write=%d B/s",
 		pid, io1.ReadBytesPerSec, io1.WriteBytesPerSec)
 
-	// Perform some I/O operations
-	tmpFile, err := os.CreateTemp("", "probe-test-*")
+	// Perform some I/O operations using t.TempDir()
+	tmpDir := t.TempDir()
+	tmpFilePath := tmpDir + "/probe-test"
+	tmpFile, err := os.Create(tmpFilePath)
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
 
 	// Write some data
-	data := make([]byte, 1024*1024) // 1 MB
-	for i := 0; i < 10; i++ {
+	const ioTestDataSize int = 1024 * 1024 // 1 MB
+	data := make([]byte, ioTestDataSize)
+	// Write data multiple times to generate I/O activity.
+	for range 10 {
 		_, _ = tmpFile.Write(data)
 	}
 	_ = tmpFile.Sync()
-	_ = tmpFile.Close()
 
 	// Wait a bit for the metrics to update
 	time.Sleep(100 * time.Millisecond)

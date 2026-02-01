@@ -74,9 +74,9 @@ func TestNewProbeConfig_ICMPMode(t *testing.T) {
 // TestProbeConfig_ICMPMode_customization tests setting custom ICMP mode.
 func TestProbeConfig_ICMPMode_customization(t *testing.T) {
 	tests := []struct {
-		name         string
-		probeType    string
-		customMode   config.ICMPMode
+		name       string
+		probeType  string
+		customMode config.ICMPMode
 	}{
 		{
 			name:       "set_native_mode",

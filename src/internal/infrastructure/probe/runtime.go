@@ -122,6 +122,8 @@ type AvailableRuntime struct {
 
 // RuntimeInfo contains full runtime environment detection results.
 // It describes containerization state and available runtimes.
+//
+//nolint:ktn-struct-onefile // grouped with runtime types
 type RuntimeInfo struct {
 	// IsContainerized indicates whether running inside a container.
 	IsContainerized bool

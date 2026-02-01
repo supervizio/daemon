@@ -117,6 +117,7 @@ func (d *OpenRCDiscoverer) listServices(ctx context.Context) ([]string, error) {
 		// Extract service name from format: "service_name [started]"
 		// Service name is everything before the first space.
 		spaceIdx := strings.Index(line, " ")
+		// Check if line has space separator.
 		if spaceIdx == -1 {
 			// Line doesn't contain status bracket - skip malformed output.
 			continue

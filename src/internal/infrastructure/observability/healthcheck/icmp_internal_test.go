@@ -16,38 +16,38 @@ import (
 // TestICMPProber_internalFields tests internal struct fields.
 func TestICMPProber_internalFields(t *testing.T) {
 	tests := []struct {
-		name                   string
-		timeout                time.Duration
-		tcpPort                int
-		expectedTimeout        time.Duration
-		expectedMode           config.ICMPMode
-		expectedTCPPort        int
-		useWithTCPFallback     bool
+		name               string
+		timeout            time.Duration
+		tcpPort            int
+		expectedTimeout    time.Duration
+		expectedMode       config.ICMPMode
+		expectedTCPPort    int
+		useWithTCPFallback bool
 	}{
 		{
-			name:                "default_prober",
-			timeout:             5 * time.Second,
-			expectedTimeout:     5 * time.Second,
-			expectedMode:        config.ICMPModeAuto,
-			expectedTCPPort:     defaultTCPFallbackPort,
-			useWithTCPFallback:  false,
+			name:               "default_prober",
+			timeout:            5 * time.Second,
+			expectedTimeout:    5 * time.Second,
+			expectedMode:       config.ICMPModeAuto,
+			expectedTCPPort:    defaultTCPFallbackPort,
+			useWithTCPFallback: false,
 		},
 		{
-			name:                "prober_with_custom_port",
-			timeout:             5 * time.Second,
-			tcpPort:             443,
-			expectedTimeout:     5 * time.Second,
-			expectedMode:        config.ICMPModeFallback,
-			expectedTCPPort:     443,
-			useWithTCPFallback:  true,
+			name:               "prober_with_custom_port",
+			timeout:            5 * time.Second,
+			tcpPort:            443,
+			expectedTimeout:    5 * time.Second,
+			expectedMode:       config.ICMPModeFallback,
+			expectedTCPPort:    443,
+			useWithTCPFallback: true,
 		},
 		{
-			name:                "zero_timeout",
-			timeout:             0,
-			expectedTimeout:     0,
-			expectedMode:        config.ICMPModeAuto,
-			expectedTCPPort:     defaultTCPFallbackPort,
-			useWithTCPFallback:  false,
+			name:               "zero_timeout",
+			timeout:            0,
+			expectedTimeout:    0,
+			expectedMode:       config.ICMPModeAuto,
+			expectedTCPPort:    defaultTCPFallbackPort,
+			useWithTCPFallback: false,
 		},
 	}
 

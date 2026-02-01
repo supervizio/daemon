@@ -6,6 +6,7 @@ package discovery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -16,20 +17,26 @@ import (
 	"github.com/kodflow/daemon/internal/domain/target"
 )
 
-// nomadProbeTypeTCP is the TCP probe type constant.
-const nomadProbeTypeTCP string = "tcp"
+// Nomad API constants.
+const (
+	// nomadProbeTypeTCP is the TCP probe type constant.
+	nomadProbeTypeTCP string = "tcp"
 
-// defaultNomadAddress is the default Nomad API address.
-const defaultNomadAddress string = "http://localhost:4646"
+	// defaultNomadAddress is the default Nomad API address.
+	defaultNomadAddress string = "http://localhost:4646"
 
-// nomadRequestTimeout is the timeout for Nomad API requests.
-const nomadRequestTimeout time.Duration = 10 * time.Second
+	// nomadRequestTimeout is the timeout for Nomad API requests.
+	nomadRequestTimeout time.Duration = 10 * time.Second
 
-// nomadMetadataLabels is the number of Nomad-specific metadata labels added to targets.
-const nomadMetadataLabels int = 5
+	// nomadMetadataLabels is the number of Nomad-specific metadata labels added to targets.
+	nomadMetadataLabels int = 5
 
-// allocIDDisplayLength is the truncated length for allocation IDs in names/labels.
-const allocIDDisplayLength int = 8
+	// allocIDDisplayLength is the truncated length for allocation IDs in names/labels.
+	allocIDDisplayLength int = 8
+)
+
+// errUnexpectedNomadStatus is returned when Nomad API returns non-OK status.
+var errUnexpectedNomadStatus error = errors.New("unexpected status code")
 
 // NomadDiscoverer discovers Nomad allocations via the Nomad HTTP API.
 // It connects to the Nomad API and queries running allocations.
@@ -59,6 +66,7 @@ type NomadDiscoverer struct {
 func NewNomadDiscoverer(cfg *config.NomadDiscoveryConfig) *NomadDiscoverer {
 	// Use default address if not specified in configuration.
 	address := cfg.Address
+	// Fallback to default Nomad address if empty.
 	if address == "" {
 		address = defaultNomadAddress
 	}
@@ -87,8 +95,30 @@ func NewNomadDiscoverer(cfg *config.NomadDiscoveryConfig) *NomadDiscoverer {
 //   - []target.ExternalTarget: the discovered allocations.
 //   - error: any error during discovery.
 func (d *NomadDiscoverer) Discover(ctx context.Context) ([]target.ExternalTarget, error) {
-	// Build API endpoint for allocation list with namespace parameter.
+	// Fetch all allocations from Nomad API.
+	allocations, err := d.fetchAllocations(ctx)
+	// Check for allocation fetch error.
+	if err != nil {
+		// Return error from fetch.
+		return nil, err
+	}
+
+	// Convert matching allocations to external targets.
+	return d.processAllocations(ctx, allocations), nil
+}
+
+// fetchAllocations retrieves all allocations from the Nomad API.
+//
+// Params:
+//   - ctx: context for cancellation.
+//
+// Returns:
+//   - nomadAllocationList: the list of allocations.
+//   - error: any error during fetch.
+func (d *NomadDiscoverer) fetchAllocations(ctx context.Context) (nomadAllocationList, error) {
+	// Build API endpoint for allocation list.
 	url := fmt.Sprintf("%s/v1/allocations", d.address)
+
 	// Create request with context for cancellation support.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	// Check for request creation error.
@@ -99,14 +129,14 @@ func (d *NomadDiscoverer) Discover(ctx context.Context) ([]target.ExternalTarget
 
 	// Add namespace query parameter if specified.
 	if d.namespace != "" {
-		q := req.URL.Query()
-		q.Add("namespace", d.namespace)
-		req.URL.RawQuery = q.Encode()
+		query := req.URL.Query()
+		query.Add("namespace", d.namespace)
+		req.URL.RawQuery = query.Encode()
 	}
 
 	// Execute request against Nomad API.
 	resp, err := d.client.Do(req)
-	// Check for API communication error.
+	// Check for API request error.
 	if err != nil {
 		// Return error with API context.
 		return nil, fmt.Errorf("nomad api request: %w", err)
@@ -115,21 +145,34 @@ func (d *NomadDiscoverer) Discover(ctx context.Context) ([]target.ExternalTarget
 
 	// Verify successful response from Nomad API.
 	if resp.StatusCode != http.StatusOK {
-		// Return error for non-OK status.
-		return nil, fmt.Errorf("nomad api returned status %d", resp.StatusCode)
+		// Return error for unexpected status code.
+		return nil, fmt.Errorf("nomad api: %w (status %d)", errUnexpectedNomadStatus, resp.StatusCode)
 	}
 
 	// Parse JSON response into allocation structs.
 	var allocations nomadAllocationList
-	// Check for JSON decoding error.
+	// Check for JSON decode error.
 	if err := json.NewDecoder(resp.Body).Decode(&allocations); err != nil {
 		// Return error with decode context.
 		return nil, fmt.Errorf("decode nomad response: %w", err)
 	}
 
-	// Convert matching allocations to external targets.
+	// Return parsed allocations.
+	return allocations, nil
+}
+
+// processAllocations converts matching allocations to external targets.
+//
+// Params:
+//   - ctx: context for cancellation.
+//   - allocations: the list of allocations to process.
+//
+// Returns:
+//   - []target.ExternalTarget: the converted targets.
+func (d *NomadDiscoverer) processAllocations(ctx context.Context, allocations nomadAllocationList) []target.ExternalTarget {
 	var targets []target.ExternalTarget
-	// Iterate over discovered allocations.
+
+	// Iterate through each allocation.
 	for _, alloc := range allocations {
 		// Skip allocations that don't match filters.
 		if !d.matchesFilters(alloc) {
@@ -138,7 +181,7 @@ func (d *NomadDiscoverer) Discover(ctx context.Context) ([]target.ExternalTarget
 
 		// Fetch detailed allocation info for port mappings.
 		allocDetail, err := d.fetchAllocationDetail(ctx, alloc.ID)
-		// Skip allocation on error (continue with others).
+		// Skip allocation if detail fetch fails.
 		if err != nil {
 			continue
 		}
@@ -148,8 +191,8 @@ func (d *NomadDiscoverer) Discover(ctx context.Context) ([]target.ExternalTarget
 		targets = append(targets, taskTargets...)
 	}
 
-	// Return all discovered and converted targets.
-	return targets, nil
+	// Return processed targets.
+	return targets
 }
 
 // Type returns the target type for Nomad.
@@ -172,6 +215,7 @@ func (d *NomadDiscoverer) Type() target.Type {
 func (d *NomadDiscoverer) matchesFilters(alloc nomadAllocation) bool {
 	// Only include running allocations.
 	if alloc.ClientStatus != "running" {
+		// Return false for non-running allocations.
 		return false
 	}
 
@@ -179,6 +223,7 @@ func (d *NomadDiscoverer) matchesFilters(alloc nomadAllocation) bool {
 	if d.jobFilter != "" {
 		// Simple prefix matching for job names.
 		if !strings.HasPrefix(alloc.JobID, d.jobFilter) {
+			// Return false when job filter doesn't match.
 			return false
 		}
 	}
@@ -220,7 +265,7 @@ func (d *NomadDiscoverer) fetchAllocationDetail(ctx context.Context, allocID str
 	// Verify successful response from Nomad API.
 	if resp.StatusCode != http.StatusOK {
 		// Return error for non-OK status.
-		return nil, fmt.Errorf("detail api returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("detail api: %w (status %d)", errUnexpectedNomadStatus, resp.StatusCode)
 	}
 
 	// Parse JSON response into allocation detail struct.
@@ -253,7 +298,7 @@ func (d *NomadDiscoverer) allocationToTargets(
 
 	// Iterate over tasks in the allocation.
 	for taskName, taskState := range alloc.TaskStates {
-		// Skip non-running tasks.
+		// Check if task is in running state.
 		if taskState.State != "running" {
 			continue
 		}
@@ -284,6 +329,7 @@ func (d *NomadDiscoverer) taskToTarget(
 ) target.ExternalTarget {
 	// Truncate allocation ID for display.
 	allocIDShort := alloc.ID
+	// Shorten ID if it exceeds display length.
 	if len(allocIDShort) > allocIDDisplayLength {
 		allocIDShort = allocIDShort[:allocIDDisplayLength]
 	}
@@ -324,6 +370,7 @@ func (d *NomadDiscoverer) taskToTarget(
 func (d *NomadDiscoverer) configureProbe(t *target.ExternalTarget, detail *nomadAllocationDetail) {
 	// Check if allocation has network configurations.
 	if len(detail.Resources.Networks) == 0 {
+		// Return early when no networks are available.
 		return
 	}
 
@@ -331,7 +378,7 @@ func (d *NomadDiscoverer) configureProbe(t *target.ExternalTarget, detail *nomad
 	network := detail.Resources.Networks[0]
 
 	// Collect all available ports (reserved first, then dynamic).
-	var ports []nomadPort
+	ports := make([]nomadPort, 0, len(network.ReservedPorts)+len(network.DynamicPorts))
 	ports = append(ports, network.ReservedPorts...)
 	ports = append(ports, network.DynamicPorts...)
 
@@ -340,6 +387,7 @@ func (d *NomadDiscoverer) configureProbe(t *target.ExternalTarget, detail *nomad
 		port := ports[0]
 		// Use network IP or fallback to localhost.
 		ip := network.IP
+		// Check if network IP is empty.
 		if ip == "" {
 			ip = "127.0.0.1"
 		}
@@ -347,7 +395,9 @@ func (d *NomadDiscoverer) configureProbe(t *target.ExternalTarget, detail *nomad
 		t.ProbeType = nomadProbeTypeTCP
 		t.ProbeTarget = health.NewTCPTarget(addr)
 
-		// Add port label to target labels.
-		t.Labels["nomad.port_label"] = port.Label
+		// Add port label to target labels if map exists.
+		if t.Labels != nil {
+			t.Labels["nomad.port_label"] = port.Label
+		}
 	}
 }

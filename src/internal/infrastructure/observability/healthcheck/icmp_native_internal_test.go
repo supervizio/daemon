@@ -41,40 +41,40 @@ func TestDetectICMPCapability(t *testing.T) {
 // TestICMPProber_modeSelection tests mode-based probe method selection.
 func TestICMPProber_modeSelection(t *testing.T) {
 	tests := []struct {
-		name               string
-		mode               config.ICMPMode
+		name                string
+		mode                config.ICMPMode
 		hasNativeCapability bool
-		expectNative       bool
+		expectNative        bool
 	}{
 		{
-			name:               "native_mode_with_capability",
-			mode:               config.ICMPModeNative,
+			name:                "native_mode_with_capability",
+			mode:                config.ICMPModeNative,
 			hasNativeCapability: true,
-			expectNative:       true,
+			expectNative:        true,
 		},
 		{
-			name:               "native_mode_without_capability",
-			mode:               config.ICMPModeNative,
+			name:                "native_mode_without_capability",
+			mode:                config.ICMPModeNative,
 			hasNativeCapability: false,
-			expectNative:       true, // Will fail but try native
+			expectNative:        true, // Will fail but try native
 		},
 		{
-			name:               "fallback_mode",
-			mode:               config.ICMPModeFallback,
+			name:                "fallback_mode",
+			mode:                config.ICMPModeFallback,
 			hasNativeCapability: true,
-			expectNative:       false,
+			expectNative:        false,
 		},
 		{
-			name:               "auto_mode_with_capability",
-			mode:               config.ICMPModeAuto,
+			name:                "auto_mode_with_capability",
+			mode:                config.ICMPModeAuto,
 			hasNativeCapability: true,
-			expectNative:       true,
+			expectNative:        true,
 		},
 		{
-			name:               "auto_mode_without_capability",
-			mode:               config.ICMPModeAuto,
+			name:                "auto_mode_without_capability",
+			mode:                config.ICMPModeAuto,
 			hasNativeCapability: false,
-			expectNative:       false,
+			expectNative:        false,
 		},
 	}
 
@@ -177,12 +177,12 @@ func TestICMPProber_nativePing_invalidHost(t *testing.T) {
 // TestNewICMPProberWithMode_internalFields tests internal field initialization.
 func TestNewICMPProberWithMode_internalFields(t *testing.T) {
 	tests := []struct {
-		name                string
-		timeout             time.Duration
-		mode                config.ICMPMode
-		expectedTimeout     time.Duration
-		expectedMode        config.ICMPMode
-		expectedTCPPort     int
+		name            string
+		timeout         time.Duration
+		mode            config.ICMPMode
+		expectedTimeout time.Duration
+		expectedMode    config.ICMPMode
+		expectedTCPPort int
 	}{
 		{
 			name:            "native_mode",

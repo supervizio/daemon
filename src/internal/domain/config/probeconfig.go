@@ -20,6 +20,9 @@ const (
 	ProbeTypeICMP string = "icmp"
 )
 
+// Default HTTP method for probe requests.
+const defaultHTTPMethod string = "GET"
+
 // ICMPMode defines how ICMP probes should operate.
 // It controls whether to use native ICMP packets or TCP fallback.
 type ICMPMode string
@@ -38,9 +41,6 @@ const (
 	// Falls back to TCP if ICMP socket creation fails.
 	ICMPModeAuto ICMPMode = "auto"
 )
-
-// Default HTTP method for probe requests.
-const defaultHTTPMethod string = "GET"
 
 // ProbeConfig defines the configuration for probing a listener.
 // It specifies timing, thresholds, and protocol-specific settings for health probes.

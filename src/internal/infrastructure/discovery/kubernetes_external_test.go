@@ -34,8 +34,8 @@ func TestKubernetesDiscoverer_Type(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Return empty pod list.
 				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"items": []interface{}{},
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"items": []any{},
 				})
 			}))
 			defer server.Close()
@@ -68,21 +68,21 @@ func TestKubernetesDiscoverer_Discover(t *testing.T) {
 			apiHandler: func(w http.ResponseWriter, r *http.Request) {
 				// Return pod list with one running pod.
 				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"items": []map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"items": []map[string]any{
 						{
-							"metadata": map[string]interface{}{
+							"metadata": map[string]any{
 								"name":      "nginx-pod",
 								"namespace": "default",
 								"labels": map[string]string{
 									"app": "nginx",
 								},
 							},
-							"spec": map[string]interface{}{
-								"containers": []map[string]interface{}{
+							"spec": map[string]any{
+								"containers": []map[string]any{
 									{
 										"name": "nginx",
-										"ports": []map[string]interface{}{
+										"ports": []map[string]any{
 											{
 												"containerPort": 80,
 												"protocol":      "TCP",
@@ -91,7 +91,7 @@ func TestKubernetesDiscoverer_Discover(t *testing.T) {
 									},
 								},
 							},
-							"status": map[string]interface{}{
+							"status": map[string]any{
 								"phase": "Running",
 								"podIP": "10.0.0.1",
 							},
@@ -108,18 +108,18 @@ func TestKubernetesDiscoverer_Discover(t *testing.T) {
 			apiHandler: func(w http.ResponseWriter, r *http.Request) {
 				// Return pod list with pending pod.
 				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"items": []map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"items": []map[string]any{
 						{
-							"metadata": map[string]interface{}{
+							"metadata": map[string]any{
 								"name":      "pending-pod",
 								"namespace": "default",
 								"labels":    map[string]string{},
 							},
-							"spec": map[string]interface{}{
-								"containers": []map[string]interface{}{},
+							"spec": map[string]any{
+								"containers": []map[string]any{},
 							},
-							"status": map[string]interface{}{
+							"status": map[string]any{
 								"phase": "Pending",
 								"podIP": "",
 							},
@@ -136,8 +136,8 @@ func TestKubernetesDiscoverer_Discover(t *testing.T) {
 			apiHandler: func(w http.ResponseWriter, r *http.Request) {
 				// Return empty pod list.
 				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"items": []interface{}{},
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"items": []any{},
 				})
 			},
 			namespaces: []string{"default"},
@@ -216,8 +216,8 @@ func TestKubernetesDiscoverer_Discover_LabelSelector(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				receivedQuery = r.URL.RawQuery
 				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"items": []interface{}{},
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"items": []any{},
 				})
 			}))
 			defer server.Close()
@@ -252,6 +252,7 @@ func newTestKubernetesDiscoverer(t *testing.T, apiServer string, cfg *config.Kub
 	// In production code, we'd add a WithAuth option or similar.
 
 	// Skip test if we can't create discoverer with mock server.
+	// TODO: implement auth injection mechanism.
 	t.Skip("newTestKubernetesDiscoverer requires auth injection mechanism")
 	return nil
 }

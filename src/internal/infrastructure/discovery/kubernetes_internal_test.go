@@ -17,18 +17,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestLoadKubeconfig verifies kubeconfig parsing.
-func TestLoadKubeconfig(t *testing.T) {
-	tests := []struct {
-		name       string
-		kubeconfig string
-		wantErr    bool
-		wantServer string
-		wantToken  string
-	}{
-		{
-			name: "parses valid kubeconfig",
-			kubeconfig: `
+// Test kubeconfig YAML constants.
+const (
+	// testKubeconfigValid is a valid kubeconfig with all required fields.
+	testKubeconfigValid string = `
 current-context: default
 clusters:
 - name: default-cluster
@@ -44,7 +36,53 @@ users:
 - name: default-user
   user:
     token: test-token
-`,
+`
+
+	// testKubeconfigMissingContext is a kubeconfig missing the current-context field.
+	testKubeconfigMissingContext string = `
+clusters:
+- name: default-cluster
+  cluster:
+    server: https://localhost:6443
+`
+
+	// testKubeconfigMissingCluster is a kubeconfig referencing a non-existent cluster.
+	testKubeconfigMissingCluster string = `
+current-context: default
+contexts:
+- name: default
+  context:
+    cluster: nonexistent-cluster
+    user: default-user
+`
+
+	// testKubeconfigMissingUser is a kubeconfig referencing a non-existent user.
+	testKubeconfigMissingUser string = `
+current-context: default
+clusters:
+- name: default-cluster
+  cluster:
+    server: https://localhost:6443
+contexts:
+- name: default
+  context:
+    cluster: default-cluster
+    user: nonexistent-user
+`
+)
+
+// TestLoadKubeconfig verifies kubeconfig parsing.
+func TestLoadKubeconfig(t *testing.T) {
+	tests := []struct {
+		name       string
+		kubeconfig string
+		wantErr    bool
+		wantServer string
+		wantToken  string
+	}{
+		{
+			name:       "parses valid kubeconfig",
+			kubeconfig: testKubeconfigValid,
 			wantErr:    false,
 			wantServer: "https://localhost:6443",
 			wantToken:  "test-token",
@@ -417,45 +455,22 @@ func TestKubeconfigParsing(t *testing.T) {
 		errMsg     string
 	}{
 		{
-			name: "missing context",
-			kubeconfig: `
-clusters:
-- name: default-cluster
-  cluster:
-    server: https://localhost:6443
-`,
-			wantErr: true,
-			errMsg:  "no context found",
+			name:       "missing context",
+			kubeconfig: testKubeconfigMissingContext,
+			wantErr:    true,
+			errMsg:     "no context found",
 		},
 		{
-			name: "missing cluster",
-			kubeconfig: `
-current-context: default
-contexts:
-- name: default
-  context:
-    cluster: nonexistent-cluster
-    user: default-user
-`,
-			wantErr: true,
-			errMsg:  "cluster nonexistent-cluster not found",
+			name:       "missing cluster",
+			kubeconfig: testKubeconfigMissingCluster,
+			wantErr:    true,
+			errMsg:     "cluster not found",
 		},
 		{
-			name: "missing user",
-			kubeconfig: `
-current-context: default
-clusters:
-- name: default-cluster
-  cluster:
-    server: https://localhost:6443
-contexts:
-- name: default
-  context:
-    cluster: default-cluster
-    user: nonexistent-user
-`,
-			wantErr: true,
-			errMsg:  "user nonexistent-user not found",
+			name:       "missing user",
+			kubeconfig: testKubeconfigMissingUser,
+			wantErr:    true,
+			errMsg:     "user not found",
 		},
 	}
 

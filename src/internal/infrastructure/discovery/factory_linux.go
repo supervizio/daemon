@@ -8,9 +8,9 @@ import "github.com/kodflow/daemon/internal/domain/target"
 // defaultDockerSocketPath is the default path to the Docker socket on Linux.
 const defaultDockerSocketPath string = "/var/run/docker.sock"
 
-
 // defaultPodmanSocketPath is the default path to the Podman socket on Linux.
 const defaultPodmanSocketPath string = "/run/podman/podman.sock"
+
 // createSystemdDiscoverer creates a systemd discoverer on Linux.
 // It reads patterns from configuration and creates a discoverer for systemd services.
 //

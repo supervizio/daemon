@@ -65,7 +65,7 @@ func (d *Duration) UnmarshalYAML(unmarshal func(any) error) error {
 
 // MarshalText implements encoding.TextMarshaler for Duration.
 // It converts a Duration back to a byte slice for serialization.
-// This approach is used instead of yaml.Marshaler to avoid returning interface{}.
+// This approach is used instead of yaml.Marshaler to avoid returning any.
 //
 // Returns:
 //   - []byte: the duration as a formatted string in bytes
@@ -377,6 +377,7 @@ func (m *MonitoringConfigDTO) ToDomain() config.MonitoringConfig {
 
 	// convert static targets
 	targets := make([]config.TargetConfig, 0, len(m.Targets))
+	// Iterate through each target configuration.
 	for i := range m.Targets {
 		targets = append(targets, m.Targets[i].ToDomain())
 	}

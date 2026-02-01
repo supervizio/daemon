@@ -14,6 +14,79 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test JSON constants for Nomad API responses.
+const (
+	// testNomadSingleAllocation is a JSON response with one running allocation.
+	testNomadSingleAllocation string = `[
+				{
+					"ID": "abcd1234-5678-90ef-ghij-klmnopqrstuv",
+					"Name": "web-server.app[0]",
+					"JobID": "web-server",
+					"TaskGroup": "app",
+					"Namespace": "default",
+					"ClientStatus": "running",
+					"TaskStates": {
+						"nginx": {"State": "running", "Failed": false}
+					}
+				}
+			]`
+
+	// testNomadTwoAllocations is a JSON response with two running allocations.
+	testNomadTwoAllocations string = `[
+				{
+					"ID": "abcd1234-5678-90ef-ghij-klmnopqrstuv",
+					"Name": "web-server.app[0]",
+					"JobID": "web-server",
+					"TaskGroup": "app",
+					"Namespace": "default",
+					"ClientStatus": "running",
+					"TaskStates": {
+						"nginx": {"State": "running", "Failed": false}
+					}
+				},
+				{
+					"ID": "efgh5678-90ab-cdef-1234-567890abcdef",
+					"Name": "db-postgres.db[0]",
+					"JobID": "db-postgres",
+					"TaskGroup": "db",
+					"Namespace": "default",
+					"ClientStatus": "running",
+					"TaskStates": {
+						"postgres": {"State": "running", "Failed": false}
+					}
+				}
+			]`
+
+	// testNomadPendingAllocation is a JSON response with a pending allocation.
+	testNomadPendingAllocation string = `[
+				{
+					"ID": "abcd1234-5678-90ef-ghij-klmnopqrstuv",
+					"Name": "web-server.app[0]",
+					"JobID": "web-server",
+					"TaskGroup": "app",
+					"Namespace": "default",
+					"ClientStatus": "pending",
+					"TaskStates": {
+						"nginx": {"State": "pending", "Failed": false}
+					}
+				}
+			]`
+
+	// testNomadDetailWithNetwork is a JSON response for allocation detail with networks.
+	testNomadDetailWithNetwork string = `{
+				"Resources": {
+					"Networks": [
+						{
+							"IP": "192.168.1.10",
+							"ReservedPorts": [
+								{"Label": "http", "Value": 8080}
+							]
+						}
+					]
+				}
+			}`
+)
+
 // TestNomadDiscoverer_matchesFilters verifies allocation filtering logic.
 func TestNomadDiscoverer_matchesFilters(t *testing.T) {
 	tests := []struct {
@@ -292,32 +365,9 @@ func TestNomadDiscoverer_Discover_Integration(t *testing.T) {
 		wantFirstID      string
 	}{
 		{
-			name: "discovers running allocations",
-			allocationsJSON: `[
-				{
-					"ID": "abcd1234-5678-90ef-ghij-klmnopqrstuv",
-					"Name": "web-server.app[0]",
-					"JobID": "web-server",
-					"TaskGroup": "app",
-					"Namespace": "default",
-					"ClientStatus": "running",
-					"TaskStates": {
-						"nginx": {"State": "running", "Failed": false}
-					}
-				}
-			]`,
-			detailJSON: `{
-				"Resources": {
-					"Networks": [
-						{
-							"IP": "192.168.1.10",
-							"ReservedPorts": [
-								{"Label": "http", "Value": 8080}
-							]
-						}
-					]
-				}
-			}`,
+			name:             "discovers running allocations",
+			allocationsJSON:  testNomadSingleAllocation,
+			detailJSON:       testNomadDetailWithNetwork,
 			namespace:        "",
 			jobFilter:        "",
 			wantTargetCount:  1,
@@ -326,43 +376,9 @@ func TestNomadDiscoverer_Discover_Integration(t *testing.T) {
 			wantFirstID:      "nomad:abcd1234/nginx",
 		},
 		{
-			name: "filters by job prefix",
-			allocationsJSON: `[
-				{
-					"ID": "abcd1234-5678-90ef-ghij-klmnopqrstuv",
-					"Name": "web-server.app[0]",
-					"JobID": "web-server",
-					"TaskGroup": "app",
-					"Namespace": "default",
-					"ClientStatus": "running",
-					"TaskStates": {
-						"nginx": {"State": "running", "Failed": false}
-					}
-				},
-				{
-					"ID": "efgh5678-90ab-cdef-1234-567890abcdef",
-					"Name": "db-postgres.db[0]",
-					"JobID": "db-postgres",
-					"TaskGroup": "db",
-					"Namespace": "default",
-					"ClientStatus": "running",
-					"TaskStates": {
-						"postgres": {"State": "running", "Failed": false}
-					}
-				}
-			]`,
-			detailJSON: `{
-				"Resources": {
-					"Networks": [
-						{
-							"IP": "192.168.1.10",
-							"ReservedPorts": [
-								{"Label": "http", "Value": 8080}
-							]
-						}
-					]
-				}
-			}`,
+			name:             "filters by job prefix",
+			allocationsJSON:  testNomadTwoAllocations,
+			detailJSON:       testNomadDetailWithNetwork,
 			namespace:        "",
 			jobFilter:        "web-",
 			wantTargetCount:  1,
@@ -371,20 +387,8 @@ func TestNomadDiscoverer_Discover_Integration(t *testing.T) {
 			wantFirstID:      "nomad:abcd1234/nginx",
 		},
 		{
-			name: "skips non-running allocations",
-			allocationsJSON: `[
-				{
-					"ID": "abcd1234-5678-90ef-ghij-klmnopqrstuv",
-					"Name": "web-server.app[0]",
-					"JobID": "web-server",
-					"TaskGroup": "app",
-					"Namespace": "default",
-					"ClientStatus": "pending",
-					"TaskStates": {
-						"nginx": {"State": "pending", "Failed": false}
-					}
-				}
-			]`,
+			name:            "skips non-running allocations",
+			allocationsJSON: testNomadPendingAllocation,
 			detailJSON:      `{}`,
 			namespace:       "",
 			jobFilter:       "",
@@ -452,20 +456,9 @@ func TestNomadDiscoverer_fetchAllocationDetail(t *testing.T) {
 		wantNetworks int
 	}{
 		{
-			name:    "successful detail fetch",
-			allocID: "abcd1234-5678-90ef-ghij-klmnopqrstuv",
-			responseJSON: `{
-				"Resources": {
-					"Networks": [
-						{
-							"IP": "192.168.1.10",
-							"ReservedPorts": [
-								{"Label": "http", "Value": 8080}
-							]
-						}
-					]
-				}
-			}`,
+			name:         "successful detail fetch",
+			allocID:      "abcd1234-5678-90ef-ghij-klmnopqrstuv",
+			responseJSON: testNomadDetailWithNetwork,
 			statusCode:   http.StatusOK,
 			wantErr:      false,
 			wantNetworks: 1,

@@ -277,6 +277,6 @@ func TestPortScanDiscoverer_ParseAddressFormat(t *testing.T) {
 
 	// Note: This test would need internal access to parseNetTCP.
 	// Since we're in external tests, we can only test via Discover().
-	// This is a placeholder for documentation.
+	// This is a placeholder for documentation - covered by Discover() integration test.
 	t.Skip("Parsing details tested via Discover() integration test")
 }

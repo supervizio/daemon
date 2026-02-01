@@ -1,6 +1,9 @@
 // Package config provides domain value objects for service configuration.
 package config
 
+// defaultExcludedSSHPort is the default SSH port excluded from port scan discovery.
+const defaultExcludedSSHPort int = 22
+
 // PortScanDiscoveryConfig configures port scan discovery.
 // Port scan discovery monitors listening ports on network interfaces by
 // reading /proc/net/tcp and /proc/net/tcp6 on Linux systems.
@@ -32,8 +35,8 @@ func NewPortScanDiscoveryConfig() *PortScanDiscoveryConfig {
 	// Return default config with SSH excluded and discovery disabled.
 	return &PortScanDiscoveryConfig{
 		Enabled:      false,
-		Interfaces:   []string{},
-		ExcludePorts: []int{22},
-		IncludePorts: []int{},
+		Interfaces:   nil,
+		ExcludePorts: []int{defaultExcludedSSHPort},
+		IncludePorts: nil,
 	}
 }

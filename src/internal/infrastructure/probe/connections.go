@@ -171,6 +171,15 @@ type TcpStats struct {
 	Closing     uint32
 }
 
+// NewTcpStats creates a new empty TcpStats instance.
+//
+// Returns:
+//   - *TcpStats: a new zero-initialized TCP statistics instance
+func NewTcpStats() *TcpStats {
+	// Return zero-initialized struct.
+	return &TcpStats{}
+}
+
 // Total returns the total number of TCP connections.
 //
 // Returns:
