@@ -247,6 +247,7 @@ func (d *DiskCollector) CollectDeviceIO(ctx context.Context, device string) (met
 }
 
 // cCharArrayToString converts a C char array to a Go string.
+// This is a thin CGO wrapper that delegates to the Go-only bytesToStringWithNull.
 //
 // Params:
 //   - arr: C char array to convert
@@ -254,23 +255,8 @@ func (d *DiskCollector) CollectDeviceIO(ctx context.Context, device string) (met
 // Returns:
 //   - string: the converted Go string
 func cCharArrayToString(arr []C.char) string {
-	// Compute base pointer once for efficiency.
-	basePtr := (*byte)(unsafe.Pointer(&arr[0]))
-	var length int
-	// Find null terminator in the array.
-	for i, c := range arr {
-		// Check for null terminator.
-		if c == 0 {
-			length = i
-			break
-		}
-	}
-	// Use full array length if no null terminator found.
-	if length == 0 {
-		length = len(arr)
-	}
-	// Convert to string once with determined length.
-	bytes := unsafe.Slice(basePtr, length)
-	// Return the converted string.
-	return string(bytes)
+	// Convert C char array to byte slice.
+	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&arr[0])), len(arr))
+	// Delegate to Go-only function.
+	return bytesToStringWithNull(bytes)
 }

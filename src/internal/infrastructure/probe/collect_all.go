@@ -25,14 +25,16 @@ func CollectAll() (*AllMetrics, error) {
 		return nil, err
 	}
 
+	// Call C function to collect all metrics.
 	var cAll C.AllMetrics
 	result := C.probe_collect_all(&cAll)
+	// Convert C result to Go error if failed.
 	if err := resultToError(result); err != nil {
 		// Collection failed.
 		return nil, err
 	}
 
-	// Build raw data by extracting from C.
+	// Build raw data by extracting scalar values from C.
 	raw := &RawAllMetrics{
 		TimestampNs: int64(cAll.timestamp_ns),
 		CPU:         RawCPUData{IdlePercent: float64(cAll.cpu.idle_percent)},
@@ -56,29 +58,28 @@ func CollectAll() (*AllMetrics, error) {
 			WriteOps:   uint64(cAll.io_stats.write_ops),
 			WriteBytes: uint64(cAll.io_stats.write_bytes),
 		},
-		Pressure: extractPressureFromC(&cAll),
+		Pressure:      extractPressureFromC(&cAll),
+		Partitions:    extractPartitionsFromC(&cAll),
+		DiskUsage:     extractDiskUsageFromC(&cAll),
+		DiskIO:        extractDiskIOFromC(&cAll),
+		NetInterfaces: extractNetIfacesFromC(&cAll),
+		NetStats:      extractNetStatsFromC(&cAll),
 	}
-
-	// Extract arrays.
-	raw.Partitions = extractPartitionsFromC(&cAll)
-	raw.DiskUsage = extractDiskUsageFromC(&cAll)
-	raw.DiskIO = extractDiskIOFromC(&cAll)
-	raw.NetInterfaces = extractNetIfacesFromC(&cAll)
-	raw.NetStats = extractNetStatsFromC(&cAll)
 
 	// Delegate to Go-only builder and return.
 	return buildAllMetricsFromRaw(raw), nil
 }
 
 // extractPressureFromC extracts pressure data from C struct.
+// Logic delegates to Raw* types which are tested.
 //
 // Params:
-//   - cAll: pointer to the C AllMetrics struct.
+//   - cAll: pointer to the C AllMetrics struct
 //
 // Returns:
-//   - RawPressureMetrics: the extracted pressure data.
+//   - RawPressureMetrics: the extracted pressure data
 func extractPressureFromC(cAll *C.AllMetrics) RawPressureMetrics {
-	// Build pressure metrics from C data.
+	// Build pressure metrics by converting C types to Go types.
 	return RawPressureMetrics{
 		Available: bool(cAll.pressure.available),
 		CPU: RawCPUPressure{
@@ -111,16 +112,17 @@ func extractPressureFromC(cAll *C.AllMetrics) RawPressureMetrics {
 }
 
 // extractPartitionsFromC extracts partition data from C struct.
+// Logic delegates to Raw* types which are tested.
 //
 // Params:
-//   - cAll: pointer to the C AllMetrics struct.
+//   - cAll: pointer to the C AllMetrics struct
 //
 // Returns:
-//   - []RawPartitionData: the extracted partition data.
+//   - []RawPartitionData: the extracted partition data
 func extractPartitionsFromC(cAll *C.AllMetrics) []RawPartitionData {
 	count := int(cAll.partition_count)
 	result := make([]RawPartitionData, 0, count)
-	// Iterate over each C partition.
+	// Iterate over C partition array to convert each entry.
 	for idx := range count {
 		pt := cAll.partitions[idx]
 		result = append(result, RawPartitionData{
@@ -135,16 +137,17 @@ func extractPartitionsFromC(cAll *C.AllMetrics) []RawPartitionData {
 }
 
 // extractDiskUsageFromC extracts disk usage data from C struct.
+// Logic delegates to Raw* types which are tested.
 //
 // Params:
-//   - cAll: pointer to the C AllMetrics struct.
+//   - cAll: pointer to the C AllMetrics struct
 //
 // Returns:
-//   - []RawDiskUsageData: the extracted disk usage data.
+//   - []RawDiskUsageData: the extracted disk usage data
 func extractDiskUsageFromC(cAll *C.AllMetrics) []RawDiskUsageData {
 	count := int(cAll.disk_usage_count)
 	result := make([]RawDiskUsageData, 0, count)
-	// Iterate over each C disk usage.
+	// Iterate over C disk usage array to convert each entry.
 	for idx := range count {
 		du := cAll.disk_usage[idx]
 		result = append(result, RawDiskUsageData{
@@ -163,16 +166,17 @@ func extractDiskUsageFromC(cAll *C.AllMetrics) []RawDiskUsageData {
 }
 
 // extractDiskIOFromC extracts disk I/O data from C struct.
+// Logic delegates to Raw* types which are tested.
 //
 // Params:
-//   - cAll: pointer to the C AllMetrics struct.
+//   - cAll: pointer to the C AllMetrics struct
 //
 // Returns:
-//   - []RawDiskIOData: the extracted disk I/O data.
+//   - []RawDiskIOData: the extracted disk I/O data
 func extractDiskIOFromC(cAll *C.AllMetrics) []RawDiskIOData {
 	count := int(cAll.disk_io_count)
 	result := make([]RawDiskIOData, 0, count)
-	// Iterate over each C disk I/O.
+	// Iterate over C disk I/O array to convert each entry.
 	for idx := range count {
 		dio := cAll.disk_io[idx]
 		result = append(result, RawDiskIOData{
@@ -193,16 +197,17 @@ func extractDiskIOFromC(cAll *C.AllMetrics) []RawDiskIOData {
 }
 
 // extractNetIfacesFromC extracts network interface data from C struct.
+// Logic delegates to Raw* types which are tested.
 //
 // Params:
-//   - cAll: pointer to the C AllMetrics struct.
+//   - cAll: pointer to the C AllMetrics struct
 //
 // Returns:
-//   - []RawNetInterfaceData: the extracted interface data.
+//   - []RawNetInterfaceData: the extracted interface data
 func extractNetIfacesFromC(cAll *C.AllMetrics) []RawNetInterfaceData {
 	count := int(cAll.net_interface_count)
 	result := make([]RawNetInterfaceData, 0, count)
-	// Iterate over each C network interface.
+	// Iterate over C network interface array to convert each entry.
 	for idx := range count {
 		iface := cAll.net_interfaces[idx]
 		result = append(result, RawNetInterfaceData{
@@ -218,16 +223,17 @@ func extractNetIfacesFromC(cAll *C.AllMetrics) []RawNetInterfaceData {
 }
 
 // extractNetStatsFromC extracts network stats data from C struct.
+// Logic delegates to Raw* types which are tested.
 //
 // Params:
-//   - cAll: pointer to the C AllMetrics struct.
+//   - cAll: pointer to the C AllMetrics struct
 //
 // Returns:
-//   - []RawNetStatsData: the extracted network stats.
+//   - []RawNetStatsData: the extracted network stats
 func extractNetStatsFromC(cAll *C.AllMetrics) []RawNetStatsData {
 	count := int(cAll.net_stats_count)
 	result := make([]RawNetStatsData, 0, count)
-	// Iterate over each C network stat.
+	// Iterate over C network stats array to convert each entry.
 	for idx := range count {
 		ns := cAll.net_stats[idx]
 		result = append(result, RawNetStatsData{

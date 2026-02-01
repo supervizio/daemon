@@ -22,24 +22,6 @@ import (
 	"sync"
 )
 
-// Go-only error code constants matching probe.h.
-const (
-	// probeCodeOK indicates success.
-	probeCodeOK int = 0
-	// probeCodeNotSupported indicates the operation is not supported.
-	probeCodeNotSupported int = 1
-	// probeCodePermission indicates permission denied.
-	probeCodePermission int = 2
-	// probeCodeNotFound indicates resource not found.
-	probeCodeNotFound int = 3
-	// probeCodeInvalidParam indicates invalid parameter.
-	probeCodeInvalidParam int = 4
-	// probeCodeIO indicates I/O error.
-	probeCodeIO int = 5
-	// probeCodeInternal indicates internal error.
-	probeCodeInternal int = 99
-)
-
 var (
 	// initialized tracks whether the probe library has been initialized.
 	initialized bool
@@ -122,6 +104,7 @@ func QuotaSupported() bool {
 }
 
 // resultToError converts a C ProbeResult to a Go error.
+// This is a thin CGO wrapper that delegates to the Go-only convertResultToError.
 //
 // Params:
 //   - r: the C ProbeResult to convert
@@ -129,27 +112,14 @@ func QuotaSupported() bool {
 // Returns:
 //   - error: nil on success, appropriate error on failure
 func resultToError(r C.ProbeResult) error {
-	// Check if the result indicates success.
-	if r.success {
-		// Return nil for successful operations.
-		return nil
-	}
-
-	// Map error code to Go error using the Go-only function.
-	code := int(r.error_code)
-	// Check if the error code maps to a known error.
-	if err := mapProbeErrorCode(code); err != nil {
-		// Return known error.
-		return err
-	}
-
-	// Handle unknown error codes with message.
+	// Extract message from C string if present.
+	var msg string
+	// Check if C error message pointer is valid.
 	if r.error_message != nil {
-		// Build error with code and message.
-		return newProbeError(code, C.GoString(r.error_message))
+		msg = C.GoString(r.error_message)
 	}
-	// Fallback to generic internal error.
-	return ErrInternal
+	// Delegate to Go-only function.
+	return convertResultToError(bool(r.success), int(r.error_code), msg)
 }
 
 // mapProbeErrorCode maps a probe error code to a Go sentinel error.
