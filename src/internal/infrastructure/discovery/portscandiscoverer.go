@@ -1,8 +1,7 @@
 //go:build linux
 
 // Package discovery provides infrastructure adapters for target discovery.
-//
-//nolint:ktn-struct-onefile // listeningPort is internal helper type for PortScanDiscoverer
+// This file implements port scanning discovery for detecting listening services.
 package discovery
 
 import (
@@ -63,19 +62,9 @@ var (
 	errInvalidIPv6Length error = errors.New("invalid IPv6 length")
 )
 
-// listeningPort represents a port in LISTEN state from /proc/net/tcp.
-type listeningPort struct {
-	Protocol  string `dto:"out,priv,pub" json:"protocol"`  // "tcp" or "udp"
-	LocalAddr string `dto:"out,priv,pub" json:"localAddr"` // IP address
-	LocalPort int    `dto:"out,priv,pub" json:"localPort"` // Port number
-	State     string `dto:"out,priv,pub" json:"state"`     // Socket state (hex)
-}
-
 // PortScanDiscoverer discovers listening ports by parsing /proc/net/tcp.
 // It scans local network interfaces for services listening on TCP ports
 // and creates monitoring targets for them.
-//
-//nolint:ktn-struct-onefile // listeningPort is internal helper
 type PortScanDiscoverer struct {
 	// interfaces maps interface names to true for fast lookup.
 	interfaces map[string]bool

@@ -87,12 +87,12 @@ func TestPortScanDiscoveryConfig_Defaults(t *testing.T) {
 					t.Error("Expected SSH (22) in ExcludePorts by default")
 				}
 			}
-			// Verify empty slices are initialized.
-			if cfg.Interfaces == nil {
-				t.Error("Interfaces should be initialized, not nil")
+			// Verify slices are usable (nil or empty both work).
+			if len(cfg.Interfaces) != 0 {
+				t.Errorf("Interfaces should be empty by default, got %v", cfg.Interfaces)
 			}
-			if cfg.IncludePorts == nil {
-				t.Error("IncludePorts should be initialized, not nil")
+			if len(cfg.IncludePorts) != 0 {
+				t.Errorf("IncludePorts should be empty by default, got %v", cfg.IncludePorts)
 			}
 		})
 	}

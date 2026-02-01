@@ -64,14 +64,14 @@ type IOCollector interface {
 // SystemCollector aggregates all metrics collectors into a single interface.
 // This provides a unified entry point for collecting all system metrics.
 type SystemCollector interface {
-	// CPU returns the CPU metrics collector.
-	CPU() CPUCollector
+	// Cpu returns the CPU metrics collector.
+	Cpu() CPUCollector
 	// Memory returns the memory metrics collector.
 	Memory() MemoryCollector
 	// Disk returns the disk metrics collector.
 	Disk() DiskCollector
 	// Network returns the network metrics collector.
 	Network() NetworkCollector
-	// IO returns the I/O metrics collector.
-	IO() IOCollector
+	// Io returns the I/O metrics collector.
+	Io() IOCollector
 }

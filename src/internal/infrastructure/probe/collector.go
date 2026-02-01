@@ -16,14 +16,12 @@
 //	defer probe.Shutdown()
 //
 //	collector := probe.NewCollector()
-//	cpu, err := collector.CPU().CollectSystem(ctx)
+//	cpu, err := collector.Cpu().CollectSystem(ctx)
 //
 // Limitations:
 //   - Some detailed metrics (jiffies) are not available cross-platform
 //   - PSI metrics are Linux-only (returns ErrNotSupported on other platforms)
 //   - Process enumeration is not supported (use platform-specific collectors)
-//
-//nolint:ktn-struct-accessor // Interface requires CPU() and IO() not Cpu() and Io()
 package probe
 
 import (
@@ -58,13 +56,11 @@ func NewCollector() *Collector {
 	}
 }
 
-// CPU returns the CPU metrics collector.
+// Cpu returns the CPU metrics collector.
 //
 // Returns:
 //   - metrics.CPUCollector: collector for CPU metrics
-//
-//nolint:ktn-struct-accessor // Interface requires CPU() not Cpu()
-func (c *Collector) CPU() metrics.CPUCollector {
+func (c *Collector) Cpu() metrics.CPUCollector {
 	// Return the pre-initialized CPU collector.
 	return c.cpu
 }
@@ -96,13 +92,11 @@ func (c *Collector) Network() metrics.NetworkCollector {
 	return c.network
 }
 
-// IO returns the I/O metrics collector.
+// Io returns the I/O metrics collector.
 //
 // Returns:
 //   - metrics.IOCollector: collector for I/O metrics
-//
-//nolint:ktn-struct-accessor // Interface requires IO() not Io()
-func (c *Collector) IO() metrics.IOCollector {
+func (c *Collector) Io() metrics.IOCollector {
 	// Return the pre-initialized I/O collector.
 	return c.io
 }

@@ -256,13 +256,14 @@ func TestFactory_addNomadDiscoverer(t *testing.T) {
 			wantAdded: false,
 		},
 		{
-			name: "enabled returns nil (not implemented)",
+			name: "enabled adds discoverer",
 			cfg: &config.DiscoveryConfig{
 				Nomad: &config.NomadDiscoveryConfig{
 					Enabled: true,
+					Address: "http://localhost:4646",
 				},
 			},
-			wantAdded: false,
+			wantAdded: true,
 		},
 	}
 

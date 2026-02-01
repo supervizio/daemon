@@ -510,3 +510,294 @@ func TestNomadDiscoverer_fetchAllocationDetail(t *testing.T) {
 		})
 	}
 }
+
+// TestNomadDiscoverer_fetchAllocations verifies allocation list fetching.
+func TestNomadDiscoverer_fetchAllocations(t *testing.T) {
+	tests := []struct {
+		name           string
+		responseJSON   string
+		statusCode     int
+		namespace      string
+		wantAllocCount int
+		wantErr        bool
+		wantErrMsg     string
+	}{
+		{
+			name:           "successful fetch",
+			responseJSON:   testNomadSingleAllocation,
+			statusCode:     http.StatusOK,
+			namespace:      "",
+			wantAllocCount: 1,
+			wantErr:        false,
+		},
+		{
+			name:           "fetch multiple allocations",
+			responseJSON:   testNomadTwoAllocations,
+			statusCode:     http.StatusOK,
+			namespace:      "",
+			wantAllocCount: 2,
+			wantErr:        false,
+		},
+		{
+			name:           "fetch with namespace filter",
+			responseJSON:   testNomadSingleAllocation,
+			statusCode:     http.StatusOK,
+			namespace:      "production",
+			wantAllocCount: 1,
+			wantErr:        false,
+		},
+		{
+			name:         "api error",
+			responseJSON: `{}`,
+			statusCode:   http.StatusInternalServerError,
+			namespace:    "",
+			wantErr:      true,
+			wantErrMsg:   "unexpected status code",
+		},
+		{
+			name:         "invalid json",
+			responseJSON: `{invalid}`,
+			statusCode:   http.StatusOK,
+			namespace:    "",
+			wantErr:      true,
+		},
+		{
+			name:           "empty allocation list",
+			responseJSON:   `[]`,
+			statusCode:     http.StatusOK,
+			namespace:      "",
+			wantAllocCount: 0,
+			wantErr:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock server.
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify namespace query param if set.
+				if tt.namespace != "" {
+					assert.Equal(t, tt.namespace, r.URL.Query().Get("namespace"))
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.statusCode)
+				_, _ = w.Write([]byte(tt.responseJSON))
+			}))
+			defer server.Close()
+
+			cfg := &config.NomadDiscoveryConfig{
+				Address:   server.URL,
+				Namespace: tt.namespace,
+			}
+			d := NewNomadDiscoverer(cfg)
+
+			allocations, err := d.fetchAllocations(context.Background())
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.wantErrMsg != "" {
+					assert.Contains(t, err.Error(), tt.wantErrMsg)
+				}
+			} else {
+				require.NoError(t, err)
+				assert.Len(t, allocations, tt.wantAllocCount)
+			}
+		})
+	}
+}
+
+// TestNomadDiscoverer_processAllocations verifies allocation processing.
+func TestNomadDiscoverer_processAllocations(t *testing.T) {
+	tests := []struct {
+		name        string
+		allocations nomadAllocationList
+		jobFilter   string
+		detailJSON  string
+		wantCount   int
+	}{
+		{
+			name: "processes running allocations",
+			allocations: nomadAllocationList{
+				{
+					ID:           "alloc-1",
+					JobID:        "web-app",
+					TaskGroup:    "app",
+					Namespace:    "default",
+					ClientStatus: "running",
+					TaskStates: map[string]nomadTaskState{
+						"nginx": {State: "running", Failed: false},
+					},
+				},
+			},
+			jobFilter:  "",
+			detailJSON: testNomadDetailWithNetwork,
+			wantCount:  1,
+		},
+		{
+			name: "filters by job prefix",
+			allocations: nomadAllocationList{
+				{
+					ID:           "alloc-1",
+					JobID:        "web-app",
+					ClientStatus: "running",
+					TaskStates:   map[string]nomadTaskState{"nginx": {State: "running"}},
+				},
+				{
+					ID:           "alloc-2",
+					JobID:        "db-postgres",
+					ClientStatus: "running",
+					TaskStates:   map[string]nomadTaskState{"postgres": {State: "running"}},
+				},
+			},
+			jobFilter:  "web-",
+			detailJSON: testNomadDetailWithNetwork,
+			wantCount:  1,
+		},
+		{
+			name: "skips non-running allocations",
+			allocations: nomadAllocationList{
+				{
+					ID:           "alloc-1",
+					JobID:        "web-app",
+					ClientStatus: "pending",
+					TaskStates:   map[string]nomadTaskState{"nginx": {State: "pending"}},
+				},
+			},
+			jobFilter:  "",
+			detailJSON: testNomadDetailWithNetwork,
+			wantCount:  0,
+		},
+		{
+			name:        "handles empty allocation list",
+			allocations: nomadAllocationList{},
+			jobFilter:   "",
+			detailJSON:  testNomadDetailWithNetwork,
+			wantCount:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock server for allocation details.
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(tt.detailJSON))
+			}))
+			defer server.Close()
+
+			cfg := &config.NomadDiscoveryConfig{
+				Address:   server.URL,
+				JobFilter: tt.jobFilter,
+			}
+			d := NewNomadDiscoverer(cfg)
+
+			targets := d.processAllocations(context.Background(), tt.allocations)
+
+			assert.Len(t, targets, tt.wantCount)
+		})
+	}
+}
+
+// TestNomadDiscoverer_taskToTarget verifies task to target conversion.
+func TestNomadDiscoverer_taskToTarget(t *testing.T) {
+	tests := []struct {
+		name       string
+		alloc      nomadAllocation
+		taskName   string
+		detail     *nomadAllocationDetail
+		wantID     string
+		wantName   string
+		wantType   target.Type
+		wantLabels map[string]string
+	}{
+		{
+			name: "converts task with network",
+			alloc: nomadAllocation{
+				ID:        "abcd1234-5678-90ef-ghij-klmnopqrstuv",
+				JobID:     "web-server",
+				TaskGroup: "app",
+				Namespace: "production",
+			},
+			taskName: "nginx",
+			detail: &nomadAllocationDetail{
+				Resources: nomadResources{
+					Networks: []nomadNetwork{
+						{
+							IP: "192.168.1.10",
+							ReservedPorts: []nomadPort{
+								{Label: "http", Value: 8080},
+							},
+						},
+					},
+				},
+			},
+			wantID:   "nomad:abcd1234/nginx",
+			wantName: "web-server/nginx",
+			wantType: target.TypeNomad,
+			wantLabels: map[string]string{
+				"nomad.job":        "web-server",
+				"nomad.task":       "nginx",
+				"nomad.task_group": "app",
+				"nomad.namespace":  "production",
+			},
+		},
+		{
+			name: "converts task without network",
+			alloc: nomadAllocation{
+				ID:        "short-id",
+				JobID:     "batch-job",
+				TaskGroup: "batch",
+				Namespace: "default",
+			},
+			taskName: "worker",
+			detail: &nomadAllocationDetail{
+				Resources: nomadResources{
+					Networks: []nomadNetwork{},
+				},
+			},
+			wantID:   "nomad:short-id/worker",
+			wantName: "batch-job/worker",
+			wantType: target.TypeNomad,
+			wantLabels: map[string]string{
+				"nomad.job":        "batch-job",
+				"nomad.task":       "worker",
+				"nomad.task_group": "batch",
+				"nomad.namespace":  "default",
+			},
+		},
+		{
+			name: "truncates long allocation ID",
+			alloc: nomadAllocation{
+				ID:        "a1b2c3d4e5f6g7h8i9j0",
+				JobID:     "long-id-job",
+				TaskGroup: "group",
+				Namespace: "ns",
+			},
+			taskName: "task",
+			detail: &nomadAllocationDetail{
+				Resources: nomadResources{Networks: []nomadNetwork{}},
+			},
+			wantID:   "nomad:a1b2c3d4/task",
+			wantName: "long-id-job/task",
+			wantType: target.TypeNomad,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &NomadDiscoverer{}
+
+			tgt := d.taskToTarget(tt.alloc, tt.taskName, tt.detail)
+
+			assert.Equal(t, tt.wantID, tgt.ID)
+			assert.Equal(t, tt.wantName, tgt.Name)
+			assert.Equal(t, tt.wantType, tgt.Type)
+			assert.Equal(t, target.SourceDiscovered, tgt.Source)
+
+			for key, value := range tt.wantLabels {
+				assert.Equal(t, value, tgt.Labels[key], "label %s mismatch", key)
+			}
+		})
+	}
+}

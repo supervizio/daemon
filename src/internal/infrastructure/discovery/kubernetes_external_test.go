@@ -1,15 +1,14 @@
-//go:build ignore
+//go:build unix
 
-// TODO: Enable when auth injection mechanism is implemented for KubernetesDiscoverer.
-
+// Package discovery_test provides external tests for Kubernetes discoverer.
 package discovery_test
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/domain/target"
@@ -18,243 +17,171 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestKubernetesDiscoverer_Type verifies the discoverer returns correct type.
-func TestKubernetesDiscoverer_Type(t *testing.T) {
-	tests := []struct {
-		name string
-		want target.Type
-	}{
-		{
-			name: "returns TypeKubernetes",
-			want: target.TypeKubernetes,
-		},
-	}
+// testKubeconfigDiscovererValid is a valid kubeconfig for discoverer creation tests.
+const testKubeconfigDiscovererValid string = `
+current-context: default
+clusters:
+- name: default-cluster
+  cluster:
+    server: https://localhost:6443
+contexts:
+- name: default
+  context:
+    cluster: default-cluster
+    user: default-user
+users:
+- name: default-user
+  user:
+    token: test-token
+`
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create mock K8s API server.
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Return empty pod list.
-				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"items": []any{},
-				})
-			}))
-			defer server.Close()
-
-			cfg := &config.KubernetesDiscoveryConfig{
-				Enabled: true,
-			}
-
-			// Create discoverer with mock server (use test helper when available).
-			d := newTestKubernetesDiscoverer(t, server.URL, cfg)
-
-			got := d.Type()
-
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-// TestKubernetesDiscoverer_Discover verifies pod discovery from K8s API.
-func TestKubernetesDiscoverer_Discover(t *testing.T) {
+// TestNewKubernetesDiscoverer verifies discoverer creation.
+func TestNewKubernetesDiscoverer(t *testing.T) {
 	tests := []struct {
 		name       string
-		apiHandler http.HandlerFunc
-		namespaces []string
-		wantCount  int
+		setupFunc  func(t *testing.T) string
 		wantErr    bool
+		wantErrMsg string
 	}{
 		{
-			name: "discovers running pods",
-			apiHandler: func(w http.ResponseWriter, r *http.Request) {
-				// Return pod list with one running pod.
-				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"items": []map[string]any{
-						{
-							"metadata": map[string]any{
-								"name":      "nginx-pod",
-								"namespace": "default",
-								"labels": map[string]string{
-									"app": "nginx",
-								},
-							},
-							"spec": map[string]any{
-								"containers": []map[string]any{
-									{
-										"name": "nginx",
-										"ports": []map[string]any{
-											{
-												"containerPort": 80,
-												"protocol":      "TCP",
-											},
-										},
-									},
-								},
-							},
-							"status": map[string]any{
-								"phase": "Running",
-								"podIP": "10.0.0.1",
-							},
-						},
-					},
-				})
+			name: "fails without kubeconfig",
+			setupFunc: func(t *testing.T) string {
+				return "/nonexistent/kubeconfig"
 			},
-			namespaces: []string{"default"},
-			wantCount:  1,
-			wantErr:    false,
-		},
-		{
-			name: "skips non-running pods",
-			apiHandler: func(w http.ResponseWriter, r *http.Request) {
-				// Return pod list with pending pod.
-				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"items": []map[string]any{
-						{
-							"metadata": map[string]any{
-								"name":      "pending-pod",
-								"namespace": "default",
-								"labels":    map[string]string{},
-							},
-							"spec": map[string]any{
-								"containers": []map[string]any{},
-							},
-							"status": map[string]any{
-								"phase": "Pending",
-								"podIP": "",
-							},
-						},
-					},
-				})
-			},
-			namespaces: []string{"default"},
-			wantCount:  0,
-			wantErr:    false,
-		},
-		{
-			name: "handles empty response",
-			apiHandler: func(w http.ResponseWriter, r *http.Request) {
-				// Return empty pod list.
-				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"items": []any{},
-				})
-			},
-			namespaces: []string{"default"},
-			wantCount:  0,
-			wantErr:    false,
-		},
-		{
-			name: "handles API error",
-			apiHandler: func(w http.ResponseWriter, r *http.Request) {
-				// Return 500 error.
-				w.WriteHeader(http.StatusInternalServerError)
-			},
-			namespaces: []string{"default"},
-			wantCount:  0,
 			wantErr:    true,
+			wantErrMsg: "load kubernetes auth",
+		},
+		{
+			name: "succeeds with valid kubeconfig",
+			setupFunc: func(t *testing.T) string {
+				tmpDir := t.TempDir()
+				kubeconfigPath := filepath.Join(tmpDir, "kubeconfig")
+				err := os.WriteFile(kubeconfigPath, []byte(testKubeconfigDiscovererValid), 0600)
+				require.NoError(t, err)
+				return kubeconfigPath
+			},
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock K8s API server.
-			server := httptest.NewServer(tt.apiHandler)
-			defer server.Close()
+			kubeconfigPath := tt.setupFunc(t)
 
 			cfg := &config.KubernetesDiscoveryConfig{
-				Enabled:    true,
-				Namespaces: tt.namespaces,
+				Enabled:        true,
+				KubeconfigPath: kubeconfigPath,
+				Namespaces:     []string{"default"},
 			}
 
-			d := newTestKubernetesDiscoverer(t, server.URL, cfg)
-
-			targets, err := d.Discover(context.Background())
+			discoverer, err := discovery.NewKubernetesDiscoverer(cfg)
 
 			if tt.wantErr {
 				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Len(t, targets, tt.wantCount)
-
-				// Verify target fields for non-empty results.
-				if tt.wantCount > 0 {
-					assert.Equal(t, target.TypeKubernetes, targets[0].Type)
-					assert.Equal(t, target.SourceDiscovered, targets[0].Source)
-					assert.NotEmpty(t, targets[0].ID)
-					assert.NotEmpty(t, targets[0].Name)
+				if tt.wantErrMsg != "" {
+					assert.Contains(t, err.Error(), tt.wantErrMsg)
 				}
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, discoverer)
 			}
 		})
 	}
 }
 
-// TestKubernetesDiscoverer_Discover_LabelSelector verifies label selector filtering.
-func TestKubernetesDiscoverer_Discover_LabelSelector(t *testing.T) {
+// TestKubernetesDiscoverer_Type verifies the Type method returns the correct target type.
+//
+// Params:
+//   - t: testing context for assertions.
+func TestKubernetesDiscoverer_Type(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
-		name          string
-		labelSelector string
-		wantQuery     bool
+		name         string
+		expectedType target.Type
 	}{
 		{
-			name:          "applies label selector",
-			labelSelector: "app=nginx,version=v1",
-			wantQuery:     true,
-		},
-		{
-			name:          "no label selector",
-			labelSelector: "",
-			wantQuery:     false,
+			name:         "returns kubernetes type",
+			expectedType: target.TypeKubernetes,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var receivedQuery string
-
-			// Create mock K8s API server that captures query params.
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				receivedQuery = r.URL.RawQuery
-				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"items": []any{},
-				})
-			}))
-			defer server.Close()
-
-			cfg := &config.KubernetesDiscoveryConfig{
-				Enabled:       true,
-				Namespaces:    []string{"default"},
-				LabelSelector: tt.labelSelector,
-			}
-
-			d := newTestKubernetesDiscoverer(t, server.URL, cfg)
-
-			_, err := d.Discover(context.Background())
+			t.Parallel()
+			// Create a temporary kubeconfig for the discoverer.
+			tmpDir := t.TempDir()
+			kubeconfigPath := filepath.Join(tmpDir, "kubeconfig")
+			err := os.WriteFile(kubeconfigPath, []byte(testKubeconfigDiscovererValid), 0600)
 			require.NoError(t, err)
 
-			if tt.wantQuery {
-				assert.Contains(t, receivedQuery, "labelSelector=")
-			} else {
-				assert.NotContains(t, receivedQuery, "labelSelector=")
+			cfg := &config.KubernetesDiscoveryConfig{
+				Enabled:        true,
+				KubeconfigPath: kubeconfigPath,
+				Namespaces:     []string{"default"},
 			}
+
+			discoverer, err := discovery.NewKubernetesDiscoverer(cfg)
+			require.NoError(t, err)
+
+			// Verify Type returns correct value.
+			assert.Equal(t, tt.expectedType, discoverer.Type())
 		})
 	}
 }
 
-// newTestKubernetesDiscoverer creates a test discoverer with mock API server.
-// This is a helper for tests that bypasses kubeconfig loading.
-func newTestKubernetesDiscoverer(t *testing.T, apiServer string, cfg *config.KubernetesDiscoveryConfig) *discovery.KubernetesDiscoverer {
-	t.Helper()
+// TestKubernetesDiscoverer_Discover verifies the Discover method behavior.
+//
+// Params:
+//   - t: testing context for assertions.
+func TestKubernetesDiscoverer_Discover(t *testing.T) {
+	t.Parallel()
 
-	// For tests, we'd need to expose a way to inject the auth.
-	// For now, this will fail in real tests. This is a placeholder.
-	// In production code, we'd add a WithAuth option or similar.
+	tests := []struct {
+		name       string
+		wantErr    bool
+		wantErrMsg string
+	}{
+		{
+			name:       "returns error when kubernetes api unreachable",
+			wantErr:    true,
+			wantErrMsg: "discover namespace",
+		},
+	}
 
-	// Skip test if we can't create discoverer with mock server.
-	// TODO: implement auth injection mechanism.
-	t.Skip("newTestKubernetesDiscoverer requires auth injection mechanism")
-	return nil
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			// Create a temporary kubeconfig for the discoverer.
+			tmpDir := t.TempDir()
+			kubeconfigPath := filepath.Join(tmpDir, "kubeconfig")
+			err := os.WriteFile(kubeconfigPath, []byte(testKubeconfigDiscovererValid), 0600)
+			require.NoError(t, err)
+
+			cfg := &config.KubernetesDiscoveryConfig{
+				Enabled:        true,
+				KubeconfigPath: kubeconfigPath,
+				Namespaces:     []string{"default"},
+			}
+
+			discoverer, err := discovery.NewKubernetesDiscoverer(cfg)
+			require.NoError(t, err)
+
+			// Call Discover with timeout context.
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+			defer cancel()
+
+			targets, err := discoverer.Discover(ctx)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.wantErrMsg != "" {
+					assert.Contains(t, err.Error(), tt.wantErrMsg)
+				}
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, targets)
+			}
+		})
+	}
 }

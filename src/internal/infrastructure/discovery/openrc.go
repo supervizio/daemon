@@ -116,15 +116,12 @@ func (d *OpenRCDiscoverer) listServices(ctx context.Context) ([]string, error) {
 
 		// Extract service name from format: "service_name [started]"
 		// Service name is everything before the first space.
-		spaceIdx := strings.Index(line, " ")
+		serviceName, _, found := strings.Cut(line, " ")
 		// Check if line has space separator.
-		if spaceIdx == -1 {
+		if !found {
 			// Line doesn't contain status bracket - skip malformed output.
 			continue
 		}
-
-		// Extract service name (before the space).
-		serviceName := line[:spaceIdx]
 		// Append service name if non-empty.
 		if serviceName != "" {
 			services = append(services, serviceName)

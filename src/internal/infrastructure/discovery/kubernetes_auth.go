@@ -1,8 +1,7 @@
 //go:build unix
 
 // Package discovery provides infrastructure adapters for target discovery.
-//
-//nolint:ktn-struct-onefile // Kubeconfig types are logically grouped for YAML parsing
+// This file implements Kubernetes authentication helpers for service account tokens.
 package discovery
 
 import (
@@ -48,62 +47,6 @@ type k8sAuth struct {
 
 	// caCert is the CA certificate for TLS verification.
 	caCert []byte
-}
-
-// kubeconfigCluster represents a cluster in kubeconfig.
-//
-//nolint:ktn-struct-onefile
-type kubeconfigCluster struct {
-	// CertificateAuthorityData is the base64-encoded CA certificate.
-	CertificateAuthorityData string `dto:"in,priv,priv" yaml:"certificate-authority-data"`
-
-	// Server is the API server URL.
-	Server string `dto:"in,priv,pub" yaml:"server"`
-}
-
-// kubeconfigContext represents a context in kubeconfig.
-//
-//nolint:ktn-struct-onefile // grouped with kubeconfig types
-type kubeconfigContext struct {
-	// Cluster is the cluster name.
-	Cluster string `dto:"in,priv,pub" yaml:"cluster"`
-
-	// User is the user name.
-	User string `dto:"in,priv,pub" yaml:"user"`
-}
-
-// kubeconfigUser represents a user in kubeconfig.
-//
-//nolint:ktn-struct-onefile // grouped with kubeconfig types
-type kubeconfigUser struct {
-	// Token is the bearer token.
-	Token string `dto:"in,priv,secret" yaml:"token"`
-}
-
-// kubeconfig represents a simplified kubeconfig file.
-//
-//nolint:ktn-struct-onefile // grouped with kubeconfig types
-type kubeconfig struct {
-	// CurrentContext is the active context name.
-	CurrentContext string `dto:"in,priv,pub" yaml:"current-context"`
-
-	// Clusters are the available clusters.
-	Clusters []struct {
-		Name    string            `dto:"in,priv,pub" yaml:"name"`
-		Cluster kubeconfigCluster `dto:"in,priv,priv" yaml:"cluster"`
-	} `dto:"in,priv,priv" yaml:"clusters"`
-
-	// Contexts are the available contexts.
-	Contexts []struct {
-		Name    string            `dto:"in,priv,pub" yaml:"name"`
-		Context kubeconfigContext `dto:"in,priv,pub" yaml:"context"`
-	} `dto:"in,priv,pub" yaml:"contexts"`
-
-	// Users are the available users.
-	Users []struct {
-		Name string         `dto:"in,priv,pub" yaml:"name"`
-		User kubeconfigUser `dto:"in,priv,secret" yaml:"user"`
-	} `dto:"in,priv,secret" yaml:"users"`
 }
 
 // loadKubeconfig loads authentication from a kubeconfig file.

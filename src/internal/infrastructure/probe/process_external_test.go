@@ -14,137 +14,160 @@ import (
 )
 
 func TestProcessCollector_CollectFDs(t *testing.T) {
-	err := probe.Init()
-	require.NoError(t, err)
-	defer probe.Shutdown()
+	tests := []struct {
+		name        string
+		initProbe   bool
+		pid         int
+		expectError bool
+		errorMsg    string
+		validate    func(t *testing.T, fds probe.ProcessFDs, pid int)
+	}{
+		{
+			name:        "ValidPID",
+			initProbe:   true,
+			pid:         os.Getpid(),
+			expectError: false,
+			validate: func(t *testing.T, fds probe.ProcessFDs, pid int) {
+				assert.Equal(t, pid, fds.PID)
+				assert.GreaterOrEqual(t, fds.Count, uint32(3), "process should have at least stdin/stdout/stderr")
+				t.Logf("Process %d has %d open file descriptors", pid, fds.Count)
+			},
+		},
+		{
+			name:        "InvalidPID",
+			initProbe:   true,
+			pid:         99999,
+			expectError: true,
+		},
+		{
+			name:        "NotInitialized",
+			initProbe:   false,
+			pid:         os.Getpid(),
+			expectError: true,
+			errorMsg:    "not initialized",
+		},
+	}
 
-	collector := probe.NewProcessCollector()
-	ctx := context.Background()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.initProbe {
+				err := probe.Init()
+				require.NoError(t, err)
+				defer probe.Shutdown()
+			}
 
-	// Test with current process
-	pid := os.Getpid()
-	fds, err := collector.CollectFDs(ctx, pid)
-	require.NoError(t, err)
+			collector := probe.NewProcessCollector()
+			ctx := context.Background()
 
-	// Verify the returned PID matches
-	assert.Equal(t, pid, fds.PID)
+			fds, err := collector.CollectFDs(ctx, tt.pid)
 
-	// Any process should have at least 3 FDs (stdin, stdout, stderr)
-	assert.GreaterOrEqual(t, fds.Count, uint32(3), "process should have at least stdin/stdout/stderr")
-
-	t.Logf("Process %d has %d open file descriptors", pid, fds.Count)
-}
-
-func TestProcessCollector_CollectFDs_InvalidPID(t *testing.T) {
-	err := probe.Init()
-	require.NoError(t, err)
-	defer probe.Shutdown()
-
-	collector := probe.NewProcessCollector()
-	ctx := context.Background()
-
-	// Test with invalid PID (99999 is unlikely to exist)
-	invalidPID := 99999
-	_, err = collector.CollectFDs(ctx, invalidPID)
-
-	// Should return an error for non-existent process
-	assert.Error(t, err)
-	t.Logf("Expected error for invalid PID: %v", err)
-}
-
-func TestProcessCollector_CollectFDs_NotInitialized(t *testing.T) {
-	// Explicitly do NOT call probe.Init()
-	collector := probe.NewProcessCollector()
-	ctx := context.Background()
-
-	pid := os.Getpid()
-	_, err := collector.CollectFDs(ctx, pid)
-
-	// Should return initialization error
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not initialized")
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+				t.Logf("Expected error: %v", err)
+			} else {
+				require.NoError(t, err)
+				if tt.validate != nil {
+					tt.validate(t, fds, tt.pid)
+				}
+			}
+		})
+	}
 }
 
 func TestProcessCollector_CollectIO(t *testing.T) {
-	err := probe.Init()
-	require.NoError(t, err)
-	defer probe.Shutdown()
-
-	collector := probe.NewProcessCollector()
-	ctx := context.Background()
-
-	// Test with current process
-	pid := os.Getpid()
-
-	// First collection
-	io1, err := collector.CollectIO(ctx, pid)
-	require.NoError(t, err)
-
-	// Verify the returned PID matches
-	assert.Equal(t, pid, io1.PID)
-
-	t.Logf("Process %d I/O: read=%d B/s, write=%d B/s",
-		pid, io1.ReadBytesPerSec, io1.WriteBytesPerSec)
-
-	// Perform some I/O operations using t.TempDir()
-	tmpDir := t.TempDir()
-	tmpFilePath := tmpDir + "/probe-test"
-	tmpFile, err := os.Create(tmpFilePath)
-	require.NoError(t, err)
-	defer tmpFile.Close()
-
-	// Write some data
-	const ioTestDataSize int = 1024 * 1024 // 1 MB
-	data := make([]byte, ioTestDataSize)
-	// Write data multiple times to generate I/O activity.
-	for range 10 {
-		_, _ = tmpFile.Write(data)
+	tests := []struct {
+		name        string
+		initProbe   bool
+		pid         int
+		expectError bool
+		errorMsg    string
+		doIOTest    bool
+	}{
+		{
+			name:        "ValidPID",
+			initProbe:   true,
+			pid:         os.Getpid(),
+			expectError: false,
+			doIOTest:    true,
+		},
+		{
+			name:        "InvalidPID",
+			initProbe:   true,
+			pid:         99999,
+			expectError: true,
+		},
+		{
+			name:        "NotInitialized",
+			initProbe:   false,
+			pid:         os.Getpid(),
+			expectError: true,
+			errorMsg:    "not initialized",
+		},
 	}
-	_ = tmpFile.Sync()
 
-	// Wait a bit for the metrics to update
-	time.Sleep(100 * time.Millisecond)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.initProbe {
+				err := probe.Init()
+				require.NoError(t, err)
+				defer probe.Shutdown()
+			}
 
-	// Second collection should show I/O activity
-	io2, err := collector.CollectIO(ctx, pid)
-	require.NoError(t, err)
+			collector := probe.NewProcessCollector()
+			ctx := context.Background()
 
-	assert.Equal(t, pid, io2.PID)
+			io1, err := collector.CollectIO(ctx, tt.pid)
 
-	// Note: I/O metrics might be 0 depending on timing and OS buffering
-	// Just verify the fields are accessible
-	t.Logf("After I/O: read=%d B/s, write=%d B/s",
-		io2.ReadBytesPerSec, io2.WriteBytesPerSec)
-}
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+				t.Logf("Expected error: %v", err)
+				return
+			}
 
-func TestProcessCollector_CollectIO_InvalidPID(t *testing.T) {
-	err := probe.Init()
-	require.NoError(t, err)
-	defer probe.Shutdown()
+			require.NoError(t, err)
+			assert.Equal(t, tt.pid, io1.PID)
+			t.Logf("Process %d I/O: read=%d B/s, write=%d B/s",
+				tt.pid, io1.ReadBytesPerSec, io1.WriteBytesPerSec)
 
-	collector := probe.NewProcessCollector()
-	ctx := context.Background()
+			if tt.doIOTest {
+				// Perform some I/O operations using t.TempDir()
+				tmpDir := t.TempDir()
+				tmpFilePath := tmpDir + "/probe-test"
+				tmpFile, err := os.Create(tmpFilePath)
+				require.NoError(t, err)
+				defer tmpFile.Close()
 
-	// Test with invalid PID
-	invalidPID := 99999
-	_, err = collector.CollectIO(ctx, invalidPID)
+				// Write some data
+				const ioTestDataSize int = 1024 * 1024 // 1 MB
+				data := make([]byte, ioTestDataSize)
+				// Write data multiple times to generate I/O activity.
+				for range 10 {
+					_, _ = tmpFile.Write(data)
+				}
+				_ = tmpFile.Sync()
 
-	// Should return an error for non-existent process
-	assert.Error(t, err)
-	t.Logf("Expected error for invalid PID: %v", err)
-}
+				// Wait a bit for the metrics to update
+				time.Sleep(100 * time.Millisecond)
 
-func TestProcessCollector_CollectIO_NotInitialized(t *testing.T) {
-	// Explicitly do NOT call probe.Init()
-	collector := probe.NewProcessCollector()
-	ctx := context.Background()
+				// Second collection should show I/O activity
+				io2, err := collector.CollectIO(ctx, tt.pid)
+				require.NoError(t, err)
 
-	pid := os.Getpid()
-	_, err := collector.CollectIO(ctx, pid)
+				assert.Equal(t, tt.pid, io2.PID)
 
-	// Should return initialization error
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not initialized")
+				// Note: I/O metrics might be 0 depending on timing and OS buffering
+				// Just verify the fields are accessible
+				t.Logf("After I/O: read=%d B/s, write=%d B/s",
+					io2.ReadBytesPerSec, io2.WriteBytesPerSec)
+			}
+		})
+	}
 }
 
 func TestProcessCollector_CollectAll(t *testing.T) {

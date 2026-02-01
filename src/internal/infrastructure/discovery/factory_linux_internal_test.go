@@ -156,7 +156,17 @@ func TestFactory_createNomadDiscoverer(t *testing.T) {
 					Enabled: true,
 				},
 			},
-			wantNil: true,
+			wantNil: false, // Nomad discoverer is implemented on Linux
+		},
+		{
+			name: "enabled nomad with address",
+			config: &config.DiscoveryConfig{
+				Nomad: &config.NomadDiscoveryConfig{
+					Enabled: true,
+					Address: "http://nomad.example.com:4646",
+				},
+			},
+			wantNil: false,
 		},
 	}
 
@@ -165,9 +175,194 @@ func TestFactory_createNomadDiscoverer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &Factory{config: tc.config}
 			discoverer := f.createNomadDiscoverer()
-			// Verify discoverer is nil (not implemented).
+			// Verify discoverer matches expectation.
 			if (discoverer == nil) != tc.wantNil {
 				t.Errorf("createNomadDiscoverer() = %v, wantNil = %v", discoverer, tc.wantNil)
+			}
+		})
+	}
+}
+
+// TestFactory_createOpenRCDiscoverer tests createOpenRCDiscoverer method.
+func TestFactory_createOpenRCDiscoverer(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *config.DiscoveryConfig
+		wantNil bool
+	}{
+		{
+			name:    "nil openrc config",
+			config:  &config.DiscoveryConfig{},
+			wantNil: true,
+		},
+		{
+			name: "enabled openrc",
+			config: &config.DiscoveryConfig{
+				OpenRC: &config.OpenRCDiscoveryConfig{
+					Enabled: true,
+				},
+			},
+			wantNil: true, // Returns nil on Linux (not implemented)
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &Factory{config: tc.config}
+			discoverer := f.createOpenRCDiscoverer()
+			// Verify discoverer is nil on Linux.
+			if (discoverer == nil) != tc.wantNil {
+				t.Errorf("createOpenRCDiscoverer() = %v, wantNil = %v", discoverer, tc.wantNil)
+			}
+		})
+	}
+}
+
+// TestFactory_createBSDRCDiscoverer tests createBSDRCDiscoverer method.
+func TestFactory_createBSDRCDiscoverer(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *config.DiscoveryConfig
+		wantNil bool
+	}{
+		{
+			name:    "nil bsdrc config",
+			config:  &config.DiscoveryConfig{},
+			wantNil: true,
+		},
+		{
+			name: "enabled bsdrc",
+			config: &config.DiscoveryConfig{
+				BSDRC: &config.BSDRCDiscoveryConfig{
+					Enabled: true,
+				},
+			},
+			wantNil: true, // Returns nil on Linux (not available)
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &Factory{config: tc.config}
+			discoverer := f.createBSDRCDiscoverer()
+			// Verify discoverer is nil on Linux.
+			if (discoverer == nil) != tc.wantNil {
+				t.Errorf("createBSDRCDiscoverer() = %v, wantNil = %v", discoverer, tc.wantNil)
+			}
+		})
+	}
+}
+
+// TestFactory_createPodmanDiscoverer tests createPodmanDiscoverer method.
+func TestFactory_createPodmanDiscoverer(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *config.DiscoveryConfig
+		wantNil bool
+	}{
+		{
+			name:    "nil podman config",
+			config:  &config.DiscoveryConfig{},
+			wantNil: true,
+		},
+		{
+			name: "enabled podman with socket",
+			config: &config.DiscoveryConfig{
+				Podman: &config.PodmanDiscoveryConfig{
+					Enabled:    true,
+					SocketPath: "/run/podman/podman.sock",
+				},
+			},
+			wantNil: false,
+		},
+		{
+			name: "enabled podman with default socket",
+			config: &config.DiscoveryConfig{
+				Podman: &config.PodmanDiscoveryConfig{
+					Enabled: true,
+				},
+			},
+			wantNil: false,
+		},
+		{
+			name: "enabled podman with labels",
+			config: &config.DiscoveryConfig{
+				Podman: &config.PodmanDiscoveryConfig{
+					Enabled: true,
+					Labels:  map[string]string{"app": "test"},
+				},
+			},
+			wantNil: false,
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &Factory{config: tc.config}
+			discoverer := f.createPodmanDiscoverer()
+			// Verify discoverer matches expectation.
+			if (discoverer == nil) != tc.wantNil {
+				t.Errorf("createPodmanDiscoverer() = %v, wantNil = %v", discoverer, tc.wantNil)
+			}
+		})
+	}
+}
+
+// TestFactory_createPortScanDiscoverer tests createPortScanDiscoverer method.
+func TestFactory_createPortScanDiscoverer(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *config.DiscoveryConfig
+		wantNil bool
+	}{
+		{
+			name:    "nil portscan config",
+			config:  &config.DiscoveryConfig{},
+			wantNil: true,
+		},
+		{
+			name: "enabled portscan",
+			config: &config.DiscoveryConfig{
+				PortScan: &config.PortScanDiscoveryConfig{
+					Enabled: true,
+				},
+			},
+			wantNil: false,
+		},
+		{
+			name: "enabled portscan with interfaces",
+			config: &config.DiscoveryConfig{
+				PortScan: &config.PortScanDiscoveryConfig{
+					Enabled:    true,
+					Interfaces: []string{"lo", "eth0"},
+				},
+			},
+			wantNil: false,
+		},
+		{
+			name: "enabled portscan with port filters",
+			config: &config.DiscoveryConfig{
+				PortScan: &config.PortScanDiscoveryConfig{
+					Enabled:      true,
+					ExcludePorts: []int{22, 25},
+					IncludePorts: []int{80, 443},
+				},
+			},
+			wantNil: false,
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &Factory{config: tc.config}
+			discoverer := f.createPortScanDiscoverer()
+			// Verify discoverer matches expectation.
+			if (discoverer == nil) != tc.wantNil {
+				t.Errorf("createPortScanDiscoverer() = %v, wantNil = %v", discoverer, tc.wantNil)
 			}
 		})
 	}

@@ -40,7 +40,8 @@ func NewNetworkCollector() *NetworkCollector {
 //   - error: nil on success, error if probe not initialized or collection fails
 //
 //nolint:gocritic // dupSubExpr false positive from CGO list operations
-func (n *NetworkCollector) ListInterfaces(_ context.Context) ([]metrics.NetInterface, error) {
+func (n *NetworkCollector) ListInterfaces(ctx context.Context) ([]metrics.NetInterface, error) {
+	_ = ctx // reserved for future cancellation support
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return nil slice with initialization error.
@@ -123,7 +124,8 @@ func (n *NetworkCollector) CollectStats(ctx context.Context, iface string) (metr
 //   - error: nil on success, error if probe not initialized or collection fails
 //
 //nolint:gocritic // dupSubExpr false positive from CGO list operations
-func (n *NetworkCollector) CollectAllStats(_ context.Context) ([]metrics.NetStats, error) {
+func (n *NetworkCollector) CollectAllStats(ctx context.Context) ([]metrics.NetStats, error) {
+	_ = ctx // reserved for future cancellation support
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return nil slice with initialization error.

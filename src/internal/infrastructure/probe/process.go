@@ -38,7 +38,8 @@ func NewProcessCollector() *ProcessCollector {
 // Returns:
 //   - metrics.ProcessCPU: CPU metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectCPU(_ context.Context, pid int) (metrics.ProcessCPU, error) {
+func (c *ProcessCollector) CollectCPU(ctx context.Context, pid int) (metrics.ProcessCPU, error) {
+	_ = ctx // reserved for future cancellation support
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -72,7 +73,8 @@ func (c *ProcessCollector) CollectCPU(_ context.Context, pid int) (metrics.Proce
 // Returns:
 //   - metrics.ProcessMemory: memory metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectMemory(_ context.Context, pid int) (metrics.ProcessMemory, error) {
+func (c *ProcessCollector) CollectMemory(ctx context.Context, pid int) (metrics.ProcessMemory, error) {
+	_ = ctx // reserved for future cancellation support
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -118,7 +120,8 @@ type ProcessFDs struct {
 // Returns:
 //   - ProcessFDs: file descriptor metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectFDs(_ context.Context, pid int) (ProcessFDs, error) {
+func (c *ProcessCollector) CollectFDs(ctx context.Context, pid int) (ProcessFDs, error) {
+	_ = ctx // reserved for future cancellation support
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -162,7 +165,8 @@ type ProcessIO struct {
 // Returns:
 //   - ProcessIO: I/O statistics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectIO(_ context.Context, pid int) (ProcessIO, error) {
+func (c *ProcessCollector) CollectIO(ctx context.Context, pid int) (ProcessIO, error) {
+	_ = ctx // reserved for future cancellation support
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.

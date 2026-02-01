@@ -163,14 +163,14 @@ func TestFactory_addNomadDiscoverer(t *testing.T) {
 			inputLen: 0,
 		},
 		{
-			name: "enabled nomad",
+			name: "with existing discoverers",
 			config: &config.DiscoveryConfig{
 				Nomad: &config.NomadDiscoveryConfig{
-					Enabled: true,
+					Enabled: false,
 				},
 			},
-			wantLen:  0, // Still 0 because createNomadDiscoverer returns nil
-			inputLen: 0,
+			wantLen:  2,
+			inputLen: 2,
 		},
 	}
 
@@ -183,6 +183,206 @@ func TestFactory_addNomadDiscoverer(t *testing.T) {
 			// Verify result length.
 			if len(result) != tc.wantLen {
 				t.Errorf("addNomadDiscoverer() len = %d, want %d", len(result), tc.wantLen)
+			}
+		})
+	}
+}
+
+// TestFactory_addPodmanDiscoverer tests addPodmanDiscoverer method.
+func TestFactory_addPodmanDiscoverer(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *config.DiscoveryConfig
+		wantLen  int
+		inputLen int
+	}{
+		{
+			name:     "nil podman config",
+			config:   &config.DiscoveryConfig{},
+			wantLen:  0,
+			inputLen: 0,
+		},
+		{
+			name: "disabled podman",
+			config: &config.DiscoveryConfig{
+				Podman: &config.PodmanDiscoveryConfig{
+					Enabled: false,
+				},
+			},
+			wantLen:  0,
+			inputLen: 0,
+		},
+		{
+			name: "with existing discoverers",
+			config: &config.DiscoveryConfig{
+				Podman: &config.PodmanDiscoveryConfig{
+					Enabled: false,
+				},
+			},
+			wantLen:  2,
+			inputLen: 2,
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &Factory{config: tc.config}
+			input := make([]target.Discoverer, tc.inputLen)
+			result := f.addPodmanDiscoverer(input)
+			// Verify result length.
+			if len(result) != tc.wantLen {
+				t.Errorf("addPodmanDiscoverer() len = %d, want %d", len(result), tc.wantLen)
+			}
+		})
+	}
+}
+
+// TestFactory_addOpenRCDiscoverer tests addOpenRCDiscoverer method.
+func TestFactory_addOpenRCDiscoverer(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *config.DiscoveryConfig
+		wantLen  int
+		inputLen int
+	}{
+		{
+			name:     "nil openrc config",
+			config:   &config.DiscoveryConfig{},
+			wantLen:  0,
+			inputLen: 0,
+		},
+		{
+			name: "disabled openrc",
+			config: &config.DiscoveryConfig{
+				OpenRC: &config.OpenRCDiscoveryConfig{
+					Enabled: false,
+				},
+			},
+			wantLen:  0,
+			inputLen: 0,
+		},
+		{
+			name: "with existing discoverers",
+			config: &config.DiscoveryConfig{
+				OpenRC: &config.OpenRCDiscoveryConfig{
+					Enabled: false,
+				},
+			},
+			wantLen:  1,
+			inputLen: 1,
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &Factory{config: tc.config}
+			input := make([]target.Discoverer, tc.inputLen)
+			result := f.addOpenRCDiscoverer(input)
+			// Verify result length.
+			if len(result) != tc.wantLen {
+				t.Errorf("addOpenRCDiscoverer() len = %d, want %d", len(result), tc.wantLen)
+			}
+		})
+	}
+}
+
+// TestFactory_addBSDRCDiscoverer tests addBSDRCDiscoverer method.
+func TestFactory_addBSDRCDiscoverer(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *config.DiscoveryConfig
+		wantLen  int
+		inputLen int
+	}{
+		{
+			name:     "nil bsdrc config",
+			config:   &config.DiscoveryConfig{},
+			wantLen:  0,
+			inputLen: 0,
+		},
+		{
+			name: "disabled bsdrc",
+			config: &config.DiscoveryConfig{
+				BSDRC: &config.BSDRCDiscoveryConfig{
+					Enabled: false,
+				},
+			},
+			wantLen:  0,
+			inputLen: 0,
+		},
+		{
+			name: "with existing discoverers",
+			config: &config.DiscoveryConfig{
+				BSDRC: &config.BSDRCDiscoveryConfig{
+					Enabled: false,
+				},
+			},
+			wantLen:  3,
+			inputLen: 3,
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &Factory{config: tc.config}
+			input := make([]target.Discoverer, tc.inputLen)
+			result := f.addBSDRCDiscoverer(input)
+			// Verify result length.
+			if len(result) != tc.wantLen {
+				t.Errorf("addBSDRCDiscoverer() len = %d, want %d", len(result), tc.wantLen)
+			}
+		})
+	}
+}
+
+// TestFactory_addPortScanDiscoverer tests addPortScanDiscoverer method.
+func TestFactory_addPortScanDiscoverer(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *config.DiscoveryConfig
+		wantLen  int
+		inputLen int
+	}{
+		{
+			name:     "nil portscan config",
+			config:   &config.DiscoveryConfig{},
+			wantLen:  0,
+			inputLen: 0,
+		},
+		{
+			name: "disabled portscan",
+			config: &config.DiscoveryConfig{
+				PortScan: &config.PortScanDiscoveryConfig{
+					Enabled: false,
+				},
+			},
+			wantLen:  0,
+			inputLen: 0,
+		},
+		{
+			name: "with existing discoverers",
+			config: &config.DiscoveryConfig{
+				PortScan: &config.PortScanDiscoveryConfig{
+					Enabled: false,
+				},
+			},
+			wantLen:  2,
+			inputLen: 2,
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &Factory{config: tc.config}
+			input := make([]target.Discoverer, tc.inputLen)
+			result := f.addPortScanDiscoverer(input)
+			// Verify result length.
+			if len(result) != tc.wantLen {
+				t.Errorf("addPortScanDiscoverer() len = %d, want %d", len(result), tc.wantLen)
 			}
 		})
 	}

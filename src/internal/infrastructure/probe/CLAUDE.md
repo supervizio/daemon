@@ -30,7 +30,7 @@ Unified adapter for system resources via CGO/FFI to Rust library:
 probe.Init()                    // Initialize once at startup
 defer probe.Shutdown()
 c := probe.NewCollector()       // Create collector
-cpu, _ := c.CPU().CollectSystem(ctx)
+cpu, _ := c.Cpu().CollectSystem(ctx)
 mem, _ := c.Memory().CollectSystem(ctx)
 ```
 

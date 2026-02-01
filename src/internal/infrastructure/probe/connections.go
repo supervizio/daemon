@@ -2,8 +2,6 @@
 
 // Package probe provides CGO bindings to the Rust probe library for
 // unified cross-platform system metrics and resource quota management.
-//
-//nolint:ktn-const-order // AddressFamily constants must follow their type definition
 package probe
 
 /*
@@ -15,6 +13,9 @@ import (
 	"context"
 	"unsafe"
 )
+
+// notFoundPID represents the PID value returned when no process is found.
+const notFoundPID int32 = -1
 
 // SocketState represents the state of a network socket.
 type SocketState uint8
@@ -46,17 +47,6 @@ const (
 	// SocketStateClosing indicates both sides sent FIN simultaneously.
 	SocketStateClosing SocketState = 11
 )
-
-// Address family constants.
-const ( //nolint:ktn-const-order // Typed constants must follow their type definition
-	// AddressFamilyIPv4 indicates IPv4 address family.
-	AddressFamilyIPv4 AddressFamily = 4
-	// AddressFamilyIPv6 indicates IPv6 address family.
-	AddressFamilyIPv6 AddressFamily = 6
-)
-
-// notFoundPID represents the PID value returned when no process is found.
-const notFoundPID int32 = -1 //nolint:ktn-const-order // Placed with related connection code
 
 // socketStateNames maps socket states to their string representations.
 var socketStateNames map[SocketState]string = map[SocketState]string{
@@ -90,6 +80,14 @@ func (s SocketState) String() string {
 
 // AddressFamily represents the address family of a network connection.
 type AddressFamily uint8
+
+// Address family constants.
+const (
+	// AddressFamilyIPv4 indicates IPv4 address family.
+	AddressFamilyIPv4 AddressFamily = 4
+	// AddressFamilyIPv6 indicates IPv6 address family.
+	AddressFamilyIPv6 AddressFamily = 6
+)
 
 // String returns the string representation of the address family.
 //
