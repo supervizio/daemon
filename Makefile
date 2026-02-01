@@ -283,8 +283,24 @@ coverage: ## Run unit tests with coverage report
 
 lint: lint-golangci lint-ktn ## Run all linters
 
-lint-golangci: ## Run golangci-lint
-	@cd $(SRC_DIR) && golangci-lint run -c ../.golangci.yml
+lint-golangci: ## Run golangci-lint (CGO required)
+	@if [ -f "$(DIST_LIB)/$(CURRENT_PLATFORM)/libprobe.a" ]; then \
+		cd $(SRC_DIR) && CGO_ENABLED=1 \
+		CGO_CFLAGS="$(CGO_CFLAGS)" \
+		CGO_LDFLAGS="$(CGO_LDFLAGS)" \
+		golangci-lint run -c ../.golangci.yml; \
+	else \
+		echo "$(YELLOW)Warning: libprobe.a not found. Skipping probe package in lint.$(RESET)"; \
+		cd $(SRC_DIR) && golangci-lint run -c ../.golangci.yml \
+			--skip-dirs=internal/infrastructure/probe \
+			./cmd/... ./internal/application/... ./internal/domain/... \
+			./internal/infrastructure/observability/... \
+			./internal/infrastructure/persistence/... \
+			./internal/infrastructure/process/... \
+			./internal/infrastructure/transport/... \
+			./internal/infrastructure/discovery/... \
+			./internal/bootstrap/...; \
+	fi
 
 lint-ktn: ## Run ktn-linter
 	@cd $(SRC_DIR) && ktn-linter lint --no-cache -c ../.ktn-linter.yaml ./...
@@ -298,7 +314,7 @@ lint-probe: ## Run Rust linter (clippy)
 	fi
 
 fmt: ## Format code with gofmt
-	@cd $(SRC_DIR) && go fmt ./...
+	@cd $(SRC_DIR) && find . -name "*.go" -type f -exec gofmt -w {} +
 
 fmt-rust: ## Format Rust code
 	@if command -v cargo >/dev/null 2>&1; then \

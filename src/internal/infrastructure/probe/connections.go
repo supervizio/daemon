@@ -48,6 +48,17 @@ const (
 	SocketStateClosing SocketState = 11
 )
 
+// AddressFamily represents the address family of a network connection.
+type AddressFamily uint8
+
+// Address family constants.
+const (
+	// AddressFamilyIPv4 indicates IPv4 address family.
+	AddressFamilyIPv4 AddressFamily = 4
+	// AddressFamilyIPv6 indicates IPv6 address family.
+	AddressFamilyIPv6 AddressFamily = 6
+)
+
 // socketStateNames maps socket states to their string representations.
 var socketStateNames map[SocketState]string = map[SocketState]string{
 	SocketStateUnknown:     "UNKNOWN",
@@ -78,17 +89,6 @@ func (s SocketState) String() string {
 	return "UNKNOWN"
 }
 
-// AddressFamily represents the address family of a network connection.
-type AddressFamily uint8
-
-// Address family constants.
-const (
-	// AddressFamilyIPv4 indicates IPv4 address family.
-	AddressFamilyIPv4 AddressFamily = 4
-	// AddressFamilyIPv6 indicates IPv6 address family.
-	AddressFamilyIPv6 AddressFamily = 6
-)
-
 // String returns the string representation of the address family.
 //
 // Returns:
@@ -106,84 +106,6 @@ func (f AddressFamily) String() string {
 	}
 	// Return Unknown for any unrecognized value
 	return "Unknown"
-}
-
-// TcpConnection represents a TCP connection with process information.
-// It includes local/remote endpoints, state, and owning process details.
-type TcpConnection struct {
-	Family      AddressFamily
-	LocalAddr   string
-	LocalPort   uint16
-	RemoteAddr  string
-	RemotePort  uint16
-	State       SocketState
-	PID         int32
-	ProcessName string
-	Inode       uint64
-	RxQueue     uint32
-	TxQueue     uint32
-}
-
-// UdpConnection represents a UDP socket with process information.
-// It includes local/remote endpoints and owning process details.
-type UdpConnection struct {
-	Family      AddressFamily
-	LocalAddr   string
-	LocalPort   uint16
-	RemoteAddr  string
-	RemotePort  uint16
-	State       SocketState
-	PID         int32
-	ProcessName string
-	Inode       uint64
-	RxQueue     uint32
-	TxQueue     uint32
-}
-
-// UnixSocket represents a Unix domain socket with process information.
-// It includes socket path, type, state, and owning process details.
-type UnixSocket struct {
-	Path        string
-	SocketType  string
-	State       SocketState
-	PID         int32
-	ProcessName string
-	Inode       uint64
-}
-
-// TcpStats contains aggregated TCP connection statistics.
-// It tracks connection counts by state for system monitoring.
-type TcpStats struct {
-	Established uint32
-	SynSent     uint32
-	SynRecv     uint32
-	FinWait1    uint32
-	FinWait2    uint32
-	TimeWait    uint32
-	Close       uint32
-	CloseWait   uint32
-	LastAck     uint32
-	Listen      uint32
-	Closing     uint32
-}
-
-// NewTcpStats creates a new empty TcpStats instance.
-//
-// Returns:
-//   - *TcpStats: a new zero-initialized TCP statistics instance
-func NewTcpStats() *TcpStats {
-	// Return zero-initialized struct.
-	return &TcpStats{}
-}
-
-// Total returns the total number of TCP connections.
-//
-// Returns:
-//   - uint32: sum of all connection state counts
-func (s *TcpStats) Total() uint32 {
-	// Sum all connection states
-	return s.Established + s.SynSent + s.SynRecv + s.FinWait1 + s.FinWait2 +
-		s.TimeWait + s.Close + s.CloseWait + s.LastAck + s.Listen + s.Closing
 }
 
 // ConnectionCollector provides network connection metrics via the Rust probe library.

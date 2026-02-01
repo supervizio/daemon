@@ -1,6 +1,9 @@
 //go:build cgo
 
 // Package probe provides CGO bindings to the Rust probe library for
+// unified cross-platform system metrics and resource quota management.
+
+// Package probe provides CGO bindings to the Rust probe library for
 // cross-platform system metrics collection.
 //
 // The probe package acts as an adapter implementing the domain.SystemCollector

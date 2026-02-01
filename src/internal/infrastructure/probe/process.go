@@ -38,8 +38,7 @@ func NewProcessCollector() *ProcessCollector {
 // Returns:
 //   - metrics.ProcessCPU: CPU metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectCPU(ctx context.Context, pid int) (metrics.ProcessCPU, error) {
-	_ = ctx // reserved for future cancellation support
+func (c *ProcessCollector) CollectCPU(_ context.Context, pid int) (metrics.ProcessCPU, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -73,8 +72,7 @@ func (c *ProcessCollector) CollectCPU(ctx context.Context, pid int) (metrics.Pro
 // Returns:
 //   - metrics.ProcessMemory: memory metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectMemory(ctx context.Context, pid int) (metrics.ProcessMemory, error) {
-	_ = ctx // reserved for future cancellation support
+func (c *ProcessCollector) CollectMemory(_ context.Context, pid int) (metrics.ProcessMemory, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -100,17 +98,6 @@ func (c *ProcessCollector) CollectMemory(ctx context.Context, pid int) (metrics.
 	}, nil
 }
 
-// ProcessFDs contains file descriptor count for a process.
-//
-// This value object captures the number of open file descriptors for a specific
-// process. File descriptors include open files, sockets, pipes, and other I/O resources.
-type ProcessFDs struct {
-	// PID is the process identifier.
-	PID int
-	// Count is the number of open file descriptors.
-	Count uint32
-}
-
 // CollectFDs collects file descriptor count for a specific process.
 //
 // Params:
@@ -120,8 +107,7 @@ type ProcessFDs struct {
 // Returns:
 //   - ProcessFDs: file descriptor metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectFDs(ctx context.Context, pid int) (ProcessFDs, error) {
-	_ = ctx // reserved for future cancellation support
+func (c *ProcessCollector) CollectFDs(_ context.Context, pid int) (ProcessFDs, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -143,19 +129,6 @@ func (c *ProcessCollector) CollectFDs(ctx context.Context, pid int) (ProcessFDs,
 	}, nil
 }
 
-// ProcessIO contains I/O statistics for a process.
-//
-// This value object captures the I/O throughput of a specific process measured
-// in bytes per second. Values are calculated by the Rust probe based on deltas.
-type ProcessIO struct {
-	// PID is the process identifier.
-	PID int
-	// ReadBytesPerSec is the read throughput in bytes per second.
-	ReadBytesPerSec uint64
-	// WriteBytesPerSec is the write throughput in bytes per second.
-	WriteBytesPerSec uint64
-}
-
 // CollectIO collects I/O statistics for a specific process.
 //
 // Params:
@@ -165,8 +138,7 @@ type ProcessIO struct {
 // Returns:
 //   - ProcessIO: I/O statistics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *ProcessCollector) CollectIO(ctx context.Context, pid int) (ProcessIO, error) {
-	_ = ctx // reserved for future cancellation support
+func (c *ProcessCollector) CollectIO(_ context.Context, pid int) (ProcessIO, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.

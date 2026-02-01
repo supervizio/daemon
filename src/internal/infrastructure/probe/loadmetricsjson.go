@@ -1,5 +1,7 @@
 //go:build cgo
 
+// Package probe provides CGO bindings to the Rust probe library for
+// unified cross-platform system metrics and resource quota management.
 package probe
 
 // LoadMetricsJSON contains load average metrics for JSON output.

@@ -43,8 +43,7 @@ func NewCPUCollector() *CPUCollector {
 // Returns:
 //   - metrics.SystemCPU: system-wide CPU statistics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *CPUCollector) CollectSystem(ctx context.Context) (metrics.SystemCPU, error) {
-	_ = ctx // reserved for future cancellation support
+func (c *CPUCollector) CollectSystem(_ context.Context) (metrics.SystemCPU, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -87,8 +86,7 @@ func (c *CPUCollector) CollectSystem(ctx context.Context) (metrics.SystemCPU, er
 // Returns:
 //   - metrics.ProcessCPU: CPU metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *CPUCollector) CollectProcess(ctx context.Context, pid int) (metrics.ProcessCPU, error) {
-	_ = ctx // reserved for future cancellation support
+func (c *CPUCollector) CollectProcess(_ context.Context, pid int) (metrics.ProcessCPU, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -121,8 +119,7 @@ func (c *CPUCollector) CollectProcess(ctx context.Context, pid int) (metrics.Pro
 // Returns:
 //   - []metrics.ProcessCPU: always nil
 //   - error: always ErrNotSupported
-func (c *CPUCollector) CollectAllProcesses(ctx context.Context) ([]metrics.ProcessCPU, error) {
-	_ = ctx // reserved for future cancellation support
+func (c *CPUCollector) CollectAllProcesses(_ context.Context) ([]metrics.ProcessCPU, error) {
 	// The Rust probe does not support enumerating all processes.
 	// This would require iterating /proc on Linux, which is platform-specific.
 	return nil, ErrNotSupported
@@ -136,8 +133,7 @@ func (c *CPUCollector) CollectAllProcesses(ctx context.Context) ([]metrics.Proce
 // Returns:
 //   - metrics.LoadAverage: system load averages (1, 5, 15 minutes)
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *CPUCollector) CollectLoadAverage(ctx context.Context) (metrics.LoadAverage, error) {
-	_ = ctx // reserved for future cancellation support
+func (c *CPUCollector) CollectLoadAverage(_ context.Context) (metrics.LoadAverage, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -172,8 +168,7 @@ func (c *CPUCollector) CollectLoadAverage(ctx context.Context) (metrics.LoadAver
 // Returns:
 //   - metrics.CPUPressure: CPU pressure statistics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (c *CPUCollector) CollectPressure(ctx context.Context) (metrics.CPUPressure, error) {
-	_ = ctx // reserved for future cancellation support
+func (c *CPUCollector) CollectPressure(_ context.Context) (metrics.CPUPressure, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.

@@ -64,7 +64,7 @@ func TestConnectionCollector_Collection(t *testing.T) {
 				return collector.CollectTCPStats(ctx)
 			},
 			validate: func(t *testing.T, result any) {
-				stats := result.(probe.TcpStats)
+				stats := result.(*probe.TcpStats)
 				t.Logf("TCP Stats: %+v", stats)
 				t.Logf("Total connections: %d", stats.Total())
 			},

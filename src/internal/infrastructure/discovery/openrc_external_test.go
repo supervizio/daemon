@@ -5,11 +5,18 @@ package discovery_test
 
 import (
 	"context"
+	"os/exec"
 	"testing"
 
 	"github.com/kodflow/daemon/internal/domain/target"
 	"github.com/kodflow/daemon/internal/infrastructure/discovery"
 )
+
+// hasRCStatus checks if the rc-status command is available.
+func hasRCStatus() bool {
+	_, err := exec.LookPath("rc-status")
+	return err == nil
+}
 
 // TestNewOpenRCDiscoverer tests the NewOpenRCDiscoverer constructor.
 func TestNewOpenRCDiscoverer(t *testing.T) {
@@ -86,30 +93,28 @@ func TestOpenRCDiscoverer_Type(t *testing.T) {
 
 // TestOpenRCDiscoverer_Discover tests OpenRCDiscoverer.Discover method.
 func TestOpenRCDiscoverer_Discover(t *testing.T) {
+	// Determine expected behavior based on rc-status availability.
+	rcStatusAvailable := hasRCStatus()
+
 	tests := []struct {
 		name     string
 		patterns []string
-		wantErr  bool
 	}{
 		{
 			name:     "no patterns lists all",
 			patterns: nil,
-			wantErr:  false,
 		},
 		{
 			name:     "empty patterns lists all",
 			patterns: []string{},
-			wantErr:  false,
 		},
 		{
 			name:     "with pattern filter",
 			patterns: []string{"*"},
-			wantErr:  false,
 		},
 		{
 			name:     "specific service pattern",
 			patterns: []string{"nginx"},
-			wantErr:  false,
 		},
 	}
 
@@ -118,9 +123,19 @@ func TestOpenRCDiscoverer_Discover(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			d := discovery.NewOpenRCDiscoverer(tc.patterns)
 			targets, err := d.Discover(context.Background())
-			// Check error matches expectation.
-			if (err != nil) != tc.wantErr {
-				t.Errorf("Discover() error = %v, wantErr %v", err, tc.wantErr)
+
+			// When rc-status is not available, expect an error.
+			if !rcStatusAvailable {
+				if err == nil {
+					t.Error("Discover() expected error when rc-status not available")
+				}
+				// Return early since we can't proceed without rc-status.
+				return
+			}
+
+			// When rc-status is available, expect success.
+			if err != nil {
+				t.Errorf("Discover() unexpected error = %v", err)
 			}
 			// Verify targets is not nil on success.
 			if err == nil && targets == nil {

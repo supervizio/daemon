@@ -171,37 +171,66 @@ func TestProcessCollector_CollectIO(t *testing.T) {
 }
 
 func TestProcessCollector_CollectAll(t *testing.T) {
-	err := probe.Init()
-	require.NoError(t, err)
-	defer probe.Shutdown()
+	tests := []struct {
+		name      string
+		initProbe bool
+		pid       int
+		wantErr   bool
+	}{
+		{
+			name:      "ValidPID_AllMetrics",
+			initProbe: true,
+			pid:       os.Getpid(),
+			wantErr:   false,
+		},
+		{
+			name:      "NotInitialized",
+			initProbe: false,
+			pid:       os.Getpid(),
+			wantErr:   true,
+		},
+	}
 
-	collector := probe.NewProcessCollector()
-	ctx := context.Background()
-	pid := os.Getpid()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.initProbe {
+				err := probe.Init()
+				require.NoError(t, err)
+				defer probe.Shutdown()
+			}
 
-	// Collect all metrics to ensure they work together
-	cpu, err := collector.CollectCPU(ctx, pid)
-	require.NoError(t, err)
+			collector := probe.NewProcessCollector()
+			ctx := context.Background()
 
-	mem, err := collector.CollectMemory(ctx, pid)
-	require.NoError(t, err)
+			// Collect all metrics to ensure they work together
+			cpu, err := collector.CollectCPU(ctx, tt.pid)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
 
-	fds, err := collector.CollectFDs(ctx, pid)
-	require.NoError(t, err)
+			mem, err := collector.CollectMemory(ctx, tt.pid)
+			require.NoError(t, err)
 
-	io, err := collector.CollectIO(ctx, pid)
-	require.NoError(t, err)
+			fds, err := collector.CollectFDs(ctx, tt.pid)
+			require.NoError(t, err)
 
-	// Verify all metrics are for the same process
-	assert.Equal(t, pid, cpu.PID)
-	assert.Equal(t, pid, mem.PID)
-	assert.Equal(t, pid, fds.PID)
-	assert.Equal(t, pid, io.PID)
+			io, err := collector.CollectIO(ctx, tt.pid)
+			require.NoError(t, err)
 
-	// Log all metrics
-	t.Logf("Process %d metrics:", pid)
-	t.Logf("  CPU: %.2f%%", cpu.UsagePercent)
-	t.Logf("  Memory: RSS=%d bytes (%.2f%%)", mem.RSS, mem.UsagePercent)
-	t.Logf("  FDs: %d", fds.Count)
-	t.Logf("  I/O: read=%d B/s, write=%d B/s", io.ReadBytesPerSec, io.WriteBytesPerSec)
+			// Verify all metrics are for the same process
+			assert.Equal(t, tt.pid, cpu.PID)
+			assert.Equal(t, tt.pid, mem.PID)
+			assert.Equal(t, tt.pid, fds.PID)
+			assert.Equal(t, tt.pid, io.PID)
+
+			// Log all metrics
+			t.Logf("Process %d metrics:", tt.pid)
+			t.Logf("  CPU: %.2f%%", cpu.UsagePercent)
+			t.Logf("  Memory: RSS=%d bytes (%.2f%%)", mem.RSS, mem.UsagePercent)
+			t.Logf("  FDs: %d", fds.Count)
+			t.Logf("  I/O: read=%d B/s, write=%d B/s", io.ReadBytesPerSec, io.WriteBytesPerSec)
+		})
+	}
 }

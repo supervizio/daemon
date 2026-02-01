@@ -2,6 +2,9 @@
 
 // Package probe provides CGO bindings to the Rust probe library for
 // unified cross-platform system metrics and resource quota management.
+
+// Package probe provides CGO bindings to the Rust probe library for
+// unified cross-platform system metrics and resource quota management.
 package probe
 
 // DiskUsageInfo contains disk usage statistics.

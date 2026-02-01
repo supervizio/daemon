@@ -40,8 +40,7 @@ func NewMemoryCollector() *MemoryCollector {
 // Returns:
 //   - metrics.SystemMemory: system-wide memory statistics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (m *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemory, error) {
-	_ = ctx // reserved for future cancellation support
+func (m *MemoryCollector) CollectSystem(_ context.Context) (metrics.SystemMemory, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -94,8 +93,7 @@ func (m *MemoryCollector) CollectSystem(ctx context.Context) (metrics.SystemMemo
 // Returns:
 //   - metrics.ProcessMemory: memory metrics for the process
 //   - error: nil on success, error if probe not initialized or collection fails
-func (m *MemoryCollector) CollectProcess(ctx context.Context, pid int) (metrics.ProcessMemory, error) {
-	_ = ctx // reserved for future cancellation support
+func (m *MemoryCollector) CollectProcess(_ context.Context, pid int) (metrics.ProcessMemory, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.
@@ -130,8 +128,7 @@ func (m *MemoryCollector) CollectProcess(ctx context.Context, pid int) (metrics.
 // Returns:
 //   - []metrics.ProcessMemory: always nil
 //   - error: always ErrNotSupported
-func (m *MemoryCollector) CollectAllProcesses(ctx context.Context) ([]metrics.ProcessMemory, error) {
-	_ = ctx // reserved for future cancellation support
+func (m *MemoryCollector) CollectAllProcesses(_ context.Context) ([]metrics.ProcessMemory, error) {
 	// The Rust probe does not support enumerating all processes.
 	return nil, ErrNotSupported
 }
@@ -145,8 +142,7 @@ func (m *MemoryCollector) CollectAllProcesses(ctx context.Context) ([]metrics.Pr
 // Returns:
 //   - metrics.MemoryPressure: memory pressure statistics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (m *MemoryCollector) CollectPressure(ctx context.Context) (metrics.MemoryPressure, error) {
-	_ = ctx // reserved for future cancellation support
+func (m *MemoryCollector) CollectPressure(_ context.Context) (metrics.MemoryPressure, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty metrics with initialization error.

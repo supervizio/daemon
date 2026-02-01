@@ -37,8 +37,7 @@ func NewIOCollector() *IOCollector {
 // Returns:
 //   - metrics.IOStats: system-wide I/O statistics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (i *IOCollector) CollectStats(ctx context.Context) (metrics.IOStats, error) {
-	_ = ctx // reserved for future cancellation support
+func (i *IOCollector) CollectStats(_ context.Context) (metrics.IOStats, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty stats with initialization error.
@@ -72,8 +71,7 @@ func (i *IOCollector) CollectStats(ctx context.Context) (metrics.IOStats, error)
 // Returns:
 //   - metrics.IOPressure: I/O pressure metrics
 //   - error: nil on success, error if probe not initialized or collection fails
-func (i *IOCollector) CollectPressure(ctx context.Context) (metrics.IOPressure, error) {
-	_ = ctx // reserved for future cancellation support
+func (i *IOCollector) CollectPressure(_ context.Context) (metrics.IOPressure, error) {
 	// Verify probe library is initialized before collecting.
 	if err := checkInitialized(); err != nil {
 		// Return empty pressure metrics with initialization error.

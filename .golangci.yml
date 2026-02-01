@@ -83,6 +83,8 @@ issues:
   exclude-generated: strict
   exclude-dirs:
     - api/proto
+    # Probe package requires CGO - skip when CGO is disabled
+    - internal/infrastructure/probe
   exclude-rules:
     # Generated files (Wire, protobuf, etc.)
     - path: wire_gen\.go

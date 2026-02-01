@@ -90,10 +90,10 @@ func TestShutdownIdempotent(t *testing.T) {
 // TestIsInitialized verifies initialization state checking.
 func TestIsInitialized(t *testing.T) {
 	tests := []struct {
-		name        string
-		doInit      bool
-		doShutdown  bool
-		expected    bool
+		name       string
+		doInit     bool
+		doShutdown bool
+		expected   bool
 	}{
 		{
 			name:       "false after shutdown",
