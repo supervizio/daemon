@@ -44,3 +44,12 @@ const (
 	// defaultHTTPStatusCode is the expected HTTP status code for successful health checks.
 	defaultHTTPStatusCode int = 200
 )
+
+// Kubernetes API timeouts and metadata.
+const (
+	// kubernetesRequestTimeout is the timeout for Kubernetes API requests.
+	kubernetesRequestTimeout time.Duration = 30 * time.Second
+
+	// kubernetesMetadataLabels is the number of Kubernetes-specific metadata labels.
+	kubernetesMetadataLabels int = 3
+)

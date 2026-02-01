@@ -13,6 +13,8 @@ type Config struct {
 	Version string
 	// Logging defines global logging defaults applied to all services.
 	Logging LoggingConfig
+	// Monitoring defines external target monitoring configuration.
+	Monitoring MonitoringConfig
 	// Services contains the list of service configurations to manage.
 	Services []ServiceConfig
 	// ConfigPath stores the path from which this configuration was loaded.
@@ -72,9 +74,10 @@ func (c *Config) GetServiceLogPath(serviceName, logFile string) string {
 func NewConfig(services []ServiceConfig) *Config {
 	// create config with version 1 and defaults
 	return &Config{
-		Version:  "1",
-		Logging:  DefaultLoggingConfig(),
-		Services: services,
+		Version:    "1",
+		Logging:    DefaultLoggingConfig(),
+		Monitoring: NewMonitoringConfig(),
+		Services:   services,
 	}
 }
 
@@ -96,5 +99,6 @@ func DefaultConfig() *Config {
 				},
 			},
 		},
+		Monitoring: NewMonitoringConfig(),
 	}
 }

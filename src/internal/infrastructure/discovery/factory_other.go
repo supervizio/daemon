@@ -14,6 +14,24 @@ func (f *Factory) createSystemdDiscoverer() target.Discoverer {
 	return nil
 }
 
+// createOpenRCDiscoverer is not available on non-Unix platforms.
+//
+// Returns:
+//   - target.Discoverer: always nil.
+func (f *Factory) createOpenRCDiscoverer() target.Discoverer {
+	// return nil on non-unix
+	return nil
+}
+
+// createBSDRCDiscoverer is not available on non-Unix platforms.
+//
+// Returns:
+//   - target.Discoverer: always nil.
+func (f *Factory) createBSDRCDiscoverer() target.Discoverer {
+	// return nil on non-unix
+	return nil
+}
+
 // createDockerDiscoverer is not available on non-Unix platforms.
 //
 // Returns:
@@ -38,5 +56,41 @@ func (f *Factory) createKubernetesDiscoverer() target.Discoverer {
 //   - target.Discoverer: always nil (not yet implemented).
 func (f *Factory) createNomadDiscoverer() target.Discoverer {
 	// return nil (not yet implemented)
+	return nil
+}
+
+// createPodmanDiscoverer is not available on non-Unix platforms.
+//
+// Returns:
+//   - target.Discoverer: always nil.
+func (f *Factory) createPodmanDiscoverer() target.Discoverer {
+	// return nil on non-unix
+	return nil
+}
+
+// createOpenRCDiscoverer is not available on non-Unix platforms.
+//
+// Returns:
+//   - target.Discoverer: always nil.
+func (f *Factory) createOpenRCDiscoverer() target.Discoverer {
+	// return nil on non-unix
+	return nil
+}
+
+// createBSDRCDiscoverer is not available on non-Unix platforms.
+//
+// Returns:
+//   - target.Discoverer: always nil.
+func (f *Factory) createBSDRCDiscoverer() target.Discoverer {
+	// return nil on non-unix
+	return nil
+}
+
+// createPortScanDiscoverer is not available on non-Unix platforms.
+//
+// Returns:
+//   - target.Discoverer: always nil.
+func (f *Factory) createPortScanDiscoverer() target.Discoverer {
+	// return nil on non-unix
 	return nil
 }

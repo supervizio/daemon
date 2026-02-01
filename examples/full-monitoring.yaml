@@ -1,0 +1,177 @@
+# superviz.io Full Monitoring Configuration Example
+# This file demonstrates all monitoring and discovery features
+
+version: "1.0"
+
+# Global logging configuration
+logging:
+  level: info
+  format: json
+  output: stdout
+
+# Monitoring configuration for external targets and service discovery
+monitoring:
+  # Default settings for all probes
+  defaults:
+    interval: 30s
+    timeout: 5s
+    success_threshold: 1
+    failure_threshold: 3
+
+  # Service discovery configuration
+  discovery:
+    # Systemd services (Linux only)
+    systemd:
+      enabled: true
+      patterns:
+        - "nginx.service"
+        - "postgresql*.service"
+        - "redis*.service"
+
+    # OpenRC services (Alpine/Gentoo)
+    openrc:
+      enabled: false
+      patterns:
+        - "nginx"
+        - "postgresql"
+
+    # BSD rc services (FreeBSD/OpenBSD/NetBSD)
+    bsdrc:
+      enabled: false
+      patterns:
+        - "nginx"
+        - "postgresql"
+
+    # Docker containers
+    docker:
+      enabled: true
+      socket_path: "/var/run/docker.sock"
+      labels:
+        supervizio.monitor: "true"
+
+    # Podman containers
+    podman:
+      enabled: false
+      socket_path: "/run/podman/podman.sock"
+      labels:
+        supervizio.monitor: "true"
+
+    # Kubernetes pods
+    kubernetes:
+      enabled: false
+      kubeconfig_path: "~/.kube/config"
+      namespaces:
+        - default
+        - production
+      label_selector: "app=myapp"
+
+    # Nomad allocations
+    nomad:
+      enabled: false
+      address: "http://localhost:4646"
+      namespace: "default"
+      job_filter: ""
+
+  # Port scanning (Linux only)
+  port_scan:
+    enabled: true
+    interfaces:
+      - eth0
+      - lo
+    exclude_ports:
+      - 22    # SSH
+      - 3306  # MySQL
+
+  # Static targets (always available)
+  targets:
+    # TCP probe example
+    - name: "database"
+      address: "localhost:5432"
+      probe:
+        type: tcp
+        interval: 10s
+        timeout: 3s
+
+    # HTTP probe example
+    - name: "api-health"
+      address: "http://localhost:8080"
+      probe:
+        type: http
+        path: "/health"
+        method: GET
+        status_code: 200
+        interval: 15s
+        timeout: 5s
+
+    # gRPC probe example
+    - name: "grpc-service"
+      address: "localhost:9090"
+      probe:
+        type: grpc
+        service: "grpc.health.v1.Health"
+        interval: 30s
+
+    # ICMP ping example (native mode)
+    - name: "gateway"
+      address: "192.168.1.1"
+      probe:
+        type: icmp
+        icmp_mode: native  # native, fallback, or auto
+        interval: 30s
+        timeout: 5s
+
+    # ICMP ping example (fallback mode for containers)
+    - name: "external-host"
+      address: "8.8.8.8"
+      probe:
+        type: icmp
+        icmp_mode: fallback
+        interval: 60s
+
+    # UDP probe example
+    - name: "dns-server"
+      address: "8.8.8.8:53"
+      probe:
+        type: udp
+        interval: 60s
+        timeout: 3s
+
+    # Exec probe example
+    - name: "custom-check"
+      probe:
+        type: exec
+        command: "/usr/local/bin/check-service.sh"
+        args:
+          - "--verbose"
+        interval: 60s
+        timeout: 10s
+      labels:
+        env: production
+        team: platform
+
+# Services managed by superviz (separate from monitoring)
+services:
+  - name: "web-server"
+    command: "/usr/bin/nginx"
+    args:
+      - "-g"
+      - "daemon off;"
+    user: www-data
+    restart:
+      policy: always
+      max_retries: 5
+      delay: 5s
+    listeners:
+      - name: http
+        port: 80
+        protocol: tcp
+        probe:
+          type: http
+          path: /health
+          interval: 10s
+      - name: https
+        port: 443
+        protocol: tcp
+        probe:
+          type: tcp
+          interval: 10s

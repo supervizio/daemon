@@ -20,6 +20,25 @@ const (
 	ProbeTypeICMP string = "icmp"
 )
 
+// ICMPMode defines how ICMP probes should operate.
+// It controls whether to use native ICMP packets or TCP fallback.
+type ICMPMode string
+
+// ICMP mode constants.
+const (
+	// ICMPModeNative uses real ICMP echo requests.
+	// Requires CAP_NET_RAW capability on Linux or root privileges.
+	ICMPModeNative ICMPMode = "native"
+
+	// ICMPModeFallback uses TCP connection probes instead of ICMP.
+	// Works without special privileges, suitable for containers.
+	ICMPModeFallback ICMPMode = "fallback"
+
+	// ICMPModeAuto automatically detects capability and uses native if available.
+	// Falls back to TCP if ICMP socket creation fails.
+	ICMPModeAuto ICMPMode = "auto"
+)
+
 // Default HTTP method for probe requests.
 const defaultHTTPMethod string = "GET"
 
@@ -27,7 +46,7 @@ const defaultHTTPMethod string = "GET"
 // It specifies timing, thresholds, and protocol-specific settings for health probes.
 type ProbeConfig struct {
 	// Type specifies the probe type.
-	// Supported values: "tcp", "udp", "http", "grpc", "exec".
+	// Supported values: "tcp", "udp", "http", "grpc", "exec", "icmp".
 	Type string
 
 	// Interval specifies the time between consecutive probes.
@@ -63,6 +82,11 @@ type ProbeConfig struct {
 
 	// Args specifies the command arguments for exec probes.
 	Args []string
+
+	// ICMPMode specifies how ICMP probes should operate.
+	// Valid values: "native", "fallback", "auto".
+	// Default is "auto" for automatic capability detection.
+	ICMPMode ICMPMode
 }
 
 // NewProbeConfig creates a new probe configuration with the specified type.
@@ -82,6 +106,7 @@ func NewProbeConfig(probeType string) ProbeConfig {
 		FailureThreshold: defaultProbeFailureThreshold,
 		Method:           defaultHTTPMethod,
 		StatusCode:       defaultHTTPStatusOK,
+		ICMPMode:         ICMPModeAuto, // auto-detect capability
 	}
 }
 

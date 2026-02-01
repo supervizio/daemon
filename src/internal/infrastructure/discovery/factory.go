@@ -9,7 +9,7 @@ import (
 
 // maxDiscovererTypes is the maximum number of discoverer types.
 // Used for pre-allocating the discoverers slice to avoid reallocations.
-const maxDiscovererTypes int = 4
+const maxDiscovererTypes int = 8
 
 // Factory creates discoverers based on configuration.
 // It provides a unified way to instantiate platform-specific discoverers.
@@ -49,9 +49,12 @@ func (f *Factory) CreateDiscoverers() []target.Discoverer {
 
 	// Add each discoverer type if enabled in configuration.
 	discoverers = f.addSystemdDiscoverer(discoverers)
+	discoverers = f.addOpenRCDiscoverer(discoverers)
+	discoverers = f.addBSDRCDiscoverer(discoverers)
 	discoverers = f.addDockerDiscoverer(discoverers)
 	discoverers = f.addKubernetesDiscoverer(discoverers)
 	discoverers = f.addNomadDiscoverer(discoverers)
+	discoverers = f.addPortScanDiscoverer(discoverers)
 
 	// Return all enabled discoverers.
 	return discoverers
@@ -126,6 +129,63 @@ func (f *Factory) addNomadDiscoverer(discoverers []target.Discoverer) []target.D
 	if f.config.Nomad != nil && f.config.Nomad.Enabled {
 		// Create Nomad discoverer instance.
 		if discoverer := f.createNomadDiscoverer(); discoverer != nil {
+			discoverers = append(discoverers, discoverer)
+		}
+	}
+	// Return updated list.
+	return discoverers
+}
+
+// addOpenRCDiscoverer adds OpenRC discoverer if enabled.
+//
+// Params:
+//   - discoverers: existing discoverer list.
+//
+// Returns:
+//   - []target.Discoverer: updated discoverer list.
+func (f *Factory) addOpenRCDiscoverer(discoverers []target.Discoverer) []target.Discoverer {
+	// Check if OpenRC discovery is configured and enabled.
+	if f.config.OpenRC != nil && f.config.OpenRC.Enabled {
+		// Create OpenRC discoverer instance.
+		if discoverer := f.createOpenRCDiscoverer(); discoverer != nil {
+			discoverers = append(discoverers, discoverer)
+		}
+	}
+	// Return updated list.
+	return discoverers
+}
+
+// addBSDRCDiscoverer adds BSD rc.d discoverer if enabled.
+//
+// Params:
+//   - discoverers: existing discoverer list.
+//
+// Returns:
+//   - []target.Discoverer: updated discoverer list.
+func (f *Factory) addBSDRCDiscoverer(discoverers []target.Discoverer) []target.Discoverer {
+	// Check if BSD rc.d discovery is configured and enabled.
+	if f.config.BSDRC != nil && f.config.BSDRC.Enabled {
+		// Create BSD rc.d discoverer instance.
+		if discoverer := f.createBSDRCDiscoverer(); discoverer != nil {
+			discoverers = append(discoverers, discoverer)
+		}
+	}
+	// Return updated list.
+	return discoverers
+}
+
+// addPortScanDiscoverer adds port scan discoverer if enabled.
+//
+// Params:
+//   - discoverers: existing discoverer list.
+//
+// Returns:
+//   - []target.Discoverer: updated discoverer list.
+func (f *Factory) addPortScanDiscoverer(discoverers []target.Discoverer) []target.Discoverer {
+	// Check if port scan discovery is configured and enabled.
+	if f.config.PortScan != nil && f.config.PortScan.Enabled {
+		// Create port scan discoverer instance.
+		if discoverer := f.createPortScanDiscoverer(); discoverer != nil {
 			discoverers = append(discoverers, discoverer)
 		}
 	}

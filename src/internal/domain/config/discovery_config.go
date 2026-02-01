@@ -24,6 +24,9 @@ type DiscoveryConfig struct {
 
 	// Nomad configures Nomad allocation discovery.
 	Nomad *NomadDiscoveryConfig
+
+	// PortScan configures port scan discovery (Linux only).
+	PortScan *PortScanDiscoveryConfig
 }
 
 // hasInitSystemDiscovery checks if init system discovery is enabled.
