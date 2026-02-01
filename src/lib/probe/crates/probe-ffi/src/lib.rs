@@ -1869,6 +1869,14 @@ pub enum RuntimeType {
     AwsFargate = 41,
     GoogleGke = 42,
     AzureAks = 43,
+    // Virtualization (60-79)
+    VMware = 60,
+    Qemu = 61,
+    VirtualBox = 62,
+    HyperV = 63,
+    Bhyve = 64,
+    Xen = 65,
+    Parallels = 66,
     /// Unknown runtime.
     Unknown = 254,
 }
@@ -1894,6 +1902,13 @@ impl From<probe_runtime::ContainerRuntime> for RuntimeType {
             probe_runtime::ContainerRuntime::AwsFargate => Self::AwsFargate,
             probe_runtime::ContainerRuntime::GoogleGke => Self::GoogleGke,
             probe_runtime::ContainerRuntime::AzureAks => Self::AzureAks,
+            probe_runtime::ContainerRuntime::VMware => Self::VMware,
+            probe_runtime::ContainerRuntime::Qemu => Self::Qemu,
+            probe_runtime::ContainerRuntime::VirtualBox => Self::VirtualBox,
+            probe_runtime::ContainerRuntime::HyperV => Self::HyperV,
+            probe_runtime::ContainerRuntime::Bhyve => Self::Bhyve,
+            probe_runtime::ContainerRuntime::Xen => Self::Xen,
+            probe_runtime::ContainerRuntime::Parallels => Self::Parallels,
             probe_runtime::ContainerRuntime::Unknown => Self::Unknown,
         }
     }
@@ -2077,6 +2092,13 @@ pub extern "C" fn probe_get_runtime_name() -> *const c_char {
             probe_runtime::ContainerRuntime::AwsFargate => c"aws-fargate".as_ptr(),
             probe_runtime::ContainerRuntime::GoogleGke => c"google-gke".as_ptr(),
             probe_runtime::ContainerRuntime::AzureAks => c"azure-aks".as_ptr(),
+            probe_runtime::ContainerRuntime::VMware => c"vmware".as_ptr(),
+            probe_runtime::ContainerRuntime::Qemu => c"qemu".as_ptr(),
+            probe_runtime::ContainerRuntime::VirtualBox => c"virtualbox".as_ptr(),
+            probe_runtime::ContainerRuntime::HyperV => c"hyper-v".as_ptr(),
+            probe_runtime::ContainerRuntime::Bhyve => c"bhyve".as_ptr(),
+            probe_runtime::ContainerRuntime::Xen => c"xen".as_ptr(),
+            probe_runtime::ContainerRuntime::Parallels => c"parallels".as_ptr(),
             probe_runtime::ContainerRuntime::Unknown => c"unknown".as_ptr(),
         },
         None => c"none".as_ptr(),

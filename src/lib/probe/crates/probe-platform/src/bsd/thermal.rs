@@ -53,10 +53,14 @@ pub fn read_thermal_zones() -> Result<Vec<ThermalZone>> {
         read_thermal_zones_freebsd()
     }
 
-    #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
+    #[cfg(target_os = "openbsd")]
     {
-        // OpenBSD and NetBSD don't have standardized thermal zone interfaces
-        Ok(Vec::new())
+        read_thermal_zones_openbsd()
+    }
+
+    #[cfg(target_os = "netbsd")]
+    {
+        read_thermal_zones_netbsd()
     }
 }
 
@@ -80,9 +84,14 @@ pub fn is_thermal_supported() -> bool {
         is_thermal_supported_freebsd()
     }
 
-    #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
+    #[cfg(target_os = "openbsd")]
     {
-        false
+        is_thermal_supported_openbsd()
+    }
+
+    #[cfg(target_os = "netbsd")]
+    {
+        is_thermal_supported_netbsd()
     }
 }
 
@@ -178,6 +187,271 @@ fn read_sysctl_i32(name: &str) -> Result<i32> {
 
         Ok(value)
     }
+}
+
+// ============================================================================
+// OpenBSD Implementation (hw.sensors)
+// ============================================================================
+
+#[cfg(target_os = "openbsd")]
+fn read_thermal_zones_openbsd() -> Result<Vec<ThermalZone>> {
+    use std::ptr;
+
+    // OpenBSD sensor structure (from sys/sensors.h)
+    #[repr(C)]
+    struct Sensor {
+        desc: [libc::c_char; 32],
+        tv_sec: i64,
+        tv_usec: i64,
+        value: i64,
+        sensor_type: i32,  // enum sensor_type
+        flags: i32,
+    }
+
+    // OpenBSD sensordev structure
+    #[repr(C)]
+    struct Sensordev {
+        num: i32,
+        xname: [libc::c_char; 16],
+        maxnumt: [i32; 21],  // SENSOR_MAX_TYPES
+        sensors_count: i32,
+    }
+
+    const SENSOR_TEMP: i32 = 0;
+    const HW_SENSORS: libc::c_int = 11;
+
+    unsafe {
+        let mut zones = Vec::new();
+        let mut dev_num = 0i32;
+
+        // Iterate through all sensor devices
+        loop {
+            // Get sensordev info
+            let mut mib = [libc::CTL_HW, HW_SENSORS, dev_num, 0, 0];
+            let mut dev: Sensordev = mem::zeroed();
+            let mut len = mem::size_of::<Sensordev>();
+
+            let result = libc::sysctl(
+                mib.as_mut_ptr(),
+                3,
+                &mut dev as *mut _ as *mut libc::c_void,
+                &mut len,
+                ptr::null_mut(),
+                0,
+            );
+
+            if result != 0 {
+                break; // No more devices
+            }
+
+            let dev_name = cstr_to_string(dev.xname.as_ptr());
+            let temp_count = dev.maxnumt[SENSOR_TEMP as usize];
+
+            // Iterate through temperature sensors for this device
+            for sensor_num in 0..temp_count {
+                mib[3] = SENSOR_TEMP;
+                mib[4] = sensor_num;
+
+                let mut sensor: Sensor = mem::zeroed();
+                let mut sensor_len = mem::size_of::<Sensor>();
+
+                let result = libc::sysctl(
+                    mib.as_mut_ptr(),
+                    5,
+                    &mut sensor as *mut _ as *mut libc::c_void,
+                    &mut sensor_len,
+                    ptr::null_mut(),
+                    0,
+                );
+
+                if result != 0 || sensor.sensor_type != SENSOR_TEMP {
+                    continue;
+                }
+
+                // Value is in microKelvin, convert to Celsius
+                let temp_celsius = micro_kelvin_to_celsius(sensor.value);
+
+                let desc = cstr_to_string(sensor.desc.as_ptr());
+                let label = if desc.is_empty() {
+                    format!("temp{sensor_num}")
+                } else {
+                    desc
+                };
+
+                zones.push(ThermalZone {
+                    name: dev_name.clone(),
+                    label,
+                    temp_celsius,
+                    temp_max: None,
+                    temp_crit: None,
+                });
+            }
+
+            dev_num += 1;
+            if dev_num > 256 {
+                break; // Safety limit
+            }
+        }
+
+        if zones.is_empty() {
+            return Err(Error::NotSupported);
+        }
+
+        Ok(zones)
+    }
+}
+
+#[cfg(target_os = "openbsd")]
+fn is_thermal_supported_openbsd() -> bool {
+    use std::ptr;
+
+    const HW_SENSORS: libc::c_int = 11;
+
+    unsafe {
+        let mut mib = [libc::CTL_HW, HW_SENSORS, 0];
+        let mut len: usize = 0;
+
+        libc::sysctl(mib.as_mut_ptr(), 3, ptr::null_mut(), &mut len, ptr::null_mut(), 0) == 0
+            && len > 0
+    }
+}
+
+/// Convert microKelvin to Celsius.
+#[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
+fn micro_kelvin_to_celsius(micro_kelvin: i64) -> f64 {
+    const ABSOLUTE_ZERO_CELSIUS: f64 = 273.15;
+    const MICRO_KELVIN_SCALE: f64 = 1_000_000.0;
+
+    (micro_kelvin as f64 / MICRO_KELVIN_SCALE) - ABSOLUTE_ZERO_CELSIUS
+}
+
+// ============================================================================
+// NetBSD Implementation (envsys)
+// ============================================================================
+
+#[cfg(target_os = "netbsd")]
+fn read_thermal_zones_netbsd() -> Result<Vec<ThermalZone>> {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
+    // NetBSD envsys exposes sensors via /dev/sysmon and proplib
+    // As a simpler approach, parse envstat output
+    // For production, we'd use proper proplib bindings
+
+    // Try to read from /dev/sysmon via ioctl (simplified)
+    // Fall back to parsing envstat output
+    match parse_envstat_output() {
+        Ok(zones) if !zones.is_empty() => Ok(zones),
+        _ => Err(Error::NotSupported),
+    }
+}
+
+#[cfg(target_os = "netbsd")]
+fn parse_envstat_output() -> Result<Vec<ThermalZone>> {
+    use std::process::Command;
+
+    // Run envstat to get sensor data
+    let output = Command::new("envstat").args(["-d", "-x"]).output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            // Parse XML output for temperature sensors
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            parse_envstat_xml(&stdout)
+        }
+        _ => Ok(Vec::new()),
+    }
+}
+
+#[cfg(target_os = "netbsd")]
+fn parse_envstat_xml(xml: &str) -> Result<Vec<ThermalZone>> {
+    let mut zones = Vec::new();
+    let mut current_device = String::new();
+    let mut in_sensor = false;
+    let mut sensor_type = String::new();
+    let mut sensor_desc = String::new();
+    let mut sensor_value: Option<i64> = None;
+
+    for line in xml.lines() {
+        let trimmed = line.trim();
+
+        // Track device name
+        if trimmed.starts_with("<dict") && trimmed.contains("device-") {
+            if let Some(start) = trimmed.find("device-") {
+                let rest = &trimmed[start + 7..];
+                if let Some(end) = rest.find('"') {
+                    current_device = rest[..end].to_string();
+                }
+            }
+        }
+
+        // Track sensor entries
+        if trimmed == "<dict>" {
+            in_sensor = true;
+            sensor_type.clear();
+            sensor_desc.clear();
+            sensor_value = None;
+        } else if trimmed == "</dict>" && in_sensor {
+            // Check if this was a temperature sensor
+            if sensor_type == "Temperature" || sensor_type.contains("temp") {
+                if let Some(value) = sensor_value {
+                    let temp_celsius = micro_kelvin_to_celsius(value);
+                    zones.push(ThermalZone {
+                        name: current_device.clone(),
+                        label: if sensor_desc.is_empty() {
+                            "temp".to_string()
+                        } else {
+                            sensor_desc.clone()
+                        },
+                        temp_celsius,
+                        temp_max: None,
+                        temp_crit: None,
+                    });
+                }
+            }
+            in_sensor = false;
+        }
+
+        // Parse key-value pairs
+        if in_sensor {
+            if trimmed.contains("<key>type</key>") {
+                // Next line should have the value
+            } else if trimmed.starts_with("<string>") && sensor_type.is_empty() {
+                let value = trimmed
+                    .trim_start_matches("<string>")
+                    .trim_end_matches("</string>");
+                sensor_type = value.to_string();
+            } else if trimmed.contains("<key>cur-value</key>") {
+                // Next line has the value
+            } else if trimmed.starts_with("<integer>") {
+                let value = trimmed
+                    .trim_start_matches("<integer>")
+                    .trim_end_matches("</integer>");
+                sensor_value = value.parse().ok();
+            } else if trimmed.contains("<key>description</key>") {
+                // Next line has the description
+            }
+        }
+    }
+
+    Ok(zones)
+}
+
+#[cfg(target_os = "netbsd")]
+fn is_thermal_supported_netbsd() -> bool {
+    use std::path::Path;
+
+    // Check if /dev/sysmon exists
+    Path::new("/dev/sysmon").exists()
+}
+
+/// Helper to convert C string to Rust String
+#[cfg(target_os = "openbsd")]
+unsafe fn cstr_to_string(ptr: *const libc::c_char) -> String {
+    if ptr.is_null() {
+        return String::new();
+    }
+    std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned()
 }
 
 // ============================================================================

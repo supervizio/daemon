@@ -4,6 +4,12 @@
 
 mod sysctl;
 
+pub use sysctl::{
+    is_thermal_supported, list_network_connections, read_process_context_switches,
+    read_self_context_switches, read_system_context_switches, read_thermal_zones,
+    ConnectionProtocol, ConnectionState, ContextSwitches, NetworkConnection,
+};
+
 use crate::{
     CPUCollector, CPUPressure, DiskCollector, DiskIOStats, DiskUsage, Error, IOCollector,
     IOPressure, IOStats, LoadAverage, LoadCollector, MemoryCollector, MemoryPressure, NetInterface,

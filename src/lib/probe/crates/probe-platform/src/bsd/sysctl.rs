@@ -163,8 +163,9 @@ pub fn get_memory_info() -> Result<MemInfo> {
 
         #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
         {
-            // OpenBSD/NetBSD use uvmexp structure
-            free_pages = physmem / page_size / 4; // Rough estimate
+            // OpenBSD/NetBSD use uvmexp structure via VM_UVMEXP sysctl
+            let uvm = get_uvmexp()?;
+            free_pages = uvm.free as u64;
         }
 
         // Get cached pages (FreeBSD specific)
@@ -184,13 +185,27 @@ pub fn get_memory_info() -> Result<MemInfo> {
             cache_pages * page_size
         };
 
-        #[cfg(not(target_os = "freebsd"))]
+        #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
+        let cached = {
+            let uvm = get_uvmexp().unwrap_or_default();
+            // vnodepages represents file cache on BSD
+            uvm.vnodepages as u64 * page_size
+        };
+
+        #[cfg(not(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd")))]
         let cached = 0u64;
 
         // Get swap info
         #[cfg(target_os = "freebsd")]
         let (swap_total, swap_used) = get_swap_freebsd();
-        #[cfg(not(target_os = "freebsd"))]
+        #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
+        let (swap_total, swap_used) = {
+            let uvm = get_uvmexp().unwrap_or_default();
+            let swap_total = uvm.swpages as u64 * page_size;
+            let swap_used = uvm.swpginuse as u64 * page_size;
+            (swap_total, swap_used)
+        };
+        #[cfg(not(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd")))]
         let (swap_total, swap_used) = (0u64, 0u64);
 
         Ok(MemInfo {
@@ -204,25 +219,42 @@ pub fn get_memory_info() -> Result<MemInfo> {
     }
 }
 
+/// FreeBSD xswdev structure (from sys/swap_pager.h).
+///
+/// This structure is returned by the vm.swap_info sysctl for each swap device.
+#[cfg(target_os = "freebsd")]
+#[repr(C)]
+struct Xswdev {
+    /// Structure version (for compatibility checking).
+    xsw_version: u32,
+    /// Device identifier.
+    xsw_dev: u64, // dev_t is 64-bit on FreeBSD
+    /// Swap flags.
+    xsw_flags: i32,
+    /// Total blocks available.
+    xsw_nblks: i32,
+    /// Blocks in use.
+    xsw_used: i32,
+}
+
+#[cfg(target_os = "freebsd")]
+const XSWDEV_VERSION: u32 = 2;
+
 #[cfg(target_os = "freebsd")]
 fn get_swap_freebsd() -> (u64, u64) {
     unsafe {
-        let name = CString::new("vm.swap_info").ok()?;
-        let mut len: usize = 0;
+        // Get the number of swap devices
+        let nswapdev_name = match CString::new("vm.nswapdev") {
+            Ok(n) => n,
+            Err(_) => return (0, 0),
+        };
 
-        // First call to get size
-        if libc::sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
-            return (0, 0);
-        }
+        let mut nswapdev: i32 = 0;
+        let mut len = mem::size_of::<i32>();
 
-        if len == 0 {
-            return (0, 0);
-        }
-
-        let mut buf: Vec<u8> = vec![0; len];
         if libc::sysctlbyname(
-            name.as_ptr(),
-            buf.as_mut_ptr() as *mut libc::c_void,
+            nswapdev_name.as_ptr(),
+            &mut nswapdev as *mut _ as *mut libc::c_void,
             &mut len,
             ptr::null_mut(),
             0,
@@ -231,8 +263,172 @@ fn get_swap_freebsd() -> (u64, u64) {
             return (0, 0);
         }
 
-        // Parse swap info (simplified)
-        (0, 0)
+        if nswapdev <= 0 {
+            return (0, 0);
+        }
+
+        // Query each swap device via vm.swap_info.<index>
+        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
+        let mut total_blocks: u64 = 0;
+        let mut used_blocks: u64 = 0;
+
+        for i in 0..nswapdev {
+            let name = match CString::new(format!("vm.swap_info.{}", i)) {
+                Ok(n) => n,
+                Err(_) => continue,
+            };
+
+            let mut xsw: Xswdev = mem::zeroed();
+            let mut xsw_len = mem::size_of::<Xswdev>();
+
+            if libc::sysctlbyname(
+                name.as_ptr(),
+                &mut xsw as *mut _ as *mut libc::c_void,
+                &mut xsw_len,
+                ptr::null_mut(),
+                0,
+            ) != 0
+            {
+                continue;
+            }
+
+            // Verify version compatibility
+            if xsw.xsw_version != XSWDEV_VERSION {
+                // Try falling back to vm.swap_total / vm.swap_reserved
+                return get_swap_freebsd_fallback();
+            }
+
+            total_blocks += xsw.xsw_nblks as u64;
+            used_blocks += xsw.xsw_used as u64;
+        }
+
+        // Convert blocks to bytes (blocks are in pages on FreeBSD)
+        let total_bytes = total_blocks * page_size;
+        let used_bytes = used_blocks * page_size;
+
+        (total_bytes, used_bytes)
+    }
+}
+
+/// Fallback swap detection using simple vm.swap_total sysctl.
+#[cfg(target_os = "freebsd")]
+fn get_swap_freebsd_fallback() -> (u64, u64) {
+    unsafe {
+        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
+
+        // Try vm.swap_total (total swap pages)
+        let total_name = match CString::new("vm.swap_total") {
+            Ok(n) => n,
+            Err(_) => return (0, 0),
+        };
+
+        let mut total_pages: u64 = 0;
+        let mut len = mem::size_of::<u64>();
+
+        if libc::sysctlbyname(
+            total_name.as_ptr(),
+            &mut total_pages as *mut _ as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        ) != 0
+        {
+            return (0, 0);
+        }
+
+        // Try vm.swap_reserved (reserved/used swap pages)
+        let reserved_name = match CString::new("vm.swap_reserved") {
+            Ok(n) => n,
+            Err(_) => return (total_pages * page_size, 0),
+        };
+
+        let mut reserved_pages: u64 = 0;
+        len = mem::size_of::<u64>();
+
+        libc::sysctlbyname(
+            reserved_name.as_ptr(),
+            &mut reserved_pages as *mut _ as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        );
+
+        (total_pages * page_size, reserved_pages * page_size)
+    }
+}
+
+// ============================================================================
+// UVMEXP (OpenBSD/NetBSD)
+// ============================================================================
+
+/// OpenBSD/NetBSD uvmexp structure for virtual memory statistics.
+///
+/// This is a partial representation of the full uvmexp structure,
+/// containing the fields most commonly needed for memory metrics.
+#[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+struct Uvmexp {
+    pagesize: i32,    // Page size in bytes
+    pagemask: i32,    // Page mask
+    pageshift: i32,   // Page shift
+    npages: i32,      // Total managed pages
+    free: i32,        // Free pages
+    active: i32,      // Active pages
+    inactive: i32,    // Inactive pages
+    paging: i32,      // Pages being paged
+    wired: i32,       // Wired pages
+    zeropages: i32,   // Zero-fill pages
+    reserve_pagedaemon: i32,
+    reserve_kernel: i32,
+    // Pageout params
+    anonpages: i32,   // Anonymous pages
+    vnodepages: i32,  // Vnode pages (file cache)
+    vtextpages: i32,  // Vnode text pages
+    freemin: i32,
+    freetarg: i32,
+    inactarg: i32,
+    wiredmax: i32,
+    // Swap
+    nswapdev: i32,    // Number of swap devices
+    swpages: i32,     // Total swap pages
+    swpginuse: i32,   // Swap pages in use
+    swpgonly: i32,    // Swap pages only in swap
+    nswget: i32,
+    // Padding to ensure structure is large enough
+    _padding: [i32; 64],
+}
+
+/// Gets uvmexp statistics via sysctl VM_UVMEXP.
+#[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
+fn get_uvmexp() -> Result<Uvmexp> {
+    unsafe {
+        #[cfg(target_os = "openbsd")]
+        const VM_UVMEXP: libc::c_int = 4;
+        #[cfg(target_os = "netbsd")]
+        const VM_UVMEXP: libc::c_int = 2;
+
+        let mut mib = [libc::CTL_VM, VM_UVMEXP];
+        let mut uvm: Uvmexp = mem::zeroed();
+        let mut len = mem::size_of::<Uvmexp>();
+
+        let result = libc::sysctl(
+            mib.as_mut_ptr(),
+            2,
+            &mut uvm as *mut _ as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        );
+
+        if result != 0 {
+            return Err(Error::Platform(format!(
+                "sysctl VM_UVMEXP failed: {}",
+                std::io::Error::last_os_error()
+            )));
+        }
+
+        Ok(uvm)
     }
 }
 
@@ -310,11 +506,280 @@ pub fn get_process_info(pid: i32) -> Result<ProcessInfo> {
             })
         }
 
-        #[cfg(not(target_os = "freebsd"))]
+        #[cfg(target_os = "openbsd")]
         {
-            // OpenBSD/NetBSD have different kinfo_proc structures
-            Err(Error::NotSupported)
+            get_process_info_openbsd(pid)
         }
+
+        #[cfg(target_os = "netbsd")]
+        {
+            get_process_info_netbsd(pid)
+        }
+    }
+}
+
+#[cfg(target_os = "openbsd")]
+fn get_process_info_openbsd(pid: i32) -> Result<ProcessInfo> {
+    unsafe {
+        // OpenBSD kinfo_proc structure (simplified, key fields only)
+        #[repr(C)]
+        struct KinfoProc {
+            p_forw: u64,           // 0: forward link
+            p_back: u64,           // 8: backward link
+            p_paddr: u64,          // 16: address of proc
+            p_addr: u64,           // 24: kernel virtual addr
+            p_fd: u64,             // 32: ptr to open files
+            p_stats: u64,          // 40: accounting info
+            p_limit: u64,          // 48: process limits
+            p_vmspace: u64,        // 56: address space
+            p_sigacts: u64,        // 64: signal actions
+            p_sess: u64,           // 72: session
+            p_tsess: u64,          // 80: controlling tty session
+            p_ru: u64,             // 88: rusage pointer
+            p_eflag: i32,          // 96: various flags
+            p_exitsig: i32,        // 100: exit signal
+            p_flag: i32,           // 104: process flags
+            p_pid: i32,            // 108: process id
+            p_ppid: i32,           // 112: parent pid
+            p_sid: i32,            // 116: session id
+            _pgid: i32,            // 120
+            p_tpgid: i32,          // 124
+            p_uid: u32,            // 128: real uid
+            p_ruid: u32,           // 132: real uid
+            p_gid: u32,            // 136: real gid
+            p_rgid: u32,           // 140: real gid
+            p_groups: [u32; 16],   // 144: groups
+            p_ngroups: i16,        // 208
+            p_jobc: i16,           // 210: job control
+            p_tdev: u32,           // 212: controlling tty
+            p_estcpu: u32,         // 216: time averaged cpu
+            p_rtime_sec: i64,      // 220: real time
+            p_rtime_usec: i64,     // 228
+            p_cpticks: i32,        // 236: cpu ticks
+            p_pctcpu: u32,         // 240: cpu usage %
+            p_swtime: u32,         // 244
+            p_slptime: u32,        // 248
+            p_schedflags: i32,     // 252
+            p_uticks: u64,         // 256
+            p_sticks: u64,         // 264
+            p_iticks: u64,         // 272
+            p_tracep: u64,         // 280: trace pointer
+            p_traceflag: i32,      // 288
+            p_holdcnt: i32,        // 292
+            p_siglist: i32,        // 296
+            p_sigmask: u32,        // 300
+            p_sigignore: u32,      // 304
+            p_sigcatch: u32,       // 308
+            p_stat: i8,            // 312: process state
+            p_priority: i8,        // 313
+            p_usrpri: i8,          // 314
+            p_nice: i8,            // 315
+            p_xstat: u16,          // 316
+            p_spare: u16,          // 318
+            p_comm: [u8; 24],      // 320: command name
+            p_wmesg: [u8; 8],      // 344: wait message
+            p_wchan: u64,          // 352: wait channel
+            p_login: [u8; 32],     // 360: login name
+            p_vm_rssize: i32,      // 392: RSS in pages
+            p_vm_tsize: i32,       // 396: text size
+            p_vm_dsize: i32,       // 400: data size
+            p_vm_ssize: i32,       // 404: stack size
+            p_uvalid: i64,         // 408
+            p_ustart_sec: i64,     // 416
+            p_ustart_usec: i64,    // 424
+            p_uutime_sec: u32,     // 432
+            p_uutime_usec: u32,    // 436
+            p_ustime_sec: u32,     // 440
+            p_ustime_usec: u32,    // 444
+            p_uru_maxrss: u64,     // 448
+            p_uru_ixrss: u64,      // 456
+            p_uru_idrss: u64,      // 464
+            p_uru_isrss: u64,      // 472
+            p_uru_minflt: u64,     // 480
+            p_uru_majflt: u64,     // 488
+            p_uru_nswap: u64,      // 496
+            p_uru_inblock: u64,    // 504
+            p_uru_oublock: u64,    // 512
+            p_uru_msgsnd: u64,     // 520
+            p_uru_msgrcv: u64,     // 528
+            p_uru_nsignals: u64,   // 536
+            p_uru_nvcsw: u64,      // 544: voluntary ctx switches
+            p_uru_nivcsw: u64,     // 552: involuntary ctx switches
+            _rest: [u8; 256],      // padding for future fields
+        }
+
+        let mut mib = [
+            libc::CTL_KERN,
+            libc::KERN_PROC,
+            libc::KERN_PROC_PID,
+            pid as libc::c_int,
+            mem::size_of::<KinfoProc>() as libc::c_int,
+            1,
+        ];
+
+        let mut kinfo: KinfoProc = mem::zeroed();
+        let mut len = mem::size_of::<KinfoProc>();
+
+        let result = libc::sysctl(
+            mib.as_mut_ptr(),
+            6,
+            &mut kinfo as *mut _ as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        );
+
+        if result != 0 || len == 0 {
+            return Err(Error::NotFound(format!("process {} not found", pid)));
+        }
+
+        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
+
+        Ok(ProcessInfo {
+            rss: kinfo.p_vm_rssize as u64 * page_size,
+            vsize: (kinfo.p_vm_tsize + kinfo.p_vm_dsize + kinfo.p_vm_ssize) as u64 * page_size,
+            num_threads: 1, // OpenBSD doesn't expose thread count easily
+            num_fds: 0,     // Would need KERN_FILE sysctl
+            state: match kinfo.p_stat {
+                1 => 1, // SIDL -> Running (idle)
+                2 => 1, // SRUN -> Running
+                3 => 2, // SSLEEP -> Sleeping
+                4 => 5, // SSTOP -> Stopped
+                5 => 4, // SZOMB -> Zombie
+                6 => 3, // SDEAD -> Waiting
+                7 => 6, // SONPROC -> Running (on CPU)
+                _ => 0,
+            },
+        })
+    }
+}
+
+#[cfg(target_os = "netbsd")]
+fn get_process_info_netbsd(pid: i32) -> Result<ProcessInfo> {
+    unsafe {
+        // NetBSD uses kinfo_proc2 via KERN_PROC2
+        #[repr(C)]
+        struct KinfoProc2 {
+            p_forw: u64,
+            p_back: u64,
+            p_paddr: u64,
+            p_addr: u64,
+            p_fd: u64,
+            p_cwdi: u64,
+            p_stats: u64,
+            p_limit: u64,
+            p_vmspace: u64,
+            p_sigacts: u64,
+            p_sess: u64,
+            p_tsess: u64,
+            p_ru: u64,
+            p_eflag: i32,
+            p_exitsig: i32,
+            p_flag: i32,
+            p_pid: i32,
+            p_ppid: i32,
+            p_sid: i32,
+            _pgid: i32,
+            p_tpgid: i32,
+            p_uid: u32,
+            p_ruid: u32,
+            p_gid: u32,
+            p_rgid: u32,
+            p_groups: [u32; 16],
+            p_ngroups: i16,
+            p_jobc: i16,
+            p_tdev: u32,
+            p_estcpu: u32,
+            p_rtime_sec: i32,
+            p_rtime_usec: i32,
+            p_cpticks: i32,
+            p_pctcpu: u32,
+            p_swtime: u32,
+            p_slptime: u32,
+            p_schedflags: i32,
+            p_uticks: u64,
+            p_sticks: u64,
+            p_iticks: u64,
+            p_tracep: u64,
+            p_traceflag: i32,
+            p_holdcnt: i32,
+            p_svuid: u32,
+            p_svgid: u32,
+            p_ename: [u8; 17],
+            p_comm: [u8; 24],
+            p_stat: i8,
+            p_nice: i8,
+            p_xstat: u16,
+            p_acflag: u16,
+            p_vm_rssize: i32,   // RSS in pages
+            p_vm_tsize: i64,    // text size
+            p_vm_dsize: i64,    // data size
+            p_vm_ssize: i64,    // stack size
+            p_vm_vsize: i64,    // total virtual size
+            p_uru_maxrss: u64,
+            p_uru_ixrss: u64,
+            p_uru_idrss: u64,
+            p_uru_isrss: u64,
+            p_uru_minflt: u64,
+            p_uru_majflt: u64,
+            p_uru_nswap: u64,
+            p_uru_inblock: u64,
+            p_uru_oublock: u64,
+            p_uru_msgsnd: u64,
+            p_uru_msgrcv: u64,
+            p_uru_nsignals: u64,
+            p_uru_nvcsw: u64,   // voluntary ctx switches
+            p_uru_nivcsw: u64,  // involuntary ctx switches
+            p_nlwps: i32,       // number of LWPs (threads)
+            p_nrlwps: i32,      // running LWPs
+            _rest: [u8; 256],
+        }
+
+        const KERN_PROC2: libc::c_int = 47;
+
+        let mut mib = [
+            libc::CTL_KERN,
+            KERN_PROC2,
+            libc::KERN_PROC_PID,
+            pid as libc::c_int,
+            mem::size_of::<KinfoProc2>() as libc::c_int,
+            1,
+        ];
+
+        let mut kinfo: KinfoProc2 = mem::zeroed();
+        let mut len = mem::size_of::<KinfoProc2>();
+
+        let result = libc::sysctl(
+            mib.as_mut_ptr(),
+            6,
+            &mut kinfo as *mut _ as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        );
+
+        if result != 0 || len == 0 {
+            return Err(Error::NotFound(format!("process {} not found", pid)));
+        }
+
+        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
+
+        Ok(ProcessInfo {
+            rss: kinfo.p_vm_rssize as u64 * page_size,
+            vsize: kinfo.p_vm_vsize as u64,
+            num_threads: kinfo.p_nlwps as u32,
+            num_fds: 0, // Would need KERN_FILE sysctl
+            state: match kinfo.p_stat {
+                1 => 1, // SIDL -> Running
+                2 => 1, // SRUN -> Running
+                3 => 2, // SSLEEP -> Sleeping
+                4 => 5, // SSTOP -> Stopped
+                5 => 4, // SZOMB -> Zombie
+                6 => 3, // SDEAD -> Waiting
+                7 => 6, // SONPROC -> Running
+                _ => 0,
+            },
+        })
     }
 }
 
@@ -354,10 +819,121 @@ pub fn list_pids() -> Result<Vec<i32>> {
             Ok(pids)
         }
 
-        #[cfg(not(target_os = "freebsd"))]
+        #[cfg(target_os = "openbsd")]
         {
-            Ok(Vec::new())
+            list_pids_openbsd()
         }
+
+        #[cfg(target_os = "netbsd")]
+        {
+            list_pids_netbsd()
+        }
+    }
+}
+
+#[cfg(target_os = "openbsd")]
+fn list_pids_openbsd() -> Result<Vec<i32>> {
+    unsafe {
+        // Minimal struct to get just PIDs
+        #[repr(C)]
+        struct KinfoProcMin {
+            _padding: [u8; 108],
+            p_pid: i32,
+            _rest: [u8; 700],
+        }
+
+        let mut mib = [
+            libc::CTL_KERN,
+            libc::KERN_PROC,
+            libc::KERN_PROC_ALL,
+            0,
+            mem::size_of::<KinfoProcMin>() as libc::c_int,
+            0,
+        ];
+
+        // Get size first
+        let mut len: usize = 0;
+        if libc::sysctl(mib.as_mut_ptr(), 6, ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+            return Ok(Vec::new());
+        }
+
+        // Get count estimate
+        let count = len / mem::size_of::<KinfoProcMin>() + 10;
+        mib[5] = count as libc::c_int;
+        len = count * mem::size_of::<KinfoProcMin>();
+
+        let mut kinfos: Vec<KinfoProcMin> = vec![mem::zeroed(); count];
+
+        if libc::sysctl(
+            mib.as_mut_ptr(),
+            6,
+            kinfos.as_mut_ptr() as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        ) != 0
+        {
+            return Ok(Vec::new());
+        }
+
+        let actual_count = len / mem::size_of::<KinfoProcMin>();
+        let pids: Vec<i32> = kinfos[..actual_count].iter().map(|k| k.p_pid).filter(|&p| p > 0).collect();
+
+        Ok(pids)
+    }
+}
+
+#[cfg(target_os = "netbsd")]
+fn list_pids_netbsd() -> Result<Vec<i32>> {
+    unsafe {
+        const KERN_PROC2: libc::c_int = 47;
+
+        // Minimal struct to get just PIDs
+        #[repr(C)]
+        struct KinfoProc2Min {
+            _padding: [u8; 76],
+            p_pid: i32,
+            _rest: [u8; 600],
+        }
+
+        let mut mib = [
+            libc::CTL_KERN,
+            KERN_PROC2,
+            libc::KERN_PROC_ALL,
+            0,
+            mem::size_of::<KinfoProc2Min>() as libc::c_int,
+            0,
+        ];
+
+        // Get size first
+        let mut len: usize = 0;
+        if libc::sysctl(mib.as_mut_ptr(), 6, ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+            return Ok(Vec::new());
+        }
+
+        // Get count estimate
+        let count = len / mem::size_of::<KinfoProc2Min>() + 10;
+        mib[5] = count as libc::c_int;
+        len = count * mem::size_of::<KinfoProc2Min>();
+
+        let mut kinfos: Vec<KinfoProc2Min> = vec![mem::zeroed(); count];
+
+        if libc::sysctl(
+            mib.as_mut_ptr(),
+            6,
+            kinfos.as_mut_ptr() as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        ) != 0
+        {
+            return Ok(Vec::new());
+        }
+
+        let actual_count = len / mem::size_of::<KinfoProc2Min>();
+        let pids: Vec<i32> = kinfos[..actual_count].iter().map(|k| k.p_pid).filter(|&p| p > 0).collect();
+
+        Ok(pids)
     }
 }
 
@@ -410,10 +986,90 @@ pub fn get_mounts() -> Result<Vec<Partition>> {
             Ok(partitions)
         }
 
-        #[cfg(not(target_os = "freebsd"))]
+        #[cfg(target_os = "openbsd")]
         {
-            Ok(Vec::new())
+            get_mounts_openbsd()
         }
+
+        #[cfg(target_os = "netbsd")]
+        {
+            get_mounts_netbsd()
+        }
+    }
+}
+
+#[cfg(target_os = "openbsd")]
+fn get_mounts_openbsd() -> Result<Vec<Partition>> {
+    unsafe {
+        // OpenBSD uses getfsstat/getmntinfo with statfs structure
+        let count = libc::getmntinfo(ptr::null_mut(), libc::MNT_NOWAIT);
+        if count <= 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut fs_list: *mut libc::statfs = ptr::null_mut();
+        let actual = libc::getmntinfo(&mut fs_list, libc::MNT_NOWAIT);
+        if actual <= 0 || fs_list.is_null() {
+            return Ok(Vec::new());
+        }
+
+        let mut partitions = Vec::new();
+        for i in 0..actual {
+            let fs = &*fs_list.add(i as usize);
+
+            let device = cstr_to_string(fs.f_mntfromname.as_ptr());
+            let mount_point = cstr_to_string(fs.f_mntonname.as_ptr());
+            let fs_type = cstr_to_string(fs.f_fstypename.as_ptr());
+
+            // Skip pseudo filesystems
+            if fs_type == "mfs" || fs_type == "kernfs" || fs_type == "procfs" {
+                continue;
+            }
+
+            partitions.push(Partition { device, mount_point, fs_type, options: String::new() });
+        }
+
+        Ok(partitions)
+    }
+}
+
+#[cfg(target_os = "netbsd")]
+fn get_mounts_netbsd() -> Result<Vec<Partition>> {
+    unsafe {
+        // NetBSD uses getvfsstat with statvfs structure
+        // First, get the count
+        let count = libc::getvfsstat(ptr::null_mut(), 0, libc::MNT_NOWAIT);
+        if count <= 0 {
+            return Ok(Vec::new());
+        }
+
+        // Allocate buffer
+        let mut fs_list: Vec<libc::statvfs> = vec![mem::zeroed(); count as usize];
+        let buf_size = count as usize * mem::size_of::<libc::statvfs>();
+
+        let actual =
+            libc::getvfsstat(fs_list.as_mut_ptr(), buf_size as libc::c_long, libc::MNT_NOWAIT);
+        if actual <= 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut partitions = Vec::new();
+        for i in 0..actual as usize {
+            let fs = &fs_list[i];
+
+            let device = cstr_to_string(fs.f_mntfromname.as_ptr());
+            let mount_point = cstr_to_string(fs.f_mntonname.as_ptr());
+            let fs_type = cstr_to_string(fs.f_fstypename.as_ptr());
+
+            // Skip pseudo filesystems
+            if fs_type == "kernfs" || fs_type == "procfs" || fs_type == "ptyfs" {
+                continue;
+            }
+
+            partitions.push(Partition { device, mount_point, fs_type, options: String::new() });
+        }
+
+        Ok(partitions)
     }
 }
 
@@ -491,9 +1147,172 @@ pub fn get_disk_io_stats() -> Result<Vec<DiskIOStats>> {
 
     #[cfg(target_os = "freebsd")]
     {
-        // FreeBSD requires libdevstat which needs C bindings
-        // TODO: Implement via devstat_getdevs() and devstat_compute_statistics()
-        Ok(Vec::new())
+        freebsd::get_disk_io_stats()
+    }
+}
+
+// ============================================================================
+// FREEBSD DISK I/O (devstat)
+// ============================================================================
+
+#[cfg(target_os = "freebsd")]
+mod freebsd {
+    use super::*;
+
+    /// FreeBSD devstat structure (from sys/devicestat.h).
+    /// This is a simplified representation for reading device statistics.
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy)]
+    struct Devstat {
+        /// Sequence counter for consistency checking.
+        sequence0: u32,
+        /// Allocated flag.
+        allocated: i32,
+        /// Start count.
+        start_count: u32,
+        /// End count.
+        end_count: u32,
+        /// Busy time (bintime).
+        busy_time_sec: i64,
+        busy_time_frac: u64,
+        /// Bytes transferred [READ, WRITE, FREE].
+        bytes: [u64; 3],
+        /// Operations completed.
+        operations: [u64; 3],
+        /// Duration of operations (bintime).
+        duration_sec: [i64; 3],
+        duration_frac: [u64; 3],
+        /// Time at which the device was created.
+        creation_time_sec: i64,
+        creation_time_frac: u64,
+        /// Block size.
+        block_size: u32,
+        /// Tag types (simple, ordered, head of queue).
+        tag_types: [u64; 3],
+        /// Device name.
+        device_name: [libc::c_char; 16],
+        /// Unit number.
+        unit_number: i32,
+        /// Sequence counter (same as sequence0 for consistency).
+        sequence1: u32,
+    }
+
+    /// Device info structure containing all devices.
+    #[repr(C)]
+    struct Devinfo {
+        /// Array of device statistics.
+        devices: *mut Devstat,
+        /// Allocated storage.
+        mem_ptr: *mut libc::c_void,
+        /// Generation number.
+        generation: i64,
+        /// Number of devices.
+        numdevs: i32,
+    }
+
+    /// Statistics info for devstat_getdevs.
+    #[repr(C)]
+    struct Statinfo {
+        /// Generation number.
+        generation: i64,
+        /// Time of statistics.
+        snap_time_sec: i64,
+        snap_time_frac: u64,
+        /// Device info pointer.
+        dinfo: *mut Devinfo,
+    }
+
+    extern "C" {
+        fn devstat_checkversion(kd: *mut libc::c_void) -> libc::c_int;
+        fn devstat_getdevs(kd: *mut libc::c_void, stats: *mut Statinfo) -> libc::c_int;
+    }
+
+    /// Collects disk I/O statistics on FreeBSD via libdevstat.
+    pub fn get_disk_io_stats() -> Result<Vec<DiskIOStats>> {
+        unsafe {
+            // Check devstat version compatibility
+            if devstat_checkversion(ptr::null_mut()) < 0 {
+                return Err(Error::Platform("devstat version mismatch".to_string()));
+            }
+
+            // Initialize structures
+            let mut dinfo: Devinfo = mem::zeroed();
+            let mut stats = Statinfo {
+                generation: 0,
+                snap_time_sec: 0,
+                snap_time_frac: 0,
+                dinfo: &mut dinfo,
+            };
+
+            // Get device statistics
+            if devstat_getdevs(ptr::null_mut(), &mut stats) < 0 {
+                return Err(Error::Platform(format!(
+                    "devstat_getdevs failed: {}",
+                    std::io::Error::last_os_error()
+                )));
+            }
+
+            if dinfo.devices.is_null() || dinfo.numdevs <= 0 {
+                return Ok(Vec::new());
+            }
+
+            let mut results = Vec::with_capacity(dinfo.numdevs as usize);
+
+            for i in 0..dinfo.numdevs as isize {
+                let ds = &*dinfo.devices.offset(i);
+
+                // Get device name
+                let name = cstr_to_string(ds.device_name.as_ptr());
+                if name.is_empty() {
+                    continue;
+                }
+
+                let device = format!("{}{}", name, ds.unit_number);
+
+                // Skip devices with no activity
+                let reads = ds.operations[0];  // DEVSTAT_READ
+                let writes = ds.operations[1]; // DEVSTAT_WRITE
+                if reads == 0 && writes == 0 {
+                    continue;
+                }
+
+                // Convert bytes to sectors (512 bytes per sector)
+                let sectors_read = ds.bytes[0] / 512;
+                let sectors_written = ds.bytes[1] / 512;
+
+                // Calculate time in milliseconds from bintime (sec + frac/2^64)
+                let read_time_ms = bintime_to_ms(ds.duration_sec[0], ds.duration_frac[0]);
+                let write_time_ms = bintime_to_ms(ds.duration_sec[1], ds.duration_frac[1]);
+                let busy_time_ms = bintime_to_ms(ds.busy_time_sec, ds.busy_time_frac);
+
+                // IO in progress: difference between start and end counts
+                let io_in_progress = ds.start_count.saturating_sub(ds.end_count) as u64;
+
+                results.push(DiskIOStats {
+                    device,
+                    reads_completed: reads,
+                    sectors_read,
+                    read_time_ms,
+                    writes_completed: writes,
+                    sectors_written,
+                    write_time_ms,
+                    io_in_progress,
+                    io_time_ms: busy_time_ms,
+                    weighted_io_time_ms: busy_time_ms,
+                });
+            }
+
+            Ok(results)
+        }
+    }
+
+    /// Convert bintime (seconds + fraction) to milliseconds.
+    fn bintime_to_ms(sec: i64, frac: u64) -> u64 {
+        // bintime fraction is scaled by 2^64
+        // frac / 2^64 gives the fractional seconds
+        // Multiply by 1000 to get milliseconds
+        let frac_ms = (frac as u128 * 1000) >> 64;
+        (sec as u64 * 1000).saturating_add(frac_ms as u64)
     }
 }
 
@@ -850,8 +1669,1223 @@ pub fn get_network_interfaces() -> Result<Vec<NetInterface>> {
     }
 }
 
+/// Gets network interface statistics via sysctl NET_RT_IFLIST.
+///
+/// # Platform Support
+///
+/// Works on all BSD platforms (FreeBSD, OpenBSD, NetBSD).
+///
+/// # Examples
+///
+/// ```no_run
+/// use probe_platform::bsd::sysctl::get_network_stats;
+///
+/// let stats = get_network_stats()?;
+/// for iface in stats {
+///     println!("{}: rx={} tx={}", iface.interface, iface.rx_bytes, iface.tx_bytes);
+/// }
+/// # Ok::<(), probe_platform::Error>(())
+/// ```
 pub fn get_network_stats() -> Result<Vec<NetStats>> {
-    // Would need sysctl NET_RT_IFLIST
+    unsafe {
+        // MIB path: CTL_NET -> PF_ROUTE -> 0 -> AF_UNSPEC -> NET_RT_IFLIST -> 0
+        let mut mib = [
+            libc::CTL_NET,
+            libc::PF_ROUTE,
+            0,
+            0, // AF_UNSPEC
+            libc::NET_RT_IFLIST,
+            0,
+        ];
+
+        // Get required buffer size
+        let mut len: usize = 0;
+        let result =
+            libc::sysctl(mib.as_mut_ptr(), 6, ptr::null_mut(), &mut len, ptr::null_mut(), 0);
+
+        if result != 0 || len == 0 {
+            return Ok(Vec::new());
+        }
+
+        // Allocate buffer
+        let mut buf: Vec<u8> = vec![0; len];
+        let result = libc::sysctl(
+            mib.as_mut_ptr(),
+            6,
+            buf.as_mut_ptr() as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        );
+
+        if result != 0 {
+            return Err(Error::Io(std::io::Error::last_os_error()));
+        }
+
+        let mut stats = Vec::new();
+        let mut offset = 0;
+
+        while offset < len {
+            // Parse if_msghdr structure
+            let ifm = buf.as_ptr().add(offset) as *const IfMsghdr;
+            let msg_len = (*ifm).ifm_msglen as usize;
+
+            if msg_len == 0 {
+                break;
+            }
+
+            // RTM_IFINFO indicates interface information
+            if (*ifm).ifm_type as i32 == RTM_IFINFO {
+                let data = &(*ifm).ifm_data;
+
+                // Get interface name from index
+                let mut ifname = [0i8; 16]; // IF_NAMESIZE
+                if !libc::if_indextoname((*ifm).ifm_index as u32, ifname.as_mut_ptr()).is_null() {
+                    let name = cstr_to_string(ifname.as_ptr());
+
+                    stats.push(NetStats {
+                        interface: name,
+                        rx_bytes: data.ifi_ibytes,
+                        rx_packets: data.ifi_ipackets,
+                        rx_errors: data.ifi_ierrors,
+                        rx_drops: data.ifi_iqdrops,
+                        tx_bytes: data.ifi_obytes,
+                        tx_packets: data.ifi_opackets,
+                        tx_errors: data.ifi_oerrors,
+                        tx_drops: 0, // Not all BSDs expose this
+                    });
+                }
+            }
+
+            offset += msg_len;
+        }
+
+        Ok(stats)
+    }
+}
+
+// RTM_IFINFO message type
+const RTM_IFINFO: i32 = 0x0e;
+
+/// BSD if_msghdr structure for routing messages.
+#[repr(C)]
+struct IfMsghdr {
+    ifm_msglen: u16,
+    ifm_version: u8,
+    ifm_type: u8,
+    ifm_addrs: i32,
+    ifm_flags: i32,
+    ifm_index: u16,
+    ifm_data: IfData,
+}
+
+/// BSD if_data structure containing interface statistics.
+#[repr(C)]
+struct IfData {
+    ifi_type: u8,
+    ifi_physical: u8,
+    ifi_addrlen: u8,
+    ifi_hdrlen: u8,
+    ifi_link_state: u8,
+    ifi_spare_char1: u8,
+    ifi_spare_char2: u8,
+    ifi_datalen: u8,
+    ifi_mtu: u64,
+    ifi_metric: u64,
+    ifi_baudrate: u64,
+    ifi_ipackets: u64,
+    ifi_ierrors: u64,
+    ifi_opackets: u64,
+    ifi_oerrors: u64,
+    ifi_collisions: u64,
+    ifi_ibytes: u64,
+    ifi_obytes: u64,
+    ifi_imcasts: u64,
+    ifi_omcasts: u64,
+    ifi_iqdrops: u64,
+    ifi_noproto: u64,
+    ifi_hwassist: u64,
+    ifi_epoch: i64,
+    ifi_lastchange_sec: i64,
+    ifi_lastchange_usec: i64,
+}
+
+// ============================================================================
+// CONTEXT SWITCHES
+// ============================================================================
+
+/// Context switch counts (voluntary and involuntary).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ContextSwitches {
+    /// Voluntary context switches (process yielded CPU).
+    pub voluntary: u64,
+    /// Involuntary context switches (preempted by scheduler).
+    pub involuntary: u64,
+}
+
+/// Reads context switches for the current process using getrusage().
+///
+/// # Platform Support
+///
+/// Works on all BSD platforms (FreeBSD, OpenBSD, NetBSD) via POSIX getrusage().
+///
+/// # Examples
+///
+/// ```no_run
+/// use probe_platform::bsd::sysctl::read_self_context_switches;
+///
+/// let ctx = read_self_context_switches()?;
+/// println!("Voluntary: {}, Involuntary: {}", ctx.voluntary, ctx.involuntary);
+/// # Ok::<(), probe_platform::Error>(())
+/// ```
+pub fn read_self_context_switches() -> Result<ContextSwitches> {
+    unsafe {
+        let mut usage: libc::rusage = mem::zeroed();
+        let result = libc::getrusage(libc::RUSAGE_SELF, &mut usage);
+
+        if result != 0 {
+            return Err(Error::Platform(format!(
+                "getrusage failed: {}",
+                std::io::Error::last_os_error()
+            )));
+        }
+
+        Ok(ContextSwitches {
+            voluntary: usage.ru_nvcsw as u64,
+            involuntary: usage.ru_nivcsw as u64,
+        })
+    }
+}
+
+/// Reads context switches for a specific process.
+///
+/// # Platform Support
+///
+/// - **FreeBSD**: Via kinfo_proc.ki_rusage
+/// - **OpenBSD**: Via kinfo_proc.p_uru_nvcsw/p_uru_nivcsw
+/// - **NetBSD**: Via kinfo_proc2.p_uru_nvcsw/p_uru_nivcsw
+///
+/// # Arguments
+///
+/// * `pid` - Process ID to query. Use 0 for the current process.
+///
+/// # Errors
+///
+/// Returns [`Error::NotFound`] if the process doesn't exist.
+pub fn read_process_context_switches(pid: i32) -> Result<ContextSwitches> {
+    // If pid is 0 or current process, use getrusage for efficiency
+    if pid == 0 || pid == unsafe { libc::getpid() } {
+        return read_self_context_switches();
+    }
+
+    #[cfg(target_os = "freebsd")]
+    {
+        read_process_context_switches_freebsd(pid)
+    }
+
+    #[cfg(target_os = "openbsd")]
+    {
+        read_process_context_switches_openbsd(pid)
+    }
+
+    #[cfg(target_os = "netbsd")]
+    {
+        read_process_context_switches_netbsd(pid)
+    }
+}
+
+#[cfg(target_os = "freebsd")]
+fn read_process_context_switches_freebsd(pid: i32) -> Result<ContextSwitches> {
+    unsafe {
+        let mut mib = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PID, pid as libc::c_int];
+
+        let mut kinfo: libc::kinfo_proc = mem::zeroed();
+        let mut len = mem::size_of::<libc::kinfo_proc>();
+
+        let result = libc::sysctl(
+            mib.as_mut_ptr(),
+            4,
+            &mut kinfo as *mut _ as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        );
+
+        if result != 0 || len == 0 {
+            return Err(Error::NotFound(format!("process {} not found", pid)));
+        }
+
+        // FreeBSD stores rusage in ki_rusage
+        Ok(ContextSwitches {
+            voluntary: kinfo.ki_rusage.ru_nvcsw as u64,
+            involuntary: kinfo.ki_rusage.ru_nivcsw as u64,
+        })
+    }
+}
+
+#[cfg(target_os = "openbsd")]
+fn read_process_context_switches_openbsd(pid: i32) -> Result<ContextSwitches> {
+    unsafe {
+        // OpenBSD kinfo_proc structure layout
+        #[repr(C)]
+        struct KinfoProc {
+            _padding1: [u8; 232], // Offset to p_uru_nvcsw varies by version
+            p_uru_nvcsw: u64,     // Voluntary context switches
+            p_uru_nivcsw: u64,    // Involuntary context switches
+            _rest: [u8; 512],     // Remaining fields
+        }
+
+        let mut mib = [
+            libc::CTL_KERN,
+            libc::KERN_PROC,
+            libc::KERN_PROC_PID,
+            pid as libc::c_int,
+            mem::size_of::<KinfoProc>() as libc::c_int,
+            1,
+        ];
+
+        let mut kinfo: KinfoProc = mem::zeroed();
+        let mut len = mem::size_of::<KinfoProc>();
+
+        let result = libc::sysctl(
+            mib.as_mut_ptr(),
+            6,
+            &mut kinfo as *mut _ as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        );
+
+        if result != 0 || len == 0 {
+            return Err(Error::NotFound(format!("process {} not found", pid)));
+        }
+
+        Ok(ContextSwitches { voluntary: kinfo.p_uru_nvcsw, involuntary: kinfo.p_uru_nivcsw })
+    }
+}
+
+#[cfg(target_os = "netbsd")]
+fn read_process_context_switches_netbsd(pid: i32) -> Result<ContextSwitches> {
+    unsafe {
+        // NetBSD uses kinfo_proc2 via KERN_PROC2
+        #[repr(C)]
+        struct KinfoProc2 {
+            _padding1: [u8; 304], // Offset to context switch fields
+            p_uru_nvcsw: u64,     // Voluntary context switches
+            p_uru_nivcsw: u64,    // Involuntary context switches
+            _rest: [u8; 256],     // Remaining fields
+        }
+
+        // NetBSD KERN_PROC2 = 47
+        const KERN_PROC2: libc::c_int = 47;
+
+        let mut mib = [
+            libc::CTL_KERN,
+            KERN_PROC2,
+            libc::KERN_PROC_PID,
+            pid as libc::c_int,
+            mem::size_of::<KinfoProc2>() as libc::c_int,
+            1,
+        ];
+
+        let mut kinfo: KinfoProc2 = mem::zeroed();
+        let mut len = mem::size_of::<KinfoProc2>();
+
+        let result = libc::sysctl(
+            mib.as_mut_ptr(),
+            6,
+            &mut kinfo as *mut _ as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        );
+
+        if result != 0 || len == 0 {
+            return Err(Error::NotFound(format!("process {} not found", pid)));
+        }
+
+        Ok(ContextSwitches { voluntary: kinfo.p_uru_nvcsw, involuntary: kinfo.p_uru_nivcsw })
+    }
+}
+
+/// Reads system-wide context switch count.
+///
+/// # Platform Support
+///
+/// BSD systems don't expose a direct system-wide context switch counter.
+/// This function aggregates from all running processes.
+///
+/// # Note
+///
+/// This is an expensive operation as it iterates all processes.
+/// For frequent sampling, consider caching the result.
+pub fn read_system_context_switches() -> Result<ContextSwitches> {
+    let pids = list_pids()?;
+    let mut total = ContextSwitches::default();
+
+    for pid in pids {
+        if let Ok(ctx) = read_process_context_switches(pid) {
+            total.voluntary = total.voluntary.saturating_add(ctx.voluntary);
+            total.involuntary = total.involuntary.saturating_add(ctx.involuntary);
+        }
+    }
+
+    Ok(total)
+}
+
+// ============================================================================
+// NETWORK CONNECTIONS
+// ============================================================================
+
+/// Network connection state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionState {
+    /// Connection is closed.
+    Closed,
+    /// Listening for connections.
+    Listen,
+    /// SYN sent, awaiting SYN-ACK.
+    SynSent,
+    /// SYN received, awaiting ACK.
+    SynReceived,
+    /// Connection established.
+    Established,
+    /// Received FIN, waiting for close.
+    CloseWait,
+    /// FIN sent, awaiting ACK.
+    FinWait1,
+    /// FIN sent and ACKed, awaiting peer FIN.
+    FinWait2,
+    /// Both sides sent FIN.
+    Closing,
+    /// Awaiting final ACK of our FIN.
+    LastAck,
+    /// Waiting for old packets to expire.
+    TimeWait,
+    /// Unknown state.
+    Unknown,
+}
+
+impl std::fmt::Display for ConnectionState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectionState::Closed => write!(f, "CLOSED"),
+            ConnectionState::Listen => write!(f, "LISTEN"),
+            ConnectionState::SynSent => write!(f, "SYN_SENT"),
+            ConnectionState::SynReceived => write!(f, "SYN_RCVD"),
+            ConnectionState::Established => write!(f, "ESTABLISHED"),
+            ConnectionState::CloseWait => write!(f, "CLOSE_WAIT"),
+            ConnectionState::FinWait1 => write!(f, "FIN_WAIT_1"),
+            ConnectionState::FinWait2 => write!(f, "FIN_WAIT_2"),
+            ConnectionState::Closing => write!(f, "CLOSING"),
+            ConnectionState::LastAck => write!(f, "LAST_ACK"),
+            ConnectionState::TimeWait => write!(f, "TIME_WAIT"),
+            ConnectionState::Unknown => write!(f, "UNKNOWN"),
+        }
+    }
+}
+
+/// Network connection protocol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionProtocol {
+    /// TCP connection.
+    Tcp,
+    /// UDP socket.
+    Udp,
+    /// Unix domain socket (stream).
+    UnixStream,
+    /// Unix domain socket (datagram).
+    UnixDgram,
+}
+
+impl std::fmt::Display for ConnectionProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectionProtocol::Tcp => write!(f, "tcp"),
+            ConnectionProtocol::Udp => write!(f, "udp"),
+            ConnectionProtocol::UnixStream => write!(f, "unix-stream"),
+            ConnectionProtocol::UnixDgram => write!(f, "unix-dgram"),
+        }
+    }
+}
+
+/// A network connection or socket.
+#[derive(Debug, Clone)]
+pub struct NetworkConnection {
+    /// Protocol (TCP, UDP, Unix).
+    pub protocol: ConnectionProtocol,
+    /// Local address (IP:port or path).
+    pub local_addr: String,
+    /// Remote address (IP:port or path), empty for listening sockets.
+    pub remote_addr: String,
+    /// Connection state (TCP only).
+    pub state: ConnectionState,
+    /// Process ID owning this connection (0 if unknown).
+    pub pid: i32,
+}
+
+/// Lists all network connections on the system.
+///
+/// # Platform Support
+///
+/// - **FreeBSD**: Via `net.inet.tcp.pcblist` and `net.inet.udp.pcblist` sysctls
+/// - **OpenBSD**: Via `net.inet.tcp.pcblist` and `net.inet.udp.pcblist` sysctls
+/// - **NetBSD**: Via `net.inet.tcp.pcblist` sysctl
+///
+/// # Examples
+///
+/// ```no_run
+/// use probe_platform::bsd::sysctl::list_network_connections;
+///
+/// let connections = list_network_connections()?;
+/// for conn in connections {
+///     println!("{} {} -> {} ({})",
+///         conn.protocol, conn.local_addr, conn.remote_addr, conn.state);
+/// }
+/// # Ok::<(), probe_platform::Error>(())
+/// ```
+pub fn list_network_connections() -> Result<Vec<NetworkConnection>> {
+    let mut connections = Vec::new();
+
+    // Get TCP connections
+    if let Ok(tcp) = list_tcp_connections() {
+        connections.extend(tcp);
+    }
+
+    // Get UDP sockets
+    if let Ok(udp) = list_udp_connections() {
+        connections.extend(udp);
+    }
+
+    // Get Unix domain sockets
+    if let Ok(unix) = list_unix_connections() {
+        connections.extend(unix);
+    }
+
+    Ok(connections)
+}
+
+/// Lists TCP connections via sysctl.
+#[cfg(target_os = "freebsd")]
+fn list_tcp_connections() -> Result<Vec<NetworkConnection>> {
+    unsafe {
+        let name = CString::new("net.inet.tcp.pcblist")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
+
+        // Get required buffer size
+        let mut len: usize = 0;
+        if libc::sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+            return Ok(Vec::new());
+        }
+
+        if len == 0 {
+            return Ok(Vec::new());
+        }
+
+        // Allocate buffer with extra space for potential growth
+        len = len * 2;
+        let mut buf: Vec<u8> = vec![0; len];
+
+        if libc::sysctlbyname(
+            name.as_ptr(),
+            buf.as_mut_ptr() as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        ) != 0
+        {
+            return Ok(Vec::new());
+        }
+
+        parse_tcp_pcblist_freebsd(&buf[..len])
+    }
+}
+
+#[cfg(target_os = "freebsd")]
+fn parse_tcp_pcblist_freebsd(buf: &[u8]) -> Result<Vec<NetworkConnection>> {
+    // FreeBSD pcblist format uses xinpgen/xtcpcb structures
+    // This is a simplified parser that extracts basic connection info
+
+    let mut connections = Vec::new();
+
+    // The buffer starts with a xinpgen header, followed by xtcpcb entries
+    // Each entry has an xig_len field indicating its size
+
+    // Skip the header (xinpgen)
+    if buf.len() < 32 {
+        return Ok(connections);
+    }
+
+    let mut offset = 0;
+
+    // Read xinpgen header to get structure size
+    #[repr(C)]
+    struct Xinpgen {
+        xig_len: u32,
+        xig_count: u32,
+        xig_gen: u64,
+        xig_sogen: u64,
+    }
+
+    let header = buf.as_ptr() as *const Xinpgen;
+    let header_len = unsafe { (*header).xig_len } as usize;
+
+    if header_len == 0 || header_len > buf.len() {
+        return Ok(connections);
+    }
+
+    offset = header_len;
+
+    // Parse xtcpcb entries
+    while offset + 256 < buf.len() {
+        // Read length of this entry
+        let entry_ptr = unsafe { buf.as_ptr().add(offset) };
+        let entry_len = unsafe { *(entry_ptr as *const u32) } as usize;
+
+        if entry_len == 0 || entry_len < 256 {
+            break;
+        }
+
+        // Extract connection info from xtcpcb
+        // Offsets are approximate and may vary by FreeBSD version
+
+        // Local address at offset ~176 (in_addr + port)
+        // Remote address at offset ~192 (in_addr + port)
+        // State at offset ~216
+
+        if offset + entry_len <= buf.len() {
+            // Try to parse addresses (simplified - assumes IPv4)
+            let local_ip_offset = offset + 176;
+            let local_port_offset = offset + 180;
+            let remote_ip_offset = offset + 192;
+            let remote_port_offset = offset + 196;
+            let state_offset = offset + 216;
+
+            if state_offset + 4 <= buf.len() {
+                let local_ip = u32::from_ne_bytes([
+                    buf[local_ip_offset],
+                    buf[local_ip_offset + 1],
+                    buf[local_ip_offset + 2],
+                    buf[local_ip_offset + 3],
+                ]);
+                let local_port = u16::from_be_bytes([buf[local_port_offset], buf[local_port_offset + 1]]);
+
+                let remote_ip = u32::from_ne_bytes([
+                    buf[remote_ip_offset],
+                    buf[remote_ip_offset + 1],
+                    buf[remote_ip_offset + 2],
+                    buf[remote_ip_offset + 3],
+                ]);
+                let remote_port = u16::from_be_bytes([buf[remote_port_offset], buf[remote_port_offset + 1]]);
+
+                let state_val = buf[state_offset] as i32;
+                let state = tcp_state_from_int(state_val);
+
+                // Only add if we have a valid port
+                if local_port > 0 || state == ConnectionState::Listen {
+                    let local_addr = format!(
+                        "{}.{}.{}.{}:{}",
+                        local_ip & 0xFF,
+                        (local_ip >> 8) & 0xFF,
+                        (local_ip >> 16) & 0xFF,
+                        (local_ip >> 24) & 0xFF,
+                        local_port
+                    );
+
+                    let remote_addr = if remote_port > 0 {
+                        format!(
+                            "{}.{}.{}.{}:{}",
+                            remote_ip & 0xFF,
+                            (remote_ip >> 8) & 0xFF,
+                            (remote_ip >> 16) & 0xFF,
+                            (remote_ip >> 24) & 0xFF,
+                            remote_port
+                        )
+                    } else {
+                        String::new()
+                    };
+
+                    connections.push(NetworkConnection {
+                        protocol: ConnectionProtocol::Tcp,
+                        local_addr,
+                        remote_addr,
+                        state,
+                        pid: 0, // PID not easily available from pcblist
+                    });
+                }
+            }
+        }
+
+        offset += entry_len;
+    }
+
+    Ok(connections)
+}
+
+/// Converts TCP state integer to ConnectionState.
+fn tcp_state_from_int(state: i32) -> ConnectionState {
+    match state {
+        0 => ConnectionState::Closed,
+        1 => ConnectionState::Listen,
+        2 => ConnectionState::SynSent,
+        3 => ConnectionState::SynReceived,
+        4 => ConnectionState::Established,
+        5 => ConnectionState::CloseWait,
+        6 => ConnectionState::FinWait1,
+        7 => ConnectionState::Closing,
+        8 => ConnectionState::LastAck,
+        9 => ConnectionState::FinWait2,
+        10 => ConnectionState::TimeWait,
+        _ => ConnectionState::Unknown,
+    }
+}
+
+/// Lists UDP sockets via sysctl.
+#[cfg(target_os = "freebsd")]
+fn list_udp_connections() -> Result<Vec<NetworkConnection>> {
+    unsafe {
+        let name = CString::new("net.inet.udp.pcblist")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
+
+        let mut len: usize = 0;
+        if libc::sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+            return Ok(Vec::new());
+        }
+
+        if len == 0 {
+            return Ok(Vec::new());
+        }
+
+        len = len * 2;
+        let mut buf: Vec<u8> = vec![0; len];
+
+        if libc::sysctlbyname(
+            name.as_ptr(),
+            buf.as_mut_ptr() as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        ) != 0
+        {
+            return Ok(Vec::new());
+        }
+
+        // UDP parsing is similar to TCP but without state
+        let mut connections = Vec::new();
+
+        // Skip xinpgen header
+        if len < 32 {
+            return Ok(connections);
+        }
+
+        let header = buf.as_ptr() as *const u32;
+        let header_len = unsafe { *header } as usize;
+
+        if header_len == 0 || header_len > len {
+            return Ok(connections);
+        }
+
+        let mut offset = header_len;
+
+        while offset + 200 < len {
+            let entry_ptr = buf.as_ptr().add(offset);
+            let entry_len = unsafe { *(entry_ptr as *const u32) } as usize;
+
+            if entry_len == 0 || entry_len < 100 {
+                break;
+            }
+
+            // Extract UDP socket info (simplified)
+            let local_ip_offset = offset + 176;
+            let local_port_offset = offset + 180;
+
+            if local_port_offset + 2 <= len {
+                let local_ip = u32::from_ne_bytes([
+                    buf[local_ip_offset],
+                    buf[local_ip_offset + 1],
+                    buf[local_ip_offset + 2],
+                    buf[local_ip_offset + 3],
+                ]);
+                let local_port = u16::from_be_bytes([buf[local_port_offset], buf[local_port_offset + 1]]);
+
+                if local_port > 0 {
+                    let local_addr = format!(
+                        "{}.{}.{}.{}:{}",
+                        local_ip & 0xFF,
+                        (local_ip >> 8) & 0xFF,
+                        (local_ip >> 16) & 0xFF,
+                        (local_ip >> 24) & 0xFF,
+                        local_port
+                    );
+
+                    connections.push(NetworkConnection {
+                        protocol: ConnectionProtocol::Udp,
+                        local_addr,
+                        remote_addr: String::new(),
+                        state: ConnectionState::Established, // UDP is stateless
+                        pid: 0,
+                    });
+                }
+            }
+
+            offset += entry_len;
+        }
+
+        Ok(connections)
+    }
+}
+
+/// Lists Unix domain sockets.
+#[cfg(target_os = "freebsd")]
+fn list_unix_connections() -> Result<Vec<NetworkConnection>> {
+    unsafe {
+        let name = CString::new("net.local.stream.pcblist")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
+
+        let mut len: usize = 0;
+        if libc::sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+            return Ok(Vec::new());
+        }
+
+        // Unix socket parsing is more complex, returning empty for now
+        // A full implementation would parse xunpcb structures
+        Ok(Vec::new())
+    }
+}
+
+// ============================================================================
+// OPENBSD NETWORK CONNECTIONS
+// ============================================================================
+
+#[cfg(target_os = "openbsd")]
+fn list_tcp_connections() -> Result<Vec<NetworkConnection>> {
+    unsafe {
+        // OpenBSD uses sysctl with CTL_NET, PF_INET, IPPROTO_TCP, TCPCTL_PCBLIST
+        const IPPROTO_TCP: libc::c_int = 6;
+        const TCPCTL_PCBLIST: libc::c_int = 5;
+
+        let mut mib = [libc::CTL_NET, libc::PF_INET, IPPROTO_TCP, TCPCTL_PCBLIST];
+
+        // Get required buffer size
+        let mut len: usize = 0;
+        if libc::sysctl(mib.as_mut_ptr(), 4, ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+            return Ok(Vec::new());
+        }
+
+        if len == 0 {
+            return Ok(Vec::new());
+        }
+
+        // Allocate buffer with extra space
+        len = len * 2;
+        let mut buf: Vec<u8> = vec![0; len];
+
+        if libc::sysctl(
+            mib.as_mut_ptr(),
+            4,
+            buf.as_mut_ptr() as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        ) != 0
+        {
+            return Ok(Vec::new());
+        }
+
+        parse_tcp_pcblist_openbsd(&buf[..len])
+    }
+}
+
+#[cfg(target_os = "openbsd")]
+fn parse_tcp_pcblist_openbsd(buf: &[u8]) -> Result<Vec<NetworkConnection>> {
+    // OpenBSD pcblist uses struct inpcb and tcpcb
+    // Structure: each entry starts with a length field
+
+    let mut connections = Vec::new();
+    let mut offset = 0;
+
+    // Skip header
+    if buf.len() < 16 {
+        return Ok(connections);
+    }
+
+    // OpenBSD inpcbtable header
+    #[repr(C)]
+    struct Inpcbhead {
+        total_len: u32,
+        count: u32,
+        _padding: [u8; 8],
+    }
+
+    let header = buf.as_ptr() as *const Inpcbhead;
+    let entry_count = unsafe { (*header).count } as usize;
+    offset = 16; // Skip header
+
+    // OpenBSD inpcb structure (simplified)
+    #[repr(C)]
+    struct InpcbEntry {
+        inp_len: u32,
+        inp_faddr: [u8; 4],  // Foreign IPv4 address
+        inp_fport: u16,       // Foreign port (network byte order)
+        inp_laddr: [u8; 4],   // Local IPv4 address
+        inp_lport: u16,       // Local port (network byte order)
+        t_state: u8,          // TCP state
+        _padding: [u8; 3],
+    }
+
+    for _ in 0..entry_count.min(4096) {
+        if offset + 24 > buf.len() {
+            break;
+        }
+
+        // Read entry length
+        let entry_len = u32::from_ne_bytes([buf[offset], buf[offset + 1], buf[offset + 2], buf[offset + 3]]) as usize;
+        if entry_len == 0 || entry_len < 20 {
+            break;
+        }
+
+        // Parse addresses at known offsets
+        let laddr_offset = offset + 8;
+        let lport_offset = offset + 12;
+        let faddr_offset = offset + 14;
+        let fport_offset = offset + 18;
+        let state_offset = offset + 20;
+
+        if state_offset + 1 <= buf.len() {
+            let local_ip = format!(
+                "{}.{}.{}.{}",
+                buf[laddr_offset],
+                buf[laddr_offset + 1],
+                buf[laddr_offset + 2],
+                buf[laddr_offset + 3]
+            );
+            let local_port = u16::from_be_bytes([buf[lport_offset], buf[lport_offset + 1]]);
+
+            let remote_ip = format!(
+                "{}.{}.{}.{}",
+                buf[faddr_offset],
+                buf[faddr_offset + 1],
+                buf[faddr_offset + 2],
+                buf[faddr_offset + 3]
+            );
+            let remote_port = u16::from_be_bytes([buf[fport_offset], buf[fport_offset + 1]]);
+
+            let state_val = buf[state_offset] as i32;
+            let state = tcp_state_from_int(state_val);
+
+            if local_port > 0 || state == ConnectionState::Listen {
+                connections.push(NetworkConnection {
+                    protocol: ConnectionProtocol::Tcp,
+                    local_addr: format!("{}:{}", local_ip, local_port),
+                    remote_addr: if remote_port > 0 {
+                        format!("{}:{}", remote_ip, remote_port)
+                    } else {
+                        String::new()
+                    },
+                    state,
+                    pid: 0,
+                });
+            }
+        }
+
+        offset += entry_len.max(24);
+    }
+
+    Ok(connections)
+}
+
+#[cfg(target_os = "openbsd")]
+fn list_udp_connections() -> Result<Vec<NetworkConnection>> {
+    unsafe {
+        const IPPROTO_UDP: libc::c_int = 17;
+        const UDPCTL_PCBLIST: libc::c_int = 5;
+
+        let mut mib = [libc::CTL_NET, libc::PF_INET, IPPROTO_UDP, UDPCTL_PCBLIST];
+
+        let mut len: usize = 0;
+        if libc::sysctl(mib.as_mut_ptr(), 4, ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+            return Ok(Vec::new());
+        }
+
+        if len == 0 {
+            return Ok(Vec::new());
+        }
+
+        len = len * 2;
+        let mut buf: Vec<u8> = vec![0; len];
+
+        if libc::sysctl(
+            mib.as_mut_ptr(),
+            4,
+            buf.as_mut_ptr() as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        ) != 0
+        {
+            return Ok(Vec::new());
+        }
+
+        // Similar parsing to TCP but simpler (no state)
+        let mut connections = Vec::new();
+        let mut offset = 16; // Skip header
+
+        while offset + 20 < len {
+            let entry_len = u32::from_ne_bytes([buf[offset], buf[offset + 1], buf[offset + 2], buf[offset + 3]]) as usize;
+            if entry_len == 0 || entry_len < 16 {
+                break;
+            }
+
+            let laddr_offset = offset + 8;
+            let lport_offset = offset + 12;
+
+            if lport_offset + 2 <= len {
+                let local_ip = format!(
+                    "{}.{}.{}.{}",
+                    buf[laddr_offset],
+                    buf[laddr_offset + 1],
+                    buf[laddr_offset + 2],
+                    buf[laddr_offset + 3]
+                );
+                let local_port = u16::from_be_bytes([buf[lport_offset], buf[lport_offset + 1]]);
+
+                if local_port > 0 {
+                    connections.push(NetworkConnection {
+                        protocol: ConnectionProtocol::Udp,
+                        local_addr: format!("{}:{}", local_ip, local_port),
+                        remote_addr: String::new(),
+                        state: ConnectionState::Established,
+                        pid: 0,
+                    });
+                }
+            }
+
+            offset += entry_len.max(20);
+        }
+
+        Ok(connections)
+    }
+}
+
+#[cfg(target_os = "openbsd")]
+fn list_unix_connections() -> Result<Vec<NetworkConnection>> {
+    // Unix sockets on OpenBSD require kvm access
+    // Return empty for now
+    Ok(Vec::new())
+}
+
+// ============================================================================
+// NETBSD NETWORK CONNECTIONS
+// ============================================================================
+
+#[cfg(target_os = "netbsd")]
+fn list_tcp_connections() -> Result<Vec<NetworkConnection>> {
+    unsafe {
+        const IPPROTO_TCP: libc::c_int = 6;
+        const TCPCTL_PCBLIST: libc::c_int = 5;
+
+        let mut mib = [libc::CTL_NET, libc::PF_INET, IPPROTO_TCP, TCPCTL_PCBLIST];
+
+        let mut len: usize = 0;
+        if libc::sysctl(mib.as_mut_ptr(), 4, ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+            return Ok(Vec::new());
+        }
+
+        if len == 0 {
+            return Ok(Vec::new());
+        }
+
+        len = len * 2;
+        let mut buf: Vec<u8> = vec![0; len];
+
+        if libc::sysctl(
+            mib.as_mut_ptr(),
+            4,
+            buf.as_mut_ptr() as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        ) != 0
+        {
+            return Ok(Vec::new());
+        }
+
+        parse_tcp_pcblist_netbsd(&buf[..len])
+    }
+}
+
+#[cfg(target_os = "netbsd")]
+fn parse_tcp_pcblist_netbsd(buf: &[u8]) -> Result<Vec<NetworkConnection>> {
+    // NetBSD uses struct kinfo_pcb via sysctl
+    // Structure is well-documented in sys/socket.h
+
+    let mut connections = Vec::new();
+
+    // NetBSD kinfo_pcb structure
+    #[repr(C)]
+    struct KinfoPcb {
+        ki_pcbaddr: u64,      // PCB address
+        ki_ppcbaddr: u64,     // Parent PCB address
+        ki_sockaddr: u64,     // Socket address
+        ki_family: u32,       // Address family (AF_INET, AF_INET6)
+        ki_type: u32,         // Socket type (SOCK_STREAM, etc)
+        ki_protocol: u32,     // Protocol (IPPROTO_TCP, etc)
+        ki_pflags: u32,       // PCB flags
+        ki_sostate: u32,      // Socket state
+        ki_prstate: u32,      // Protocol state (TCP state)
+        ki_tstate: u32,       // Timer state
+        ki_rcvq: u32,         // Receive queue length
+        ki_sndq: u32,         // Send queue length
+        // Addresses follow in sockaddr_storage format
+        ki_s: [u8; 128],      // Local address
+        ki_d: [u8; 128],      // Remote address
+    }
+
+    const KINFO_PCB_SIZE: usize = std::mem::size_of::<KinfoPcb>();
+
+    let entry_count = buf.len() / KINFO_PCB_SIZE;
+
+    for i in 0..entry_count {
+        let offset = i * KINFO_PCB_SIZE;
+        if offset + KINFO_PCB_SIZE > buf.len() {
+            break;
+        }
+
+        let entry_ptr = unsafe { buf.as_ptr().add(offset) as *const KinfoPcb };
+        let entry = unsafe { &*entry_ptr };
+
+        // Only process IPv4 TCP connections
+        if entry.ki_family != libc::AF_INET as u32 {
+            continue;
+        }
+
+        // Parse local address from sockaddr_in at ki_s
+        // sockaddr_in: family(2) + port(2) + addr(4) + zero(8)
+        let local_port = u16::from_be_bytes([entry.ki_s[2], entry.ki_s[3]]);
+        let local_ip = format!(
+            "{}.{}.{}.{}",
+            entry.ki_s[4], entry.ki_s[5], entry.ki_s[6], entry.ki_s[7]
+        );
+
+        // Parse remote address from sockaddr_in at ki_d
+        let remote_port = u16::from_be_bytes([entry.ki_d[2], entry.ki_d[3]]);
+        let remote_ip = format!(
+            "{}.{}.{}.{}",
+            entry.ki_d[4], entry.ki_d[5], entry.ki_d[6], entry.ki_d[7]
+        );
+
+        let state = tcp_state_from_int(entry.ki_prstate as i32);
+
+        if local_port > 0 || state == ConnectionState::Listen {
+            connections.push(NetworkConnection {
+                protocol: ConnectionProtocol::Tcp,
+                local_addr: format!("{}:{}", local_ip, local_port),
+                remote_addr: if remote_port > 0 {
+                    format!("{}:{}", remote_ip, remote_port)
+                } else {
+                    String::new()
+                },
+                state,
+                pid: 0,
+            });
+        }
+    }
+
+    Ok(connections)
+}
+
+#[cfg(target_os = "netbsd")]
+fn list_udp_connections() -> Result<Vec<NetworkConnection>> {
+    unsafe {
+        const IPPROTO_UDP: libc::c_int = 17;
+        const UDPCTL_PCBLIST: libc::c_int = 1;
+
+        let mut mib = [libc::CTL_NET, libc::PF_INET, IPPROTO_UDP, UDPCTL_PCBLIST];
+
+        let mut len: usize = 0;
+        if libc::sysctl(mib.as_mut_ptr(), 4, ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+            return Ok(Vec::new());
+        }
+
+        if len == 0 {
+            return Ok(Vec::new());
+        }
+
+        len = len * 2;
+        let mut buf: Vec<u8> = vec![0; len];
+
+        if libc::sysctl(
+            mib.as_mut_ptr(),
+            4,
+            buf.as_mut_ptr() as *mut libc::c_void,
+            &mut len,
+            ptr::null_mut(),
+            0,
+        ) != 0
+        {
+            return Ok(Vec::new());
+        }
+
+        // NetBSD kinfo_pcb structure (same as TCP)
+        #[repr(C)]
+        struct KinfoPcb {
+            ki_pcbaddr: u64,
+            ki_ppcbaddr: u64,
+            ki_sockaddr: u64,
+            ki_family: u32,
+            ki_type: u32,
+            ki_protocol: u32,
+            ki_pflags: u32,
+            ki_sostate: u32,
+            ki_prstate: u32,
+            ki_tstate: u32,
+            ki_rcvq: u32,
+            ki_sndq: u32,
+            ki_s: [u8; 128],
+            ki_d: [u8; 128],
+        }
+
+        const KINFO_PCB_SIZE: usize = std::mem::size_of::<KinfoPcb>();
+
+        let mut connections = Vec::new();
+        let entry_count = len / KINFO_PCB_SIZE;
+
+        for i in 0..entry_count {
+            let offset = i * KINFO_PCB_SIZE;
+            if offset + KINFO_PCB_SIZE > len {
+                break;
+            }
+
+            let entry_ptr = buf.as_ptr().add(offset) as *const KinfoPcb;
+            let entry = &*entry_ptr;
+
+            if entry.ki_family != libc::AF_INET as u32 {
+                continue;
+            }
+
+            let local_port = u16::from_be_bytes([entry.ki_s[2], entry.ki_s[3]]);
+            let local_ip = format!(
+                "{}.{}.{}.{}",
+                entry.ki_s[4], entry.ki_s[5], entry.ki_s[6], entry.ki_s[7]
+            );
+
+            if local_port > 0 {
+                connections.push(NetworkConnection {
+                    protocol: ConnectionProtocol::Udp,
+                    local_addr: format!("{}:{}", local_ip, local_port),
+                    remote_addr: String::new(),
+                    state: ConnectionState::Established,
+                    pid: 0,
+                });
+            }
+        }
+
+        Ok(connections)
+    }
+}
+
+#[cfg(target_os = "netbsd")]
+fn list_unix_connections() -> Result<Vec<NetworkConnection>> {
     Ok(Vec::new())
 }
 
