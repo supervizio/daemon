@@ -370,8 +370,8 @@ func Test_Grid_generateRowRegions(t *testing.T) {
 			},
 			wantRegions: []Region{
 				{X: 5, Y: 15, Width: 20, Height: 25},
-				{X: 28, Y: 15, Width: 20, Height: 25},  // 5 + 20 + 3
-				{X: 51, Y: 15, Width: 20, Height: 25},  // 28 + 20 + 3
+				{X: 28, Y: 15, Width: 20, Height: 25}, // 5 + 20 + 3
+				{X: 51, Y: 15, Width: 20, Height: 25}, // 28 + 20 + 3
 			},
 		},
 		{

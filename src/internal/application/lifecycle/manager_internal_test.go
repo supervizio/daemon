@@ -91,8 +91,6 @@ func (e *testExecutor) Signal(pid int, sig os.Signal) error {
 //
 // Returns:
 //   - *config.ServiceConfig: the test configuration.
-//
-//nolint:unparam // Test helper designed for flexibility even if currently used with same values
 func createInternalTestConfig(name, command string) *config.ServiceConfig {
 	// Return a new service config with defaults.
 	return &config.ServiceConfig{

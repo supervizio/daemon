@@ -1,0 +1,30 @@
+# probe-platform - Platform-specific implementations
+# Implements metrics collection for Linux, macOS, BSD, and Windows
+
+[package]
+name = "probe-platform"
+version.workspace = true
+edition.workspace = true
+description = "Platform-specific system metrics implementations"
+
+[dependencies]
+probe-metrics = { path = "../probe-metrics" }
+thiserror.workspace = true
+log.workspace = true
+libc.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+mach2.workspace = true
+
+[target.'cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]
+nix.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "metrics"
+harness = false

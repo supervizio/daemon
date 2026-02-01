@@ -53,11 +53,13 @@ func (m *Manager) LookupUser(nameOrID string) (*User, error) {
 		lookedUpUser, err = user.LookupId(nameOrID)
 		// Both lookups failed.
 		if err != nil {
+			// return user not found error.
 			return nil, process.WrapError("lookup user", ErrUserNotFound)
 		}
 	}
 	uid, _ := strconv.ParseUint(lookedUpUser.Uid, baseDecimal, bitSize32)
 	gid, _ := strconv.ParseUint(lookedUpUser.Gid, baseDecimal, bitSize32)
+	// construct user object with resolved IDs.
 	return &User{
 		UID:      uint32(uid),
 		GID:      uint32(gid),
@@ -81,10 +83,12 @@ func (m *Manager) LookupGroup(nameOrID string) (*Group, error) {
 		lookedUpGroup, err = user.LookupGroupId(nameOrID)
 		// Both lookups failed.
 		if err != nil {
+			// return group not found error.
 			return nil, process.WrapError("lookup group", ErrGroupNotFound)
 		}
 	}
 	gid, _ := strconv.ParseUint(lookedUpGroup.Gid, baseDecimal, bitSize32)
+	// construct group object with resolved ID.
 	return &Group{
 		GID:  uint32(gid),
 		Name: lookedUpGroup.Name,
@@ -112,7 +116,7 @@ func (m *Manager) ResolveCredentials(username, groupname string) (uid, gid uint3
 			if id, parseErr := strconv.ParseUint(username, baseDecimal, bitSize32); parseErr == nil {
 				uid = uint32(id)
 			} else {
-				// Non-numeric and lookup failed.
+				// non-numeric string and system lookup failed.
 				return 0, 0, fmt.Errorf("looking up user %s: %w", username, lookupErr)
 			}
 		} else {
@@ -133,7 +137,7 @@ func (m *Manager) ResolveCredentials(username, groupname string) (uid, gid uint3
 			if id, parseErr := strconv.ParseUint(groupname, baseDecimal, bitSize32); parseErr == nil {
 				gid = uint32(id)
 			} else {
-				// Non-numeric and lookup failed.
+				// non-numeric string and system lookup failed.
 				return 0, 0, fmt.Errorf("looking up group %s: %w", groupname, lookupErr)
 			}
 		} else {
@@ -141,6 +145,7 @@ func (m *Manager) ResolveCredentials(username, groupname string) (uid, gid uint3
 			gid = resolvedGroup.GID
 		}
 	}
+	// return resolved credential IDs.
 	return uid, gid, nil
 }
 
@@ -156,6 +161,7 @@ func (m *Manager) ResolveCredentials(username, groupname string) (uid, gid uint3
 func (m *Manager) ApplyCredentials(cmd *exec.Cmd, uid, gid uint32) error {
 	// Skip credential setup when running as root (uid=0, gid=0).
 	if uid == 0 && gid == 0 {
+		// no credentials to apply for root.
 		return nil
 	}
 	// Initialize SysProcAttr if not already set by caller.
@@ -166,5 +172,6 @@ func (m *Manager) ApplyCredentials(cmd *exec.Cmd, uid, gid uint32) error {
 		Uid: uid,
 		Gid: gid,
 	}
+	// credentials successfully applied.
 	return nil
 }

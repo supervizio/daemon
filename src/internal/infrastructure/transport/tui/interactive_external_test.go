@@ -177,4 +177,3 @@ func createTestModel(interval time.Duration) tui.Model {
 		ServicesPanel: component.NewServicesPanel(80, 6),
 	})
 }
-

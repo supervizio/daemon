@@ -10,6 +10,54 @@ import (
 	"testing"
 )
 
+// TestPlatformInit tests that platform-specific signals are registered during initialization.
+//
+// Params:
+//   - t: the testing context
+//
+// Returns:
+//   - (none, test function)
+func TestPlatformInit(t *testing.T) {
+	// Define test cases for platformInit.
+	tests := []struct {
+		name       string
+		signalName string
+		wantSignal syscall.Signal
+	}{
+		{
+			name:       "SIGPWR is registered",
+			signalName: "SIGPWR",
+			wantSignal: syscall.SIGPWR,
+		},
+		{
+			name:       "SIGSTKFLT is registered",
+			signalName: "SIGSTKFLT",
+			wantSignal: syscall.SIGSTKFLT,
+		},
+	}
+
+	// Iterate over test cases.
+	for _, tt := range tests {
+		// Run each test case as a subtest.
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a new manager (which calls platformInit).
+			m := New()
+
+			// Look up the signal by name.
+			sig, ok := m.SignalByName(tt.signalName)
+			if !ok {
+				t.Errorf("signal %s not registered", tt.signalName)
+				return
+			}
+
+			// Verify the signal value.
+			if sig != tt.wantSignal {
+				t.Errorf("signal %s = %v; want %v", tt.signalName, sig, tt.wantSignal)
+			}
+		})
+	}
+}
+
 // TestPrctlSubreaper tests the prctlSubreaper function internally.
 //
 // Params:

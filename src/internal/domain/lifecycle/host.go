@@ -29,8 +29,11 @@ type HostInfo struct {
 // Returns:
 //   - time.Duration: time elapsed since StartTime, or 0 if StartTime is zero
 func (h HostInfo) Uptime() time.Duration {
+	// check if start time is unset
 	if h.StartTime.IsZero() {
+		// return zero for unset start time
 		return 0
 	}
+	// return elapsed time since start
 	return time.Since(h.StartTime)
 }

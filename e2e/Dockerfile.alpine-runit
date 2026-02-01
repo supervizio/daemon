@@ -11,6 +11,7 @@ FROM alpine:3.21
 RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.21/community" >> /etc/apk/repositories \
     && apk add --no-cache \
         curl \
+        jq \
         procps \
         runit \
     && mkdir -p /var/log/supervizio /etc/supervizio /etc/sv /var/service

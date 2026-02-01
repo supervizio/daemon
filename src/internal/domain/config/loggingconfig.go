@@ -17,6 +17,7 @@ type LoggingConfig struct {
 // Returns:
 //   - LoggingConfig: a configuration with base directory and default settings.
 func DefaultLoggingConfig() LoggingConfig {
+	// return config with default base dir and rotation
 	return LoggingConfig{
 		BaseDir: "/var/log/daemon",
 		Defaults: LogDefaults{

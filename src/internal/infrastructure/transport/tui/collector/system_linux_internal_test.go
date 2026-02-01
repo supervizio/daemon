@@ -13,6 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// testTypicalMeminfoContent represents typical /proc/meminfo content for testing.
+const testTypicalMeminfoContent string = `MemTotal:       16384000 kB
+MemFree:         8192000 kB
+MemAvailable:   12288000 kB
+Buffers:          512000 kB
+Cached:          2048000 kB`
+
 func Test_parseCPUSample(t *testing.T) {
 	t.Parallel()
 
@@ -316,12 +323,12 @@ func Test_populateMemoryMetrics(t *testing.T) {
 		{
 			name: "typical memory values",
 			memValues: map[string]uint64{
-				"MemTotal":      16384000 * 1024,
-				"MemAvailable":  12288000 * 1024,
-				"Cached":        2048000 * 1024,
-				"Buffers":       512000 * 1024,
-				"SwapTotal":     4096000 * 1024,
-				"SwapFree":      4096000 * 1024,
+				"MemTotal":     16384000 * 1024,
+				"MemAvailable": 12288000 * 1024,
+				"Cached":       2048000 * 1024,
+				"Buffers":      512000 * 1024,
+				"SwapTotal":    4096000 * 1024,
+				"SwapFree":     4096000 * 1024,
 			},
 			expectedTotal:     16384000 * 1024,
 			expectedAvailable: 12288000 * 1024,
@@ -595,12 +602,8 @@ func Test_SystemCollector_parseMemInfo(t *testing.T) {
 		expectedKeys []string
 	}{
 		{
-			name: "typical meminfo content",
-			content: `MemTotal:       16384000 kB
-MemFree:         8192000 kB
-MemAvailable:   12288000 kB
-Buffers:          512000 kB
-Cached:          2048000 kB`,
+			name:         "typical meminfo content",
+			content:      testTypicalMeminfoContent,
 			expectedKeys: []string{"MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached"},
 		},
 		{
@@ -694,4 +697,3 @@ func Test_SystemCollector_collectDisk(t *testing.T) {
 		})
 	}
 }
-

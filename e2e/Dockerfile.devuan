@@ -11,6 +11,7 @@ FROM dyne/devuan:excalibur
 # Install minimal dependencies for testing
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    jq \
     procps \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/log/supervizio /etc/supervizio

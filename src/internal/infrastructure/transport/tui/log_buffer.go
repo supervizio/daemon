@@ -41,14 +41,17 @@ type LogBuffer struct {
 // Returns:
 //   - *LogBuffer: the created buffer.
 func NewLogBuffer(maxSize int) *LogBuffer {
+	// evaluate condition.
 	if maxSize <= 0 {
 		maxSize = defaultLogBufferSize
 	}
 	// Pre-populate entries using append pattern for ring buffer.
 	entries := make([]model.LogEntry, 0, maxSize)
+	// iterate over collection.
 	for range maxSize {
 		entries = append(entries, model.LogEntry{})
 	}
+	// return computed result.
 	return &LogBuffer{
 		entries: entries,
 		maxSize: maxSize,
@@ -65,13 +68,18 @@ func NewLogBuffer(maxSize int) *LogBuffer {
 //   - entry: the log entry to add.
 func (b *LogBuffer) Add(entry model.LogEntry) {
 	b.mu.Lock()
+	// schedule deferred execution.
 	defer b.mu.Unlock()
 
+	// evaluate switch expression.
 	switch entry.Level {
+	// handle case condition.
 	case "INFO":
 		b.infoCount++
+	// handle case condition.
 	case "WARN", "WARNING":
 		b.warnCount++
+	// handle case condition.
 	case "ERROR", "ERR":
 		b.errorCount++
 	}
@@ -79,8 +87,10 @@ func (b *LogBuffer) Add(entry model.LogEntry) {
 	b.entries[b.tail] = entry
 	b.tail = (b.tail + 1) % b.maxSize
 
+	// evaluate condition.
 	if b.count < b.maxSize {
 		b.count++
+		// handle alternative case.
 	} else {
 		b.head = (b.head + 1) % b.maxSize
 	}
@@ -108,8 +118,10 @@ func (b *LogBuffer) AddFromDomainEvent(event domainlogging.LogEvent) {
 //   - []model.LogEntry: the log entries.
 func (b *LogBuffer) Entries() []model.LogEntry {
 	b.mu.RLock()
+	// schedule deferred execution.
 	defer b.mu.RUnlock()
 
+	// return computed result.
 	return b.entriesLocked()
 }
 
@@ -118,15 +130,19 @@ func (b *LogBuffer) Entries() []model.LogEntry {
 // Returns:
 //   - []model.LogEntry: the log entries in chronological order.
 func (b *LogBuffer) entriesLocked() []model.LogEntry {
+	// check for empty value.
 	if b.count == 0 {
+		// return nil to indicate no error.
 		return nil
 	}
 
 	result := make([]model.LogEntry, 0, b.count)
+	// iterate over collection.
 	for i := range b.count {
 		idx := (b.head + i) % b.maxSize
 		result = append(result, b.entries[idx])
 	}
+	// return computed result.
 	return result
 }
 
@@ -137,8 +153,10 @@ func (b *LogBuffer) entriesLocked() []model.LogEntry {
 //   - model.LogSummary: the log summary.
 func (b *LogBuffer) Summary() model.LogSummary {
 	b.mu.RLock()
+	// schedule deferred execution.
 	defer b.mu.RUnlock()
 
+	// return computed result.
 	return model.LogSummary{
 		Period:        logPeriod,
 		InfoCount:     b.infoCount,
@@ -152,6 +170,7 @@ func (b *LogBuffer) Summary() model.LogSummary {
 // Clear resets the buffer without deallocating memory.
 func (b *LogBuffer) Clear() {
 	b.mu.Lock()
+	// schedule deferred execution.
 	defer b.mu.Unlock()
 
 	// Reset ring buffer state (entries array stays allocated).

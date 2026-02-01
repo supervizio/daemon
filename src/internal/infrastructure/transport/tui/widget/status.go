@@ -163,9 +163,11 @@ func (s *StatusIndicator) HealthStatus(status health.Status) string {
 	case health.StatusUnknown:
 		// Return muted unknown icon.
 		return s.Theme.Muted + s.Icons.Unknown + ansi.Reset
+	// handle default case.
+	default:
+		// Default fallback: muted unknown icon.
+		return s.Theme.Muted + s.Icons.Unknown + ansi.Reset
 	}
-	// Default fallback: muted unknown icon.
-	return s.Theme.Muted + s.Icons.Unknown + ansi.Reset
 }
 
 // HealthStatusText returns colored health text.
@@ -190,13 +192,15 @@ func (s *StatusIndicator) HealthStatusText(status health.Status) string {
 	case health.StatusDegraded:
 		// Return yellow text.
 		return s.Theme.Warning + "degraded" + ansi.Reset
-	// Unknown status.
+	// Unknown status - explicit case for exhaustive switch.
 	case health.StatusUnknown:
-		// Return muted text.
+		// Return muted "unknown" text.
+		return s.Theme.Muted + "unknown" + ansi.Reset
+	// Future status values default to unknown display.
+	default:
+		// Fallback for any future status values.
 		return s.Theme.Muted + "unknown" + ansi.Reset
 	}
-	// Default fallback: muted "unknown".
-	return s.Theme.Muted + "unknown" + ansi.Reset
 }
 
 // ListenerState returns colored icon for listener state.

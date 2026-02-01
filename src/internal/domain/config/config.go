@@ -13,6 +13,8 @@ type Config struct {
 	Version string
 	// Logging defines global logging defaults applied to all services.
 	Logging LoggingConfig
+	// Monitoring defines external target monitoring configuration.
+	Monitoring MonitoringConfig
 	// Services contains the list of service configurations to manage.
 	Services []ServiceConfig
 	// ConfigPath stores the path from which this configuration was loaded.
@@ -27,11 +29,15 @@ type Config struct {
 // Returns:
 //   - *ServiceConfig: service configuration or nil if not found
 func (c *Config) FindService(name string) *ServiceConfig {
+	// search services by name
 	for i := range c.Services {
+		// check if service name matches
 		if c.Services[i].Name == name {
+			// return matching service
 			return &c.Services[i]
 		}
 	}
+	// no match found
 	return nil
 }
 
@@ -40,6 +46,7 @@ func (c *Config) FindService(name string) *ServiceConfig {
 // Returns:
 //   - error: validation error if any
 func (c *Config) Validate() error {
+	// delegate to validation function
 	return Validate(c)
 }
 
@@ -53,6 +60,7 @@ func (c *Config) Validate() error {
 //   - string: full path to the service log file
 func (c *Config) GetServiceLogPath(serviceName, logFile string) string {
 	// Construct path by joining base directory, service name, and log filename
+	// construct path from base directory, service name, and log file
 	return c.Logging.BaseDir + "/" + serviceName + "/" + logFile
 }
 
@@ -64,10 +72,12 @@ func (c *Config) GetServiceLogPath(serviceName, logFile string) string {
 // Returns:
 //   - *Config: configuration with the provided services and default logging settings.
 func NewConfig(services []ServiceConfig) *Config {
+	// create config with version 1 and defaults
 	return &Config{
-		Version:  "1",
-		Logging:  DefaultLoggingConfig(),
-		Services: services,
+		Version:    "1",
+		Logging:    DefaultLoggingConfig(),
+		Monitoring: NewMonitoringConfig(),
+		Services:   services,
 	}
 }
 
@@ -76,6 +86,7 @@ func NewConfig(services []ServiceConfig) *Config {
 // Returns:
 //   - *Config: configuration with sensible defaults for logging and rotation
 func DefaultConfig() *Config {
+	// return config with default values
 	return &Config{
 		Version: "1",
 		Logging: LoggingConfig{
@@ -88,5 +99,6 @@ func DefaultConfig() *Config {
 				},
 			},
 		},
+		Monitoring: NewMonitoringConfig(),
 	}
 }

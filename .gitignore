@@ -68,8 +68,8 @@ src/daemon
 # **/*.pb.go
 # **/*_grpc.pb.go
 
-# Rust
-target/
+# Rust (specific to probe library, not domain/target package)
+/src/lib/probe/target/
 Cargo.lock
 
 # Java

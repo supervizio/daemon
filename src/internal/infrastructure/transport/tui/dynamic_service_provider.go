@@ -39,6 +39,7 @@ type DynamicServiceProvider struct {
 // Returns:
 //   - *DynamicServiceProvider: the created provider.
 func NewDynamicServiceProvider(provider TUISnapshotser, metrics ProcessMetricsProvider) *DynamicServiceProvider {
+	// return computed result.
 	return &DynamicServiceProvider{
 		provider: provider,
 		metrics:  metrics,
@@ -50,13 +51,16 @@ func NewDynamicServiceProvider(provider TUISnapshotser, metrics ProcessMetricsPr
 // Returns:
 //   - []model.ServiceSnapshot: the service snapshots.
 func (p *DynamicServiceProvider) ListServices() []model.ServiceSnapshot {
+	// handle nil condition.
 	if p.provider == nil {
+		// return nil to indicate no error.
 		return nil
 	}
 
 	snapshots := p.provider.TUISnapshots()
 	result := make([]model.ServiceSnapshot, 0, len(snapshots))
 
+	// iterate over collection.
 	for _, snap := range snapshots {
 		ss := model.ServiceSnapshot{
 			Name:   snap.Name,
@@ -65,7 +69,9 @@ func (p *DynamicServiceProvider) ListServices() []model.ServiceSnapshot {
 			Uptime: time.Duration(snap.Uptime) * time.Second,
 		}
 
+		// handle non-nil condition.
 		if p.metrics != nil {
+			// evaluate condition.
 			if m, ok := p.metrics.Get(snap.Name); ok {
 				ss.CPUPercent = m.CPU.UsagePercent
 				ss.MemoryRSS = m.Memory.RSS
@@ -75,5 +81,6 @@ func (p *DynamicServiceProvider) ListServices() []model.ServiceSnapshot {
 		result = append(result, ss)
 	}
 
+	// return computed result.
 	return result
 }

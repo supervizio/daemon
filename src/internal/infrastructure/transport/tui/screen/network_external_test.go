@@ -93,12 +93,12 @@ func TestNetworkRenderer_RenderInline(t *testing.T) {
 			snap: &model.Snapshot{
 				Network: []model.NetworkInterface{
 					{
-						Name:           "eth0",
-						IsLoopback:     false,
-						IsUp:           true,
-						IP:             "192.168.1.1",
-						RxBytesPerSec:  1024,
-						TxBytesPerSec:  512,
+						Name:          "eth0",
+						IsLoopback:    false,
+						IsUp:          true,
+						IP:            "192.168.1.1",
+						RxBytesPerSec: 1024,
+						TxBytesPerSec: 512,
 					},
 				},
 			},
@@ -177,12 +177,12 @@ func TestNetworkRenderer_Render_Compact(t *testing.T) {
 			snap: &model.Snapshot{
 				Network: []model.NetworkInterface{
 					{
-						Name:           "eth0",
-						IsLoopback:     false,
-						IsUp:           true,
-						IP:             "192.168.1.1",
-						RxBytesPerSec:  1024,
-						TxBytesPerSec:  512,
+						Name:          "eth0",
+						IsLoopback:    false,
+						IsUp:          true,
+						IP:            "192.168.1.1",
+						RxBytesPerSec: 1024,
+						TxBytesPerSec: 512,
 					},
 				},
 			},
@@ -213,13 +213,13 @@ func TestNetworkRenderer_Render_WithBars(t *testing.T) {
 			snap: &model.Snapshot{
 				Network: []model.NetworkInterface{
 					{
-						Name:           "eth0",
-						IsLoopback:     false,
-						IsUp:           true,
-						IP:             "192.168.1.1",
-						Speed:          1000000000,
-						RxBytesPerSec:  1024000,
-						TxBytesPerSec:  512000,
+						Name:          "eth0",
+						IsLoopback:    false,
+						IsUp:          true,
+						IP:            "192.168.1.1",
+						Speed:         1000000000,
+						RxBytesPerSec: 1024000,
+						TxBytesPerSec: 512000,
 					},
 				},
 			},
@@ -230,13 +230,13 @@ func TestNetworkRenderer_Render_WithBars(t *testing.T) {
 			snap: &model.Snapshot{
 				Network: []model.NetworkInterface{
 					{
-						Name:           "lo",
-						IsLoopback:     true,
-						IsUp:           true,
-						IP:             "127.0.0.1",
-						Speed:          0,
-						RxBytesPerSec:  100,
-						TxBytesPerSec:  100,
+						Name:          "lo",
+						IsLoopback:    true,
+						IsUp:          true,
+						IP:            "127.0.0.1",
+						Speed:         0,
+						RxBytesPerSec: 100,
+						TxBytesPerSec: 100,
 					},
 				},
 			},

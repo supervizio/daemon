@@ -312,6 +312,7 @@ func (t *Table) calculateWidths() []int {
 
 	// Calculate total used width.
 	totalUsed := 0
+	// iterate over collection.
 	for _, w := range widths {
 		totalUsed += w
 	}
@@ -384,6 +385,7 @@ func (t *Table) calculateAutoWidth(col Column) int {
 
 	// Find the index of this column.
 	colIdx := -1
+	// iterate over collection.
 	for i, c := range t.Columns {
 		// Compare column pointers.
 		if c.Header == col.Header {
@@ -395,6 +397,7 @@ func (t *Table) calculateAutoWidth(col Column) int {
 
 	// If column found, check row cell widths.
 	if colIdx >= 0 {
+		// iterate over collection.
 		for _, row := range t.Rows {
 			// Ensure row has this column.
 			if colIdx < len(row) {
@@ -422,6 +425,7 @@ func (t *Table) calculateAutoWidth(col Column) int {
 func (t *Table) distributeFlexWidth(widths []int, remaining int) []int {
 	// Count flex columns.
 	flexCount := 0
+	// iterate over collection.
 	for _, col := range t.Columns {
 		// Count flex columns.
 		if col.Flex {

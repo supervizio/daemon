@@ -25,9 +25,9 @@ internal/
 └── infrastructure/       # Infrastructure layer (adapters)
     ├── observability/    # healthcheck (probers), logging
     ├── persistence/      # config/yaml, storage/boltdb
+    ├── probe/            # System metrics & quotas (cross-platform Rust FFI)
     ├── process/          # control, credentials, executor, reaper, signals
-    ├── resources/        # cgroup, metrics (linux/darwin/bsd)
-    └── transport/        # grpc server
+    └── transport/        # grpc, tui
 ```
 
 ## Layer Responsibilities
@@ -48,7 +48,7 @@ internal/
 | Infrastructure | `observability/healthcheck` | TCP, HTTP, gRPC, ICMP, Exec probers |
 | Infrastructure | `persistence/config/yaml` | YAML configuration loader |
 | Infrastructure | `process/executor` | Unix process execution |
-| Infrastructure | `resources/metrics` | Platform-specific metrics (Linux/Darwin/BSD) |
+| Infrastructure | `probe` | Cross-platform system metrics & quotas (Rust FFI) |
 
 ## Dependency Rules
 

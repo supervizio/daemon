@@ -12,6 +12,59 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/persistence/config/yaml"
 )
 
+// Test configuration constants for YAML loader tests.
+const (
+	testValidMinimalConfig string = `
+version: "1"
+services:
+  - name: test-service
+    command: /bin/echo
+    args: ["hello"]
+`
+
+	testValidConfigHealthChecks string = `
+version: "1"
+services:
+  - name: web-service
+    command: /bin/server
+    health_checks:
+      - name: http-check
+        type: http
+        endpoint: http://localhost:8080/health
+        interval: 10s
+        timeout: 5s
+        retries: 3
+`
+
+	testValidBasicConfig string = `
+version: "1"
+services:
+  - name: my-service
+    command: /bin/true
+`
+
+	testConfigForReload string = `
+version: "1"
+services:
+  - name: test-service
+    command: /bin/echo
+`
+
+	testMinimalConfigForDefaults string = `
+version: "1"
+services:
+  - name: minimal-service
+    command: /bin/true
+`
+
+	testConfigForPathCheck string = `
+version: "1"
+services:
+  - name: test-service
+    command: /bin/echo
+`
+)
+
 // TestNewLoader tests the NewLoader constructor function.
 //
 // Params:
@@ -51,14 +104,8 @@ func TestLoader_Load(t *testing.T) {
 		validate func(t *testing.T, cfg any)
 	}{
 		{
-			name: "valid_minimal_config",
-			content: `
-version: "1"
-services:
-  - name: test-service
-    command: /bin/echo
-    args: ["hello"]
-`,
+			name:    "valid_minimal_config",
+			content: testValidMinimalConfig,
 			wantErr: false,
 			validate: func(t *testing.T, cfg any) {
 				// Assert configuration is not nil.
@@ -66,20 +113,8 @@ services:
 			},
 		},
 		{
-			name: "valid_config_with_health_checks",
-			content: `
-version: "1"
-services:
-  - name: web-service
-    command: /bin/server
-    health_checks:
-      - name: http-check
-        type: http
-        endpoint: http://localhost:8080/health
-        interval: 10s
-        timeout: 5s
-        retries: 3
-`,
+			name:    "valid_config_with_health_checks",
+			content: testValidConfigHealthChecks,
 			wantErr: false,
 			validate: func(t *testing.T, cfg any) {
 				// Assert configuration is not nil.
@@ -176,13 +211,8 @@ func TestLoader_Parse(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid_config",
-			data: []byte(`
-version: "1"
-services:
-  - name: my-service
-    command: /bin/true
-`),
+			name:    "valid_config",
+			data:    []byte(testValidBasicConfig),
 			wantErr: false,
 		},
 		{
@@ -260,13 +290,7 @@ func TestLoader_Reload(t *testing.T) {
 				configPath := filepath.Join(tmpDir, "config.yaml")
 
 				// Write valid configuration to temporary file.
-				content := `
-version: "1"
-services:
-  - name: test-service
-    command: /bin/echo
-`
-				err := os.WriteFile(configPath, []byte(content), 0o644)
+				err := os.WriteFile(configPath, []byte(testConfigForReload), 0o644)
 				require.NoError(t, err)
 
 				// Load the configuration.
@@ -311,13 +335,8 @@ func TestLoader_DefaultsApplied(t *testing.T) {
 		expectedVersion         string
 	}{
 		{
-			name: "minimal_config_gets_defaults",
-			content: `
-version: "1"
-services:
-  - name: minimal-service
-    command: /bin/true
-`,
+			name:                    "minimal_config_gets_defaults",
+			content:                 testMinimalConfigForDefaults,
 			expectedBaseDir:         "/var/log/daemon",
 			expectedTimestampFormat: "iso8601",
 			expectedVersion:         "1",
@@ -365,13 +384,8 @@ func TestLoader_ConfigPath(t *testing.T) {
 		content string
 	}{
 		{
-			name: "config_path_set_after_load",
-			content: `
-version: "1"
-services:
-  - name: test-service
-    command: /bin/echo
-`,
+			name:    "config_path_set_after_load",
+			content: testConfigForPathCheck,
 		},
 	}
 

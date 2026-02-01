@@ -1,0 +1,15 @@
+[package]
+name = "probe-cache"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "TTL caching layer for probe metrics collection"
+
+[dependencies]
+probe-metrics = { path = "../probe-metrics" }
+parking_lot.workspace = true
+log.workspace = true
+
+[dev-dependencies]

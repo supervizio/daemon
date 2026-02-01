@@ -426,4 +426,3 @@ func Test_bitsPerByte(t *testing.T) {
 		})
 	}
 }
-

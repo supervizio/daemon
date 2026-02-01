@@ -147,6 +147,23 @@ else
     echo "[WARN] Version check returned non-zero (may be expected)"
 fi
 
+# Test 6.5: Probe metrics validation (requires jq)
+echo ""
+echo "=== Test 6.5: Probe metrics ==="
+if command -v jq >/dev/null 2>&1; then
+    if [ -x /vagrant/validate-probe.sh ]; then
+        if /vagrant/validate-probe.sh; then
+            pass "Probe metrics valid"
+        else
+            fail "Probe metrics validation failed"
+        fi
+    else
+        echo "[WARN] validate-probe.sh not found, skipping probe validation"
+    fi
+else
+    echo "[WARN] jq not installed, skipping probe validation"
+fi
+
 # Test 7: Uninstall (skip if installed via package manager)
 echo ""
 echo "=== Test 7: Uninstallation ==="

@@ -34,6 +34,7 @@ type IOPressure struct {
 // Returns:
 //   - IOPressure: the created IOPressure instance
 func NewIOPressure(params *IOPressureParams) IOPressure {
+	// initialize with all I/O pressure metrics
 	return IOPressure{
 		SomeAvg10:  params.SomeAvg10,
 		SomeAvg60:  params.SomeAvg60,
@@ -53,5 +54,6 @@ func NewIOPressure(params *IOPressureParams) IOPressure {
 // Returns:
 //   - bool: true if I/O pressure exceeds the threshold
 func (p *IOPressure) IsUnderPressure() bool {
+	// check if either some or full pressure exceeds threshold
 	return p.SomeAvg10 > PressureThreshold || p.FullAvg10 > PressureThreshold
 }

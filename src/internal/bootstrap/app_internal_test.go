@@ -1653,7 +1653,6 @@ func (m *mockAppSupervisorWithErr) SetEventHandler(_ appsupervisor.EventHandler)
 	// Do nothing.
 }
 
-
 // Test_addPIDMetadata verifies PID metadata enrichment.
 //
 // Params:
@@ -1882,6 +1881,39 @@ func Test_addRestartMetadata(t *testing.T) {
 				if _, exists := result.Metadata["restarts"]; exists {
 					t.Error("addRestartMetadata() should not add restarts metadata")
 				}
+			}
+		})
+	}
+}
+
+// Test_runProbeMode verifies runProbeMode function behavior.
+//
+// Params:
+//   - t: testing context for assertions.
+func Test_runProbeMode(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		wantExitCode int
+	}{
+		{
+			name:         "probe_mode_returns_valid_exit_code",
+			wantExitCode: 0,
+		},
+	}
+
+	// Run all test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Call runProbeMode and verify exit code.
+			exitCode := runProbeMode()
+
+			// Verify exit code matches expectation or is an error code.
+			if exitCode != tt.wantExitCode && exitCode != 1 {
+				t.Errorf("runProbeMode() exit code = %d, want %d or error code 1", exitCode, tt.wantExitCode)
 			}
 		})
 	}

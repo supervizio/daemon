@@ -40,6 +40,7 @@ type DiskIOStats struct {
 // Returns:
 //   - *DiskIOStats: initialized disk I/O statistics struct.
 func NewDiskIOStats(input *DiskIOStatsInput) *DiskIOStats {
+	// initialize with all disk I/O fields
 	return &DiskIOStats{
 		Device:         input.Device,
 		ReadBytes:      input.ReadBytes,
@@ -60,6 +61,7 @@ func NewDiskIOStats(input *DiskIOStatsInput) *DiskIOStats {
 // Returns:
 //   - uint64: sum of read and write operation counts.
 func (d *DiskIOStats) TotalOperations() uint64 {
+	// sum read and write operations
 	return d.ReadCount + d.WriteCount
 }
 
@@ -68,6 +70,7 @@ func (d *DiskIOStats) TotalOperations() uint64 {
 // Returns:
 //   - uint64: sum of bytes read and written.
 func (d *DiskIOStats) TotalBytes() uint64 {
+	// sum read and write bytes
 	return d.ReadBytes + d.WriteBytes
 }
 
@@ -76,5 +79,6 @@ func (d *DiskIOStats) TotalBytes() uint64 {
 // Returns:
 //   - time.Duration: sum of read and write time.
 func (d *DiskIOStats) TotalTime() time.Duration {
+	// sum read and write durations
 	return d.ReadTime + d.WriteTime
 }

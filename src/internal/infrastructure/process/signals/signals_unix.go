@@ -21,11 +21,16 @@ type Manager struct {
 // Returns:
 //   - *Manager: signal manager with POSIX signals mapped by name
 func NewManager() *Manager {
-	return &Manager{signalMap: map[string]os.Signal{
+	// return manager with predefined signal mappings.
+	m := &Manager{signalMap: map[string]os.Signal{
 		"SIGHUP": syscall.SIGHUP, "SIGINT": syscall.SIGINT, "SIGQUIT": syscall.SIGQUIT,
 		"SIGTERM": syscall.SIGTERM, "SIGKILL": syscall.SIGKILL, "SIGUSR1": syscall.SIGUSR1,
 		"SIGUSR2": syscall.SIGUSR2, "SIGCHLD": syscall.SIGCHLD,
 	}}
+	// add platform-specific signals.
+	platformInit(m)
+	// return manager with all signals registered.
+	return m
 }
 
 // New returns a Manager with common Unix signals pre-registered.
@@ -33,11 +38,16 @@ func NewManager() *Manager {
 // Returns:
 //   - *Manager: signal manager with POSIX signals mapped by name
 func New() *Manager {
-	return &Manager{signalMap: map[string]os.Signal{
+	// return manager with predefined signal mappings.
+	m := &Manager{signalMap: map[string]os.Signal{
 		"SIGHUP": syscall.SIGHUP, "SIGINT": syscall.SIGINT, "SIGQUIT": syscall.SIGQUIT,
 		"SIGTERM": syscall.SIGTERM, "SIGKILL": syscall.SIGKILL, "SIGUSR1": syscall.SIGUSR1,
 		"SIGUSR2": syscall.SIGUSR2, "SIGCHLD": syscall.SIGCHLD,
 	}}
+	// add platform-specific signals.
+	platformInit(m)
+	// return manager with all signals registered.
+	return m
 }
 
 // Notify returns a channel that receives the specified signals.
@@ -49,8 +59,11 @@ func New() *Manager {
 //   - <-chan os.Signal: buffered channel receiving signal notifications
 func (m *Manager) Notify(signals ...os.Signal) <-chan os.Signal {
 	// Buffer of 1 prevents signal loss during handler processing.
+	// create buffered channel for signal delivery.
 	ch := make(chan os.Signal, 1)
+	// register channel for signal notifications.
 	signal.Notify(ch, signals...)
+	// return receive-only channel to caller.
 	return ch
 }
 
@@ -58,7 +71,10 @@ func (m *Manager) Notify(signals ...os.Signal) <-chan os.Signal {
 //
 // Params:
 //   - ch: channel to unregister from signal delivery
-func (m *Manager) Stop(ch chan<- os.Signal) { signal.Stop(ch) }
+func (m *Manager) Stop(ch chan<- os.Signal) {
+	// unregister channel from signal delivery.
+	signal.Stop(ch)
+}
 
 // Forward delivers a signal to a process via os.Process handle.
 //
@@ -70,7 +86,9 @@ func (m *Manager) Stop(ch chan<- os.Signal) { signal.Stop(ch) }
 //   - error: if signal delivery fails (process not found, permission denied, etc)
 func (m *Manager) Forward(pid int, sig os.Signal) error {
 	// FindProcess always succeeds on Unix; error deferred to Signal call.
+	// create process handle for target PID.
 	process, _ := os.FindProcess(pid)
+	// deliver signal to target process.
 	return process.Signal(sig)
 }
 
@@ -84,6 +102,7 @@ func (m *Manager) Forward(pid int, sig os.Signal) error {
 //   - error: if signal delivery fails
 func (m *Manager) ForwardToGroup(pgid int, sig syscall.Signal) error {
 	// Negative PID signals all processes in the group.
+	// deliver signal to entire process group.
 	return syscall.Kill(-pgid, sig)
 }
 
@@ -96,10 +115,15 @@ func (m *Manager) ForwardToGroup(pgid int, sig syscall.Signal) error {
 //   - bool: true for termination signals
 func (m *Manager) IsTermSignal(sig os.Signal) bool {
 	// Standard termination signals per POSIX convention.
+	// check if signal is a termination type.
 	switch sig {
+	// termination signals that should stop the process.
 	case syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGKILL:
+		// signal is a termination type.
 		return true
+	// all other signals are not termination signals.
 	default:
+		// signal is not a termination type.
 		return false
 	}
 }
@@ -111,7 +135,10 @@ func (m *Manager) IsTermSignal(sig os.Signal) bool {
 //
 // Returns:
 //   - bool: true for SIGHUP (Unix reload convention)
-func (m *Manager) IsReloadSignal(sig os.Signal) bool { return sig == syscall.SIGHUP }
+func (m *Manager) IsReloadSignal(sig os.Signal) bool {
+	// check if signal is SIGHUP (reload convention).
+	return sig == syscall.SIGHUP
+}
 
 // SignalByName looks up a signal by name from the registered map.
 //
@@ -122,7 +149,9 @@ func (m *Manager) IsReloadSignal(sig os.Signal) bool { return sig == syscall.SIG
 //   - os.Signal: the signal if found
 //   - bool: true if signal name was registered
 func (m *Manager) SignalByName(name string) (os.Signal, bool) {
+	// lookup signal by name in map.
 	sig, ok := m.signalMap[name]
+	// return signal and found status.
 	return sig, ok
 }
 
@@ -131,4 +160,7 @@ func (m *Manager) SignalByName(name string) (os.Signal, bool) {
 // Params:
 //   - name: signal name to register (e.g., "SIGPWR" on Linux)
 //   - sig: signal value to associate with name
-func (m *Manager) AddSignal(name string, sig os.Signal) { m.signalMap[name] = sig }
+func (m *Manager) AddSignal(name string, sig os.Signal) {
+	// add signal to name lookup map.
+	m.signalMap[name] = sig
+}

@@ -42,8 +42,8 @@ PID1-capable process supervisor in Go for containers and Unix systems.
 ```bash
 go build ./cmd/daemon         # Build
 go test -race ./...           # Tests with race detection
-golangci-lint run             # Standard linting
-ktn-linter lint ./...         # KTN convention linting
+golangci-lint run -c ../.golangci.yml   # Standard linting
+ktn-linter lint -c ../.ktn-linter.yaml ./...  # KTN convention linting
 ```
 
 ## Conventions

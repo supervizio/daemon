@@ -1,0 +1,26 @@
+# probe-ffi - C ABI interface for the probe library
+# This crate exposes the FFI functions that Go calls via CGO
+
+[package]
+name = "probe-ffi"
+version.workspace = true
+edition.workspace = true
+description = "FFI interface for probe metrics library"
+
+[lib]
+name = "probe"
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+probe-metrics = { path = "../probe-metrics" }
+probe-platform = { path = "../probe-platform" }
+probe-quota = { path = "../probe-quota" }
+probe-runtime = { path = "../probe-runtime" }
+probe-cache = { path = "../probe-cache" }
+thiserror.workspace = true
+log.workspace = true
+libc.workspace = true
+parking_lot.workspace = true
+
+[build-dependencies]
+cbindgen = "0.27"

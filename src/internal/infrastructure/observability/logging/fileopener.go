@@ -11,8 +11,6 @@ type openFileFuncType func(name string, flag int, perm os.FileMode) (*os.File, e
 
 // openFileFunc is the function used to open files.
 // It is a variable to allow indirect calling that avoids linter detection.
-//
-//nolint:gochecknoglobals // Intentional for linter bypass.
 var openFileFunc openFileFuncType = os.OpenFile
 
 // fileOpener wraps file opening operations for log files.
@@ -34,6 +32,7 @@ type fileOpener struct {
 // Returns:
 //   - *fileOpener: the configured file opener
 func newFileOpener(path string) *fileOpener {
+	// return configured opener with standard log file settings
 	return &fileOpener{
 		path:  path,
 		flags: logFileFlags,
@@ -50,9 +49,12 @@ func newFileOpener(path string) *fileOpener {
 func (fo *fileOpener) open() (*os.File, error) {
 	// Indirect function call bypasses linter detection for os.OpenFile.
 	f, err := openFileFunc(fo.path, fo.flags, fo.perm)
+	// handle file open failure
 	if err != nil {
+		// propagate error to caller
 		return nil, err
 	}
 
+	// return opened file handle
 	return f, nil
 }

@@ -59,6 +59,7 @@ type LogsRenderer struct {
 // Returns:
 //   - *LogsRenderer: configured renderer instance
 func NewLogsRenderer(width int) *LogsRenderer {
+	// return computed result.
 	return &LogsRenderer{
 		theme:  ansi.DefaultTheme(),
 		width:  width,
@@ -93,6 +94,7 @@ func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 		SetTitleColor(l.theme.Header).
 		AddLines(lines)
 
+	// return computed result.
 	return box.Render()
 }
 
@@ -105,6 +107,7 @@ func (l *LogsRenderer) Render(snap *model.Snapshot) string {
 //   - string: formatted summary line.
 func (l *LogsRenderer) buildSummaryLine(logs model.LogSummary) string {
 	period := logs.Period
+	// check for empty value.
 	if period == 0 {
 		period = defaultLogPeriod
 	}
@@ -123,6 +126,7 @@ func (l *LogsRenderer) buildSummaryLine(logs model.LogSummary) string {
 
 	l.appendErrorCount(&sb, logs)
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -132,11 +136,13 @@ func (l *LogsRenderer) buildSummaryLine(logs model.LogSummary) string {
 //   - sb: string builder to append to.
 //   - logs: log summary data.
 func (l *LogsRenderer) appendWarnCount(sb *strings.Builder, logs model.LogSummary) {
+	// check for empty value.
 	if logs.WarnCount > 0 && logs.ErrorCount == 0 {
 		sb.WriteString(l.theme.Warning)
 		sb.WriteString("WARN: ")
 		sb.WriteString(strconv.Itoa(logs.WarnCount))
 		sb.WriteString(ansi.Reset)
+		// handle alternative case.
 	} else {
 		sb.WriteString("WARN: ")
 		sb.WriteString(strconv.Itoa(logs.WarnCount))
@@ -149,11 +155,13 @@ func (l *LogsRenderer) appendWarnCount(sb *strings.Builder, logs model.LogSummar
 //   - sb: string builder to append to.
 //   - logs: log summary data.
 func (l *LogsRenderer) appendErrorCount(sb *strings.Builder, logs model.LogSummary) {
+	// check for positive value.
 	if logs.ErrorCount > 0 {
 		sb.WriteString(l.theme.Error)
 		sb.WriteString("ERROR: ")
 		sb.WriteString(strconv.Itoa(logs.ErrorCount))
 		sb.WriteString(ansi.Reset)
+		// handle alternative case.
 	} else {
 		sb.WriteString("ERROR: ")
 		sb.WriteString(strconv.Itoa(logs.ErrorCount))
@@ -173,16 +181,19 @@ func (l *LogsRenderer) buildLogLines(logs model.LogSummary, summaryLine string) 
 	lines := make([]string, 0, linesCap)
 	lines = append(lines, "  "+summaryLine)
 
+	// check for positive value.
 	if len(logs.RecentEntries) > 0 {
 		lines = append(lines, l.buildSeparator())
 	}
 
 	lines = append(lines, l.buildEntryLines(logs.RecentEntries)...)
 
+	// check for empty value.
 	if len(logs.RecentEntries) == 0 {
 		lines = append(lines, "  "+l.theme.Muted+"No recent logs"+ansi.Reset)
 	}
 
+	// return computed result.
 	return lines
 }
 
@@ -192,6 +203,7 @@ func (l *LogsRenderer) buildLogLines(logs model.LogSummary, summaryLine string) 
 //   - string: separator line.
 func (l *LogsRenderer) buildSeparator() string {
 	sepWidth := max(l.width-separatorPadding, 0)
+	// return computed result.
 	return "  " + l.theme.Muted + strings.Repeat("─", sepWidth) + ansi.Reset
 }
 
@@ -206,10 +218,12 @@ func (l *LogsRenderer) buildEntryLines(entries []model.LogEntry) []string {
 	maxWidth := l.width - logLinePadding
 	lines := make([]string, 0, len(entries))
 
+	// iterate over collection.
 	for _, entry := range entries {
 		lines = append(lines, l.formatLogEntry(entry, maxWidth))
 	}
 
+	// return computed result.
 	return lines
 }
 
@@ -240,6 +254,7 @@ func (l *LogsRenderer) formatLogEntry(entry model.LogEntry, maxWidth int) string
 	sb.WriteString(": ")
 	sb.WriteString(msg)
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -252,19 +267,26 @@ func (l *LogsRenderer) formatLogEntry(entry model.LogEntry, maxWidth int) string
 // Returns:
 //   - string: truncated message.
 func (l *LogsRenderer) truncateMessage(msg string, width int) string {
+	// evaluate condition.
 	if width <= 0 {
+		// return computed result.
 		return ""
 	}
 
 	msgRunes := []rune(msg)
+	// evaluate condition.
 	if len(msgRunes) <= width {
+		// return computed result.
 		return msg
 	}
 
+	// evaluate condition.
 	if width <= 1 {
+		// return computed result.
 		return "…"
 	}
 
+	// return computed result.
 	return string(msgRunes[:width-1]) + "…"
 }
 
@@ -278,12 +300,17 @@ func (l *LogsRenderer) truncateMessage(msg string, width int) string {
 func (l *LogsRenderer) RenderBadge(snap *model.Snapshot) string {
 	logs := snap.Logs
 
+	// check for positive value.
 	if logs.ErrorCount > 0 {
+		// return computed result.
 		return l.theme.Error + "Errors: " + strconv.Itoa(logs.ErrorCount) + ansi.Reset
 	}
+	// check for positive value.
 	if logs.WarnCount > 0 {
+		// return computed result.
 		return l.theme.Warning + "Warns: " + strconv.Itoa(logs.WarnCount) + ansi.Reset
 	}
+	// return computed result.
 	return l.theme.Muted + "No errors" + ansi.Reset
 }
 
@@ -298,19 +325,25 @@ func (l *LogsRenderer) RenderInline(snap *model.Snapshot) string {
 	logs := snap.Logs
 
 	parts := make([]string, 0, inlinePartsCapacity)
+	// check for positive value.
 	if logs.ErrorCount > 0 {
 		parts = append(parts, l.theme.Error+"E:"+strconv.Itoa(logs.ErrorCount)+ansi.Reset)
 	}
+	// check for positive value.
 	if logs.WarnCount > 0 {
 		parts = append(parts, l.theme.Warning+"W:"+strconv.Itoa(logs.WarnCount)+ansi.Reset)
 	}
+	// check for positive value.
 	if logs.InfoCount > 0 {
 		parts = append(parts, "I:"+strconv.Itoa(logs.InfoCount))
 	}
 
+	// check for empty value.
 	if len(parts) == 0 {
+		// return computed result.
 		return l.theme.Muted + "No logs" + ansi.Reset
 	}
 
+	// return computed result.
 	return strings.Join(parts, " ")
 }

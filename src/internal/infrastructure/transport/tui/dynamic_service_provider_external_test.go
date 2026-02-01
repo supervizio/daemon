@@ -60,7 +60,7 @@ func TestNewDynamicServiceProvider(t *testing.T) {
 					{Name: "test", State: process.StateRunning, PID: 100, Uptime: 3600},
 				},
 			}
-			
+
 			var metricsProvider tui.ProcessMetricsProvider
 			if tt.name == "with_both_providers" {
 				metricsProvider = &mockProcessMetricsProvider{
@@ -72,7 +72,7 @@ func TestNewDynamicServiceProvider(t *testing.T) {
 					},
 				}
 			}
-			
+
 			dsp := tui.NewDynamicServiceProvider(provider, metricsProvider)
 			assert.NotNil(t, dsp)
 		})
@@ -128,10 +128,10 @@ func TestDynamicServiceProvider_ListServices(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		snapshots      []tui.TUISnapshotData
-		withMetrics    bool
-		expectedCount  int
+		name          string
+		snapshots     []tui.TUISnapshotData
+		withMetrics   bool
+		expectedCount int
 	}{
 		{
 			name: "single_service_no_metrics",
@@ -175,11 +175,11 @@ func TestDynamicServiceProvider_ListServices(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			provider := &mockTUISnapshotser{
 				snapshots: tt.snapshots,
 			}
-			
+
 			var metricsProvider tui.ProcessMetricsProvider
 			if tt.withMetrics {
 				mockMetrics := &mockProcessMetricsProvider{
@@ -193,18 +193,18 @@ func TestDynamicServiceProvider_ListServices(t *testing.T) {
 				}
 				metricsProvider = mockMetrics
 			}
-			
+
 			dsp := tui.NewDynamicServiceProvider(provider, metricsProvider)
 			services := dsp.ListServices()
-			
+
 			assert.Len(t, services, tt.expectedCount)
-			
+
 			for i, svc := range services {
 				assert.Equal(t, tt.snapshots[i].Name, svc.Name)
 				assert.Equal(t, tt.snapshots[i].State, svc.State)
 				assert.Equal(t, tt.snapshots[i].PID, svc.PID)
 				assert.Equal(t, time.Duration(tt.snapshots[i].Uptime)*time.Second, svc.Uptime)
-				
+
 				if tt.withMetrics {
 					assert.Equal(t, 25.5, svc.CPUPercent)
 					assert.Equal(t, uint64(1024*1024*100), svc.MemoryRSS)
@@ -296,16 +296,16 @@ func TestDynamicServiceProvider_ListServices_UptimeConversion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			provider := &mockTUISnapshotser{
 				snapshots: []tui.TUISnapshotData{
 					{Name: "test", State: process.StateRunning, PID: 100, Uptime: tt.uptimeSeconds},
 				},
 			}
-			
+
 			dsp := tui.NewDynamicServiceProvider(provider, nil)
 			services := dsp.ListServices()
-			
+
 			assert.Len(t, services, 1)
 			assert.Equal(t, tt.expectedUptime, services[0].Uptime)
 		})

@@ -161,7 +161,6 @@ func TestMode_String(t *testing.T) {
 	}
 }
 
-
 // Test_runRaw tests the runRaw method execution path.
 // It verifies that raw mode rendering works without error.
 //
@@ -350,4 +349,3 @@ func Test_TUI_runInteractive(t *testing.T) {
 		})
 	}
 }
-

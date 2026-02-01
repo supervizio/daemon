@@ -2512,3 +2512,94 @@ func Test_ProbeMonitor_handleHealthyTransition(t *testing.T) {
 		})
 	}
 }
+
+// Test_ProbeMonitor_attemptStateTransition tests the attemptStateTransition method.
+func Test_ProbeMonitor_attemptStateTransition(t *testing.T) {
+	tests := []struct {
+		name                 string
+		targetState          domain.SubjectState
+		listenerInitialState listener.State
+		expected             bool
+		expectedFinalState   listener.State
+	}{
+		{
+			name:                 "transition to ready accepted",
+			targetState:          domain.SubjectReady,
+			listenerInitialState: listener.StateListening,
+			expected:             true,
+			expectedFinalState:   listener.StateReady,
+		},
+		{
+			name:                 "transition to listening accepted",
+			targetState:          domain.SubjectListening,
+			listenerInitialState: listener.StateReady,
+			expected:             true,
+			expectedFinalState:   listener.StateListening,
+		},
+		{
+			name:                 "transition to unknown rejected",
+			targetState:          domain.SubjectUnknown,
+			listenerInitialState: listener.StateListening,
+			expected:             false,
+			expectedFinalState:   listener.StateListening,
+		},
+		{
+			name:                 "transition to closed rejected",
+			targetState:          domain.SubjectClosed,
+			listenerInitialState: listener.StateListening,
+			expected:             false,
+			expectedFinalState:   listener.StateListening,
+		},
+		{
+			name:                 "transition to running rejected",
+			targetState:          domain.SubjectRunning,
+			listenerInitialState: listener.StateListening,
+			expected:             false,
+			expectedFinalState:   listener.StateListening,
+		},
+		{
+			name:                 "transition to stopped rejected",
+			targetState:          domain.SubjectStopped,
+			listenerInitialState: listener.StateListening,
+			expected:             false,
+			expectedFinalState:   listener.StateListening,
+		},
+		{
+			name:                 "transition to failed rejected",
+			targetState:          domain.SubjectFailed,
+			listenerInitialState: listener.StateListening,
+			expected:             false,
+			expectedFinalState:   listener.StateListening,
+		},
+	}
+
+	// iterate through test cases
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// create a listener with initial state
+			l := listener.NewListener("test", "tcp", "127.0.0.1", 8080)
+			// set initial state based on test case
+			if tt.listenerInitialState == listener.StateReady {
+				l.MarkListening()
+				l.MarkReady()
+			} else if tt.listenerInitialState == listener.StateListening {
+				l.MarkListening()
+			}
+
+			lp := &ListenerProbe{
+				Listener: l,
+			}
+
+			// create monitor
+			m := &ProbeMonitor{}
+
+			// attempt state transition
+			result := m.attemptStateTransition(lp, tt.targetState)
+
+			// verify acceptance result
+			require.Equal(t, tt.expected, result, "expected acceptance: %v, got: %v", tt.expected, result)
+			// verify final listener state
+			require.Equal(t, tt.expectedFinalState, l.State, "expected final state: %v, got: %v", tt.expectedFinalState, l.State)
+		})
+	}
+}

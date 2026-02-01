@@ -13,9 +13,9 @@ func Test_getKernelVersion(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		wantEmpty      bool
-		wantUnknown    bool
+		name        string
+		wantEmpty   bool
+		wantUnknown bool
 	}{
 		{
 			name:        "returns non-empty kernel version on Linux",

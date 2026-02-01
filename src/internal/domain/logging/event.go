@@ -41,6 +41,7 @@ type LogEvent struct {
 // Returns:
 //   - LogEvent: the created event.
 func NewLogEvent(level Level, service, eventType, message string) LogEvent {
+	// return initialized log event
 	return LogEvent{
 		Timestamp: time.Now(),
 		Level:     level,
@@ -61,15 +62,16 @@ func NewLogEvent(level Level, service, eventType, message string) LogEvent {
 //   - LogEvent: the event with the added metadata.
 //
 // Note: any type required - metadata values are runtime-determined and type-heterogeneous.
-//
-//nolint:ktn-interface-anyuse // any required: heterogeneous log metadata (primitives, errors, custom types)
 func (e LogEvent) WithMeta(key string, value any) LogEvent {
+	// clone existing metadata to avoid mutation
 	newMeta := maps.Clone(e.Metadata)
+	// initialize map if clone returned nil
 	if newMeta == nil {
 		newMeta = make(map[string]any, defaultMetadataCapacity)
 	}
 	newMeta[key] = value
 
+	// return new event with updated metadata
 	return LogEvent{
 		Timestamp: e.Timestamp,
 		Level:     e.Level,
@@ -88,16 +90,22 @@ func (e LogEvent) WithMeta(key string, value any) LogEvent {
 // Returns:
 //   - LogEvent: the event with the added metadata.
 func (e LogEvent) WithMetadata(meta map[string]any) LogEvent {
+	// return unchanged if no metadata provided
 	if meta == nil {
+		// early return for nil metadata
 		return e
 	}
 
+	// clone existing metadata to avoid mutation
 	newMeta := maps.Clone(e.Metadata)
+	// initialize map if clone returned nil
 	if newMeta == nil {
 		newMeta = make(map[string]any, len(meta))
 	}
+	// merge provided metadata into cloned map
 	maps.Copy(newMeta, meta)
 
+	// return new event with merged metadata
 	return LogEvent{
 		Timestamp: e.Timestamp,
 		Level:     e.Level,

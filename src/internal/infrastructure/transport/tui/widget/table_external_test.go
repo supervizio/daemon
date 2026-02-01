@@ -34,11 +34,11 @@ func TestTable_AddColumn(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		header        string
-		width         int
-		align         widget.Align
-		expectedCols  int
+		name         string
+		header       string
+		width        int
+		align        widget.Align
+		expectedCols int
 	}{
 		{
 			name:         "single_column",
@@ -64,12 +64,12 @@ func TestTable_AddFlexColumn(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		header        string
-		minWidth      int
-		align         widget.Align
-		expectedCols  int
-		expectedFlex  bool
+		name         string
+		header       string
+		minWidth     int
+		align        widget.Align
+		expectedCols int
+		expectedFlex bool
 	}{
 		{
 			name:         "flex_column",

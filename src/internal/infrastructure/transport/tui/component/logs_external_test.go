@@ -67,10 +67,10 @@ func TestLogsPanel_Focus(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		setFocused    bool
-		wantFocused   bool
-		toggleAgain   bool
+		name            string
+		setFocused      bool
+		wantFocused     bool
+		toggleAgain     bool
 		wantAfterToggle bool
 	}{
 		{"initial_unfocused_then_focus", true, true, false, true},
