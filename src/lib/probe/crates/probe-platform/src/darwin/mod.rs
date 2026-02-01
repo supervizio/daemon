@@ -179,10 +179,8 @@ impl ProcessCollector for DarwinProcessCollector {
 
     fn collect_all(&self) -> Result<Vec<ProcessMetrics>> {
         let pids = sysctl::list_pids()?;
-        let results: Vec<ProcessMetrics> = pids
-            .into_iter()
-            .filter_map(|pid| self.collect(pid).ok())
-            .collect();
+        let results: Vec<ProcessMetrics> =
+            pids.into_iter().filter_map(|pid| self.collect(pid).ok()).collect();
         Ok(results)
     }
 }

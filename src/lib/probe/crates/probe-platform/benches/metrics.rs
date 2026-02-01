@@ -45,9 +45,7 @@ fn bench_memory_collect_pressure(c: &mut Criterion) {
 fn bench_load_collect(c: &mut Criterion) {
     let collector = new_collector();
 
-    c.bench_function("load_collect", |b| {
-        b.iter(|| black_box(collector.load().collect()).ok())
-    });
+    c.bench_function("load_collect", |b| b.iter(|| black_box(collector.load().collect()).ok()));
 }
 
 /// Benchmark single process metrics collection.
@@ -66,9 +64,7 @@ fn bench_process_collect_all(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("process_collect_all");
     group.throughput(Throughput::Elements(1));
-    group.bench_function("full", |b| {
-        b.iter(|| black_box(collector.process().collect_all()).ok())
-    });
+    group.bench_function("full", |b| b.iter(|| black_box(collector.process().collect_all()).ok()));
     group.finish();
 }
 
@@ -141,9 +137,7 @@ fn bench_collect_all(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("collect_all");
     group.throughput(Throughput::Elements(1));
-    group.bench_function("full", |b| {
-        b.iter(|| black_box(collector.collect_all()).ok())
-    });
+    group.bench_function("full", |b| b.iter(|| black_box(collector.collect_all()).ok()));
     group.finish();
 }
 
@@ -152,9 +146,7 @@ fn bench_collect_all(c: &mut Criterion) {
 fn bench_thermal_collect(c: &mut Criterion) {
     use probe_platform::linux::read_thermal_zones;
 
-    c.bench_function("thermal_collect", |b| {
-        b.iter(|| black_box(read_thermal_zones()).ok())
-    });
+    c.bench_function("thermal_collect", |b| b.iter(|| black_box(read_thermal_zones()).ok()));
 }
 
 /// Benchmark context switch reading.
@@ -194,11 +186,7 @@ criterion_group!(
 );
 
 // Group process benchmarks (potentially slower)
-criterion_group!(
-    process_benches,
-    bench_process_collect_single,
-    bench_process_collect_all,
-);
+criterion_group!(process_benches, bench_process_collect_single, bench_process_collect_all,);
 
 // Group aggregated benchmarks
 criterion_group!(aggregate_benches, bench_collect_all,);
@@ -208,18 +196,7 @@ criterion_group!(aggregate_benches, bench_collect_all,);
 criterion_group!(linux_benches, bench_thermal_collect, bench_context_switches,);
 
 #[cfg(target_os = "linux")]
-criterion_main!(
-    basic_benches,
-    io_benches,
-    process_benches,
-    aggregate_benches,
-    linux_benches
-);
+criterion_main!(basic_benches, io_benches, process_benches, aggregate_benches, linux_benches);
 
 #[cfg(not(target_os = "linux"))]
-criterion_main!(
-    basic_benches,
-    io_benches,
-    process_benches,
-    aggregate_benches
-);
+criterion_main!(basic_benches, io_benches, process_benches, aggregate_benches);

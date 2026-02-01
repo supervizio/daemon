@@ -2,9 +2,9 @@
 //!
 //! Detectors are ordered by priority (highest first):
 //! 1. Cloud-specific (AWS Fargate, ECS) - most specific
-//! 2. Orchestrators (Kubernetes, Nomad, OpenShift)
+//! 2. Orchestrators (Kubernetes, Nomad, `OpenShift`)
 //! 3. Container runtimes (Docker, Podman, etc.)
-//! 4. Platform-specific (FreeBSD Jail)
+//! 4. Platform-specific (FreeBSD Jail, OpenBSD/NetBSD VMs)
 
 mod cloud;
 mod containerd;
@@ -20,6 +20,12 @@ mod systemd_nspawn;
 #[cfg(target_os = "freebsd")]
 mod freebsd_jail;
 
+#[cfg(target_os = "openbsd")]
+mod openbsd_vm;
+
+#[cfg(target_os = "netbsd")]
+mod netbsd_vm;
+
 pub use cloud::{AwsEcsDetector, AwsFargateDetector, AzureAksDetector, GoogleGkeDetector};
 pub use containerd::ContainerdInsideDetector;
 pub use crio::CriOInsideDetector;
@@ -34,9 +40,16 @@ pub use systemd_nspawn::SystemdNspawnInsideDetector;
 #[cfg(target_os = "freebsd")]
 pub use freebsd_jail::FreeBsdJailInsideDetector;
 
+#[cfg(target_os = "openbsd")]
+pub use openbsd_vm::OpenBsdVmInsideDetector;
+
+#[cfg(target_os = "netbsd")]
+pub use netbsd_vm::NetBsdVmInsideDetector;
+
 use crate::InsideDetector;
 
 /// Returns all inside detectors in priority order.
+#[must_use]
 pub fn all_detectors() -> Vec<Box<dyn InsideDetector>> {
     let mut detectors: Vec<Box<dyn InsideDetector>> = vec![
         // Cloud-specific (highest priority - most specific)
@@ -60,6 +73,12 @@ pub fn all_detectors() -> Vec<Box<dyn InsideDetector>> {
     // Platform-specific
     #[cfg(target_os = "freebsd")]
     detectors.push(Box::new(FreeBsdJailInsideDetector));
+
+    #[cfg(target_os = "openbsd")]
+    detectors.push(Box::new(OpenBsdVmInsideDetector));
+
+    #[cfg(target_os = "netbsd")]
+    detectors.push(Box::new(NetBsdVmInsideDetector));
 
     // Sort by priority (highest first)
     detectors.sort_by_key(|b| std::cmp::Reverse(b.priority()));

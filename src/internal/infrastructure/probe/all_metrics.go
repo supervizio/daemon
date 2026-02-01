@@ -182,17 +182,19 @@ type ProcessMetricsJSON struct {
 	TopProcesses []ProcessInfoJSON `json:"top_processes,omitempty"`
 }
 
-// ProcessInfoJSON contains information about a process.
-// It includes CPU, memory, thread, and file descriptor statistics.
+// ProcessInfoJSON contains comprehensive information about a process.
+// It includes CPU, memory, I/O, thread, and file descriptor statistics.
 type ProcessInfoJSON struct {
-	PID            int32   `json:"pid"`
-	CPUPercent     float64 `json:"cpu_percent"`
-	MemoryRSSBytes uint64  `json:"memory_rss_bytes"`
-	MemoryVMSBytes uint64  `json:"memory_vms_bytes"`
-	MemoryPercent  float64 `json:"memory_percent"`
-	NumThreads     uint32  `json:"num_threads"`
-	NumFDs         uint32  `json:"num_fds"`
-	State          string  `json:"state"`
+	PID              int32   `json:"pid"`
+	CPUPercent       float64 `json:"cpu_percent"`
+	MemoryRSSBytes   uint64  `json:"memory_rss_bytes"`
+	MemoryVMSBytes   uint64  `json:"memory_vms_bytes"`
+	MemoryPercent    float64 `json:"memory_percent"`
+	NumThreads       uint32  `json:"num_threads"`
+	NumFDs           uint32  `json:"num_fds"`
+	ReadBytesPerSec  uint64  `json:"read_bytes_per_sec"`
+	WriteBytesPerSec uint64  `json:"write_bytes_per_sec"`
+	State            string  `json:"state"`
 }
 
 // ThermalMetricsJSON contains thermal sensor information.
@@ -718,16 +720,31 @@ func collectProcessMetricsJSON(ctx context.Context) *ProcessMetricsJSON {
 	pc := NewProcessCollector()
 	cpuInfo, cpuErr := pc.CollectCPU(ctx, pid)
 	memInfo, memErr := pc.CollectMemory(ctx, pid)
+	fdsInfo, fdsErr := pc.CollectFDs(ctx, pid)
+	ioInfo, ioErr := pc.CollectIO(ctx, pid)
 
-	// Check if both collections succeeded
+	// Check if all collections succeeded
 	if cpuErr == nil && memErr == nil {
-		pm.TopProcesses = []ProcessInfoJSON{{
+		processInfo := ProcessInfoJSON{
 			PID:            int32(cpuInfo.PID),
 			CPUPercent:     cpuInfo.UsagePercent,
 			MemoryRSSBytes: memInfo.RSS,
 			MemoryVMSBytes: memInfo.VMS,
 			MemoryPercent:  memInfo.UsagePercent,
-		}}
+		}
+
+		// Add FD count if available
+		if fdsErr == nil {
+			processInfo.NumFDs = fdsInfo.Count
+		}
+
+		// Add I/O stats if available
+		if ioErr == nil {
+			processInfo.ReadBytesPerSec = ioInfo.ReadBytesPerSec
+			processInfo.WriteBytesPerSec = ioInfo.WriteBytesPerSec
+		}
+
+		pm.TopProcesses = []ProcessInfoJSON{processInfo}
 	}
 
 	// Return the collected process metrics

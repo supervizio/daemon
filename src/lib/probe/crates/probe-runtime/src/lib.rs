@@ -6,9 +6,10 @@
 //!
 //! Supported runtimes:
 //! - Docker, Podman, containerd, CRI-O, LXC/LXD
-//! - Kubernetes, Nomad, Docker Swarm, OpenShift
+//! - Kubernetes, Nomad, Docker Swarm, `OpenShift`
 //! - AWS ECS/Fargate, Google GKE, Azure AKS
 //! - FreeBSD Jail, systemd-nspawn, Firecracker
+//! - `VMware`, QEMU, `VirtualBox`, Hyper-V, bhyve, Xen (VM detection)
 
 pub mod available;
 pub mod detector;
@@ -49,11 +50,11 @@ pub enum ContainerRuntime {
     // Orchestrators (20-39)
     /// Kubernetes orchestrator.
     Kubernetes = 20,
-    /// HashiCorp Nomad orchestrator.
+    /// `HashiCorp` Nomad orchestrator.
     Nomad = 21,
     /// Docker Swarm orchestrator.
     DockerSwarm = 22,
-    /// OpenShift (Kubernetes variant).
+    /// `OpenShift` (Kubernetes variant).
     OpenShift = 23,
 
     // Cloud-specific (40-59)
@@ -66,12 +67,29 @@ pub enum ContainerRuntime {
     /// Azure Kubernetes Service.
     AzureAks = 43,
 
+    // Virtual Machines / Hypervisors (60-79)
+    /// `VMware` virtualization.
+    VMware = 60,
+    /// QEMU/KVM virtualization.
+    Qemu = 61,
+    /// `VirtualBox` virtualization.
+    VirtualBox = 62,
+    /// Microsoft Hyper-V.
+    HyperV = 63,
+    /// bhyve (FreeBSD hypervisor).
+    Bhyve = 64,
+    /// Xen hypervisor.
+    Xen = 65,
+    /// Parallels Desktop.
+    Parallels = 66,
+
     /// Unknown runtime detected.
     Unknown = 254,
 }
 
 impl ContainerRuntime {
     /// Returns the string name of the runtime.
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::None => "none",
@@ -92,11 +110,19 @@ impl ContainerRuntime {
             Self::AwsFargate => "aws-fargate",
             Self::GoogleGke => "google-gke",
             Self::AzureAks => "azure-aks",
+            Self::VMware => "vmware",
+            Self::Qemu => "qemu",
+            Self::VirtualBox => "virtualbox",
+            Self::HyperV => "hyper-v",
+            Self::Bhyve => "bhyve",
+            Self::Xen => "xen",
+            Self::Parallels => "parallels",
             Self::Unknown => "unknown",
         }
     }
 
     /// Returns whether this is an orchestrator (vs a container runtime).
+    #[must_use]
     pub fn is_orchestrator(&self) -> bool {
         matches!(
             self,
@@ -108,6 +134,21 @@ impl ContainerRuntime {
                 | Self::AwsFargate
                 | Self::GoogleGke
                 | Self::AzureAks
+        )
+    }
+
+    /// Returns whether this is a VM/hypervisor (vs container).
+    #[must_use]
+    pub fn is_vm(&self) -> bool {
+        matches!(
+            self,
+            Self::VMware
+                | Self::Qemu
+                | Self::VirtualBox
+                | Self::HyperV
+                | Self::Bhyve
+                | Self::Xen
+                | Self::Parallels
         )
     }
 }

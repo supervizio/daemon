@@ -4,6 +4,10 @@
 
 mod sysctl;
 
+pub use sysctl::{
+    read_process_context_switches, read_self_context_switches, read_system_context_switches,
+};
+
 use crate::{
     CPUCollector, CPUPressure, DiskCollector, DiskIOStats, DiskUsage, Error, IOCollector,
     IOPressure, IOStats, LoadAverage, LoadCollector, MemoryCollector, MemoryPressure, NetInterface,
@@ -24,6 +28,7 @@ pub struct BsdCollector {
 
 impl BsdCollector {
     /// Create a new BSD collector.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             cpu: BsdCPUCollector,
@@ -179,10 +184,8 @@ impl ProcessCollector for BsdProcessCollector {
 
     fn collect_all(&self) -> Result<Vec<ProcessMetrics>> {
         let pids = sysctl::list_pids()?;
-        let results: Vec<ProcessMetrics> = pids
-            .into_iter()
-            .filter_map(|pid| self.collect(pid).ok())
-            .collect();
+        let results: Vec<ProcessMetrics> =
+            pids.into_iter().filter_map(|pid| self.collect(pid).ok()).collect();
         Ok(results)
     }
 }

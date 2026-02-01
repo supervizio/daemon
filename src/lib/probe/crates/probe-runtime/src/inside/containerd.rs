@@ -74,7 +74,7 @@ fn extract_containerd_id(line: &str) -> Option<String> {
         let start = pos + "cri-containerd-".len();
         let rest = &line[start..];
 
-        let id: String = rest.chars().take_while(|c| c.is_ascii_hexdigit()).collect();
+        let id: String = rest.chars().take_while(char::is_ascii_hexdigit).collect();
 
         if id.len() == 64 {
             return Some(id);
@@ -87,10 +87,7 @@ fn extract_containerd_id(line: &str) -> Option<String> {
         let parts: Vec<&str> = rest.split('/').collect();
         if parts.len() >= 2 {
             let potential_id = parts[1].trim_end_matches(".scope");
-            let id: String = potential_id
-                .chars()
-                .take_while(|c| c.is_ascii_hexdigit())
-                .collect();
+            let id: String = potential_id.chars().take_while(char::is_ascii_hexdigit).collect();
 
             if id.len() == 64 {
                 return Some(id);

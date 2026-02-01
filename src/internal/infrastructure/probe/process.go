@@ -97,3 +97,90 @@ func (c *ProcessCollector) CollectMemory(_ context.Context, pid int) (metrics.Pr
 		// Note: Shared, Swap, Data, Stack not available cross-platform.
 	}, nil
 }
+
+// ProcessFDs contains file descriptor count for a process.
+//
+// This value object captures the number of open file descriptors for a specific
+// process. File descriptors include open files, sockets, pipes, and other I/O resources.
+type ProcessFDs struct {
+	// PID is the process identifier.
+	PID int
+	// Count is the number of open file descriptors.
+	Count uint32
+}
+
+// CollectFDs collects file descriptor count for a specific process.
+//
+// Params:
+//   - ctx: context for cancellation (unused, reserved for future use)
+//   - pid: process ID to collect metrics for
+//
+// Returns:
+//   - ProcessFDs: file descriptor metrics for the process
+//   - error: nil on success, error if probe not initialized or collection fails
+func (c *ProcessCollector) CollectFDs(_ context.Context, pid int) (ProcessFDs, error) {
+	// Verify probe library is initialized before collecting.
+	if err := checkInitialized(); err != nil {
+		// Return empty metrics with initialization error.
+		return ProcessFDs{}, err
+	}
+
+	var cProc C.ProcessMetrics
+	result := C.probe_collect_process(C.int32_t(pid), &cProc)
+	// Check if the FFI call succeeded.
+	if err := resultToError(result); err != nil {
+		// Return empty metrics with collection error.
+		return ProcessFDs{}, err
+	}
+
+	// Return collected file descriptor count.
+	return ProcessFDs{
+		PID:   int(cProc.pid),
+		Count: uint32(cProc.num_fds),
+	}, nil
+}
+
+// ProcessIO contains I/O statistics for a process.
+//
+// This value object captures the I/O throughput of a specific process measured
+// in bytes per second. Values are calculated by the Rust probe based on deltas.
+type ProcessIO struct {
+	// PID is the process identifier.
+	PID int
+	// ReadBytesPerSec is the read throughput in bytes per second.
+	ReadBytesPerSec uint64
+	// WriteBytesPerSec is the write throughput in bytes per second.
+	WriteBytesPerSec uint64
+}
+
+// CollectIO collects I/O statistics for a specific process.
+//
+// Params:
+//   - ctx: context for cancellation (unused, reserved for future use)
+//   - pid: process ID to collect metrics for
+//
+// Returns:
+//   - ProcessIO: I/O statistics for the process
+//   - error: nil on success, error if probe not initialized or collection fails
+func (c *ProcessCollector) CollectIO(_ context.Context, pid int) (ProcessIO, error) {
+	// Verify probe library is initialized before collecting.
+	if err := checkInitialized(); err != nil {
+		// Return empty metrics with initialization error.
+		return ProcessIO{}, err
+	}
+
+	var cProc C.ProcessMetrics
+	result := C.probe_collect_process(C.int32_t(pid), &cProc)
+	// Check if the FFI call succeeded.
+	if err := resultToError(result); err != nil {
+		// Return empty metrics with collection error.
+		return ProcessIO{}, err
+	}
+
+	// Return collected I/O statistics.
+	return ProcessIO{
+		PID:              int(cProc.pid),
+		ReadBytesPerSec:  uint64(cProc.read_bytes_per_sec),
+		WriteBytesPerSec: uint64(cProc.write_bytes_per_sec),
+	}, nil
+}

@@ -14,10 +14,7 @@ pub struct CacheEntry<T> {
 impl<T> CacheEntry<T> {
     /// Create a new cache entry with the current timestamp.
     pub fn new(value: T) -> Self {
-        Self {
-            value,
-            cached_at: Instant::now(),
-        }
+        Self { value, cached_at: Instant::now() }
     }
 
     /// Check if the cache entry is still valid based on TTL.
@@ -59,10 +56,7 @@ pub struct TtlCache<K, V> {
 impl<K: std::hash::Hash + Eq, V> TtlCache<K, V> {
     /// Create a new TTL cache with the given default TTL.
     pub fn new(default_ttl: Duration) -> Self {
-        Self {
-            entries: std::collections::HashMap::new(),
-            default_ttl,
-        }
+        Self { entries: std::collections::HashMap::new(), default_ttl }
     }
 
     /// Insert a value into the cache.
@@ -80,10 +74,7 @@ impl<K: std::hash::Hash + Eq, V> TtlCache<K, V> {
 
     /// Get a value from the cache with a custom TTL.
     pub fn get_with_ttl(&self, key: &K, ttl: Duration) -> Option<&V> {
-        self.entries
-            .get(key)
-            .filter(|entry| entry.is_valid(ttl))
-            .map(|entry| &entry.value)
+        self.entries.get(key).filter(|entry| entry.is_valid(ttl)).map(|entry| &entry.value)
     }
 
     /// Remove a value from the cache.
@@ -98,8 +89,7 @@ impl<K: std::hash::Hash + Eq, V> TtlCache<K, V> {
 
     /// Remove all expired entries from the cache.
     pub fn cleanup(&mut self) {
-        self.entries
-            .retain(|_, entry| entry.is_valid(self.default_ttl));
+        self.entries.retain(|_, entry| entry.is_valid(self.default_ttl));
     }
 
     /// Get the number of entries in the cache (including expired ones).

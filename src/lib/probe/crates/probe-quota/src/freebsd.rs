@@ -16,9 +16,7 @@ pub struct FreeBSDQuotaReader {
 impl FreeBSDQuotaReader {
     /// Create a new FreeBSD quota reader.
     pub fn new() -> Self {
-        Self {
-            rctl_available: check_rctl_available(),
-        }
+        Self { rctl_available: check_rctl_available() }
     }
 
     /// Read rctl rules for a process.
@@ -28,9 +26,7 @@ impl FreeBSDQuotaReader {
         }
 
         // Use rctl -l to list rules for this process
-        let output = Command::new("rctl")
-            .args(["-l", &format!("process:{}", pid)])
-            .output();
+        let output = Command::new("rctl").args(["-l", &format!("process:{}", pid)]).output();
 
         match output {
             Ok(out) if out.status.success() => {
@@ -104,9 +100,8 @@ impl QuotaReader for FreeBSDQuotaReader {
 
         // Read current usage from rctl -u
         if self.rctl_available {
-            if let Ok(output) = Command::new("rctl")
-                .args(["-u", &format!("process:{}", pid)])
-                .output()
+            if let Ok(output) =
+                Command::new("rctl").args(["-u", &format!("process:{}", pid)]).output()
             {
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -140,10 +135,7 @@ struct RctlRule {
 /// Check if rctl is available.
 fn check_rctl_available() -> bool {
     // Check sysctl kern.racct.enable
-    if let Ok(output) = Command::new("sysctl")
-        .args(["-n", "kern.racct.enable"])
-        .output()
-    {
+    if let Ok(output) = Command::new("sysctl").args(["-n", "kern.racct.enable"]).output() {
         if output.status.success() {
             let val = String::from_utf8_lossy(&output.stdout);
             return val.trim() == "1";
@@ -201,52 +193,37 @@ fn read_rlimits_into(limits: &mut QuotaLimits) {
     use libc::{RLIMIT_CPU, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_NPROC, getrlimit, rlimit};
 
     unsafe {
-        let mut rl = rlimit {
-            rlim_cur: 0,
-            rlim_max: 0,
-        };
+        let mut rl = rlimit { rlim_cur: 0, rlim_max: 0 };
 
         // RLIMIT_NOFILE (if not already set from rctl)
         if limits.nofile_limit.is_none() {
             if getrlimit(RLIMIT_NOFILE, &mut rl) == 0 {
-                limits.nofile_limit = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
-                    u64::MAX
-                } else {
-                    rl.rlim_cur
-                });
+                limits.nofile_limit =
+                    Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
             }
         }
 
         // RLIMIT_CPU (if not already set)
         if limits.cpu_time_limit_secs.is_none() {
             if getrlimit(RLIMIT_CPU, &mut rl) == 0 {
-                limits.cpu_time_limit_secs = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
-                    u64::MAX
-                } else {
-                    rl.rlim_cur
-                });
+                limits.cpu_time_limit_secs =
+                    Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
             }
         }
 
         // RLIMIT_DATA (if not already set)
         if limits.data_limit_bytes.is_none() {
             if getrlimit(RLIMIT_DATA, &mut rl) == 0 {
-                limits.data_limit_bytes = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
-                    u64::MAX
-                } else {
-                    rl.rlim_cur
-                });
+                limits.data_limit_bytes =
+                    Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
             }
         }
 
         // RLIMIT_NPROC (if not already set)
         if limits.pids_limit.is_none() {
             if getrlimit(RLIMIT_NPROC, &mut rl) == 0 {
-                limits.pids_limit = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
-                    u64::MAX
-                } else {
-                    rl.rlim_cur
-                });
+                limits.pids_limit =
+                    Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
             }
         }
     }
@@ -255,10 +232,7 @@ fn read_rlimits_into(limits: &mut QuotaLimits) {
 /// Detect if running in a FreeBSD jail.
 pub fn detect_container() -> ContainerInfo {
     // Check sysctl security.jail.jailed
-    if let Ok(output) = Command::new("sysctl")
-        .args(["-n", "security.jail.jailed"])
-        .output()
-    {
+    if let Ok(output) = Command::new("sysctl").args(["-n", "security.jail.jailed"]).output() {
         if output.status.success() {
             let val = String::from_utf8_lossy(&output.stdout);
             if val.trim() == "1" {

@@ -24,11 +24,14 @@ pub fn get_cpu_times() -> Result<CpuTimes> {
     unsafe {
         // kern.cp_time on FreeBSD/NetBSD, kern.cp_time2 on OpenBSD
         #[cfg(target_os = "freebsd")]
-        let name = CString::new("kern.cp_time").unwrap();
+        let name = CString::new("kern.cp_time")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
         #[cfg(target_os = "openbsd")]
-        let name = CString::new("kern.cp_time").unwrap();
+        let name = CString::new("kern.cp_time")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
         #[cfg(target_os = "netbsd")]
-        let name = CString::new("kern.cp_time").unwrap();
+        let name = CString::new("kern.cp_time")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
 
         let mut cp_time: [u64; 5] = [0; 5]; // user, nice, sys, intr, idle
         let mut len = mem::size_of_val(&cp_time);
@@ -42,11 +45,7 @@ pub fn get_cpu_times() -> Result<CpuTimes> {
         );
 
         if result != 0 {
-            return Ok(CpuTimes {
-                user_percent: 0.0,
-                system_percent: 0.0,
-                idle_percent: 100.0,
-            });
+            return Ok(CpuTimes { user_percent: 0.0, system_percent: 0.0, idle_percent: 100.0 });
         }
 
         let user = cp_time[0] + cp_time[1]; // user + nice
@@ -55,11 +54,7 @@ pub fn get_cpu_times() -> Result<CpuTimes> {
         let total = user + system + idle;
 
         if total == 0 {
-            return Ok(CpuTimes {
-                user_percent: 0.0,
-                system_percent: 0.0,
-                idle_percent: 100.0,
-            });
+            return Ok(CpuTimes { user_percent: 0.0, system_percent: 0.0, idle_percent: 100.0 });
         }
 
         Ok(CpuTimes {
@@ -73,7 +68,8 @@ pub fn get_cpu_times() -> Result<CpuTimes> {
 pub fn get_cpu_info() -> Result<CpuInfo> {
     unsafe {
         // Get number of CPUs
-        let name = CString::new("hw.ncpu").unwrap();
+        let name = CString::new("hw.ncpu")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
         let mut ncpu: libc::c_int = 0;
         let mut len = mem::size_of::<libc::c_int>();
 
@@ -87,11 +83,14 @@ pub fn get_cpu_info() -> Result<CpuInfo> {
 
         // Get CPU frequency
         #[cfg(target_os = "freebsd")]
-        let freq_name = CString::new("hw.clockrate").unwrap();
+        let freq_name = CString::new("hw.clockrate")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
         #[cfg(target_os = "openbsd")]
-        let freq_name = CString::new("hw.cpuspeed").unwrap();
+        let freq_name = CString::new("hw.cpuspeed")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
         #[cfg(target_os = "netbsd")]
-        let freq_name = CString::new("machdep.tsc_freq").unwrap();
+        let freq_name = CString::new("machdep.tsc_freq")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
 
         let mut freq: libc::c_int = 0;
         let mut freq_len = mem::size_of::<libc::c_int>();
@@ -104,10 +103,7 @@ pub fn get_cpu_info() -> Result<CpuInfo> {
             0,
         );
 
-        Ok(CpuInfo {
-            cores: ncpu as u32,
-            frequency_mhz: freq as u64,
-        })
+        Ok(CpuInfo { cores: ncpu as u32, frequency_mhz: freq as u64 })
     }
 }
 
@@ -130,7 +126,8 @@ pub fn get_memory_info() -> Result<MemInfo> {
         let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
 
         // Get total physical memory
-        let name = CString::new("hw.physmem").unwrap();
+        let name = CString::new("hw.physmem")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
         let mut physmem: u64 = 0;
         let mut len = mem::size_of::<u64>();
 
@@ -144,9 +141,11 @@ pub fn get_memory_info() -> Result<MemInfo> {
 
         // Get free pages
         #[cfg(target_os = "freebsd")]
-        let free_name = CString::new("vm.stats.vm.v_free_count").unwrap();
+        let free_name = CString::new("vm.stats.vm.v_free_count")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
         #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
-        let free_name = CString::new("vm.uvmexp").unwrap();
+        let free_name = CString::new("vm.uvmexp")
+            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
 
         let mut free_pages: u64 = 0;
         let mut free_len = mem::size_of::<u64>();
@@ -171,7 +170,8 @@ pub fn get_memory_info() -> Result<MemInfo> {
         // Get cached pages (FreeBSD specific)
         #[cfg(target_os = "freebsd")]
         let cached = {
-            let cache_name = CString::new("vm.stats.vm.v_cache_count").unwrap();
+            let cache_name = CString::new("vm.stats.vm.v_cache_count")
+                .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
             let mut cache_pages: u64 = 0;
             let mut cache_len = mem::size_of::<u64>();
             libc::sysctlbyname(
@@ -207,7 +207,7 @@ pub fn get_memory_info() -> Result<MemInfo> {
 #[cfg(target_os = "freebsd")]
 fn get_swap_freebsd() -> (u64, u64) {
     unsafe {
-        let name = CString::new("vm.swap_info").unwrap();
+        let name = CString::new("vm.swap_info").ok()?;
         let mut len: usize = 0;
 
         // First call to get size
@@ -255,11 +255,7 @@ pub fn get_loadavg() -> Result<LoadAvg> {
             return Err(Error::Platform("getloadavg failed".to_string()));
         }
 
-        Ok(LoadAvg {
-            load_1min: loadavg[0],
-            load_5min: loadavg[1],
-            load_15min: loadavg[2],
-        })
+        Ok(LoadAvg { load_1min: loadavg[0], load_5min: loadavg[1], load_15min: loadavg[2] })
     }
 }
 
@@ -279,12 +275,8 @@ pub fn get_process_info(pid: i32) -> Result<ProcessInfo> {
     unsafe {
         #[cfg(target_os = "freebsd")]
         {
-            let mut mib = [
-                libc::CTL_KERN,
-                libc::KERN_PROC,
-                libc::KERN_PROC_PID,
-                pid as libc::c_int,
-            ];
+            let mut mib =
+                [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PID, pid as libc::c_int];
 
             let mut kinfo: libc::kinfo_proc = mem::zeroed();
             let mut len = mem::size_of::<libc::kinfo_proc>();
@@ -335,14 +327,7 @@ pub fn list_pids() -> Result<Vec<i32>> {
             let mut len: usize = 0;
 
             // Get size first
-            if libc::sysctl(
-                mib.as_mut_ptr(),
-                3,
-                ptr::null_mut(),
-                &mut len,
-                ptr::null_mut(),
-                0,
-            ) != 0
+            if libc::sysctl(mib.as_mut_ptr(), 3, ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0
             {
                 return Ok(Vec::new());
             }
@@ -363,11 +348,8 @@ pub fn list_pids() -> Result<Vec<i32>> {
             }
 
             let actual_count = len / mem::size_of::<libc::kinfo_proc>();
-            let pids: Vec<i32> = kinfos[..actual_count]
-                .iter()
-                .map(|k| k.ki_pid)
-                .filter(|&p| p > 0)
-                .collect();
+            let pids: Vec<i32> =
+                kinfos[..actual_count].iter().map(|k| k.ki_pid).filter(|&p| p > 0).collect();
 
             Ok(pids)
         }
@@ -422,12 +404,7 @@ pub fn get_mounts() -> Result<Vec<Partition>> {
                     continue;
                 }
 
-                partitions.push(Partition {
-                    device,
-                    mount_point,
-                    fs_type,
-                    options: String::new(),
-                });
+                partitions.push(Partition { device, mount_point, fs_type, options: String::new() });
             }
 
             Ok(partitions)
@@ -461,11 +438,7 @@ pub fn get_disk_usage(path: &str) -> Result<DiskUsage> {
             total_bytes: total,
             used_bytes: used,
             free_bytes: available,
-            used_percent: if total > 0 {
-                (used as f64 / total as f64) * 100.0
-            } else {
-                0.0
-            },
+            used_percent: if total > 0 { (used as f64 / total as f64) * 100.0 } else { 0.0 },
             inodes_total: stat.f_files as u64,
             inodes_used: (stat.f_files as u64).saturating_sub(stat.f_ffree as u64),
             inodes_free: stat.f_ffree as u64,
@@ -473,9 +446,357 @@ pub fn get_disk_usage(path: &str) -> Result<DiskUsage> {
     }
 }
 
+// ============================================================================
+// DISK I/O STATISTICS
+// ============================================================================
+
+/// Gets disk I/O statistics for the current BSD platform.
+///
+/// # Platform Support
+///
+/// - **OpenBSD**: Via `sysctl hw.diskstats`
+/// - **NetBSD**: Via `sysctl hw.diskstats` or `/proc/diskstats`
+/// - **FreeBSD**: Returns empty vector (requires devstat library)
+///
+/// # Examples
+///
+/// ```no_run
+/// use probe_platform::bsd::sysctl;
+///
+/// let stats = sysctl::get_disk_io_stats()?;
+/// for disk in stats {
+///     println!("{}: {} reads, {} writes",
+///         disk.device,
+///         disk.reads_completed,
+///         disk.writes_completed
+///     );
+/// }
+/// # Ok::<(), probe_platform::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if the platform-specific syscalls fail.
+/// Returns an empty vector if no disks are found or stats are unavailable.
 pub fn get_disk_io_stats() -> Result<Vec<DiskIOStats>> {
-    // Would need devstat on FreeBSD
-    Ok(Vec::new())
+    #[cfg(target_os = "openbsd")]
+    {
+        openbsd::get_disk_io_stats()
+    }
+
+    #[cfg(target_os = "netbsd")]
+    {
+        netbsd::get_disk_io_stats()
+    }
+
+    #[cfg(target_os = "freebsd")]
+    {
+        // FreeBSD requires libdevstat which needs C bindings
+        // TODO: Implement via devstat_getdevs() and devstat_compute_statistics()
+        Ok(Vec::new())
+    }
+}
+
+// ============================================================================
+// OPENBSD DISK I/O
+// ============================================================================
+
+#[cfg(target_os = "openbsd")]
+mod openbsd {
+    use super::*;
+
+    /// OpenBSD disk statistics structure (from sys/disk.h).
+    ///
+    /// This structure matches the kernel's `struct diskstats` definition.
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy)]
+    struct DiskStats {
+        /// Device name (e.g., "sd0", "wd0").
+        ds_name: [libc::c_char; 16],
+        /// Number of busy units.
+        ds_busy: i32,
+        /// Read operations completed.
+        ds_rxfer: u64,
+        /// Write operations completed.
+        ds_wxfer: u64,
+        /// Bytes read.
+        ds_rbytes: u64,
+        /// Bytes written.
+        ds_wbytes: u64,
+        /// Attachment timestamp.
+        ds_attachtime_sec: i64,
+        ds_attachtime_usec: i64,
+        /// Total time in operation.
+        ds_timestamp_sec: i64,
+        ds_timestamp_usec: i64,
+        /// Time spent processing requests.
+        ds_time_sec: i64,
+        ds_time_usec: i64,
+    }
+
+    /// Collects disk I/O statistics on OpenBSD via sysctl hw.diskstats.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the sysctl call fails.
+    /// Returns an empty vector if no disk devices are found.
+    pub fn get_disk_io_stats() -> Result<Vec<DiskIOStats>> {
+        unsafe {
+            let name = CString::new("hw.diskstats")
+                .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
+
+            // Get required buffer size
+            let mut len: usize = 0;
+            let result =
+                libc::sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0);
+
+            if result != 0 || len == 0 {
+                return Ok(Vec::new());
+            }
+
+            // Allocate buffer
+            let count = len / mem::size_of::<DiskStats>();
+            let mut stats: Vec<DiskStats> = vec![mem::zeroed(); count];
+
+            let result = libc::sysctlbyname(
+                name.as_ptr(),
+                stats.as_mut_ptr() as *mut libc::c_void,
+                &mut len,
+                ptr::null_mut(),
+                0,
+            );
+
+            if result != 0 {
+                return Err(Error::Platform(format!(
+                    "sysctl hw.diskstats failed: {}",
+                    std::io::Error::last_os_error()
+                )));
+            }
+
+            let actual_count = len / mem::size_of::<DiskStats>();
+            let mut results = Vec::with_capacity(actual_count);
+
+            for disk in &stats[..actual_count] {
+                let device = cstr_to_string(disk.ds_name.as_ptr());
+
+                // Skip devices with no activity
+                if disk.ds_rxfer == 0 && disk.ds_wxfer == 0 {
+                    continue;
+                }
+
+                // Convert time from seconds + microseconds to milliseconds
+                let time_ms = (disk.ds_time_sec * 1000).saturating_add(disk.ds_time_usec / 1000);
+
+                // OpenBSD provides bytes, convert to sectors (512 bytes)
+                let sectors_read = disk.ds_rbytes / 512;
+                let sectors_written = disk.ds_wbytes / 512;
+
+                results.push(DiskIOStats {
+                    device,
+                    reads_completed: disk.ds_rxfer,
+                    sectors_read,
+                    read_time_ms: (time_ms / 2).max(1) as u64, // Estimate split
+                    writes_completed: disk.ds_wxfer,
+                    sectors_written,
+                    write_time_ms: (time_ms / 2).max(1) as u64, // Estimate split
+                    io_in_progress: disk.ds_busy as u64,
+                    io_time_ms: time_ms as u64,
+                    weighted_io_time_ms: time_ms as u64,
+                });
+            }
+
+            Ok(results)
+        }
+    }
+}
+
+// ============================================================================
+// NETBSD DISK I/O
+// ============================================================================
+
+#[cfg(target_os = "netbsd")]
+mod netbsd {
+    use super::*;
+
+    /// NetBSD disk statistics structure (from sys/disk.h).
+    ///
+    /// This structure matches the kernel's `struct disk_sysctl` definition.
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy)]
+    struct DiskSysctl {
+        /// Device name (e.g., "wd0", "sd0").
+        dk_name: [libc::c_char; 16],
+        /// Transfer count.
+        dk_xfer: u64,
+        /// Number of seeks (not used on modern drives).
+        dk_seek: u64,
+        /// Bytes transferred.
+        dk_bytes: u64,
+        /// Read operations.
+        dk_rxfer: u64,
+        /// Write operations.
+        dk_wxfer: u64,
+        /// Bytes read.
+        dk_rbytes: u64,
+        /// Bytes written.
+        dk_wbytes: u64,
+        /// Attachment time.
+        dk_attachtime_sec: i64,
+        dk_attachtime_usec: u64,
+        /// Total operation time.
+        dk_timestamp_sec: i64,
+        dk_timestamp_usec: u64,
+        /// Time spent in operations.
+        dk_time_sec: i64,
+        dk_time_usec: u64,
+        /// Number of busy units.
+        dk_busy: i32,
+    }
+
+    /// Collects disk I/O statistics on NetBSD.
+    ///
+    /// Tries multiple methods in order of preference:
+    /// 1. sysctl hw.diskstats (preferred)
+    /// 2. /proc/diskstats if procfs is mounted
+    ///
+    /// # Errors
+    ///
+    /// Returns an empty vector if all methods fail or no disk devices are found.
+    pub fn get_disk_io_stats() -> Result<Vec<DiskIOStats>> {
+        // Try sysctl first
+        match get_disk_io_stats_sysctl() {
+            Ok(stats) if !stats.is_empty() => return Ok(stats),
+            _ => {}
+        }
+
+        // Try procfs as fallback
+        match get_disk_io_stats_procfs() {
+            Ok(stats) if !stats.is_empty() => return Ok(stats),
+            _ => {}
+        }
+
+        // Return empty if no method succeeds
+        Ok(Vec::new())
+    }
+
+    /// Gets disk I/O stats via sysctl hw.diskstats.
+    fn get_disk_io_stats_sysctl() -> Result<Vec<DiskIOStats>> {
+        unsafe {
+            let name = CString::new("hw.diskstats")
+                .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
+
+            // Get required buffer size
+            let mut len: usize = 0;
+            let result =
+                libc::sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0);
+
+            if result != 0 || len == 0 {
+                return Ok(Vec::new());
+            }
+
+            // Allocate buffer
+            let count = len / mem::size_of::<DiskSysctl>();
+            let mut stats: Vec<DiskSysctl> = vec![mem::zeroed(); count];
+
+            let result = libc::sysctlbyname(
+                name.as_ptr(),
+                stats.as_mut_ptr() as *mut libc::c_void,
+                &mut len,
+                ptr::null_mut(),
+                0,
+            );
+
+            if result != 0 {
+                return Err(Error::Platform(format!(
+                    "sysctl hw.diskstats failed: {}",
+                    std::io::Error::last_os_error()
+                )));
+            }
+
+            let actual_count = len / mem::size_of::<DiskSysctl>();
+            let mut results = Vec::with_capacity(actual_count);
+
+            for disk in &stats[..actual_count] {
+                let device = cstr_to_string(disk.dk_name.as_ptr());
+
+                // Skip devices with no activity
+                if disk.dk_rxfer == 0 && disk.dk_wxfer == 0 {
+                    continue;
+                }
+
+                // Convert time from seconds + microseconds to milliseconds
+                let time_ms =
+                    (disk.dk_time_sec * 1000).saturating_add((disk.dk_time_usec / 1000) as i64);
+
+                // NetBSD provides bytes, convert to sectors (512 bytes)
+                let sectors_read = disk.dk_rbytes / 512;
+                let sectors_written = disk.dk_wbytes / 512;
+
+                results.push(DiskIOStats {
+                    device,
+                    reads_completed: disk.dk_rxfer,
+                    sectors_read,
+                    read_time_ms: (time_ms / 2).max(1) as u64,
+                    writes_completed: disk.dk_wxfer,
+                    sectors_written,
+                    write_time_ms: (time_ms / 2).max(1) as u64,
+                    io_in_progress: disk.dk_busy as u64,
+                    io_time_ms: time_ms as u64,
+                    weighted_io_time_ms: time_ms as u64,
+                });
+            }
+
+            Ok(results)
+        }
+    }
+
+    /// Gets disk I/O stats from /proc/diskstats if available.
+    fn get_disk_io_stats_procfs() -> Result<Vec<DiskIOStats>> {
+        use std::fs;
+        use std::io::{BufRead, BufReader};
+
+        let file = fs::File::open("/proc/diskstats").map_err(|_| Error::NotSupported)?;
+
+        let reader = BufReader::new(file);
+        let mut results = Vec::new();
+
+        for line in reader.lines() {
+            let line = line.map_err(Error::Io)?;
+            let fields: Vec<&str> = line.split_whitespace().collect();
+
+            // /proc/diskstats format: major minor name reads ... writes ...
+            if fields.len() < 14 {
+                continue;
+            }
+
+            // Parse fields (same format as Linux)
+            let device = fields[2].to_string();
+            let reads_completed = fields[3].parse().unwrap_or(0);
+            let sectors_read = fields[5].parse().unwrap_or(0);
+            let read_time_ms = fields[6].parse().unwrap_or(0);
+            let writes_completed = fields[7].parse().unwrap_or(0);
+            let sectors_written = fields[9].parse().unwrap_or(0);
+            let write_time_ms = fields[10].parse().unwrap_or(0);
+            let io_in_progress = fields[11].parse().unwrap_or(0);
+            let io_time_ms = fields[12].parse().unwrap_or(0);
+            let weighted_io_time_ms = fields[13].parse().unwrap_or(0);
+
+            results.push(DiskIOStats {
+                device,
+                reads_completed,
+                sectors_read,
+                read_time_ms,
+                writes_completed,
+                sectors_written,
+                write_time_ms,
+                io_in_progress,
+                io_time_ms,
+                weighted_io_time_ms,
+            });
+        }
+
+        Ok(results)
+    }
 }
 
 // ============================================================================
@@ -497,17 +818,15 @@ pub fn get_network_interfaces() -> Result<Vec<NetInterface>> {
             let ifa = &*addr;
             let name = cstr_to_string(ifa.ifa_name);
 
-            let iface = interfaces
-                .entry(name.clone())
-                .or_insert_with(|| NetInterface {
-                    name: name.clone(),
-                    mac_address: String::new(),
-                    ipv4_addresses: Vec::new(),
-                    ipv6_addresses: Vec::new(),
-                    mtu: 0,
-                    is_up: (ifa.ifa_flags as i32 & libc::IFF_UP) != 0,
-                    is_loopback: (ifa.ifa_flags as i32 & libc::IFF_LOOPBACK) != 0,
-                });
+            let iface = interfaces.entry(name.clone()).or_insert_with(|| NetInterface {
+                name: name.clone(),
+                mac_address: String::new(),
+                ipv4_addresses: Vec::new(),
+                ipv6_addresses: Vec::new(),
+                mtu: 0,
+                is_up: (ifa.ifa_flags as i32 & libc::IFF_UP) != 0,
+                is_loopback: (ifa.ifa_flags as i32 & libc::IFF_LOOPBACK) != 0,
+            });
 
             if !ifa.ifa_addr.is_null() {
                 let sa_family = (*ifa.ifa_addr).sa_family as i32;

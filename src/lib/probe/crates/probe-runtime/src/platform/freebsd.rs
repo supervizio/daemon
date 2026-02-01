@@ -4,10 +4,7 @@ use std::process::Command;
 
 /// Get the jail ID if running in a jail.
 pub fn get_jail_id() -> Option<i32> {
-    let output = Command::new("sysctl")
-        .args(["-n", "security.jail.jid"])
-        .output()
-        .ok()?;
+    let output = Command::new("sysctl").args(["-n", "security.jail.jid"]).output().ok()?;
 
     if output.status.success() {
         let jid_str = String::from_utf8_lossy(&output.stdout);
@@ -22,9 +19,7 @@ pub fn get_jail_id() -> Option<i32> {
 
 /// Check if running inside a jail.
 pub fn is_jailed() -> bool {
-    let output = Command::new("sysctl")
-        .args(["-n", "security.jail.jailed"])
-        .output();
+    let output = Command::new("sysctl").args(["-n", "security.jail.jailed"]).output();
 
     if let Ok(output) = output {
         if output.status.success() {

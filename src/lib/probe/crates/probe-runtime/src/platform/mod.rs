@@ -9,7 +9,14 @@ pub mod freebsd;
 #[cfg(target_os = "macos")]
 pub mod darwin;
 
+#[cfg(target_os = "openbsd")]
+pub mod openbsd;
+
+#[cfg(target_os = "netbsd")]
+pub mod netbsd;
+
 /// Get the current platform name.
+#[must_use]
 pub fn current_platform() -> &'static str {
     #[cfg(target_os = "linux")]
     {
@@ -44,11 +51,19 @@ pub fn current_platform() -> &'static str {
 }
 
 /// Check if the platform supports cgroups.
+#[must_use]
 pub fn supports_cgroups() -> bool {
     cfg!(target_os = "linux")
 }
 
 /// Check if the platform supports FreeBSD jails.
+#[must_use]
 pub fn supports_jails() -> bool {
     cfg!(target_os = "freebsd")
+}
+
+/// Check if the platform supports hypervisor detection.
+#[must_use]
+pub fn supports_hypervisor_detection() -> bool {
+    cfg!(any(target_os = "openbsd", target_os = "netbsd"))
 }

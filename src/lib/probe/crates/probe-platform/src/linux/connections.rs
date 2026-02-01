@@ -15,9 +15,8 @@ fn parse_ipv4_addr(hex: &str) -> String {
     if hex.len() != 8 {
         return "0.0.0.0".to_string();
     }
-    let bytes: Vec<u8> = (0..4)
-        .filter_map(|i| u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16).ok())
-        .collect();
+    let bytes: Vec<u8> =
+        (0..4).filter_map(|i| u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16).ok()).collect();
     if bytes.len() != 4 {
         return "0.0.0.0".to_string();
     }
@@ -55,11 +54,7 @@ fn parse_addr_port(addr_port: &str, ipv6: bool) -> (String, u16) {
     if parts.len() != 2 {
         return (String::new(), 0);
     }
-    let addr = if ipv6 {
-        parse_ipv6_addr(parts[0])
-    } else {
-        parse_ipv4_addr(parts[0])
-    };
+    let addr = if ipv6 { parse_ipv6_addr(parts[0]) } else { parse_ipv4_addr(parts[0]) };
     let port = u16::from_str_radix(parts[1], 16).unwrap_or(0);
     (addr, port)
 }
@@ -86,10 +81,7 @@ pub fn build_socket_pid_map() -> HashMap<u64, (i32, String)> {
 
         // Read process name
         let comm_path = proc_path.join(&name).join("comm");
-        let process_name = fs::read_to_string(&comm_path)
-            .unwrap_or_default()
-            .trim()
-            .to_string();
+        let process_name = fs::read_to_string(&comm_path).unwrap_or_default().trim().to_string();
 
         // Scan fd directory for socket links
         let fd_path = proc_path.join(&name).join("fd");
@@ -106,9 +98,8 @@ pub fn build_socket_pid_map() -> HashMap<u64, (i32, String)> {
 
             let link_str = link.to_string_lossy();
             // Socket links look like: socket:[12345]
-            if let Some(inode_str) = link_str
-                .strip_prefix("socket:[")
-                .and_then(|s| s.strip_suffix(']'))
+            if let Some(inode_str) =
+                link_str.strip_prefix("socket:[").and_then(|s| s.strip_suffix(']'))
                 && let Ok(inode) = inode_str.parse::<u64>()
             {
                 map.insert(inode, (pid, process_name.clone()));
@@ -144,31 +135,17 @@ fn parse_tcp_file(
 
         // Parse tx_queue:rx_queue
         let queue_parts: Vec<&str> = parts[4].split(':').collect();
-        let tx_queue = queue_parts
-            .first()
-            .and_then(|s| u32::from_str_radix(s, 16).ok())
-            .unwrap_or(0);
-        let rx_queue = queue_parts
-            .get(1)
-            .and_then(|s| u32::from_str_radix(s, 16).ok())
-            .unwrap_or(0);
+        let tx_queue =
+            queue_parts.first().and_then(|s| u32::from_str_radix(s, 16).ok()).unwrap_or(0);
+        let rx_queue =
+            queue_parts.get(1).and_then(|s| u32::from_str_radix(s, 16).ok()).unwrap_or(0);
 
-        let inode = parts
-            .get(9)
-            .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(0);
+        let inode = parts.get(9).and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
 
-        let (pid, process_name) = socket_map
-            .get(&inode)
-            .cloned()
-            .unwrap_or((-1, String::new()));
+        let (pid, process_name) = socket_map.get(&inode).cloned().unwrap_or((-1, String::new()));
 
         connections.push(TcpConnection {
-            family: if ipv6 {
-                AddressFamily::IPv6
-            } else {
-                AddressFamily::IPv4
-            },
+            family: if ipv6 { AddressFamily::IPv6 } else { AddressFamily::IPv4 },
             local_addr,
             local_port,
             remote_addr,
@@ -207,31 +184,17 @@ fn parse_udp_file(
         let state = SocketState::from_linux_state(state_hex);
 
         let queue_parts: Vec<&str> = parts[4].split(':').collect();
-        let tx_queue = queue_parts
-            .first()
-            .and_then(|s| u32::from_str_radix(s, 16).ok())
-            .unwrap_or(0);
-        let rx_queue = queue_parts
-            .get(1)
-            .and_then(|s| u32::from_str_radix(s, 16).ok())
-            .unwrap_or(0);
+        let tx_queue =
+            queue_parts.first().and_then(|s| u32::from_str_radix(s, 16).ok()).unwrap_or(0);
+        let rx_queue =
+            queue_parts.get(1).and_then(|s| u32::from_str_radix(s, 16).ok()).unwrap_or(0);
 
-        let inode = parts
-            .get(9)
-            .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(0);
+        let inode = parts.get(9).and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
 
-        let (pid, process_name) = socket_map
-            .get(&inode)
-            .cloned()
-            .unwrap_or((-1, String::new()));
+        let (pid, process_name) = socket_map.get(&inode).cloned().unwrap_or((-1, String::new()));
 
         connections.push(UdpConnection {
-            family: if ipv6 {
-                AddressFamily::IPv6
-            } else {
-                AddressFamily::IPv4
-            },
+            family: if ipv6 { AddressFamily::IPv6 } else { AddressFamily::IPv4 },
             local_addr,
             local_port,
             remote_addr,
@@ -279,19 +242,9 @@ fn parse_unix_file(socket_map: &HashMap<u64, (i32, String)>) -> Result<Vec<UnixS
 
         let path = parts.get(7).map(|s| s.to_string()).unwrap_or_default();
 
-        let (pid, process_name) = socket_map
-            .get(&inode)
-            .cloned()
-            .unwrap_or((-1, String::new()));
+        let (pid, process_name) = socket_map.get(&inode).cloned().unwrap_or((-1, String::new()));
 
-        sockets.push(UnixSocket {
-            path,
-            socket_type,
-            state,
-            pid,
-            process_name,
-            inode,
-        });
+        sockets.push(UnixSocket { path, socket_type, state, pid, process_name, inode });
     }
 
     Ok(sockets)
@@ -375,19 +328,15 @@ pub fn collect_process_connections(pid: i32) -> Result<(Vec<TcpConnection>, Vec<
     }
 
     let comm_path = proc_path.join("comm");
-    let process_name = fs::read_to_string(&comm_path)
-        .unwrap_or_default()
-        .trim()
-        .to_string();
+    let process_name = fs::read_to_string(&comm_path).unwrap_or_default().trim().to_string();
 
     let fd_path = proc_path.join("fd");
     if let Ok(entries) = fs::read_dir(&fd_path) {
         for entry in entries.flatten() {
             if let Ok(link) = fs::read_link(entry.path()) {
                 let link_str = link.to_string_lossy();
-                if let Some(inode_str) = link_str
-                    .strip_prefix("socket:[")
-                    .and_then(|s| s.strip_suffix(']'))
+                if let Some(inode_str) =
+                    link_str.strip_prefix("socket:[").and_then(|s| s.strip_suffix(']'))
                     && let Ok(inode) = inode_str.parse::<u64>()
                 {
                     socket_map.insert(inode, (pid, process_name.clone()));

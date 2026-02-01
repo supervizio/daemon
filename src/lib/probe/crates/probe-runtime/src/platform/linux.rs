@@ -16,6 +16,7 @@ pub enum CgroupVersion {
 }
 
 /// Detect the cgroup version in use.
+#[must_use]
 pub fn detect_cgroup_version() -> CgroupVersion {
     // Check for cgroup v2 unified hierarchy
     let v2_exists = fs::metadata("/sys/fs/cgroup/cgroup.controllers").is_ok();
@@ -33,11 +34,13 @@ pub fn detect_cgroup_version() -> CgroupVersion {
 }
 
 /// Read cgroup file for the current process.
+#[must_use]
 pub fn read_self_cgroup() -> Option<String> {
     fs::read_to_string("/proc/self/cgroup").ok()
 }
 
 /// Get the cgroup path for the current process.
+#[must_use]
 pub fn get_cgroup_path() -> Option<String> {
     let content = read_self_cgroup()?;
 

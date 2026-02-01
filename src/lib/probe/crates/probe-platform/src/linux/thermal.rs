@@ -108,10 +108,7 @@ mod tests {
             Ok(zones) => {
                 println!("Found {} thermal zones", zones.len());
                 for zone in &zones {
-                    println!(
-                        "  {} ({}): {:.1}°C",
-                        zone.name, zone.label, zone.temp_celsius
-                    );
+                    println!("  {} ({}): {:.1}°C", zone.name, zone.label, zone.temp_celsius);
                 }
             }
             Err(e) => println!("Thermal zones not available: {}", e),

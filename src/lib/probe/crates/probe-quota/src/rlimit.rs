@@ -27,10 +27,7 @@ impl QuotaReader for RlimitQuotaReader {
         let mut limits = QuotaLimits::default();
 
         unsafe {
-            let mut rl = rlimit {
-                rlim_cur: 0,
-                rlim_max: 0,
-            };
+            let mut rl = rlimit { rlim_cur: 0, rlim_max: 0 };
 
             // RLIMIT_NOFILE - Maximum file descriptors
             if getrlimit(RLIMIT_NOFILE, &mut rl) == 0 {
@@ -102,11 +99,7 @@ impl QuotaReader for RlimitQuotaReader {
 
 /// Convert rlimit value to u64, handling RLIM_INFINITY.
 fn rlimit_to_u64(val: libc::rlim_t) -> u64 {
-    if val == libc::RLIM_INFINITY {
-        u64::MAX
-    } else {
-        val as u64
-    }
+    if val == libc::RLIM_INFINITY { u64::MAX } else { val as u64 }
 }
 
 #[cfg(test)]

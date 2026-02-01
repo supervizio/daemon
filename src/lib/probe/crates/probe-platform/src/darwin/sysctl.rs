@@ -38,11 +38,7 @@ pub fn get_cpu_times() -> Result<CpuTimes> {
         );
 
         if result != 0 || info.is_null() {
-            return Ok(CpuTimes {
-                user_percent: 0.0,
-                system_percent: 0.0,
-                idle_percent: 100.0,
-            });
+            return Ok(CpuTimes { user_percent: 0.0, system_percent: 0.0, idle_percent: 100.0 });
         }
 
         // Calculate aggregate CPU times
@@ -59,11 +55,7 @@ pub fn get_cpu_times() -> Result<CpuTimes> {
 
         let total = total_user + total_system + total_idle;
         if total == 0 {
-            return Ok(CpuTimes {
-                user_percent: 0.0,
-                system_percent: 0.0,
-                idle_percent: 100.0,
-            });
+            return Ok(CpuTimes { user_percent: 0.0, system_percent: 0.0, idle_percent: 100.0 });
         }
 
         // Deallocate
@@ -110,10 +102,7 @@ pub fn get_cpu_info() -> Result<CpuInfo> {
             0,
         );
 
-        Ok(CpuInfo {
-            cores: ncpu as u32,
-            frequency_mhz: freq / 1_000_000,
-        })
+        Ok(CpuInfo { cores: ncpu as u32, frequency_mhz: freq / 1_000_000 })
     }
 }
 
@@ -182,19 +171,10 @@ pub fn get_memory_info() -> Result<MemInfo> {
             0,
         );
 
-        let (swap_total, swap_used) = if swap_result == 0 {
-            (swap.xsu_total, swap.xsu_used)
-        } else {
-            (0, 0)
-        };
+        let (swap_total, swap_used) =
+            if swap_result == 0 { (swap.xsu_total, swap.xsu_used) } else { (0, 0) };
 
-        Ok(MemInfo {
-            total: memsize,
-            available,
-            cached,
-            swap_total,
-            swap_used,
-        })
+        Ok(MemInfo { total: memsize, available, cached, swap_total, swap_used })
     }
 }
 
@@ -217,11 +197,7 @@ pub fn get_loadavg() -> Result<LoadAvg> {
             return Err(Error::Platform("getloadavg failed".to_string()));
         }
 
-        Ok(LoadAvg {
-            load_1min: loadavg[0],
-            load_5min: loadavg[1],
-            load_15min: loadavg[2],
-        })
+        Ok(LoadAvg { load_1min: loadavg[0], load_5min: loadavg[1], load_15min: loadavg[2] })
     }
 }
 
@@ -239,12 +215,7 @@ pub struct ProcessInfo {
 
 pub fn get_process_info(pid: i32) -> Result<ProcessInfo> {
     unsafe {
-        let mut mib = [
-            libc::CTL_KERN,
-            libc::KERN_PROC,
-            libc::KERN_PROC_PID,
-            pid as libc::c_int,
-        ];
+        let mut mib = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PID, pid as libc::c_int];
 
         let mut kinfo: libc::kinfo_proc = mem::zeroed();
         let mut len = mem::size_of::<libc::kinfo_proc>();
@@ -309,11 +280,7 @@ pub fn list_pids() -> Result<Vec<i32>> {
 fn proc_pidinfo_fdcount(pid: i32) -> u32 {
     unsafe {
         let size = libc::proc_pidinfo(pid, PROC_PIDLISTFDS, 0, ptr::null_mut(), 0);
-        if size > 0 {
-            (size as usize / mem::size_of::<proc_fdinfo>()) as u32
-        } else {
-            0
-        }
+        if size > 0 { (size as usize / mem::size_of::<proc_fdinfo>()) as u32 } else { 0 }
     }
 }
 
@@ -350,12 +317,7 @@ pub fn get_mounts() -> Result<Vec<Partition>> {
                 continue;
             }
 
-            partitions.push(Partition {
-                device,
-                mount_point,
-                fs_type,
-                options: String::new(),
-            });
+            partitions.push(Partition { device, mount_point, fs_type, options: String::new() });
         }
 
         Ok(partitions)
@@ -383,11 +345,7 @@ pub fn get_disk_usage(path: &str) -> Result<DiskUsage> {
             total_bytes: total,
             used_bytes: used,
             free_bytes: available,
-            used_percent: if total > 0 {
-                (used as f64 / total as f64) * 100.0
-            } else {
-                0.0
-            },
+            used_percent: if total > 0 { (used as f64 / total as f64) * 100.0 } else { 0.0 },
             inodes_total: stat.f_files as u64,
             inodes_used: (stat.f_files as u64).saturating_sub(stat.f_ffree as u64),
             inodes_free: stat.f_ffree as u64,
@@ -420,17 +378,15 @@ pub fn get_network_interfaces() -> Result<Vec<NetInterface>> {
             let ifa = &*addr;
             let name = cstr_to_string(ifa.ifa_name);
 
-            let iface = interfaces
-                .entry(name.clone())
-                .or_insert_with(|| NetInterface {
-                    name: name.clone(),
-                    mac_address: String::new(),
-                    ipv4_addresses: Vec::new(),
-                    ipv6_addresses: Vec::new(),
-                    mtu: 0,
-                    is_up: (ifa.ifa_flags as i32 & libc::IFF_UP) != 0,
-                    is_loopback: (ifa.ifa_flags as i32 & libc::IFF_LOOPBACK) != 0,
-                });
+            let iface = interfaces.entry(name.clone()).or_insert_with(|| NetInterface {
+                name: name.clone(),
+                mac_address: String::new(),
+                ipv4_addresses: Vec::new(),
+                ipv6_addresses: Vec::new(),
+                mtu: 0,
+                is_up: (ifa.ifa_flags as i32 & libc::IFF_UP) != 0,
+                is_loopback: (ifa.ifa_flags as i32 & libc::IFF_LOOPBACK) != 0,
+            });
 
             if !ifa.ifa_addr.is_null() {
                 let sa_family = (*ifa.ifa_addr).sa_family as i32;
@@ -476,15 +432,7 @@ pub fn get_network_stats() -> Result<Vec<NetStats>> {
         let mut mib = [libc::CTL_NET, libc::PF_ROUTE, 0, 0, libc::NET_RT_IFLIST2, 0];
 
         let mut len: usize = 0;
-        if libc::sysctl(
-            mib.as_mut_ptr(),
-            6,
-            ptr::null_mut(),
-            &mut len,
-            ptr::null_mut(),
-            0,
-        ) != 0
-        {
+        if libc::sysctl(mib.as_mut_ptr(), 6, ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
             return Err(Error::Io(std::io::Error::last_os_error()));
         }
 

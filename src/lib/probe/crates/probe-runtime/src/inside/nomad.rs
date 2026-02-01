@@ -1,4 +1,4 @@
-//! HashiCorp Nomad allocation inside detection.
+//! `HashiCorp` Nomad allocation inside detection.
 
 use crate::{ContainerRuntime, InsideDetector, InsideInfo};
 use std::collections::HashMap;

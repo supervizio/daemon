@@ -65,11 +65,7 @@ pub struct CachedCollector<T: SystemCollector> {
 impl<T: SystemCollector> CachedCollector<T> {
     /// Create a new cached collector with the given policies.
     pub fn new(inner: T, policies: CachePolicies) -> Self {
-        Self {
-            inner: Arc::new(inner),
-            cache: RwLock::new(MetricsCache::default()),
-            policies,
-        }
+        Self { inner: Arc::new(inner), cache: RwLock::new(MetricsCache::default()), policies }
     }
 
     /// Create a new cached collector with default policies.

@@ -220,11 +220,7 @@ pub struct ContainerInfo {
 
 impl Default for ContainerInfo {
     fn default() -> Self {
-        Self {
-            is_containerized: false,
-            runtime: ContainerRuntime::None,
-            container_id: None,
-        }
+        Self { is_containerized: false, runtime: ContainerRuntime::None, container_id: None }
     }
 }
 

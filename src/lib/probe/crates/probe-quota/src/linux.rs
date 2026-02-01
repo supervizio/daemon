@@ -242,11 +242,7 @@ fn parse_cgroup_v1_path(content: &str) -> Result<PathBuf> {
 fn parse_cpu_max(content: &str) -> Option<(u64, u64)> {
     let parts: Vec<&str> = content.split_whitespace().collect();
     if parts.len() >= 2 {
-        let quota = if parts[0] == "max" {
-            u64::MAX
-        } else {
-            parts[0].parse().ok()?
-        };
+        let quota = if parts[0] == "max" { u64::MAX } else { parts[0].parse().ok()? };
         let period = parts[1].parse().ok()?;
         return Some((quota, period));
     }
@@ -256,11 +252,7 @@ fn parse_cpu_max(content: &str) -> Option<(u64, u64)> {
 /// Parse cgroup value that can be "max" or a number.
 fn parse_cgroup_value(content: &str) -> Option<u64> {
     let trimmed = content.trim();
-    if trimmed == "max" {
-        Some(u64::MAX)
-    } else {
-        trimmed.parse().ok()
-    }
+    if trimmed == "max" { Some(u64::MAX) } else { trimmed.parse().ok() }
 }
 
 /// Parse io.max format: "MAJ:MIN rbps=X wbps=X riops=Y wiops=Z".
@@ -271,17 +263,9 @@ fn parse_io_max(content: &str) -> (Option<u64>, Option<u64>) {
     for line in content.lines() {
         for part in line.split_whitespace() {
             if let Some(val) = part.strip_prefix("rbps=") {
-                rbps = if val == "max" {
-                    Some(u64::MAX)
-                } else {
-                    val.parse().ok()
-                };
+                rbps = if val == "max" { Some(u64::MAX) } else { val.parse().ok() };
             } else if let Some(val) = part.strip_prefix("wbps=") {
-                wbps = if val == "max" {
-                    Some(u64::MAX)
-                } else {
-                    val.parse().ok()
-                };
+                wbps = if val == "max" { Some(u64::MAX) } else { val.parse().ok() };
             }
         }
     }
@@ -294,45 +278,30 @@ fn read_rlimits_into(limits: &mut QuotaLimits) {
     use libc::{RLIMIT_CPU, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_NPROC, getrlimit, rlimit};
 
     unsafe {
-        let mut rl = rlimit {
-            rlim_cur: 0,
-            rlim_max: 0,
-        };
+        let mut rl = rlimit { rlim_cur: 0, rlim_max: 0 };
 
         // RLIMIT_NOFILE
         if getrlimit(RLIMIT_NOFILE, &mut rl) == 0 {
-            limits.nofile_limit = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
-                u64::MAX
-            } else {
-                rl.rlim_cur
-            });
+            limits.nofile_limit =
+                Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
         }
 
         // RLIMIT_CPU
         if getrlimit(RLIMIT_CPU, &mut rl) == 0 {
-            limits.cpu_time_limit_secs = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
-                u64::MAX
-            } else {
-                rl.rlim_cur
-            });
+            limits.cpu_time_limit_secs =
+                Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
         }
 
         // RLIMIT_DATA
         if getrlimit(RLIMIT_DATA, &mut rl) == 0 {
-            limits.data_limit_bytes = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
-                u64::MAX
-            } else {
-                rl.rlim_cur
-            });
+            limits.data_limit_bytes =
+                Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
         }
 
         // RLIMIT_NPROC (if not already set from cgroups)
         if limits.pids_limit.is_none() && getrlimit(RLIMIT_NPROC, &mut rl) == 0 {
-            limits.pids_limit = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
-                u64::MAX
-            } else {
-                rl.rlim_cur
-            });
+            limits.pids_limit =
+                Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
         }
     }
 }

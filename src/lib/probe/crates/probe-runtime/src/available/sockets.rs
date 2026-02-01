@@ -14,23 +14,14 @@ const SOCKET_PATHS: &[(&str, ContainerRuntime)] = &[
     ("/var/run/podman/podman.sock", ContainerRuntime::Podman),
     ("/run/podman/podman.sock", ContainerRuntime::Podman),
     // containerd
-    (
-        "/var/run/containerd/containerd.sock",
-        ContainerRuntime::Containerd,
-    ),
-    (
-        "/run/containerd/containerd.sock",
-        ContainerRuntime::Containerd,
-    ),
+    ("/var/run/containerd/containerd.sock", ContainerRuntime::Containerd),
+    ("/run/containerd/containerd.sock", ContainerRuntime::Containerd),
     // CRI-O
     ("/var/run/crio/crio.sock", ContainerRuntime::CriO),
     ("/run/crio/crio.sock", ContainerRuntime::CriO),
     // LXD
     ("/var/lib/lxd/unix.socket", ContainerRuntime::Lxd),
-    (
-        "/var/snap/lxd/common/lxd/unix.socket",
-        ContainerRuntime::Lxd,
-    ),
+    ("/var/snap/lxd/common/lxd/unix.socket", ContainerRuntime::Lxd),
 ];
 
 /// Detects available runtimes via Unix sockets.
@@ -88,10 +79,10 @@ fn probe_socket(path: &str) -> bool {
         .is_ok()
 }
 
-/// Check for rootless Podman socket in XDG_RUNTIME_DIR.
+/// Check for rootless Podman socket in `XDG_RUNTIME_DIR`.
 fn check_rootless_podman() -> Option<AvailableRuntime> {
     let xdg_runtime = std::env::var("XDG_RUNTIME_DIR").ok()?;
-    let socket_path = format!("{}/podman/podman.sock", xdg_runtime);
+    let socket_path = format!("{xdg_runtime}/podman/podman.sock");
 
     if Path::new(&socket_path).exists() {
         return Some(AvailableRuntime {
@@ -113,10 +104,7 @@ fn check_macos_docker() -> Option<AvailableRuntime> {
     // Docker Desktop locations
     let paths = [
         format!("{}/.docker/run/docker.sock", home),
-        format!(
-            "{}/Library/Containers/com.docker.docker/Data/docker.sock",
-            home
-        ),
+        format!("{}/Library/Containers/com.docker.docker/Data/docker.sock", home),
     ];
 
     for path in paths {

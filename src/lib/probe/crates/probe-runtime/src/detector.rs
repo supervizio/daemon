@@ -19,6 +19,7 @@ impl Default for UniversalRuntimeDetector {
 
 impl UniversalRuntimeDetector {
     /// Create a new detector with all built-in detectors.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             inside_detectors: inside::all_detectors(),
@@ -27,17 +28,16 @@ impl UniversalRuntimeDetector {
     }
 
     /// Create a detector with custom detectors.
+    #[must_use]
     pub fn with_detectors(
         inside_detectors: Vec<Box<dyn InsideDetector>>,
         available_detectors: Vec<Box<dyn AvailableDetector>>,
     ) -> Self {
-        Self {
-            inside_detectors,
-            available_detectors,
-        }
+        Self { inside_detectors, available_detectors }
     }
 
     /// Perform full runtime environment detection.
+    #[must_use]
     pub fn detect(&self) -> RuntimeInfo {
         let mut info = RuntimeInfo::default();
 
@@ -45,11 +45,7 @@ impl UniversalRuntimeDetector {
         for detector in &self.inside_detectors {
             log::trace!("Running inside detector: {}", detector.name());
             if let Some(inside) = detector.detect() {
-                log::debug!(
-                    "Inside detection matched: {} ({})",
-                    detector.name(),
-                    inside.runtime
-                );
+                log::debug!("Inside detection matched: {} ({})", detector.name(), inside.runtime);
                 info.is_containerized = true;
                 info.container_runtime = Some(inside.runtime);
                 info.orchestrator = inside.orchestrator;
@@ -66,11 +62,7 @@ impl UniversalRuntimeDetector {
         for detector in &self.available_detectors {
             log::trace!("Running available detector: {}", detector.name());
             let detected = detector.detect();
-            log::debug!(
-                "Available detector {} found {} runtimes",
-                detector.name(),
-                detected.len()
-            );
+            log::debug!("Available detector {} found {} runtimes", detector.name(), detected.len());
             info.available_runtimes.extend(detected);
         }
 
@@ -81,6 +73,7 @@ impl UniversalRuntimeDetector {
     }
 
     /// Detect only if inside a container (faster, no host detection).
+    #[must_use]
     pub fn detect_inside(&self) -> Option<RuntimeInfo> {
         for detector in &self.inside_detectors {
             if let Some(inside) = detector.detect() {
@@ -101,6 +94,7 @@ impl UniversalRuntimeDetector {
     }
 
     /// Detect only available runtimes on host (no inside detection).
+    #[must_use]
     pub fn detect_available(&self) -> Vec<AvailableRuntime> {
         let mut available = Vec::new();
 
@@ -120,20 +114,21 @@ fn deduplicate_available(runtimes: &mut Vec<AvailableRuntime>) {
 }
 
 /// Convenience function for quick detection.
+#[must_use]
 pub fn detect() -> RuntimeInfo {
     UniversalRuntimeDetector::new().detect()
 }
 
 /// Convenience function to check if containerized.
+#[must_use]
 pub fn is_containerized() -> bool {
     UniversalRuntimeDetector::new().detect_inside().is_some()
 }
 
 /// Convenience function to get container runtime.
+#[must_use]
 pub fn get_container_runtime() -> Option<ContainerRuntime> {
-    UniversalRuntimeDetector::new()
-        .detect_inside()
-        .and_then(|info| info.container_runtime)
+    UniversalRuntimeDetector::new().detect_inside().and_then(|info| info.container_runtime)
 }
 
 #[cfg(test)]

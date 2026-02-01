@@ -47,11 +47,9 @@ impl AvailableDetector for KubernetesAvailableDetector {
 /// Check for kubeconfig file.
 fn check_kubeconfig() -> Option<AvailableRuntime> {
     // KUBECONFIG env var takes precedence
-    let kubeconfig_path = std::env::var("KUBECONFIG").ok().or_else(|| {
-        std::env::var("HOME")
-            .ok()
-            .map(|h| format!("{}/.kube/config", h))
-    })?;
+    let kubeconfig_path = std::env::var("KUBECONFIG")
+        .ok()
+        .or_else(|| std::env::var("HOME").ok().map(|h| format!("{h}/.kube/config")))?;
 
     if !Path::new(&kubeconfig_path).exists() {
         return None;
@@ -76,11 +74,8 @@ fn extract_server_from_kubeconfig(path: &str) -> Option<String> {
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("server:") {
-            let server = trimmed
-                .strip_prefix("server:")?
-                .trim()
-                .trim_matches('"')
-                .trim_matches('\'');
+            let server =
+                trimmed.strip_prefix("server:")?.trim().trim_matches('"').trim_matches('\'');
             if !server.is_empty() {
                 return Some(server.to_string());
             }
@@ -92,10 +87,7 @@ fn extract_server_from_kubeconfig(path: &str) -> Option<String> {
 
 /// Check kubectl CLI version.
 fn check_kubectl() -> Option<String> {
-    let output = Command::new("kubectl")
-        .args(["version", "--client", "--short"])
-        .output()
-        .ok()?;
+    let output = Command::new("kubectl").args(["version", "--client", "--short"]).output().ok()?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -106,10 +98,7 @@ fn check_kubectl() -> Option<String> {
     }
 
     // Try without --short flag (older kubectl versions)
-    let output = Command::new("kubectl")
-        .args(["version", "--client"])
-        .output()
-        .ok()?;
+    let output = Command::new("kubectl").args(["version", "--client"]).output().ok()?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);

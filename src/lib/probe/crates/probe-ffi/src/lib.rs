@@ -49,19 +49,11 @@ pub struct ProbeResult {
 
 impl ProbeResult {
     fn ok() -> Self {
-        Self {
-            success: true,
-            error_code: PROBE_OK,
-            error_message: ptr::null(),
-        }
+        Self { success: true, error_code: PROBE_OK, error_message: ptr::null() }
     }
 
     fn err(code: c_int, message: *const c_char) -> Self {
-        Self {
-            success: false,
-            error_code: code,
-            error_message: message,
-        }
+        Self { success: false, error_code: code, error_message: message }
     }
 
     fn from_metrics_error(e: probe_metrics::Error) -> Self {
@@ -145,11 +137,7 @@ pub struct LoadAverage {
 
 impl From<probe_metrics::LoadAverage> for LoadAverage {
     fn from(load: probe_metrics::LoadAverage) -> Self {
-        Self {
-            load_1min: load.load_1min,
-            load_5min: load.load_5min,
-            load_15min: load.load_15min,
-        }
+        Self { load_1min: load.load_1min, load_5min: load.load_5min, load_15min: load.load_15min }
     }
 }
 
@@ -371,11 +359,7 @@ pub struct ContainerInfo {
 
 impl Default for ContainerInfo {
     fn default() -> Self {
-        Self {
-            is_containerized: false,
-            runtime: ContainerRuntime::None,
-            container_id: [0; 65],
-        }
+        Self { is_containerized: false, runtime: ContainerRuntime::None, container_id: [0; 65] }
     }
 }
 
@@ -1108,13 +1092,7 @@ pub struct NetInterface {
 
 impl Default for NetInterface {
     fn default() -> Self {
-        Self {
-            name: [0; 64],
-            mac_address: [0; 18],
-            mtu: 0,
-            is_up: false,
-            is_loopback: false,
-        }
+        Self { name: [0; 64], mac_address: [0; 18], mtu: 0, is_up: false, is_loopback: false }
     }
 }
 
@@ -1366,11 +1344,7 @@ pub struct ContextSwitches {
 
 impl From<probe_metrics::ContextSwitches> for ContextSwitches {
     fn from(cs: probe_metrics::ContextSwitches) -> Self {
-        Self {
-            voluntary: cs.voluntary,
-            involuntary: cs.involuntary,
-            system_total: cs.system_total,
-        }
+        Self { voluntary: cs.voluntary, involuntary: cs.involuntary, system_total: cs.system_total }
     }
 }
 
@@ -1395,7 +1369,23 @@ pub unsafe extern "C" fn probe_collect_system_context_switches(out: *mut u64) ->
         }
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+    {
+        match probe_platform::bsd::read_system_context_switches() {
+            Ok(count) => {
+                unsafe { *out = count };
+                ProbeResult::ok()
+            }
+            Err(e) => ProbeResult::from_metrics_error(e),
+        }
+    }
+
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    )))]
     {
         ProbeResult::err(
             PROBE_ERR_NOT_SUPPORTED,
@@ -1428,7 +1418,23 @@ pub unsafe extern "C" fn probe_collect_process_context_switches(
         }
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+    {
+        match probe_platform::bsd::read_process_context_switches(pid) {
+            Ok(switches) => {
+                unsafe { *out = ContextSwitches::from(switches) };
+                ProbeResult::ok()
+            }
+            Err(e) => ProbeResult::from_metrics_error(e),
+        }
+    }
+
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    )))]
     {
         let _ = pid;
         ProbeResult::err(
@@ -1461,7 +1467,23 @@ pub unsafe extern "C" fn probe_collect_self_context_switches(
         }
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+    {
+        match probe_platform::bsd::read_self_context_switches() {
+            Ok(switches) => {
+                unsafe { *out = ContextSwitches::from(switches) };
+                ProbeResult::ok()
+            }
+            Err(e) => ProbeResult::from_metrics_error(e),
+        }
+    }
+
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    )))]
     {
         ProbeResult::err(
             PROBE_ERR_NOT_SUPPORTED,
@@ -1714,17 +1736,8 @@ impl Default for AllMetrics {
                 swap_total_bytes: 0,
                 swap_used_bytes: 0,
             },
-            load: LoadAverage {
-                load_1min: 0.0,
-                load_5min: 0.0,
-                load_15min: 0.0,
-            },
-            io_stats: IOStats {
-                read_ops: 0,
-                read_bytes: 0,
-                write_ops: 0,
-                write_bytes: 0,
-            },
+            load: LoadAverage { load_1min: 0.0, load_5min: 0.0, load_15min: 0.0 },
+            io_stats: IOStats { read_ops: 0, read_bytes: 0, write_ops: 0, write_bytes: 0 },
             pressure: AllPressure::default(),
             timestamp_ns: 0,
             partition_count: 0,
@@ -1806,12 +1819,7 @@ pub unsafe extern "C" fn probe_collect_all(out: *mut AllMetrics) -> ProbeResult 
             // Copy network interfaces
             let iface_count = metrics.net_interfaces.len().min(MAX_ALL_METRICS_ITEMS);
             result.net_interface_count = iface_count as u32;
-            for (i, iface) in metrics
-                .net_interfaces
-                .into_iter()
-                .take(iface_count)
-                .enumerate()
-            {
+            for (i, iface) in metrics.net_interfaces.into_iter().take(iface_count).enumerate() {
                 result.net_interfaces[i] = NetInterface::from(iface);
             }
 
@@ -2102,10 +2110,7 @@ pub extern "C" fn probe_cache_enable() -> ProbeResult {
         return ProbeResult::ok(); // Already enabled
     }
 
-    *guard = Some(CachedCollector::new(
-        new_collector(),
-        CachePolicies::default(),
-    ));
+    *guard = Some(CachedCollector::new(new_collector(), CachePolicies::default()));
     ProbeResult::ok()
 }
 

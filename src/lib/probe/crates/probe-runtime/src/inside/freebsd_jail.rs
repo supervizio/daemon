@@ -37,10 +37,7 @@ fn is_jailed() -> bool {
     use std::process::Command;
 
     // sysctl -n security.jail.jailed returns 1 if jailed, 0 otherwise
-    if let Ok(output) = Command::new("sysctl")
-        .args(["-n", "security.jail.jailed"])
-        .output()
-    {
+    if let Ok(output) = Command::new("sysctl").args(["-n", "security.jail.jailed"]).output() {
         if output.status.success() {
             let value = String::from_utf8_lossy(&output.stdout);
             return value.trim() == "1";
@@ -57,10 +54,7 @@ fn get_jail_id() -> Option<String> {
     use std::process::Command;
 
     // sysctl -n security.jail.jid returns the jail ID
-    if let Ok(output) = Command::new("sysctl")
-        .args(["-n", "security.jail.jid"])
-        .output()
-    {
+    if let Ok(output) = Command::new("sysctl").args(["-n", "security.jail.jid"]).output() {
         if output.status.success() {
             let jid = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !jid.is_empty() && jid != "0" {

@@ -687,10 +687,8 @@ pub trait SystemCollector: Send + Sync {
     fn collect_all(&self) -> Result<AllMetrics> {
         use std::time::{SystemTime, UNIX_EPOCH};
 
-        let timestamp_ns = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_nanos() as u64)
-            .unwrap_or(0);
+        let timestamp_ns =
+            SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
 
         // Collect all metrics, using defaults for any that fail
         let cpu = self.cpu().collect_system().unwrap_or_default();
@@ -711,11 +709,9 @@ pub trait SystemCollector: Send + Sync {
             self.memory().collect_pressure(),
             self.io().collect_pressure(),
         ) {
-            (Ok(cpu_p), Ok(mem_p), Ok(io_p)) => Some(AllPressure {
-                cpu: cpu_p,
-                memory: mem_p,
-                io: io_p,
-            }),
+            (Ok(cpu_p), Ok(mem_p), Ok(io_p)) => {
+                Some(AllPressure { cpu: cpu_p, memory: mem_p, io: io_p })
+            }
             _ => None,
         };
 

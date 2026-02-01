@@ -27,10 +27,7 @@ pub fn get_docker_socket() -> Option<String> {
     // Check various locations
     let paths = [
         format!("{}/.docker/run/docker.sock", home),
-        format!(
-            "{}/Library/Containers/com.docker.docker/Data/docker.sock",
-            home
-        ),
+        format!("{}/Library/Containers/com.docker.docker/Data/docker.sock", home),
         format!("{}/.colima/default/docker.sock", home),
     ];
 

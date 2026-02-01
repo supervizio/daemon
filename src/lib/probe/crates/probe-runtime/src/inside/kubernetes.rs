@@ -68,9 +68,7 @@ impl InsideDetector for KubernetesInsideDetector {
 
 /// Get namespace from environment or file.
 fn get_namespace() -> Option<String> {
-    std::env::var("POD_NAMESPACE")
-        .ok()
-        .or_else(read_namespace_file)
+    std::env::var("POD_NAMESPACE").ok().or_else(read_namespace_file)
 }
 
 /// Read namespace from service account file.
@@ -109,10 +107,7 @@ fn get_container_id_from_cgroup() -> Option<String> {
                 .trim_end_matches(".scope");
 
             // Check if it's a 64-char hex ID
-            let id: String = cleaned
-                .chars()
-                .take_while(|c| c.is_ascii_hexdigit())
-                .collect();
+            let id: String = cleaned.chars().take_while(char::is_ascii_hexdigit).collect();
 
             if id.len() == 64 {
                 return Some(id);
@@ -146,10 +141,7 @@ fn collect_k8s_metadata() -> HashMap<String, String> {
     }
 
     // Try to read Downward API files
-    let files = [
-        ("/etc/podinfo/labels", "labels"),
-        ("/etc/podinfo/annotations", "annotations"),
-    ];
+    let files = [("/etc/podinfo/labels", "labels"), ("/etc/podinfo/annotations", "annotations")];
 
     for (path, key) in files {
         if let Ok(content) = fs::read_to_string(path) {

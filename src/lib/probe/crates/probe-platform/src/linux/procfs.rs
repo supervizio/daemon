@@ -23,10 +23,8 @@ impl ProcStat {
     /// Read and parse /proc/stat.
     pub fn read() -> Result<Self> {
         let content = fs::read_to_string("/proc/stat")?;
-        let line = content
-            .lines()
-            .next()
-            .ok_or_else(|| Error::Platform("empty /proc/stat".into()))?;
+        let line =
+            content.lines().next().ok_or_else(|| Error::Platform("empty /proc/stat".into()))?;
 
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() < 9 || parts[0] != "cpu" {
@@ -44,17 +42,7 @@ impl ProcStat {
 
         let total = user + nice + system + idle + iowait + irq + softirq + steal;
 
-        Ok(Self {
-            user,
-            nice,
-            system,
-            idle,
-            iowait,
-            irq,
-            softirq,
-            steal,
-            total,
-        })
+        Ok(Self { user, nice, system, idle, iowait, irq, softirq, steal, total })
     }
 
     /// User CPU percentage.
@@ -125,10 +113,7 @@ impl CpuInfo {
             }
         }
 
-        Ok(Self {
-            num_cores,
-            frequency_mhz,
-        })
+        Ok(Self { num_cores, frequency_mhz })
     }
 }
 
@@ -244,10 +229,7 @@ impl ProcessStat {
         let fields: Vec<&str> = after_comm.split_whitespace().collect();
 
         if fields.is_empty() {
-            return Err(Error::Platform(format!(
-                "insufficient fields in stat for pid {}",
-                pid
-            )));
+            return Err(Error::Platform(format!("insufficient fields in stat for pid {}", pid)));
         }
 
         let state = fields[0].chars().next().unwrap_or('?');
@@ -255,13 +237,7 @@ impl ProcessStat {
         let stime: u64 = fields.get(12).and_then(|s| s.parse().ok()).unwrap_or(0);
         let num_threads: u32 = fields.get(17).and_then(|s| s.parse().ok()).unwrap_or(0);
 
-        Ok(Self {
-            pid,
-            state,
-            num_threads,
-            utime,
-            stime,
-        })
+        Ok(Self { pid, state, num_threads, utime, stime })
     }
 }
 
@@ -356,11 +332,7 @@ fn parse_psi_line(line: &str) -> (f64, f64, f64, u64) {
 /// Read CPU pressure from /proc/pressure/cpu.
 pub fn read_cpu_pressure() -> Result<CPUPressure> {
     let content = fs::read_to_string("/proc/pressure/cpu").map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            Error::NotSupported
-        } else {
-            Error::Io(e)
-        }
+        if e.kind() == std::io::ErrorKind::NotFound { Error::NotSupported } else { Error::Io(e) }
     })?;
 
     for line in content.lines() {
@@ -381,11 +353,7 @@ pub fn read_cpu_pressure() -> Result<CPUPressure> {
 /// Read memory pressure from /proc/pressure/memory.
 pub fn read_memory_pressure() -> Result<MemoryPressure> {
     let content = fs::read_to_string("/proc/pressure/memory").map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            Error::NotSupported
-        } else {
-            Error::Io(e)
-        }
+        if e.kind() == std::io::ErrorKind::NotFound { Error::NotSupported } else { Error::Io(e) }
     })?;
 
     let mut pressure = MemoryPressure::default();
@@ -412,11 +380,7 @@ pub fn read_memory_pressure() -> Result<MemoryPressure> {
 /// Read I/O pressure from /proc/pressure/io.
 pub fn read_io_pressure() -> Result<IOPressure> {
     let content = fs::read_to_string("/proc/pressure/io").map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            Error::NotSupported
-        } else {
-            Error::Io(e)
-        }
+        if e.kind() == std::io::ErrorKind::NotFound { Error::NotSupported } else { Error::Io(e) }
     })?;
 
     let mut pressure = IOPressure::default();
@@ -535,11 +499,8 @@ pub fn read_disk_usage(path: &str) -> Result<DiskUsage> {
     let available_bytes = stat.f_bavail * block_size;
     let used_bytes = total_bytes.saturating_sub(free_bytes);
 
-    let used_percent = if total_bytes > 0 {
-        (used_bytes as f64 / total_bytes as f64) * 100.0
-    } else {
-        0.0
-    };
+    let used_percent =
+        if total_bytes > 0 { (used_bytes as f64 / total_bytes as f64) * 100.0 } else { 0.0 };
 
     Ok(DiskUsage {
         path: path.to_string(),
@@ -573,10 +534,7 @@ pub fn read_diskstats() -> Result<Vec<DiskIOStats>> {
             || device.starts_with("dm-")
             || (device.len() > 3
                 && device.chars().last().is_some_and(|c| c.is_ascii_digit())
-                && device
-                    .chars()
-                    .nth(device.len() - 2)
-                    .is_some_and(|c| c.is_ascii_alphabetic()))
+                && device.chars().nth(device.len() - 2).is_some_and(|c| c.is_ascii_alphabetic()))
         {
             continue;
         }

@@ -18,6 +18,7 @@ pub use sockets::SocketDetector;
 use crate::AvailableDetector;
 
 /// Returns all available detectors.
+#[must_use]
 pub fn all_detectors() -> Vec<Box<dyn AvailableDetector>> {
     vec![
         Box::new(SocketDetector),
