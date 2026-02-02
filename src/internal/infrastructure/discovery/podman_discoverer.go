@@ -5,13 +5,9 @@ package discovery
 
 import (
 	"context"
-	"fmt"
-	"maps"
 	"net"
 	"net/http"
-	"strings"
 
-	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/domain/target"
 )
 
@@ -153,64 +149,12 @@ func (d *PodmanDiscoverer) matchesLabels(container dockerContainer) bool {
 // Returns:
 //   - target.ExternalTarget: the external target.
 func (d *PodmanDiscoverer) containerToTarget(container dockerContainer) target.ExternalTarget {
-	// Extract container name with fallback to truncated ID.
-	name := container.ID[:containerIDDisplayLength]
-	// Check if container has named aliases.
-	if len(container.Names) > 0 {
-		name = strings.TrimPrefix(container.Names[0], "/")
-	}
-
-	// Initialize target with Podman-specific configuration.
-	t := target.ExternalTarget{
-		ID:               "podman:" + container.ID[:containerIDDisplayLength],
-		Name:             name,
-		Type:             target.TypePodman,
-		Source:           target.SourceDiscovered,
-		Labels:           make(map[string]string, len(container.Labels)+podmanMetadataLabels),
-		Interval:         defaultProbeInterval,
-		Timeout:          defaultProbeTimeout,
-		SuccessThreshold: defaultProbeSuccessThreshold,
-		FailureThreshold: defaultProbeFailureThreshold,
-	}
-
-	// Copy all container labels to target labels.
-	maps.Copy(t.Labels, container.Labels)
-
-	// Add Podman-specific metadata as labels.
-	t.Labels["podman.state"] = container.State
-	t.Labels["podman.status"] = container.Status
-
-	// Configure TCP probe based on exposed ports.
-	d.configureProbe(&t, container)
-
-	// Return fully configured target with probe.
-	return t
-}
-
-// configureProbe configures the probe for a container based on its ports.
-// It prefers public (host) ports over private (container) ports for TCP probes.
-//
-// Params:
-//   - t: the target to configure.
-//   - container: the Podman container.
-func (d *PodmanDiscoverer) configureProbe(t *target.ExternalTarget, container dockerContainer) {
-	// Find first TCP port with public mapping for external accessibility.
-	for _, port := range container.Ports {
-		// Check for TCP port with public mapping.
-		if port.Type == podmanProbeTypeTCP && port.PublicPort > 0 {
-			addr := fmt.Sprintf("127.0.0.1:%d", port.PublicPort)
-			t.ProbeType = podmanProbeTypeTCP
-			t.ProbeTarget = health.NewTCPTarget(addr)
-			// Return after configuring with first public port.
-			return
-		}
-	}
-
-	// Fallback to first private port if no public port exists.
-	if len(container.Ports) > 0 {
-		port := container.Ports[0]
-		addr := fmt.Sprintf("127.0.0.1:%d", port.PrivatePort)
-		t.ProbeType = podmanProbeTypeTCP
-		t.ProbeTarget = health.NewTCPTarget(addr)
-	}
+	// Delegate to shared helper with Podman-specific parameters.
+	return containerToExternalTarget(containerToTargetParams{
+		Container:      container,
+		RuntimePrefix:  "podman",
+		TargetType:     target.TypePodman,
+		MetadataLabels: podmanMetadataLabels,
+		ProbeType:      podmanProbeTypeTCP,
+	})
 }

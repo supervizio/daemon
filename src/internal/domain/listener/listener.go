@@ -86,7 +86,7 @@ func (l *Listener) SetState(state State) bool {
 		return false
 	}
 	l.State = state
-	// return success
+
 	return true
 }
 

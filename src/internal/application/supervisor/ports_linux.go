@@ -40,6 +40,9 @@ const (
 	// defaultInodeMapCapacity is the initial capacity for inode maps.
 	defaultInodeMapCapacity int = 16
 
+	// procfsPath is the path to the procfs mount point.
+	procfsPath string = "/proc"
+
 	// minNetFields is minimum fields in /proc/net/* line.
 	minNetFields int = 10
 
@@ -145,7 +148,7 @@ func mapToSortedSlice(ports map[int]struct{}) []int {
 //   - []int: slice of mapped host ports, nil if not a Docker container
 func getDockerPorts(pid int) []int {
 	// Read process command line from procfs.
-	cmdline, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
+	cmdline, err := os.ReadFile(filepath.Join(procfsPath, strconv.Itoa(pid), "cmdline"))
 	// Failed to read cmdline.
 	if err != nil {
 		// Unable to read cmdline.
@@ -352,7 +355,7 @@ func isAncestor(ancestorPID, childPID int) bool {
 //   - bool: true if successfully read
 func getParentPID(pid int) (int, bool) {
 	// Read /proc/pid/stat file.
-	statFile := filepath.Join("/proc", strconv.Itoa(pid), "stat")
+	statFile := filepath.Join(procfsPath, strconv.Itoa(pid), "stat")
 	data, err := os.ReadFile(statFile)
 	// Failed to read stat file.
 	if err != nil {
@@ -469,7 +472,7 @@ func parseDockerPortOutput(output string) []int {
 func getSocketInodes(pid int) map[uint64]struct{} {
 	inodes := make(map[uint64]struct{}, defaultInodeMapCapacity)
 
-	fdDir := filepath.Join("/proc", strconv.Itoa(pid), "fd")
+	fdDir := filepath.Join(procfsPath, strconv.Itoa(pid), "fd")
 	// Read file descriptor directory.
 	entries, err := os.ReadDir(fdDir)
 	// Failed to read fd directory.

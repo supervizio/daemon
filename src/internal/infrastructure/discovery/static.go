@@ -76,8 +76,8 @@ func (d *StaticDiscoverer) Discover(ctx context.Context) ([]target.ExternalTarge
 	// Convert configurations to targets with pre-allocated capacity.
 	result := make([]target.ExternalTarget, 0, len(d.targets))
 	// Iterate over all configured targets.
-	for _, cfg := range d.targets {
-		t := d.configToTarget(cfg)
+	for i := range d.targets {
+		t := d.configToTarget(&d.targets[i])
 		result = append(result, t)
 	}
 
@@ -102,7 +102,7 @@ func (d *StaticDiscoverer) Type() target.Type {
 //
 // Returns:
 //   - target.ExternalTarget: the external target.
-func (d *StaticDiscoverer) configToTarget(cfg config.TargetConfig) target.ExternalTarget {
+func (d *StaticDiscoverer) configToTarget(cfg *config.TargetConfig) target.ExternalTarget {
 	// Determine target type from configuration string.
 	targetType := d.parseTargetType(cfg.Type)
 
@@ -123,7 +123,7 @@ func (d *StaticDiscoverer) configToTarget(cfg config.TargetConfig) target.Extern
 	maps.Copy(t.Labels, cfg.Labels)
 
 	// Configure probe based on type and address.
-	d.configureProbe(&t, cfg)
+	d.configureProbe(&t, cfg) // cfg is already a pointer
 
 	// Return fully configured target.
 	return t
@@ -173,7 +173,7 @@ func (d *StaticDiscoverer) parseTargetType(typeStr string) target.Type {
 // Params:
 //   - t: the target to configure.
 //   - cfg: the target configuration.
-func (d *StaticDiscoverer) configureProbe(t *target.ExternalTarget, cfg config.TargetConfig) {
+func (d *StaticDiscoverer) configureProbe(t *target.ExternalTarget, cfg *config.TargetConfig) {
 	probe := cfg.Probe
 	// Skip probe configuration when type is empty.
 	if probe.Type == "" {

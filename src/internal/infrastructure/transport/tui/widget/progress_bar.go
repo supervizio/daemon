@@ -244,25 +244,25 @@ func (p *ProgressBar) writePercentValue(sb *strings.Builder) {
 	sb.WriteByte('%')
 }
 
-// clamp restricts value to [min, max].
+// clamp restricts value to [minVal, maxVal].
 //
 // Params:
 //   - value: the input value to clamp.
-//   - min: minimum allowed value.
-//   - max: maximum allowed value.
+//   - minVal: minimum allowed value.
+//   - maxVal: maximum allowed value.
 //
 // Returns:
 //   - float64: clamped value within bounds.
-func clamp(value, min, max float64) float64 {
+func clamp(value, minVal, maxVal float64) float64 {
 	// Enforce minimum bound.
-	if value < min {
+	if value < minVal {
 		// Return minimum if value is below.
-		return min
+		return minVal
 	}
 	// Enforce maximum bound.
-	if value > max {
+	if value > maxVal {
 		// Return maximum if value is above.
-		return max
+		return maxVal
 	}
 	// Return unchanged value within bounds.
 	return value

@@ -129,7 +129,8 @@ func (s *ServicesRenderer) renderCompact(snap *model.Snapshot) string {
 	lines := make([]string, 0, len(snap.Services)+1)
 
 	// Format each service on a single line.
-	for _, svc := range snap.Services {
+	for i := range snap.Services {
+		svc := &snap.Services[i]
 		icon := s.status.ProcessState(svc.State)
 		name := widget.Truncate(svc.Name, nameWidth)
 		state := s.stateShort(svc.State)
@@ -230,7 +231,8 @@ func (s *ServicesRenderer) createNormalTable() *widget.Table {
 //   - services: services to add as rows
 func (s *ServicesRenderer) populateNormalRows(table AddRower, services []model.ServiceSnapshot) {
 	// iterate over collection.
-	for _, svc := range services {
+	for i := range services {
+		svc := &services[i]
 		icon := s.status.ProcessState(svc.State)
 		state := s.status.ProcessStateText(svc.State)
 		pid := s.formatPID(svc.PID)
@@ -305,8 +307,7 @@ func (s *ServicesRenderer) formatMetrics(state process.State, cpuPercent float64
 //   - string: rendered box containing table
 func (s *ServicesRenderer) renderTableInBox(table Renderer, snap *model.Snapshot) string {
 	lines := strings.Split(table.Render(), "\n")
-	lines = append(lines, "")
-	lines = append(lines, "  "+s.theme.Muted+s.renderSummary(snap)+ansi.Reset)
+	lines = append(lines, "", "  "+s.theme.Muted+s.renderSummary(snap)+ansi.Reset)
 
 	box := widget.NewBox(s.width).
 		SetTitle("Services").
@@ -385,7 +386,8 @@ func (s *ServicesRenderer) createWideTable() *widget.Table {
 //   - services: services to add as rows
 func (s *ServicesRenderer) populateWideRows(table AddRower, services []model.ServiceSnapshot) {
 	// iterate over collection.
-	for _, svc := range services {
+	for i := range services {
+		svc := &services[i]
 		icon := s.status.ProcessState(svc.State)
 		state := s.status.ProcessStateText(svc.State)
 		pid := s.formatPID(svc.PID)
@@ -594,8 +596,9 @@ func (s *ServicesRenderer) renderEmptyServices() string {
 func (s *ServicesRenderer) buildServiceEntries(services []model.ServiceSnapshot) []serviceEntry {
 	entries := make([]serviceEntry, 0, len(services))
 	// iterate over collection.
-	for _, svc := range services {
-		display := s.formatServiceEntry(svc)
+	for i := range services {
+		svc := &services[i]
+		display := s.formatServiceEntry(*svc)
 		entries = append(entries, serviceEntry{display: display, visibleLen: len(display)})
 	}
 	// return computed result.

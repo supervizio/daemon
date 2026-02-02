@@ -50,8 +50,9 @@ func BuildLogger(cfg config.DaemonLogging, baseDir string) (logging.Logger, erro
 	var writers []logging.Writer
 
 	// create writer for each configuration
-	for _, wcfg := range cfg.Writers {
-		w, err := buildWriter(wcfg, baseDir)
+	for i := range cfg.Writers {
+		wcfg := &cfg.Writers[i]
+		w, err := buildWriter(*wcfg, baseDir)
 		// handle writer creation failure
 		if err != nil {
 			// clean up already created writers
@@ -178,14 +179,15 @@ func BuildLoggerWithoutConsole(cfg config.DaemonLogging, baseDir string) (loggin
 	var writers []logging.Writer
 
 	// create writers excluding console type
-	for _, wcfg := range cfg.Writers {
+	for i := range cfg.Writers {
+		wcfg := &cfg.Writers[i]
 		// Skip console writers in interactive mode.
 		// skip console writers for TUI mode
 		if wcfg.Type == writerTypeConsole {
 			continue
 		}
 
-		w, err := buildWriter(wcfg, baseDir)
+		w, err := buildWriter(*wcfg, baseDir)
 		// handle writer creation failure
 		if err != nil {
 			// clean up already created writers
@@ -250,7 +252,8 @@ func BuildLoggerWithBufferedConsole(cfg config.DaemonLogging, baseDir string) (l
 	var bufferedConsole *BufferedWriter
 
 	// create writer for each configuration
-	for _, wcfg := range cfg.Writers {
+	for i := range cfg.Writers {
+		wcfg := &cfg.Writers[i]
 		var w logging.Writer
 		var err error
 
@@ -265,7 +268,7 @@ func BuildLoggerWithBufferedConsole(cfg config.DaemonLogging, baseDir string) (l
 			w = bufferedConsole
 		} else {
 			// create non-console writer
-			w, err = buildWriter(wcfg, baseDir)
+			w, err = buildWriter(*wcfg, baseDir)
 			// handle writer creation failure
 			if err != nil {
 				// clean up already created writers

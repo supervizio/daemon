@@ -20,7 +20,7 @@ func TestNewIOPressure(t *testing.T) {
 	}{
 		{
 			name: "all_fields_populated",
-			params: &metrics.IOPressureParams{
+			params: &metrics.IOPressureParams{PressureParams: metrics.PressureParams{
 				SomeAvg10:  5.0,
 				SomeAvg60:  3.0,
 				SomeAvg300: 2.0,
@@ -30,11 +30,11 @@ func TestNewIOPressure(t *testing.T) {
 				FullAvg300: 0.2,
 				FullTotal:  500000,
 				Timestamp:  time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
-			},
+			}},
 		},
 		{
 			name: "zero_values",
-			params: &metrics.IOPressureParams{
+			params: &metrics.IOPressureParams{PressureParams: metrics.PressureParams{
 				SomeAvg10:  0.0,
 				SomeAvg60:  0.0,
 				SomeAvg300: 0.0,
@@ -44,11 +44,11 @@ func TestNewIOPressure(t *testing.T) {
 				FullAvg300: 0.0,
 				FullTotal:  0,
 				Timestamp:  time.Time{},
-			},
+			}},
 		},
 		{
 			name: "high_pressure_values",
-			params: &metrics.IOPressureParams{
+			params: &metrics.IOPressureParams{PressureParams: metrics.PressureParams{
 				SomeAvg10:  50.0,
 				SomeAvg60:  40.0,
 				SomeAvg300: 30.0,
@@ -58,7 +58,7 @@ func TestNewIOPressure(t *testing.T) {
 				FullAvg300: 15.0,
 				FullTotal:  2500000,
 				Timestamp:  time.Now(),
-			},
+			}},
 		},
 	}
 
@@ -94,7 +94,7 @@ func TestIOPressure_IsUnderPressure(t *testing.T) {
 	}{
 		{
 			name: "low_pressure",
-			pressure: metrics.IOPressure{
+			pressure: metrics.IOPressure{Pressure: metrics.Pressure{
 				SomeAvg10:  5.0,
 				SomeAvg60:  3.0,
 				SomeAvg300: 2.0,
@@ -102,12 +102,12 @@ func TestIOPressure_IsUnderPressure(t *testing.T) {
 				FullAvg60:  0.5,
 				FullAvg300: 0.2,
 				Timestamp:  time.Now(),
-			},
+			}},
 			wantUnderPressure: false,
 		},
 		{
 			name: "high_some_pressure",
-			pressure: metrics.IOPressure{
+			pressure: metrics.IOPressure{Pressure: metrics.Pressure{
 				SomeAvg10:  15.0,
 				SomeAvg60:  10.0,
 				SomeAvg300: 5.0,
@@ -115,12 +115,12 @@ func TestIOPressure_IsUnderPressure(t *testing.T) {
 				FullAvg60:  3.0,
 				FullAvg300: 1.0,
 				Timestamp:  time.Now(),
-			},
+			}},
 			wantUnderPressure: true,
 		},
 		{
 			name: "high_full_pressure",
-			pressure: metrics.IOPressure{
+			pressure: metrics.IOPressure{Pressure: metrics.Pressure{
 				SomeAvg10:  8.0,
 				SomeAvg60:  5.0,
 				SomeAvg300: 3.0,
@@ -128,12 +128,12 @@ func TestIOPressure_IsUnderPressure(t *testing.T) {
 				FullAvg60:  8.0,
 				FullAvg300: 4.0,
 				Timestamp:  time.Now(),
-			},
+			}},
 			wantUnderPressure: true,
 		},
 		{
 			name: "exactly_at_threshold",
-			pressure: metrics.IOPressure{
+			pressure: metrics.IOPressure{Pressure: metrics.Pressure{
 				SomeAvg10:  10.0,
 				SomeAvg60:  5.0,
 				SomeAvg300: 3.0,
@@ -141,12 +141,12 @@ func TestIOPressure_IsUnderPressure(t *testing.T) {
 				FullAvg60:  5.0,
 				FullAvg300: 3.0,
 				Timestamp:  time.Now(),
-			},
+			}},
 			wantUnderPressure: false,
 		},
 		{
 			name: "some_just_above_threshold",
-			pressure: metrics.IOPressure{
+			pressure: metrics.IOPressure{Pressure: metrics.Pressure{
 				SomeAvg10:  10.1,
 				SomeAvg60:  5.0,
 				SomeAvg300: 3.0,
@@ -154,12 +154,12 @@ func TestIOPressure_IsUnderPressure(t *testing.T) {
 				FullAvg60:  3.0,
 				FullAvg300: 1.0,
 				Timestamp:  time.Now(),
-			},
+			}},
 			wantUnderPressure: true,
 		},
 		{
 			name: "full_just_above_threshold",
-			pressure: metrics.IOPressure{
+			pressure: metrics.IOPressure{Pressure: metrics.Pressure{
 				SomeAvg10:  5.0,
 				SomeAvg60:  3.0,
 				SomeAvg300: 2.0,
@@ -167,7 +167,7 @@ func TestIOPressure_IsUnderPressure(t *testing.T) {
 				FullAvg60:  5.0,
 				FullAvg300: 3.0,
 				Timestamp:  time.Now(),
-			},
+			}},
 			wantUnderPressure: true,
 		},
 	}

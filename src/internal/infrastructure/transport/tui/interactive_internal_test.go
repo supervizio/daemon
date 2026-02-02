@@ -833,13 +833,16 @@ func createTestTUI(interval time.Duration) *TUI {
 
 // createTestModel creates a minimal test model without snapshot.
 func createTestModel(interval time.Duration) Model {
-	return NewModel(ModelConfig{
+	theme := ansi.DefaultTheme()
+	logsPanel := component.NewLogsPanel(80, 10)
+	servicesPanel := component.NewServicesPanel(80, 6)
+	return NewModel(&ModelConfig{
 		TUI:           createTestTUI(interval),
 		Width:         80,
 		Height:        24,
-		Theme:         ansi.DefaultTheme(),
-		LogsPanel:     component.NewLogsPanel(80, 10),
-		ServicesPanel: component.NewServicesPanel(80, 6),
+		Theme:         &theme,
+		LogsPanel:     &logsPanel,
+		ServicesPanel: &servicesPanel,
 	})
 }
 
@@ -864,13 +867,16 @@ func createTestModelWithSnapshot(interval time.Duration) Model {
 		},
 	}
 
-	return NewModel(ModelConfig{
+	theme := ansi.DefaultTheme()
+	logsPanel := component.NewLogsPanel(80, 10)
+	servicesPanel := component.NewServicesPanel(80, 6)
+	return NewModel(&ModelConfig{
 		TUI:           tui,
 		Width:         80,
 		Height:        24,
-		Theme:         ansi.DefaultTheme(),
-		LogsPanel:     component.NewLogsPanel(80, 10),
-		ServicesPanel: component.NewServicesPanel(80, 6),
+		Theme:         &theme,
+		LogsPanel:     &logsPanel,
+		ServicesPanel: &servicesPanel,
 	})
 }
 
@@ -885,13 +891,16 @@ func createTestModelWithCollectors(interval time.Duration) Model {
 		snapshot:   model.NewSnapshot(),
 	}
 
-	return NewModel(ModelConfig{
+	theme := ansi.DefaultTheme()
+	logsPanel := component.NewLogsPanel(80, 10)
+	servicesPanel := component.NewServicesPanel(80, 6)
+	return NewModel(&ModelConfig{
 		TUI:           tui,
 		Width:         80,
 		Height:        24,
-		Theme:         ansi.DefaultTheme(),
-		LogsPanel:     component.NewLogsPanel(80, 10),
-		ServicesPanel: component.NewServicesPanel(80, 6),
+		Theme:         &theme,
+		LogsPanel:     &logsPanel,
+		ServicesPanel: &servicesPanel,
 	})
 }
 
@@ -1179,13 +1188,16 @@ func Test_TUI_runTeaProgram(t *testing.T) {
 				snapshot:   model.NewSnapshot(),
 			}
 
-			m := NewModel(ModelConfig{
+			theme := ansi.DefaultTheme()
+			logsPanel := component.NewLogsPanel(80, 10)
+			servicesPanel := component.NewServicesPanel(80, 6)
+			m := NewModel(&ModelConfig{
 				TUI:           tui,
 				Width:         80,
 				Height:        24,
-				Theme:         ansi.DefaultTheme(),
-				LogsPanel:     component.NewLogsPanel(80, 10),
-				ServicesPanel: component.NewServicesPanel(80, 6),
+				Theme:         &theme,
+				LogsPanel:     &logsPanel,
+				ServicesPanel: &servicesPanel,
 			})
 
 			ctx, cancel := context.WithCancel(context.Background())

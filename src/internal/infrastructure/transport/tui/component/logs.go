@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/model"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/widget"
@@ -501,45 +502,8 @@ func (l *LogsPanel) Update(msg tea.Msg) (*LogsPanel, tea.Cmd) {
 // Returns:
 //   - tea.Cmd: command to execute
 func (l *LogsPanel) handleKeyMsg(msg Stringer) tea.Cmd {
-	// Process keyboard shortcuts.
-	switch msg.String() {
-	// Handle home/top navigation.
-	case "home", "g":
-		l.viewport.GotoTop()
-		// Return no command.
-		return nil
-	// Handle end/bottom navigation.
-	case "end", "G":
-		l.viewport.GotoBottom()
-		// Return no command.
-		return nil
-	// Handle page up navigation.
-	case "pgup", "ctrl+u":
-		l.viewport.HalfPageUp()
-		// Return no command.
-		return nil
-	// Handle page down navigation.
-	case "pgdown", "ctrl+d":
-		l.viewport.HalfPageDown()
-		// Return no command.
-		return nil
-	// Handle line up navigation.
-	case "up", "k":
-		l.viewport.ScrollUp(1)
-		// Return no command.
-		return nil
-	// Handle line down navigation.
-	case "down", "j":
-		l.viewport.ScrollDown(1)
-		// Return no command.
-		return nil
-	// Handle other keys via viewport.
-	default:
-		var cmd tea.Cmd
-		l.viewport, cmd = l.viewport.Update(msg)
-		// Return viewport command.
-		return cmd
-	}
+	// Delegate to shared viewport key handler.
+	return handleViewportKeyMsg(&l.viewport, msg)
 }
 
 // View renders the logs panel with border and vertical scrollbar.
@@ -624,41 +588,8 @@ func (l *LogsPanel) renderContentLines(sb *strings.Builder, borderColor string, 
 	// Calculate scrollbar characters.
 	scrollbarChars := l.renderVerticalScrollbar()
 
-	// Render each content line with scrollbar.
-	for i := range l.viewport.Height {
-		sb.WriteString(borderColor)
-		sb.WriteString("|")
-		sb.WriteString(ansi.Reset)
-
-		// Write content line or blank space.
-		if i < len(lines) {
-			line := lines[i]
-			visLen := widget.VisibleLen(line)
-			sb.WriteString(line)
-
-			// Pad line if needed.
-			if visLen < innerWidth {
-				sb.WriteString(strings.Repeat(" ", innerWidth-visLen))
-			}
-		} else {
-			// Write blank line.
-			sb.WriteString(strings.Repeat(" ", innerWidth))
-		}
-
-		// Write scrollbar character.
-		sb.WriteString(borderColor)
-
-		// Select appropriate scrollbar character.
-		if i < len(scrollbarChars) {
-			sb.WriteString(scrollbarChars[i])
-		} else {
-			// Use track character as fallback.
-			sb.WriteString(scrollTrack)
-		}
-		sb.WriteString("|")
-		sb.WriteString(ansi.Reset)
-		sb.WriteString("\n")
-	}
+	// Delegate to shared helper for rendering.
+	renderContentLinesWithScrollbar(sb, lines, scrollbarChars, l.viewport.Height, innerWidth, borderColor, scrollTrack)
 }
 
 // renderBottomBorder renders the bottom border.

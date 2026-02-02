@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/component"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/model"
@@ -48,6 +49,7 @@ const (
 )
 
 // Model is the Bubble Tea model.
+// Large fields use pointers to keep Model small for tea.Model interface requirements.
 // TODO: Add missing tests - create interactive_external_test.go and interactive_internal_test.go.
 type Model struct {
 	tui           *TUI
@@ -55,9 +57,9 @@ type Model struct {
 	height        int
 	quitting      bool
 	focus         FocusPanel
-	logsPanel     component.LogsPanel
-	servicesPanel component.ServicesPanel
-	theme         ansi.Theme
+	logsPanel     *component.LogsPanel
+	servicesPanel *component.ServicesPanel
+	theme         *ansi.Theme
 }
 
 // NewModel creates a new Model with the given configuration.
@@ -68,7 +70,7 @@ type Model struct {
 //
 // Returns:
 //   - Model: configured model instance.
-func NewModel(cfg ModelConfig) Model {
+func NewModel(cfg *ModelConfig) Model {
 	// return computed result.
 	return Model{
 		tui:           cfg.TUI,
@@ -311,12 +313,12 @@ func (m Model) forwardKeyToPanel(msg Stringer) (tea.Model, tea.Cmd) {
 	// handle case condition.
 	case FocusLogs:
 		lp, c := m.logsPanel.Update(msg)
-		m.logsPanel = *lp
+		m.logsPanel = lp
 		cmd = c
 	// handle case condition.
 	case FocusServices:
 		sp, c := m.servicesPanel.Update(msg)
-		m.servicesPanel = *sp
+		m.servicesPanel = sp
 		cmd = c
 	}
 
@@ -336,7 +338,7 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// evaluate condition.
 	if m.focus == FocusLogs {
 		lp, cmd := m.logsPanel.Update(msg)
-		m.logsPanel = *lp
+		m.logsPanel = lp
 		// return computed result.
 		return m, cmd
 	}
@@ -685,11 +687,12 @@ func (t *TUI) createInitialModel() Model {
 
 	servicesPanel, logsPanel := t.createInitialPanels(size)
 
-	m := NewModel(ModelConfig{
+	theme := ansi.DefaultTheme()
+	m := NewModel(&ModelConfig{
 		TUI:           t,
 		Width:         size.Cols,
 		Height:        size.Rows,
-		Theme:         ansi.DefaultTheme(),
+		Theme:         &theme,
 		LogsPanel:     logsPanel,
 		ServicesPanel: servicesPanel,
 	})
@@ -711,9 +714,9 @@ func (t *TUI) createInitialModel() Model {
 //   - size: terminal size.
 //
 // Returns:
-//   - component.ServicesPanel: configured services panel.
-//   - component.LogsPanel: configured logs panel.
-func (t *TUI) createInitialPanels(size terminal.Size) (component.ServicesPanel, component.LogsPanel) {
+//   - *component.ServicesPanel: configured services panel.
+//   - *component.LogsPanel: configured logs panel.
+func (t *TUI) createInitialPanels(size terminal.Size) (*component.ServicesPanel, *component.LogsPanel) {
 	servicesPanel := component.NewServicesPanel(size.Cols, panelInitialServicesHeight)
 	// handle non-nil condition.
 	if t.snapshot != nil {
@@ -728,8 +731,9 @@ func (t *TUI) createInitialPanels(size terminal.Size) (component.ServicesPanel, 
 
 	servicesPanel.SetSize(size.Cols, servicesHeight)
 
+	logsPanel := component.NewLogsPanel(size.Cols, logsHeight)
 	// return computed result.
-	return servicesPanel, component.NewLogsPanel(size.Cols, logsHeight)
+	return &servicesPanel, &logsPanel
 }
 
 // runTeaProgram runs the Bubble Tea program with context support.

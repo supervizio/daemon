@@ -168,10 +168,9 @@ func TestDockerDiscoverer_configureProbe(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := &DockerDiscoverer{}
 			tgt := target.ExternalTarget{}
 
-			d.configureProbe(&tgt, tt.container)
+			configureContainerProbe(&tgt, tt.container, dockerProbeTypeTCP)
 
 			// check if probe was configured based on ProbeType
 			if tt.wantProbe {

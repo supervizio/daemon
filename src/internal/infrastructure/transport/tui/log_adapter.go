@@ -202,7 +202,7 @@ func parseLogLine(line string) (model.LogEntry, bool) {
 func isServiceName(s string) bool {
 	// Service names are typically alphanumeric with dashes/underscores.
 	// They don't start with uppercase words like "Service", "Daemon", etc.
-	if len(s) == 0 {
+	if s == "" {
 		// return false for failure.
 		return false
 	}

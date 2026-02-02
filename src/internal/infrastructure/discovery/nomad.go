@@ -120,7 +120,7 @@ func (d *NomadDiscoverer) fetchAllocations(ctx context.Context) (nomadAllocation
 	url := fmt.Sprintf("%s/v1/allocations", d.address)
 
 	// Create request with context for cancellation support.
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	// Check for request creation error.
 	if err != nil {
 		// Return error with request context.
@@ -246,7 +246,7 @@ func (d *NomadDiscoverer) fetchAllocationDetail(ctx context.Context, allocID str
 	// Build API endpoint for allocation detail.
 	url := fmt.Sprintf("%s/v1/allocation/%s", d.address, allocID)
 	// Create request with context for cancellation support.
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	// Check for request creation error.
 	if err != nil {
 		// Return error with request context.

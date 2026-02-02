@@ -4,8 +4,9 @@ package widget
 import (
 	"strings"
 
-	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
 	"github.com/mattn/go-runewidth"
+
+	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
 )
 
 const (

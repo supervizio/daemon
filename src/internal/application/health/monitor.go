@@ -140,7 +140,7 @@ func (m *ProbeMonitor) AddListener(l *listener.Listener) error {
 
 	// Add listener without binding (no probing).
 	m.listeners = append(m.listeners, NewListenerProbe(l))
-	// return success
+
 	return nil
 }
 
@@ -172,7 +172,7 @@ func (m *ProbeMonitor) AddListenerWithBinding(l *listener.Listener, binding *Pro
 
 	// Add listener probe.
 	m.listeners = append(m.listeners, lp)
-	// return success
+
 	return nil
 }
 

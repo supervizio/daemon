@@ -46,14 +46,14 @@ func (s *SparkLine) Render() string {
 		return strings.Repeat(" ", s.Width)
 	}
 
-	min, max := s.findMinMax()
-	valueRange := s.calculateRange(min, max)
+	minVal, maxVal := s.findMinMax()
+	valueRange := s.calculateRange(minVal, maxVal)
 	start := s.calculateStartIndex()
 
 	var sb strings.Builder
 	sb.Grow(s.Width*sparkCharWidth + preAllocGrowSize)
 	sb.WriteString(s.Color)
-	s.writeSparkChars(&sb, min, valueRange, start)
+	s.writeSparkChars(&sb, minVal, valueRange, start)
 	s.writePadding(&sb, start)
 	sb.WriteString(ansi.Reset)
 
@@ -64,35 +64,35 @@ func (s *SparkLine) Render() string {
 // findMinMax returns the minimum and maximum values in the sparkline.
 //
 // Returns:
-//   - min: smallest value in the dataset.
-//   - max: largest value in the dataset.
-func (s *SparkLine) findMinMax() (min, max float64) {
-	min, max = s.Values[0], s.Values[0]
+//   - minVal: smallest value in the dataset.
+//   - maxVal: largest value in the dataset.
+func (s *SparkLine) findMinMax() (minVal, maxVal float64) {
+	minVal, maxVal = s.Values[0], s.Values[0]
 	// iterate over collection.
 	for _, v := range s.Values {
 		// evaluate condition.
-		if v < min {
-			min = v
+		if v < minVal {
+			minVal = v
 		}
 		// evaluate condition.
-		if v > max {
-			max = v
+		if v > maxVal {
+			maxVal = v
 		}
 	}
 	// return computed result.
-	return min, max
+	return minVal, maxVal
 }
 
 // calculateRange computes the value range, avoiding division by zero.
 //
 // Params:
-//   - min: minimum value in the dataset.
-//   - max: maximum value in the dataset.
+//   - minVal: minimum value in the dataset.
+//   - maxVal: maximum value in the dataset.
 //
 // Returns:
-//   - float64: range between min and max, or 1 if equal.
-func (s *SparkLine) calculateRange(min, max float64) float64 {
-	valueRange := max - min
+//   - float64: range between minVal and maxVal, or 1 if equal.
+func (s *SparkLine) calculateRange(minVal, maxVal float64) float64 {
+	valueRange := maxVal - minVal
 	// check for empty value.
 	if valueRange == 0 {
 		valueRange = 1
@@ -119,13 +119,13 @@ func (s *SparkLine) calculateStartIndex() int {
 //
 // Params:
 //   - sb: string builder to write spark characters to.
-//   - min: minimum value for normalization.
+//   - minVal: minimum value for normalization.
 //   - valueRange: range of values for normalization.
 //   - start: index to start reading values from.
-func (s *SparkLine) writeSparkChars(sb *strings.Builder, min, valueRange float64, start int) {
+func (s *SparkLine) writeSparkChars(sb *strings.Builder, minVal, valueRange float64, start int) {
 	// execute loop.
 	for i := start; i < len(s.Values); i++ {
-		idx := s.valueToSparkIndex(s.Values[i], min, valueRange)
+		idx := s.valueToSparkIndex(s.Values[i], minVal, valueRange)
 		sb.WriteString(Sparks[idx])
 	}
 }
@@ -134,13 +134,13 @@ func (s *SparkLine) writeSparkChars(sb *strings.Builder, min, valueRange float64
 //
 // Params:
 //   - value: the value to convert.
-//   - min: minimum value for normalization.
+//   - minVal: minimum value for normalization.
 //   - valueRange: range of values for normalization.
 //
 // Returns:
 //   - int: index into Sparks array (0-7).
-func (s *SparkLine) valueToSparkIndex(value, min, valueRange float64) int {
-	normalized := (value - min) / valueRange
+func (s *SparkLine) valueToSparkIndex(value, minVal, valueRange float64) int {
+	normalized := (value - minVal) / valueRange
 	idx := int(normalized * float64(len(Sparks)-1))
 	idx = max(idx, 0)
 	// evaluate condition.

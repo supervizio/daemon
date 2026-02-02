@@ -168,7 +168,6 @@ func (p *GRPCProber) handleRPCError(err error, latency time.Duration, service st
 
 	// handle specific error codes
 	// We only handle specific codes; all others fall through to default.
-	//nolint:exhaustive // intentionally not handling all gRPC codes
 	switch st.Code() {
 	// service not found means misconfiguration or service not registered
 	case codes.NotFound:

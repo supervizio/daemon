@@ -417,27 +417,28 @@ func (s *Store) GetProcessMetrics(ctx context.Context, serviceName string, since
 	return result, err
 }
 
-// GetLatestSystemCPU retrieves the most recent system CPU metrics.
+// getLatestFromBucket retrieves the most recent entry from a bucket.
 //
 // Params:
 //   - ctx: context for cancellation and timeout
+//   - bucket: the bucket to query
+//   - decodeFn: function to decode the value
+//   - metricName: name for error messages
 //
 // Returns:
-//   - metrics.SystemCPU: most recent CPU metrics
 //   - error: context cancellation, database errors, or not found
-func (s *Store) GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, error) {
+func (s *Store) getLatestFromBucket(ctx context.Context, bucket []byte, decodeFn func([]byte) error, metricName string) error {
 	// respect context cancellation before starting database transaction
 	if err := ctx.Err(); err != nil {
 		// propagate cancellation error
-		return metrics.SystemCPU{}, err
+		return err
 	}
 
-	var result metrics.SystemCPU
 	var found bool
 
 	// read latest entry without blocking writers
 	err := s.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketSystemCPU)
+		b := tx.Bucket(bucket)
 		c := b.Cursor()
 		// Last entry is most recent due to timestamp-based keys.
 		k, val := c.Last()
@@ -449,22 +450,39 @@ func (s *Store) GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, erro
 		found = true
 
 		// decode and return latest metrics
-		return decodeSystemCPU(val, &result)
+		return decodeFn(val)
 	})
 
 	// propagate decoding errors
 	if err != nil {
-		// return zero value with error
-		return metrics.SystemCPU{}, err
+		// return with error
+		return err
 	}
 	// return not found error if no metrics exist
 	if !found {
 		// return sentinel error for missing metrics
-		return metrics.SystemCPU{}, fmt.Errorf("no system CPU metrics found: %w", errNotFound)
+		return fmt.Errorf("no %s metrics found: %w", metricName, errNotFound)
 	}
 
-	// return found metrics
-	return result, nil
+	// return found
+	return nil
+}
+
+// GetLatestSystemCPU retrieves the most recent system CPU metrics.
+//
+// Params:
+//   - ctx: context for cancellation and timeout
+//
+// Returns:
+//   - metrics.SystemCPU: most recent CPU metrics
+//   - error: context cancellation, database errors, or not found
+func (s *Store) GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, error) {
+	var result metrics.SystemCPU
+	decodeFn := func(val []byte) error {
+		return decodeSystemCPU(val, &result)
+	}
+	err := s.getLatestFromBucket(ctx, bucketSystemCPU, decodeFn, "system CPU")
+	return result, err
 }
 
 // GetLatestSystemMemory retrieves the most recent system memory metrics.
@@ -476,45 +494,12 @@ func (s *Store) GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, erro
 //   - metrics.SystemMemory: most recent memory metrics
 //   - error: context cancellation, database errors, or not found
 func (s *Store) GetLatestSystemMemory(ctx context.Context) (metrics.SystemMemory, error) {
-	// respect context cancellation before starting database transaction
-	if err := ctx.Err(); err != nil {
-		// propagate cancellation error
-		return metrics.SystemMemory{}, err
-	}
-
 	var result metrics.SystemMemory
-	var found bool
-
-	// read latest entry without blocking writers
-	err := s.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketSystemMemory)
-		c := b.Cursor()
-		// Last entry is most recent due to timestamp-based keys.
-		k, val := c.Last()
-		// return empty if no metrics exist yet
-		if k == nil {
-			// signal no error but not found
-			return nil
-		}
-		found = true
-
-		// decode and return latest metrics
+	decodeFn := func(val []byte) error {
 		return decodeSystemMemory(val, &result)
-	})
-
-	// propagate decoding errors
-	if err != nil {
-		// return zero value with error
-		return metrics.SystemMemory{}, err
 	}
-	// return not found error if no metrics exist
-	if !found {
-		// return sentinel error for missing metrics
-		return metrics.SystemMemory{}, fmt.Errorf("no system memory metrics found: %w", errNotFound)
-	}
-
-	// return found metrics
-	return result, nil
+	err := s.getLatestFromBucket(ctx, bucketSystemMemory, decodeFn, "system memory")
+	return result, err
 }
 
 // GetLatestProcessMetrics retrieves the most recent process metrics for a service.
@@ -678,7 +663,6 @@ func (s *Store) pruneProcessMetricsBuckets(parent bucketReader, cutoffKey []byte
 			deleted += n
 		}
 
-		// continue iteration
 		return nil
 	})
 

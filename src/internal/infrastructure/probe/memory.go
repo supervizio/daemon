@@ -159,14 +159,16 @@ func (m *MemoryCollector) CollectPressure(ctx context.Context) (metrics.MemoryPr
 	}
 	// Return collected memory pressure metrics with current timestamp.
 	return metrics.MemoryPressure{
-		SomeAvg10:  float64(pressure.some_avg10),
-		SomeAvg60:  float64(pressure.some_avg60),
-		SomeAvg300: float64(pressure.some_avg300),
-		SomeTotal:  uint64(pressure.some_total_us),
-		FullAvg10:  float64(pressure.full_avg10),
-		FullAvg60:  float64(pressure.full_avg60),
-		FullAvg300: float64(pressure.full_avg300),
-		FullTotal:  uint64(pressure.full_total_us),
-		Timestamp:  time.Now(),
+		Pressure: metrics.Pressure{
+			SomeAvg10:  float64(pressure.some_avg10),
+			SomeAvg60:  float64(pressure.some_avg60),
+			SomeAvg300: float64(pressure.some_avg300),
+			SomeTotal:  uint64(pressure.some_total_us),
+			FullAvg10:  float64(pressure.full_avg10),
+			FullAvg60:  float64(pressure.full_avg60),
+			FullAvg300: float64(pressure.full_avg300),
+			FullTotal:  uint64(pressure.full_total_us),
+			Timestamp:  time.Now(),
+		},
 	}, nil
 }

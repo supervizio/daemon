@@ -66,7 +66,6 @@ func (r *Registry) Add(t *target.ExternalTarget) error {
 	r.targets[t.ID] = t
 	r.statuses[t.ID] = target.NewStatus(t)
 
-	// return success
 	return nil
 }
 
@@ -111,7 +110,6 @@ func (r *Registry) Remove(id string) error {
 	delete(r.targets, id)
 	delete(r.statuses, id)
 
-	// return success
 	return nil
 }
 
@@ -265,7 +263,6 @@ func (r *Registry) UpdateStatus(id string, fn func(*target.Status)) error {
 	// Apply update function.
 	fn(status)
 
-	// return success
 	return nil
 }
 

@@ -63,7 +63,7 @@ func TestStaticDiscoverer_configToTarget(t *testing.T) {
 	// Iterate over test cases.
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := d.configToTarget(tc.cfg)
+			got := d.configToTarget(&tc.cfg)
 			// Verify ID matches expected.
 			if got.ID != tc.wantID {
 				t.Errorf("configToTarget().ID = %q, want %q", got.ID, tc.wantID)
@@ -171,7 +171,7 @@ func TestStaticDiscoverer_configureProbe(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var tgt target.ExternalTarget
-			d.configureProbe(&tgt, tc.cfg)
+			d.configureProbe(&tgt, &tc.cfg)
 			// Verify probe type matches expected.
 			if tgt.ProbeType != tc.wantProbeType {
 				t.Errorf("configureProbe() ProbeType = %q, want %q", tgt.ProbeType, tc.wantProbeType)

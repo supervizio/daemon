@@ -384,7 +384,7 @@ func (s *SystemRenderer) RenderForInteractive(snap *model.Snapshot) string {
 // Returns:
 //   - [metricBarCount]*widget.ProgressBar: array of progress bars (CPU, RAM, Swap, Disk)
 //   - [metricBarCount]string: array of info strings for each bar
-func (s *SystemRenderer) createInteractiveBars(barWidth int, sys model.SystemMetrics) ([metricBarCount]*widget.ProgressBar, [metricBarCount]string) {
+func (s *SystemRenderer) createInteractiveBars(barWidth int, sys model.SystemMetrics) (bars [metricBarCount]*widget.ProgressBar, info [metricBarCount]string) {
 	// CPU bar.
 	cpuBar := s.createProgressBar(barWidth, sys.CPUPercent, "CPU  ")
 
@@ -397,10 +397,10 @@ func (s *SystemRenderer) createInteractiveBars(barWidth int, sys model.SystemMet
 	// Disk bar.
 	diskBar := s.createProgressBar(barWidth, sys.DiskPercent, "Disk ")
 
-	bars := [metricBarCount]*widget.ProgressBar{cpuBar, ramBar, swapBar, diskBar}
+	bars = [metricBarCount]*widget.ProgressBar{cpuBar, ramBar, swapBar, diskBar}
 
 	// Format values with padding - string concatenation avoids fmt.Sprintf.
-	infos := [metricBarCount]string{
+	info = [metricBarCount]string{
 		"  Load: " + formatFloat2(sys.LoadAvg1) + " " + formatFloat2(sys.LoadAvg5) + " " + formatFloat2(sys.LoadAvg15),
 		"  " + widget.FormatBytes(sys.MemoryUsed) + " / " + widget.FormatBytes(sys.MemoryTotal),
 		"  " + widget.FormatBytes(sys.SwapUsed) + " / " + widget.FormatBytes(sys.SwapTotal),
@@ -408,17 +408,19 @@ func (s *SystemRenderer) createInteractiveBars(barWidth int, sys model.SystemMet
 	}
 
 	// Return bars and info strings.
-	return bars, infos
+	return bars, info
 }
 
 // appendLimitsInteractive appends cgroup limits to lines for interactive mode.
+// appendLimits appends cgroup limits to lines if present.
+//
 // Params:
 //   - lines: existing lines to append to
 //   - limits: resource limits data
 //
 // Returns:
 //   - []string: lines with limits appended if present
-func (s *SystemRenderer) appendLimitsInteractive(lines []string, limits model.ResourceLimits) []string {
+func (s *SystemRenderer) appendLimits(lines []string, limits model.ResourceLimits) []string {
 	// Skip if no cgroup limits detected.
 	if !limits.HasLimits {
 		// Return lines unchanged when no limits.
@@ -449,6 +451,19 @@ func (s *SystemRenderer) appendLimitsInteractive(lines []string, limits model.Re
 
 	// Return lines with limits appended.
 	return lines
+}
+
+// appendLimitsInteractive appends cgroup limits to lines for interactive mode.
+//
+// Params:
+//   - lines: existing lines to append to
+//   - limits: resource limits data
+//
+// Returns:
+//   - []string: lines with limits appended if present
+func (s *SystemRenderer) appendLimitsInteractive(lines []string, limits model.ResourceLimits) []string {
+	// Delegate to common implementation.
+	return s.appendLimits(lines, limits)
 }
 
 // RenderForRaw renders system metrics for raw mode with "at start" indicator.
@@ -494,7 +509,7 @@ func (s *SystemRenderer) RenderForRaw(snap *model.Snapshot) string {
 // Returns:
 //   - [metricBarCount]*widget.ProgressBar: array of progress bars (CPU, RAM, Swap, Disk)
 //   - [metricBarCount]string: array of info strings for each bar
-func (s *SystemRenderer) createRawBars(barWidth int, sys model.SystemMetrics) ([metricBarCount]*widget.ProgressBar, [metricBarCount]string) {
+func (s *SystemRenderer) createRawBars(barWidth int, sys model.SystemMetrics) (bars [metricBarCount]*widget.ProgressBar, info [metricBarCount]string) {
 	// CPU bar.
 	cpuBar := s.createProgressBar(barWidth, sys.CPUPercent, "CPU  ")
 
@@ -507,10 +522,10 @@ func (s *SystemRenderer) createRawBars(barWidth int, sys model.SystemMetrics) ([
 	// Disk bar.
 	diskBar := s.createProgressBar(barWidth, sys.DiskPercent, "Disk ")
 
-	bars := [metricBarCount]*widget.ProgressBar{cpuBar, ramBar, swapBar, diskBar}
+	bars = [metricBarCount]*widget.ProgressBar{cpuBar, ramBar, swapBar, diskBar}
 
 	// Format values with padding - string concatenation avoids fmt.Sprintf.
-	infos := [metricBarCount]string{
+	info = [metricBarCount]string{
 		"  Load: " + formatFloat2(sys.LoadAvg1) + " " + formatFloat2(sys.LoadAvg5),
 		"  " + widget.FormatBytes(sys.MemoryUsed) + " / " + widget.FormatBytes(sys.MemoryTotal),
 		"  " + widget.FormatBytes(sys.SwapUsed) + " / " + widget.FormatBytes(sys.SwapTotal),
@@ -518,10 +533,12 @@ func (s *SystemRenderer) createRawBars(barWidth int, sys model.SystemMetrics) ([
 	}
 
 	// Return bars and info strings.
-	return bars, infos
+	return bars, info
 }
 
 // appendLimitsRaw appends cgroup limits to lines for raw mode.
+// appendLimitsRaw appends cgroup limits to lines for raw mode.
+//
 // Params:
 //   - lines: existing lines to append to
 //   - limits: resource limits data
@@ -529,36 +546,8 @@ func (s *SystemRenderer) createRawBars(barWidth int, sys model.SystemMetrics) ([
 // Returns:
 //   - []string: lines with limits appended if present
 func (s *SystemRenderer) appendLimitsRaw(lines []string, limits model.ResourceLimits) []string {
-	// Skip if no cgroup limits detected.
-	if !limits.HasLimits {
-		// Return lines unchanged when no limits.
-		return lines
-	}
-
-	var limitParts []string
-
-	// Add CPU quota if set.
-	if limits.CPUQuota > 0 {
-		limitParts = append(limitParts, "CPU: "+formatFloat0(limits.CPUQuota)+" cores")
-	}
-
-	// Add memory limit if set.
-	if limits.MemoryMax > 0 {
-		limitParts = append(limitParts, "Memory: "+widget.FormatBytes(limits.MemoryMax))
-	}
-
-	// Add CPU set if configured.
-	if limits.CPUSet != "" {
-		limitParts = append(limitParts, "CPUSet: "+limits.CPUSet)
-	}
-
-	// Append limits line when any limits present.
-	if len(limitParts) > 0 {
-		lines = append(lines, "  "+s.theme.Muted+"Limits: "+strings.Join(limitParts, " │ ")+ansi.Reset)
-	}
-
-	// Return lines with limits appended.
-	return lines
+	// Delegate to common implementation.
+	return s.appendLimits(lines, limits)
 }
 
 // createProgressBar creates a progress bar with standard configuration.

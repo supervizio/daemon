@@ -168,10 +168,9 @@ func TestPodmanDiscoverer_configureProbe(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := &PodmanDiscoverer{}
 			tgt := target.ExternalTarget{}
 
-			d.configureProbe(&tgt, tt.container)
+			configureContainerProbe(&tgt, tt.container, podmanProbeTypeTCP)
 
 			// Check if probe was configured based on ProbeType.
 			if tt.wantProbe {

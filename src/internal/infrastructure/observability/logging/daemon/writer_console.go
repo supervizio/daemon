@@ -6,8 +6,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/kodflow/daemon/internal/domain/logging"
 	"golang.org/x/term"
+
+	"github.com/kodflow/daemon/internal/domain/logging"
 )
 
 // ANSI color codes for log levels.

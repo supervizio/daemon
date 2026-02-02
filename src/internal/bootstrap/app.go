@@ -842,7 +842,8 @@ func findLogFilePath(cfg *domainconfig.Config) string {
 
 	baseDir := cfg.Logging.BaseDir
 	// search for first file writer in config
-	for _, w := range cfg.Logging.Daemon.Writers {
+	for i := range cfg.Logging.Daemon.Writers {
+		w := &cfg.Logging.Daemon.Writers[i]
 		// check if writer is file type with valid path
 		if w.Type == "file" && w.File.Path != "" {
 			path := w.File.Path

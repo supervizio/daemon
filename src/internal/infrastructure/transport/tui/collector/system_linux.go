@@ -257,7 +257,7 @@ func (c *SystemCollector) parseMemInfo(f *os.File) {
 // Returns:
 //   - string: key name or empty on error
 //   - uint64: parsed value in bytes
-func parseMemInfoLine(line string) (string, uint64) {
+func parseMemInfoLine(line string) (key string, value uint64) {
 	// Parse manually to avoid strings.Fields allocation.
 	// Format: "KeyName:     12345 kB"
 	key, rest, found := strings.Cut(line, ":")
@@ -280,7 +280,7 @@ func parseMemInfoLine(line string) (string, uint64) {
 		valueStr = rest
 	}
 
-	value := parseUint64(valueStr)
+	value = parseUint64(valueStr)
 
 	// Values in meminfo are in kB.
 	if strings.HasSuffix(rest, " kB") {

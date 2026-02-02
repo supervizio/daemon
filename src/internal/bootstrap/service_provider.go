@@ -39,11 +39,13 @@ func (p *supervisorServiceLister) ListServices() []model.ServiceSnapshot {
 	allListeners := make([]model.ListenerSnapshot, 0, totalListeners)
 
 	// convert supervisor snapshots to model snapshots
-	for _, snap := range snapshots {
+	for i := range snapshots {
+		snap := &snapshots[i]
 		listenerStart := len(allListeners)
 
 		// convert each listener to model format
-		for _, l := range snap.Listeners {
+		for j := range snap.Listeners {
+			l := &snap.Listeners[j]
 			// append converted listener
 			allListeners = append(allListeners, model.ListenerSnapshot{
 				Name:      l.Name,

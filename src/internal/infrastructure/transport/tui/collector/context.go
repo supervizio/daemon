@@ -147,17 +147,17 @@ func (c *ContextCollector) Gather(snap *model.Snapshot) error {
 // Returns:
 //   - model.RuntimeMode: detected runtime mode (container, VM, or host)
 //   - string: container runtime name (docker, kubernetes, etc.) or empty
-func detectRuntimeMode() (model.RuntimeMode, string) {
+func detectRuntimeMode() (mode model.RuntimeMode, runtimeName string) {
 	// Check for container indicators.
-	if mode, runtime, found := detectContainerByFiles(); found {
+	if mode, rtInfo, found := detectContainerByFiles(); found {
 		// Container detected via files.
-		return mode, runtime
+		return mode, rtInfo
 	}
 
 	// Check cgroup-based container detection.
-	if mode, runtime, found := detectContainerByCgroup(); found {
+	if mode, rtInfo, found := detectContainerByCgroup(); found {
 		// Container detected via cgroup.
-		return mode, runtime
+		return mode, rtInfo
 	}
 
 	// Check for VM indicators.

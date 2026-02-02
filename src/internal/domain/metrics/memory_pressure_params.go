@@ -1,27 +1,9 @@
 // Package metrics provides domain types for system and process metrics collection.
 package metrics
 
-import "time"
-
 // MemoryPressureParams contains parameters for creating MemoryPressure instances.
-// This struct groups all memory pressure metrics to avoid excessive constructor parameters.
+// This struct embeds PressureParams to share common pressure fields.
 type MemoryPressureParams struct {
-	// SomeAvg10 is the percentage of time some tasks were stalled (10s average).
-	SomeAvg10 float64
-	// SomeAvg60 is the percentage of time some tasks were stalled (60s average).
-	SomeAvg60 float64
-	// SomeAvg300 is the percentage of time some tasks were stalled (300s average).
-	SomeAvg300 float64
-	// SomeTotal is the total stall time for some tasks in microseconds.
-	SomeTotal uint64
-	// FullAvg10 is the percentage of time all tasks were stalled (10s average).
-	FullAvg10 float64
-	// FullAvg60 is the percentage of time all tasks were stalled (60s average).
-	FullAvg60 float64
-	// FullAvg300 is the percentage of time all tasks were stalled (300s average).
-	FullAvg300 float64
-	// FullTotal is the total stall time for all tasks in microseconds.
-	FullTotal uint64
-	// Timestamp is when this sample was taken.
-	Timestamp time.Time
+	// PressureParams embeds common pressure fields.
+	PressureParams
 }

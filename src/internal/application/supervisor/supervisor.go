@@ -222,16 +222,18 @@ func (s *Supervisor) startReaper() {
 func (s *Supervisor) startAllServices() error {
 	// Iterate through all managed services.
 	for name, mgr := range s.managers {
-		// Check if service fails to start.
-		if err := mgr.Start(); err != nil {
-			// Handle startup failure by stopping all services.
-			s.stopAll()
-			s.mu.Lock()
-			s.state = StateStopped
-			s.mu.Unlock()
-			// Return wrapped start error.
-			return fmt.Errorf("failed to start service %s: %w", name, err)
+		err := mgr.Start()
+		// Skip successfully started services.
+		if err == nil {
+			continue
 		}
+		// Handle startup failure by stopping all services.
+		s.stopAll()
+		s.mu.Lock()
+		s.state = StateStopped
+		s.mu.Unlock()
+		// Return wrapped start error.
+		return fmt.Errorf("failed to start service %s: %w", name, err)
 	}
 	// return success after starting all services
 	return nil

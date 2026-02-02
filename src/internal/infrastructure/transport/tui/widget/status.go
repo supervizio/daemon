@@ -63,6 +63,33 @@ func (s *StatusIndicator) ProcessState(state process.State) string {
 	}
 }
 
+// stateColorText returns the theme color and text for a process state.
+//
+// Params:
+//   - state: the process state to look up
+//
+// Returns:
+//   - func(*ansi.Theme) string: theme color getter
+//   - string: full state text
+//   - string: short state text
+func stateColorText(state process.State) (colorFn func(*ansi.Theme) string, text, short string) {
+	// Use lookup table for state display info.
+	switch state {
+	case process.StateRunning:
+		return func(t *ansi.Theme) string { return t.Success }, "running", "run"
+	case process.StateStarting:
+		return func(t *ansi.Theme) string { return t.Warning }, "starting", "start"
+	case process.StateStopped:
+		return func(t *ansi.Theme) string { return t.Muted }, "stopped", "stop"
+	case process.StateStopping:
+		return func(t *ansi.Theme) string { return t.Warning }, "stopping", "stopping"
+	case process.StateFailed:
+		return func(t *ansi.Theme) string { return t.Error }, "failed", "fail"
+	default:
+		return func(t *ansi.Theme) string { return t.Muted }, "unknown", "?"
+	}
+}
+
 // ProcessStateText returns colored state text.
 //
 // Params:
@@ -71,33 +98,10 @@ func (s *StatusIndicator) ProcessState(state process.State) string {
 // Returns:
 //   - string: colored text representing the state
 func (s *StatusIndicator) ProcessStateText(state process.State) string {
-	// Map process state to colored text representation.
-	switch state {
-	// Running state.
-	case process.StateRunning:
-		// Return green text.
-		return s.Theme.Success + "running" + ansi.Reset
-	// Starting state.
-	case process.StateStarting:
-		// Return yellow text.
-		return s.Theme.Warning + "starting" + ansi.Reset
-	// Stopped state.
-	case process.StateStopped:
-		// Return muted text.
-		return s.Theme.Muted + "stopped" + ansi.Reset
-	// Stopping state.
-	case process.StateStopping:
-		// Return yellow text.
-		return s.Theme.Warning + "stopping" + ansi.Reset
-	// Failed state.
-	case process.StateFailed:
-		// Return red text.
-		return s.Theme.Error + "failed" + ansi.Reset
-	// Unknown state.
-	default:
-		// Return muted text.
-		return s.Theme.Muted + "unknown" + ansi.Reset
-	}
+	// Get color and text from helper.
+	colorFn, text, _ := stateColorText(state)
+	// Return colored text.
+	return colorFn(&s.Theme) + text + ansi.Reset
 }
 
 // ProcessStateShort returns short colored state text.
@@ -108,33 +112,10 @@ func (s *StatusIndicator) ProcessStateText(state process.State) string {
 // Returns:
 //   - string: short colored abbreviation
 func (s *StatusIndicator) ProcessStateShort(state process.State) string {
-	// Map process state to short colored abbreviation.
-	switch state {
-	// Running state.
-	case process.StateRunning:
-		// Return green abbreviation.
-		return s.Theme.Success + "run" + ansi.Reset
-	// Starting state.
-	case process.StateStarting:
-		// Return yellow abbreviation.
-		return s.Theme.Warning + "start" + ansi.Reset
-	// Stopped state.
-	case process.StateStopped:
-		// Return muted abbreviation.
-		return s.Theme.Muted + "stop" + ansi.Reset
-	// Stopping state.
-	case process.StateStopping:
-		// Return yellow text.
-		return s.Theme.Warning + "stopping" + ansi.Reset
-	// Failed state.
-	case process.StateFailed:
-		// Return red abbreviation.
-		return s.Theme.Error + "fail" + ansi.Reset
-	// Unknown state.
-	default:
-		// Return muted placeholder.
-		return s.Theme.Muted + "?" + ansi.Reset
-	}
+	// Get color and short text from helper.
+	colorFn, _, short := stateColorText(state)
+	// Return colored short text.
+	return colorFn(&s.Theme) + short + ansi.Reset
 }
 
 // HealthStatus returns colored icon for health status.

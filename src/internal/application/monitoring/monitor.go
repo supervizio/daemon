@@ -95,7 +95,6 @@ func (m *ExternalMonitor) AddTarget(t *target.ExternalTarget) error {
 		}
 	}
 
-	// return success
 	return nil
 }
 
@@ -136,7 +135,6 @@ func (m *ExternalMonitor) AddTargets(targets []*target.ExternalTarget) error {
 		}
 	}
 
-	// return success
 	return nil
 }
 
@@ -421,14 +419,15 @@ func (m *ExternalMonitor) notifyStateChange(t *target.ExternalTarget, previousSt
 	}
 
 	// Send event to channel.
-	m.sendEvent(target.NewHealthChangedEvent(t, previousState, newState))
+	healthChangedEvent := target.NewHealthChangedEvent(t, previousState, newState)
+	m.sendEvent(&healthChangedEvent)
 }
 
 // sendEvent sends an event to the events channel.
 //
 // Params:
 //   - event: the event to send.
-func (m *ExternalMonitor) sendEvent(event target.Event) {
+func (m *ExternalMonitor) sendEvent(event *target.Event) {
 	// check if event channel is configured
 	if m.config.Events == nil {
 		// Return early when no event channel.
@@ -437,7 +436,7 @@ func (m *ExternalMonitor) sendEvent(event target.Event) {
 
 	// Non-blocking send to avoid deadlocks.
 	select {
-	case m.config.Events <- event:
+	case m.config.Events <- *event:
 		// Event sent successfully.
 	default:
 		// Channel full, skip event.
@@ -503,7 +502,8 @@ func (m *ExternalMonitor) discover(ctx context.Context) {
 				err := m.AddTarget(t)
 				// check if target was added successfully
 				if err == nil {
-					m.sendEvent(target.NewAddedEvent(t))
+					addedEvent := target.NewAddedEvent(t)
+					m.sendEvent(&addedEvent)
 				}
 			} else {
 				// Update existing target.
@@ -543,7 +543,7 @@ func (m *ExternalMonitor) runWatcher(ctx context.Context, stopCh <-chan struct{}
 				return
 			}
 			// Handle the watcher event.
-			m.handleWatcherEvent(event)
+			m.handleWatcherEvent(&event)
 		}
 	}
 }
@@ -552,7 +552,7 @@ func (m *ExternalMonitor) runWatcher(ctx context.Context, stopCh <-chan struct{}
 //
 // Params:
 //   - event: the event to handle.
-func (m *ExternalMonitor) handleWatcherEvent(event target.Event) {
+func (m *ExternalMonitor) handleWatcherEvent(event *target.Event) {
 	// dispatch based on event type
 	switch event.Type {
 	// Handle target added event.

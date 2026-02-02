@@ -11,6 +11,7 @@ linters:
     # govet shift analyzer panics on supervisor/ports_linux.go (linter bug, not code issue)
     # The shift operation is safe: portBytes[0]<<8 where len is verified to be 2
     - govet
+
   enable:
     - bodyclose
     - dogsled
@@ -36,68 +37,83 @@ linters:
     - unparam
     - whitespace
 
+  settings:
+    gocyclo:
+      min-complexity: 15
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    dupl:
+      threshold: 100
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        # dupSubExpr false positives on CGO-generated code in probe package
+        # The CGO compiler generates code that triggers this checker incorrectly
+        - dupSubExpr
+      settings:
+        hugeParam:
+          sizeThreshold: 256
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+    exhaustive:
+      default-signifies-exhaustive: true
+
+  exclusions:
+    # En v2, l'exclusion des fichiers générés est ici (pas dans issues.*)
+    generated: strict
+
+    # Remplace issues.exclude-dirs
+    paths:
+      - api/proto
+      # Probe package requires CGO - skip when CGO is disabled
+      - internal/infrastructure/probe
+
+    # Remplace issues.exclude-rules
+    rules:
+      # Generated files (Wire, protobuf, etc.)
+      - path: wire_gen\.go
+        linters:
+          - all
+      - path: \.pb\.go$
+        linters:
+          - all
+      - path: _grpc\.pb\.go$
+        linters:
+          - all
+
+      # Platform-specific files
+      - path: (_linux|_darwin|_bsd|_unix)\.go
+        linters:
+          - dupl
+
+      # CGO false positives: gocritic triggers on CGO-generated code patterns
+      # The CGO compiler generates code that incorrectly triggers these checkers
+      - path: internal/infrastructure/probe/
+        text: "dupSubExpr|uncheckedInlineErr|dupImport"
+        linters:
+          - gocritic
+
 formatters:
   enable:
     - gofmt
     - goimports
 
-linters-settings:
-  govet:
-    # Disable shift analyzer - panics on supervisor/ports_linux.go (linter bug)
-    disable:
-      - shift
+  settings:
+    # En v2, goimports est un formatter => settings ici
+    goimports:
+      local-prefixes:
+        - github.com/kodflow/daemon
 
-  gocyclo:
-    min-complexity: 15
-
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-
-  dupl:
-    threshold: 100
-
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
-      - style
-    settings:
-      hugeParam:
-        sizeThreshold: 256
-
-  errorlint:
-    errorf: true
-    asserts: true
-    comparison: true
-
-  exhaustive:
-    default-signifies-exhaustive: true
-
-  goimports:
-    local-prefixes: github.com/kodflow/daemon
+  # Optionnel mais cohérent si tu veux aussi exclure les generated côté formatters
+  exclusions:
+    generated: strict
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-generated: strict
-  exclude-dirs:
-    - api/proto
-    # Probe package requires CGO - skip when CGO is disabled
-    - internal/infrastructure/probe
-  exclude-rules:
-    # Generated files (Wire, protobuf, etc.)
-    - path: wire_gen\.go
-      linters:
-        - all
-    - path: \.pb\.go$
-      linters:
-        - all
-    - path: _grpc\.pb\.go$
-      linters:
-        - all
-
-    # Platform-specific files
-    - path: (_linux|_darwin|_bsd|_unix)\.go
-      linters:
-        - dupl

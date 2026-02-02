@@ -5,13 +5,9 @@ package discovery
 
 import (
 	"context"
-	"fmt"
-	"maps"
 	"net"
 	"net/http"
-	"strings"
 
-	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/domain/target"
 )
 
@@ -148,64 +144,12 @@ func (d *DockerDiscoverer) matchesLabels(container dockerContainer) bool {
 // Returns:
 //   - target.ExternalTarget: the external target.
 func (d *DockerDiscoverer) containerToTarget(container dockerContainer) target.ExternalTarget {
-	// Extract container name with fallback to truncated ID.
-	name := container.ID[:containerIDDisplayLength]
-	// Check if container has named aliases.
-	if len(container.Names) > 0 {
-		name = strings.TrimPrefix(container.Names[0], "/")
-	}
-
-	// Initialize target with Docker-specific configuration.
-	t := target.ExternalTarget{
-		ID:               "docker:" + container.ID[:containerIDDisplayLength],
-		Name:             name,
-		Type:             target.TypeDocker,
-		Source:           target.SourceDiscovered,
-		Labels:           make(map[string]string, len(container.Labels)+dockerMetadataLabels),
-		Interval:         defaultProbeInterval,
-		Timeout:          defaultProbeTimeout,
-		SuccessThreshold: defaultProbeSuccessThreshold,
-		FailureThreshold: defaultProbeFailureThreshold,
-	}
-
-	// Copy all container labels to target labels.
-	maps.Copy(t.Labels, container.Labels)
-
-	// Add Docker-specific metadata as labels.
-	t.Labels["docker.state"] = container.State
-	t.Labels["docker.status"] = container.Status
-
-	// Configure TCP probe based on exposed ports.
-	d.configureProbe(&t, container)
-
-	// Return fully configured target with probe.
-	return t
-}
-
-// configureProbe configures the probe for a container based on its ports.
-// It prefers public (host) ports over private (container) ports for TCP probes.
-//
-// Params:
-//   - t: the target to configure.
-//   - container: the Docker container.
-func (d *DockerDiscoverer) configureProbe(t *target.ExternalTarget, container dockerContainer) {
-	// Find first TCP port with public mapping for external accessibility.
-	for _, port := range container.Ports {
-		// Check for TCP port with public mapping.
-		if port.Type == dockerProbeTypeTCP && port.PublicPort > 0 {
-			addr := fmt.Sprintf("127.0.0.1:%d", port.PublicPort)
-			t.ProbeType = dockerProbeTypeTCP
-			t.ProbeTarget = health.NewTCPTarget(addr)
-			// Return after configuring with first public port.
-			return
-		}
-	}
-
-	// Fallback to first private port if no public port exists.
-	if len(container.Ports) > 0 {
-		port := container.Ports[0]
-		addr := fmt.Sprintf("127.0.0.1:%d", port.PrivatePort)
-		t.ProbeType = dockerProbeTypeTCP
-		t.ProbeTarget = health.NewTCPTarget(addr)
-	}
+	// Delegate to shared helper with Docker-specific parameters.
+	return containerToExternalTarget(containerToTargetParams{
+		Container:      container,
+		RuntimePrefix:  "docker",
+		TargetType:     target.TypeDocker,
+		MetadataLabels: dockerMetadataLabels,
+		ProbeType:      dockerProbeTypeTCP,
+	})
 }

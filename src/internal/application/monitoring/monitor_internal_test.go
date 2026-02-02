@@ -660,7 +660,7 @@ func TestExternalMonitor_sendEvent(t *testing.T) {
 			event := target.NewAddedEvent(tgt)
 
 			// Send event.
-			monitor.sendEvent(event)
+			monitor.sendEvent(&event)
 
 			// Verify.
 			if tt.expectEvent {
@@ -711,7 +711,7 @@ func TestExternalMonitor_sendEvent_fullChannel(t *testing.T) {
 
 			done := make(chan struct{})
 			go func() {
-				monitor.sendEvent(event)
+				monitor.sendEvent(&event)
 				close(done)
 			}()
 
@@ -775,7 +775,7 @@ func TestExternalMonitor_handleWatcherEvent(t *testing.T) {
 
 			// Handle event - should not panic.
 			assert.NotPanics(t, func() {
-				monitor.handleWatcherEvent(event)
+				monitor.handleWatcherEvent(&event)
 			})
 		})
 	}

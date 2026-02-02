@@ -120,7 +120,7 @@ func (h *HeaderRenderer) buildCompactLogoLine(version string) string {
 	sb.WriteByte(' ')
 	sb.WriteString(h.theme.Accent)
 	// Add 'v' prefix if version doesn't have it.
-	if len(version) > 0 && version[0] != 'v' {
+	if version != "" && version[0] != 'v' {
 		sb.WriteByte('v')
 	}
 	sb.WriteString(version)
@@ -206,7 +206,7 @@ func (h *HeaderRenderer) buildNormalTitleLine(version string) string {
 	)
 
 	// check for positive value.
-	if len(version) > 0 && version[0] != 'v' {
+	if version != "" && version[0] != 'v' {
 		version = "v" + version
 	}
 

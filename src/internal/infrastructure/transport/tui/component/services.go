@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/domain/process"
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/ansi"
@@ -173,8 +174,9 @@ func (s *ServicesPanel) updateContent() {
 	}
 
 	// Build content for each service.
-	for _, svc := range s.services {
-		line := s.formatServiceLine(svc)
+	for i := range s.services {
+		svc := &s.services[i]
+		line := s.formatServiceLine(*svc)
 		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
@@ -478,39 +480,44 @@ func (s *ServicesPanel) getPortStatusColor(status model.PortStatus) string {
 
 // getStateIcon returns the state icon with color.
 //
+// stateColorAndText returns the color function and state text for a process state.
+//
+// Params:
+//   - state: the process state to look up
+//
+// Returns:
+//   - func(*ansi.Theme) string: theme color getter
+//   - string: state text
+func stateColorAndText(state process.State) (colorFn func(*ansi.Theme) string, text string) {
+	// Use lookup for state display info.
+	switch state {
+	case process.StateRunning:
+		return func(t *ansi.Theme) string { return t.Success }, "running"
+	case process.StateStopped:
+		return func(t *ansi.Theme) string { return t.Muted }, "stopped"
+	case process.StateFailed:
+		return func(t *ansi.Theme) string { return t.Error }, "failed"
+	case process.StateStarting:
+		return func(t *ansi.Theme) string { return t.Warning }, "starting"
+	case process.StateStopping:
+		return func(t *ansi.Theme) string { return t.Warning }, "stopping"
+	default:
+		return func(t *ansi.Theme) string { return t.Muted }, "unknown"
+	}
+}
+
+// getStateIcon returns the state icon with color.
+//
 // Params:
 //   - state: process state
 //
 // Returns:
 //   - string: colored icon representing the state
 func (s *ServicesPanel) getStateIcon(state process.State) string {
-	// Map state to colored icon.
-	switch state {
-	// Running state gets green filled circle.
-	case process.StateRunning:
-		// Return success icon.
-		return s.theme.Success + "o" + ansi.Reset
-	// Stopped state gets muted empty circle.
-	case process.StateStopped:
-		// Return muted icon.
-		return s.theme.Muted + "o" + ansi.Reset
-	// Failed state gets red filled circle.
-	case process.StateFailed:
-		// Return error icon.
-		return s.theme.Error + "o" + ansi.Reset
-	// Starting state gets warning half-filled.
-	case process.StateStarting:
-		// Return warning icon.
-		return s.theme.Warning + "o" + ansi.Reset
-	// Stopping state gets warning half-filled.
-	case process.StateStopping:
-		// Return warning icon.
-		return s.theme.Warning + "o" + ansi.Reset
-	// Default to muted empty circle.
-	default:
-		// Return muted icon.
-		return s.theme.Muted + "o" + ansi.Reset
-	}
+	// Get color from helper.
+	colorFn, _ := stateColorAndText(state)
+	// Return colored icon.
+	return colorFn(&s.theme) + "o" + ansi.Reset
 }
 
 // getStateText returns the state text with color.
@@ -521,33 +528,10 @@ func (s *ServicesPanel) getStateIcon(state process.State) string {
 // Returns:
 //   - string: colored text representing the state
 func (s *ServicesPanel) getStateText(state process.State) string {
-	// Map state to colored text.
-	switch state {
-	// Running state.
-	case process.StateRunning:
-		// Return success text.
-		return s.theme.Success + "running" + ansi.Reset
-	// Stopped state.
-	case process.StateStopped:
-		// Return muted text.
-		return s.theme.Muted + "stopped" + ansi.Reset
-	// Failed state.
-	case process.StateFailed:
-		// Return error text.
-		return s.theme.Error + "failed" + ansi.Reset
-	// Starting state.
-	case process.StateStarting:
-		// Return warning text.
-		return s.theme.Warning + "starting" + ansi.Reset
-	// Stopping state.
-	case process.StateStopping:
-		// Return warning text.
-		return s.theme.Warning + "stopping" + ansi.Reset
-	// Unknown state.
-	default:
-		// Return muted text.
-		return s.theme.Muted + "unknown" + ansi.Reset
-	}
+	// Get color and text from helper.
+	colorFn, text := stateColorAndText(state)
+	// Return colored text.
+	return colorFn(&s.theme) + text + ansi.Reset
 }
 
 // getHealthText returns the health status text with color.
@@ -643,45 +627,8 @@ func (s *ServicesPanel) Update(msg tea.Msg) (*ServicesPanel, tea.Cmd) {
 // Returns:
 //   - tea.Cmd: command to execute
 func (s *ServicesPanel) handleKeyMsg(msg Stringer) tea.Cmd {
-	// Process keyboard shortcuts.
-	switch msg.String() {
-	// Handle home/top navigation.
-	case "home", "g":
-		s.viewport.GotoTop()
-		// Return no command.
-		return nil
-	// Handle end/bottom navigation.
-	case "end", "G":
-		s.viewport.GotoBottom()
-		// Return no command.
-		return nil
-	// Handle page up navigation.
-	case "pgup", "ctrl+u":
-		s.viewport.HalfPageUp()
-		// Return no command.
-		return nil
-	// Handle page down navigation.
-	case "pgdown", "ctrl+d":
-		s.viewport.HalfPageDown()
-		// Return no command.
-		return nil
-	// Handle line up navigation.
-	case "up", "k":
-		s.viewport.ScrollUp(1)
-		// Return no command.
-		return nil
-	// Handle line down navigation.
-	case "down", "j":
-		s.viewport.ScrollDown(1)
-		// Return no command.
-		return nil
-	// Handle other keys via viewport.
-	default:
-		var cmd tea.Cmd
-		s.viewport, cmd = s.viewport.Update(msg)
-		// Return viewport command.
-		return cmd
-	}
+	// Delegate to shared viewport key handler.
+	return handleViewportKeyMsg(&s.viewport, msg)
 }
 
 // View renders the services panel with border and vertical scrollbar.
@@ -792,41 +739,8 @@ func (s *ServicesPanel) renderContentLines(sb *strings.Builder, borderColor stri
 	// Ensure minimum content height.
 	contentHeight = max(contentHeight, minContentHeight)
 
-	// Render each content line with scrollbar.
-	for i := range contentHeight {
-		sb.WriteString(borderColor)
-		sb.WriteString("|")
-		sb.WriteString(ansi.Reset)
-
-		// Write content line or blank space.
-		if i < len(lines) {
-			line := lines[i]
-			visLen := widget.VisibleLen(line)
-			sb.WriteString(line)
-
-			// Pad line if needed.
-			if visLen < innerWidth {
-				sb.WriteString(strings.Repeat(" ", innerWidth-visLen))
-			}
-		} else {
-			// Write blank line.
-			sb.WriteString(strings.Repeat(" ", innerWidth))
-		}
-
-		// Write scrollbar character.
-		sb.WriteString(borderColor)
-
-		// Select appropriate scrollbar character.
-		if i < len(scrollbarChars) {
-			sb.WriteString(scrollbarChars[i])
-		} else {
-			// Use track character as fallback.
-			sb.WriteString(scrollTrack)
-		}
-		sb.WriteString("|")
-		sb.WriteString(ansi.Reset)
-		sb.WriteString("\n")
-	}
+	// Delegate to shared helper for rendering.
+	renderContentLinesWithScrollbar(sb, lines, scrollbarChars, contentHeight, innerWidth, borderColor, scrollTrack)
 }
 
 // renderBottomBorder renders the bottom border.
@@ -884,9 +798,9 @@ func (s *ServicesPanel) countIndicator() string {
 	running := 0
 
 	// Count running services.
-	for _, svc := range s.services {
+	for i := range s.services {
 		// Increment for running services.
-		if svc.State == process.StateRunning {
+		if s.services[i].State == process.StateRunning {
 			running++
 		}
 	}

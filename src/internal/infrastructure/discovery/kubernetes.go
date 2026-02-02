@@ -184,7 +184,7 @@ func (d *KubernetesDiscoverer) buildPodListURL(namespace string) string {
 //   - error: any error during fetch.
 func (d *KubernetesDiscoverer) fetchPods(ctx context.Context, apiURL string) (*k8sPodList, error) {
 	// Build HTTP request with bearer token.
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, http.NoBody)
 	// Check for request creation error.
 	if err != nil {
 		// Return error with request context.

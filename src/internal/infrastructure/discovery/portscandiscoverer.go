@@ -345,7 +345,7 @@ func (d *PortScanDiscoverer) parseNetTCPLine(line, protocol string) (listeningPo
 //   - string: IP address.
 //   - int: port number.
 //   - error: any parsing error.
-func (d *PortScanDiscoverer) parseAddress(hexAddr, protocol string) (string, int, error) {
+func (d *PortScanDiscoverer) parseAddress(hexAddr, protocol string) (ip string, port int, err error) {
 	// Split address into IP and port.
 	parts := strings.Split(hexAddr, ":")
 	// Check for valid address format.
