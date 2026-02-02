@@ -257,7 +257,7 @@ jobs:
           CGO_ENABLED: 1
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
           CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/linux-amd64 -lprobe -lpthread -ldl -lm"
-        run: go test -race -coverprofile=coverage.raw.out -covermode=atomic ./...
+        run: go test -race -p=1 -coverprofile=coverage.raw.out -covermode=atomic ./...
 
       - name: Filter coverage (exclude generated files)
         working-directory: src
