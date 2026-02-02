@@ -107,7 +107,7 @@ jobs:
             runner: ubuntu-24.04
           - rust_target: aarch64-unknown-linux-gnu
             go_platform: linux-arm64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -159,7 +159,7 @@ jobs:
             runner: ubuntu-24.04
           - rust_target: aarch64-unknown-linux-musl
             go_platform: linux-arm64-musl
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -299,7 +299,7 @@ jobs:
             runner: ubuntu-22.04
           - goarch: arm64
             platform: linux-arm64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -357,7 +357,7 @@ jobs:
             runner: ubuntu-22.04
           - goarch: arm64
             platform: linux-arm64-musl
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
