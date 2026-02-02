@@ -93,9 +93,10 @@ jobs:
   # =============================================================================
 
   # Build Rust Probe Library (glibc targets)
+  # Uses native runners: ubuntu-24.04 for AMD64, ubuntu-24.04-arm for ARM64
   build-probe:
     name: Build Probe (glibc)
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     needs: [rust-test]
     strategy:
       fail-fast: false
@@ -103,8 +104,10 @@ jobs:
         include:
           - rust_target: x86_64-unknown-linux-gnu
             go_platform: linux-amd64
+            runner: ubuntu-24.04
           - rust_target: aarch64-unknown-linux-gnu
             go_platform: linux-arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -113,13 +116,6 @@ jobs:
         uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          targets: ${{ matrix.rust_target }}
-
-      - name: Install cross-compilation tools (ARM64)
-        if: matrix.rust_target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gcc-aarch64-linux-gnu
 
       - name: Cache Cargo
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -132,16 +128,14 @@ jobs:
           restore-keys: |
             rust-probe-${{ matrix.rust_target }}-
 
-      - name: Build libprobe.a
+      - name: Build libprobe.a (native)
         working-directory: src/lib/probe
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        run: cargo build --release --target ${{ matrix.rust_target }}
+        run: cargo build --release
 
       - name: Prepare artifact
         run: |
           mkdir -p dist/lib/${{ matrix.go_platform }}
-          cp src/lib/probe/target/${{ matrix.rust_target }}/release/libprobe.a dist/lib/${{ matrix.go_platform }}/
+          cp src/lib/probe/target/release/libprobe.a dist/lib/${{ matrix.go_platform }}/
 
       - name: Upload libprobe artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -151,9 +145,10 @@ jobs:
           retention-days: 1
 
   # Build Rust Probe Library (musl targets for Alpine/static binaries)
+  # Uses native runners: ubuntu-24.04 for AMD64, ubuntu-24.04-arm for ARM64
   build-probe-musl:
     name: Build Probe (musl)
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     needs: [rust-test]
     strategy:
       fail-fast: false
@@ -161,8 +156,10 @@ jobs:
         include:
           - rust_target: x86_64-unknown-linux-musl
             go_platform: linux-amd64-musl
+            runner: ubuntu-24.04
           - rust_target: aarch64-unknown-linux-musl
             go_platform: linux-arm64-musl
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -173,25 +170,10 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.rust_target }}
 
-      - name: Install musl cross-compilation tools
-        timeout-minutes: 5
+      - name: Install musl tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq musl-tools
-          if [ "${{ matrix.rust_target }}" = "aarch64-unknown-linux-musl" ]; then
-            # Use zig for cross-compilation (direct download - much faster than snap)
-            ZIG_VERSION="0.13.0"
-            curl -sSfL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
-            sudo mkdir -p /opt/zig
-            sudo tar -xf zig.tar.xz -C /opt/zig --strip-components=1
-            rm zig.tar.xz
-            # Create wrapper scripts for cargo
-            sudo mkdir -p /opt/zig-cc
-            printf '#!/bin/bash\nexec /opt/zig/zig cc -target aarch64-linux-musl "$@"\n' | sudo tee /opt/zig-cc/aarch64-linux-musl-gcc > /dev/null
-            printf '#!/bin/bash\nexec /opt/zig/zig ar "$@"\n' | sudo tee /opt/zig-cc/aarch64-linux-musl-ar > /dev/null
-            sudo chmod +x /opt/zig-cc/*
-            echo "/opt/zig-cc" >> $GITHUB_PATH
-          fi
 
       - name: Cache Cargo
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -204,13 +186,10 @@ jobs:
           restore-keys: |
             rust-probe-${{ matrix.rust_target }}-
 
-      - name: Build libprobe.a
+      - name: Build libprobe.a (native musl)
         working-directory: src/lib/probe
         env:
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
-          CC_x86_64_unknown_linux_musl: musl-gcc
-          CC_aarch64_unknown_linux_musl: aarch64-linux-musl-gcc
+          CC: musl-gcc
         run: cargo build --release --target ${{ matrix.rust_target }}
 
       - name: Prepare artifact
@@ -306,9 +285,10 @@ jobs:
   # =============================================================================
 
   # Build Linux binaries (glibc - standard)
+  # Uses native runners: ubuntu-24.04 for AMD64, ubuntu-24.04-arm for ARM64
   matrix-unix:
     name: Build linux-${{ matrix.goarch }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     needs: [go-test]
     strategy:
       fail-fast: false
@@ -316,10 +296,10 @@ jobs:
         include:
           - goarch: amd64
             platform: linux-amd64
-            cc: gcc
+            runner: ubuntu-24.04
           - goarch: arm64
             platform: linux-arm64
-            cc: aarch64-linux-gnu-gcc
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -330,12 +310,6 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
           cache-dependency-path: src/go.sum
-
-      - name: Install cross-compilation tools (ARM64)
-        if: matrix.goarch == 'arm64'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gcc-aarch64-linux-gnu
 
       - name: Download libprobe
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -350,13 +324,10 @@ jobs:
         working-directory: src
         run: wire ./internal/bootstrap/
 
-      - name: Build supervizio binary
+      - name: Build supervizio binary (native)
         working-directory: src
         env:
           CGO_ENABLED: 1
-          CC: ${{ matrix.cc }}
-          GOOS: linux
-          GOARCH: ${{ matrix.goarch }}
           CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
           CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lpthread -ldl -lm"
         run: |
@@ -371,10 +342,11 @@ jobs:
           retention-days: 1
 
   # Build Linux binaries (musl - static for Alpine/scratch)
-  # Uses Docker with Alpine to ensure native musl libc
+  # Uses native runners: ubuntu-24.04 for AMD64, ubuntu-24.04-arm for ARM64
+  # Alpine container for musl libc compatibility
   matrix-unix-musl:
     name: Build linux-${{ matrix.goarch }}-musl
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     needs: [go-test, build-probe-musl]
     strategy:
       fail-fast: false
@@ -382,10 +354,10 @@ jobs:
         include:
           - goarch: amd64
             platform: linux-amd64-musl
-            docker_platform: linux/amd64
+            runner: ubuntu-24.04
           - goarch: arm64
             platform: linux-arm64-musl
-            docker_platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -396,14 +368,9 @@ jobs:
           name: libprobe-${{ matrix.platform }}
           path: dist/lib/${{ matrix.platform }}/
 
-      - name: Set up QEMU (for arm64)
-        if: matrix.goarch == 'arm64'
-        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3.2.0
-
-      - name: Build in Alpine container
+      - name: Build in Alpine container (native)
         run: |
           docker run --rm \
-            --platform ${{ matrix.docker_platform }} \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace/src \
             -e CGO_ENABLED=1 \
