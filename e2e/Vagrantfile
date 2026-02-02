@@ -45,18 +45,22 @@ def ci_mode?
   ENV['CI'] == 'true' || ENV['GITHUB_ACTIONS'] == 'true'
 end
 
-Vagrant.configure("2") do |config|
-  # ===========================================================================
-  # Shared folders (rsync works with all providers)
-  # Note: rsync must be installed on guest for these to work
-  # ===========================================================================
-  config.vm.synced_folder "../setup", "/setup", type: "rsync"
-  # bin folder is optional - only synced for script-based tests, not package tests
-  config.vm.synced_folder "../bin", "/bin-local", type: "rsync" if File.exist?("../bin")
-  # src folder is synced for BSD VMs that build from source
-  config.vm.synced_folder "../src", "/vagrant/src", type: "rsync"
-  config.vm.synced_folder ".", "/vagrant", type: "rsync"
+# Helper to configure rsync synced folders for Linux VMs
+# Linux boxes have rsync pre-installed or install it early enough
+def configure_linux_synced_folders(v)
+  v.vm.synced_folder "../setup", "/setup", type: "rsync"
+  v.vm.synced_folder "../bin", "/bin-local", type: "rsync" if File.exist?("../bin")
+  v.vm.synced_folder "../src", "/vagrant/src", type: "rsync"
+  v.vm.synced_folder ".", "/vagrant", type: "rsync"
+end
 
+# Helper to disable synced folders for BSD VMs
+# BSD boxes don't have rsync pre-installed; CI uses tar-over-SSH instead
+def configure_bsd_synced_folders(v)
+  v.vm.synced_folder ".", "/vagrant", disabled: true
+end
+
+Vagrant.configure("2") do |config|
   # ===========================================================================
   # QEMU Provider (macOS)
   # ===========================================================================
@@ -115,6 +119,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "debian13", primary: true do |v|
     v.vm.box = "generic/debian12"  # Use debian12 box until debian13 is available
     v.vm.hostname = "e2e-debian13"
+    configure_linux_synced_folders(v)
     v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl jq rsync"
   end
 
@@ -122,6 +127,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "fedora", autostart: false do |v|
     v.vm.box = "generic/fedora38"
     v.vm.hostname = "e2e-fedora"
+    configure_linux_synced_folders(v)
     v.vm.provision "shell", inline: <<-SHELL
       # Update package cache and install rsync
       dnf makecache --refresh || true
@@ -139,6 +145,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "alpine", autostart: false do |v|
     v.vm.box = "generic/alpine319"
     v.vm.hostname = "e2e-alpine"
+    configure_linux_synced_folders(v)
     v.vm.provision "shell", inline: "apk update && apk add curl jq rsync"
   end
 
@@ -150,6 +157,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "devuan", autostart: false do |v|
     v.vm.box = "generic/devuan4"  # Use devuan4 (chimaera) until devuan5 box available
     v.vm.hostname = "e2e-devuan"
+    configure_linux_synced_folders(v)
     v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl jq rsync"
   end
 
@@ -162,6 +170,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "alpine-runit", autostart: false do |v|
     v.vm.box = "generic/alpine319"
     v.vm.hostname = "e2e-alpine-runit"
+    configure_linux_synced_folders(v)
     v.vm.provision "shell", inline: <<-SHELL
       # Enable community repo for runit
       sed -i 's/#.*community/community/' /etc/apk/repositories
@@ -188,11 +197,17 @@ Vagrant.configure("2") do |config|
   # ===========================================================================
   # BSD: rc.d (FreeBSD style)
   # ===========================================================================
+  # NOTE: BSD VMs use disabled synced_folders because:
+  # 1. BSD boxes don't have rsync pre-installed
+  # 2. rsync is installed during provisioning (after synced_folders would run)
+  # 3. CI workflow syncs files via tar-over-SSH after provisioning completes
+  # ===========================================================================
 
   # FreeBSD 14
   config.vm.define "freebsd", autostart: false do |v|
     v.vm.box = "generic/freebsd14"
     v.vm.hostname = "e2e-freebsd"
+    configure_bsd_synced_folders(v)
     v.vm.provision "shell", inline: <<-SHELL
       pkg install -y curl jq rsync rust go
       # Verify installations
@@ -204,8 +219,10 @@ Vagrant.configure("2") do |config|
   config.vm.define "openbsd", autostart: false do |v|
     v.vm.box = "generic/openbsd7"
     v.vm.hostname = "e2e-openbsd"
+    configure_bsd_synced_folders(v)
     v.vm.provision "shell", inline: <<-SHELL
-      pkg_add curl jq rsync-- rust go
+      # Install packages (rsync-- means rsync with no flavor suffix)
+      pkg_add curl jq rsync rust go
       # Verify installations
       rustc --version && cargo --version && go version
     SHELL
@@ -215,6 +232,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "netbsd", autostart: false do |v|
     v.vm.box = "generic/netbsd9"
     v.vm.hostname = "e2e-netbsd"
+    configure_bsd_synced_folders(v)
     v.vm.provision "shell", inline: <<-SHELL
       # Update pkgin database and install packages
       pkgin -y update || true
@@ -228,6 +246,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "dragonfly", autostart: false do |v|
     v.vm.box = "generic/dragonflybsd6"  # DragonFlyBSD 6.x
     v.vm.hostname = "e2e-dragonfly"
+    configure_bsd_synced_folders(v)
     v.vm.provision "shell", inline: <<-SHELL
       pkg install -y curl jq rsync rust go
       # Verify installations

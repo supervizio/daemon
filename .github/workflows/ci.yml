@@ -104,7 +104,7 @@ jobs:
         include:
           - rust_target: x86_64-unknown-linux-gnu
             go_platform: linux-amd64
-            runner: ubuntu-24.04
+            runner: ubuntu-20.04
           - rust_target: aarch64-unknown-linux-gnu
             go_platform: linux-arm64
             runner: ubuntu-24.04-arm
@@ -156,7 +156,7 @@ jobs:
         include:
           - rust_target: x86_64-unknown-linux-musl
             go_platform: linux-amd64-musl
-            runner: ubuntu-24.04
+            runner: ubuntu-20.04
           - rust_target: aarch64-unknown-linux-musl
             go_platform: linux-arm64-musl
             runner: ubuntu-24.04-arm
@@ -296,7 +296,7 @@ jobs:
         include:
           - goarch: amd64
             platform: linux-amd64
-            runner: ubuntu-24.04
+            runner: ubuntu-20.04
           - goarch: arm64
             platform: linux-arm64
             runner: ubuntu-24.04-arm
@@ -354,7 +354,7 @@ jobs:
         include:
           - goarch: amd64
             platform: linux-amd64-musl
-            runner: ubuntu-24.04
+            runner: ubuntu-20.04
           - goarch: arm64
             platform: linux-arm64-musl
             runner: ubuntu-24.04-arm
@@ -854,16 +854,36 @@ jobs:
         run: |
           set -euo pipefail
           echo "=== Syncing source code to ${{ matrix.vm }} ==="
-
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /vagrant/src /setup && sudo chmod 777 /vagrant /setup"
+          
+          # Create directories with proper permissions
+          # BSD systems may need explicit directory creation
+          echo "Creating directories..."
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            sudo mkdir -p /vagrant/src /vagrant/e2e /setup && 
+            sudo chmod 755 /vagrant /setup && 
+            ls -la / | grep -E 'vagrant|setup'"
+          
+          # Sync setup scripts (to /setup at root)
           echo "Syncing setup..."
-          tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xf -"
+          tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xvf - 2>&1 | tail -5"
+          
+          # Sync src directory (to /vagrant/src)
           echo "Syncing src..."
-          tar -cf - -C .. src | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
+          tar -cf - -C .. src | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd /vagrant && sudo tar -xvf - 2>&1 | tail -5"
+          
+          # Sync e2e directory contents (to /vagrant)
           echo "Syncing e2e..."
-          tar -cf - . | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chown -R root: /setup"
+          tar -cf - . | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd /vagrant && sudo tar -xvf - 2>&1 | tail -5"
+          
+          # Fix ownership and verify
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            sudo chown -R root: /setup && 
+            echo '=== Verifying sync ===' && 
+            ls -la /vagrant/ && 
+            ls -la /vagrant/src/ | head -10 && 
+            ls -la /setup/ | head -5"
           echo "Sync complete"
+
 
       - name: Build in VM (Rust + Go with probe)
         working-directory: e2e
@@ -1002,26 +1022,6 @@ jobs:
           # Rename musl binary to standard name for nfpm
           mv supervizio-linux-${{ matrix.arch }}-musl supervizio-linux-${{ matrix.arch }}
           chmod +x supervizio-linux-${{ matrix.arch }}
-
-      - name: Install nfpm
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
-
-      - name: Build package
-        env:
-          VERSION: "0.0.0"
-          GOARCH: ${{ matrix.arch }}
-        run: |
-          set -euo pipefail
-          envsubst < nfpm.yaml > nfpm-resolved.yaml
-          nfpm package --config nfpm-resolved.yaml --packager apk --target ./
-
-      - name: Upload package
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: supervizio-${{ matrix.arch }}.apk
-          path: "*.apk"
-          retention-days: 1
-
   # Generate BSD Packages (native build in VMs)
   # FreeBSD/DragonFly: .pkg (pkgng), OpenBSD/NetBSD: .tgz
   packages-bsd:
@@ -1038,22 +1038,26 @@ jobs:
             vm: freebsd
             os: freebsd
             pkg_format: pkg
-            pkg_create: "pkg create -M /tmp/manifest.ucl -r /tmp/staging -o ."
+            config_base: /usr/local/etc
+            pkg_create: "pkg create -M /tmp/manifest.ucl -r /tmp/staging -o /tmp"
           - name: OpenBSD
             vm: openbsd
             os: openbsd
             pkg_format: tgz
-            pkg_create: "pkg_create -d /tmp/description -f /tmp/packing-list -B /tmp/staging -p /usr/local supervizio-0.0.0.tgz"
+            config_base: /etc
+            pkg_create: "pkg_create -D COMMENT='PID1-capable process supervisor' -D FULLPKGPATH=sysutils/supervizio -f /tmp/packing-list supervizio-0.0.0.tgz"
           - name: NetBSD
             vm: netbsd
             os: netbsd
             pkg_format: tgz
-            pkg_create: "pkg_create -v -B /tmp/staging -I /usr/local -c 'Process supervisor' -d 'PID1-capable process supervisor' supervizio-0.0.0.tgz"
+            config_base: /etc
+            pkg_create: "pkg_create -v -B /tmp/build-info -c /tmp/comment -d /tmp/description -f /tmp/packing-list -I /usr/local -p /tmp/staging/usr/local supervizio-0.0.0.tgz"
           - name: DragonFlyBSD
             vm: dragonfly
             os: dragonfly
             pkg_format: pkg
-            pkg_create: "pkg create -M /tmp/manifest.ucl -r /tmp/staging -o ."
+            config_base: /usr/local/etc
+            pkg_create: "pkg create -M /tmp/manifest.ucl -r /tmp/staging -o /tmp"
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -1145,21 +1149,27 @@ jobs:
         run: |
           set -euo pipefail
           sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            set -euo pipefail
+            CONFIG_BASE='${{ matrix.config_base }}'
+            
             mkdir -p /tmp/staging/usr/local/bin
-            mkdir -p /tmp/staging/usr/local/etc/supervizio
             mkdir -p /tmp/staging/usr/local/etc/rc.d
+            mkdir -p /tmp/staging\${CONFIG_BASE}/supervizio
 
             # Install binary
             cp /vagrant/supervizio /tmp/staging/usr/local/bin/supervizio
             chmod 755 /tmp/staging/usr/local/bin/supervizio
 
             # Install config
-            echo '# supervizio configuration' > /tmp/staging/usr/local/etc/supervizio/config.yaml
+            echo '# supervizio configuration' > /tmp/staging\${CONFIG_BASE}/supervizio/config.yaml
 
             # Install rc.d script
             cp /setup/init/${{ matrix.os }}/supervizio /tmp/staging/usr/local/etc/rc.d/supervizio 2>/dev/null || \
               cp /setup/init/freebsd/supervizio /tmp/staging/usr/local/etc/rc.d/supervizio
             chmod 755 /tmp/staging/usr/local/etc/rc.d/supervizio
+            
+            echo '=== Staging contents ==='
+            find /tmp/staging -type f
           "
 
       - name: Create package manifest (FreeBSD/DragonFly)
@@ -1167,31 +1177,89 @@ jobs:
         working-directory: e2e
         run: |
           sudo -E vagrant ssh ${{ matrix.vm }} -c "
-            cat > /tmp/manifest.ucl << 'EOF'
+            cat > /tmp/manifest.ucl << 'MANIFEST_EOF'
           name: supervizio
           version: \"0.0.0\"
           origin: sysutils/supervizio
           comment: \"PID1-capable process supervisor\"
-          desc: \"Process supervisor for containers and Unix systems with health probes\"
+          desc: \"Process supervisor for containers and Unix systems with health probes. Supports PID1 operation, health checks, and process lifecycle management.\"
           maintainer: \"team@superviz.io\"
           www: \"https://superviz.io\"
           prefix: /usr/local
-          EOF
+          files: {
+            /usr/local/bin/supervizio: \"-\"
+            /usr/local/etc/supervizio/config.yaml: \"-\"
+            /usr/local/etc/rc.d/supervizio: \"-\"
+          }
+          directories: {
+            /usr/local/etc/supervizio: y
+          }
+          MANIFEST_EOF
+            echo '=== Manifest contents ==='
+            cat /tmp/manifest.ucl
           "
 
-      - name: Create package manifest (OpenBSD)
+      - name: Create packing list (OpenBSD)
         if: matrix.os == 'openbsd'
         working-directory: e2e
         run: |
           sudo -E vagrant ssh ${{ matrix.vm }} -c "
             echo 'PID1-capable process supervisor' > /tmp/description
-            cat > /tmp/packing-list << 'EOF'
+            cat > /tmp/packing-list << 'PLIST_EOF'
           @name supervizio-0.0.0
-          @cwd /tmp/staging
+          @comment PID1-capable process supervisor for containers and Unix systems
+          @pkgpath sysutils/supervizio
+          @cwd /tmp/staging/usr/local
+          @mode 0755
+          @owner root
+          @group wheel
           bin/supervizio
+          @mode 0644
+          @cwd /tmp/staging
+          etc/supervizio/
           etc/supervizio/config.yaml
+          @cwd /tmp/staging/usr/local
+          @mode 0755
           etc/rc.d/supervizio
-          EOF
+          PLIST_EOF
+            echo '=== Packing list contents ==='
+            cat /tmp/packing-list
+          "
+
+      - name: Create packing list (NetBSD)
+        if: matrix.os == 'netbsd'
+        working-directory: e2e
+        run: |
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "
+            # Build info file
+            cat > /tmp/build-info << 'BUILD_EOF'
+          MACHINE_ARCH=x86_64
+          OPSYS=NetBSD
+          OS_VERSION=9.0
+          PKGTOOLS_VERSION=20211115
+          BUILD_EOF
+
+            # Comment (one-line description)
+            echo 'PID1-capable process supervisor' > /tmp/comment
+            
+            # Description (multi-line)
+            cat > /tmp/description << 'DESC_EOF'
+          Process supervisor for containers and Unix systems with health probes.
+          Supports PID1 operation, health checks, and process lifecycle management.
+          DESC_EOF
+
+            # Packing list
+            cat > /tmp/packing-list << 'PLIST_EOF'
+          @name supervizio-0.0.0
+          @cwd /tmp/staging/usr/local
+          bin/supervizio
+          @cwd /tmp/staging
+          etc/supervizio/config.yaml
+          @cwd /tmp/staging/usr/local
+          etc/rc.d/supervizio
+          PLIST_EOF
+            echo '=== Packing list contents ==='
+            cat /tmp/packing-list
           "
 
       - name: Build package
@@ -1199,15 +1267,28 @@ jobs:
         run: |
           sudo -E vagrant ssh ${{ matrix.vm }} -c "
             cd /tmp
+            echo '=== Building package ==='
             ${{ matrix.pkg_create }}
-            ls -la *.pkg *.tgz 2>/dev/null || true
+            echo '=== Package files created ==='
+            ls -la *.pkg *.tgz 2>/dev/null || echo 'No package files found'
           "
 
       - name: Extract package from VM
         working-directory: e2e
         run: |
+          set -euo pipefail
           mkdir -p ../packages
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "cat /tmp/supervizio*.${{ matrix.pkg_format }}" > ../packages/supervizio-${{ matrix.os }}-amd64.${{ matrix.pkg_format }}
+          
+          # Find and extract the package file
+          PKG_FILE=$(sudo -E vagrant ssh ${{ matrix.vm }} -c "ls /tmp/supervizio*.${{ matrix.pkg_format }} 2>/dev/null | head -1" | tr -d '\r\n')
+          if [ -z "$PKG_FILE" ]; then
+            echo "ERROR: No package file found in /tmp/"
+            sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /tmp/" || true
+            exit 1
+          fi
+          
+          echo "Found package: $PKG_FILE"
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "cat '$PKG_FILE'" > ../packages/supervizio-${{ matrix.os }}-amd64.${{ matrix.pkg_format }}
           ls -la ../packages/
 
       - name: Upload BSD package
