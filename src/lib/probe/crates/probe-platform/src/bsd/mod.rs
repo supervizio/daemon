@@ -6,9 +6,9 @@ mod sysctl;
 pub mod thermal;
 
 pub use sysctl::{
+    ConnectionProtocol, ConnectionState, ContextSwitches, NetworkConnection,
     list_network_connections, read_process_context_switches, read_self_context_switches,
-    read_system_context_switches, ConnectionProtocol, ConnectionState, ContextSwitches,
-    NetworkConnection,
+    read_system_context_switches,
 };
 
 pub use thermal::{deci_kelvin_to_celsius, is_thermal_supported, read_thermal_zones};

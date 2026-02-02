@@ -369,31 +369,31 @@ fn get_swap_freebsd_fallback() -> (u64, u64) {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 struct Uvmexp {
-    pagesize: i32,    // Page size in bytes
-    pagemask: i32,    // Page mask
-    pageshift: i32,   // Page shift
-    npages: i32,      // Total managed pages
-    free: i32,        // Free pages
-    active: i32,      // Active pages
-    inactive: i32,    // Inactive pages
-    paging: i32,      // Pages being paged
-    wired: i32,       // Wired pages
-    zeropages: i32,   // Zero-fill pages
+    pagesize: i32,  // Page size in bytes
+    pagemask: i32,  // Page mask
+    pageshift: i32, // Page shift
+    npages: i32,    // Total managed pages
+    free: i32,      // Free pages
+    active: i32,    // Active pages
+    inactive: i32,  // Inactive pages
+    paging: i32,    // Pages being paged
+    wired: i32,     // Wired pages
+    zeropages: i32, // Zero-fill pages
     reserve_pagedaemon: i32,
     reserve_kernel: i32,
     // Pageout params
-    anonpages: i32,   // Anonymous pages
-    vnodepages: i32,  // Vnode pages (file cache)
-    vtextpages: i32,  // Vnode text pages
+    anonpages: i32,  // Anonymous pages
+    vnodepages: i32, // Vnode pages (file cache)
+    vtextpages: i32, // Vnode text pages
     freemin: i32,
     freetarg: i32,
     inactarg: i32,
     wiredmax: i32,
     // Swap
-    nswapdev: i32,    // Number of swap devices
-    swpages: i32,     // Total swap pages
-    swpginuse: i32,   // Swap pages in use
-    swpgonly: i32,    // Swap pages only in swap
+    nswapdev: i32,  // Number of swap devices
+    swpages: i32,   // Total swap pages
+    swpginuse: i32, // Swap pages in use
+    swpgonly: i32,  // Swap pages only in swap
     nswget: i32,
     // Padding to ensure structure is large enough
     _padding: [i32; 64],
@@ -524,88 +524,88 @@ fn get_process_info_openbsd(pid: i32) -> Result<ProcessInfo> {
         // OpenBSD kinfo_proc structure (simplified, key fields only)
         #[repr(C)]
         struct KinfoProc {
-            p_forw: u64,           // 0: forward link
-            p_back: u64,           // 8: backward link
-            p_paddr: u64,          // 16: address of proc
-            p_addr: u64,           // 24: kernel virtual addr
-            p_fd: u64,             // 32: ptr to open files
-            p_stats: u64,          // 40: accounting info
-            p_limit: u64,          // 48: process limits
-            p_vmspace: u64,        // 56: address space
-            p_sigacts: u64,        // 64: signal actions
-            p_sess: u64,           // 72: session
-            p_tsess: u64,          // 80: controlling tty session
-            p_ru: u64,             // 88: rusage pointer
-            p_eflag: i32,          // 96: various flags
-            p_exitsig: i32,        // 100: exit signal
-            p_flag: i32,           // 104: process flags
-            p_pid: i32,            // 108: process id
-            p_ppid: i32,           // 112: parent pid
-            p_sid: i32,            // 116: session id
-            _pgid: i32,            // 120
-            p_tpgid: i32,          // 124
-            p_uid: u32,            // 128: real uid
-            p_ruid: u32,           // 132: real uid
-            p_gid: u32,            // 136: real gid
-            p_rgid: u32,           // 140: real gid
-            p_groups: [u32; 16],   // 144: groups
-            p_ngroups: i16,        // 208
-            p_jobc: i16,           // 210: job control
-            p_tdev: u32,           // 212: controlling tty
-            p_estcpu: u32,         // 216: time averaged cpu
-            p_rtime_sec: i64,      // 220: real time
-            p_rtime_usec: i64,     // 228
-            p_cpticks: i32,        // 236: cpu ticks
-            p_pctcpu: u32,         // 240: cpu usage %
-            p_swtime: u32,         // 244
-            p_slptime: u32,        // 248
-            p_schedflags: i32,     // 252
-            p_uticks: u64,         // 256
-            p_sticks: u64,         // 264
-            p_iticks: u64,         // 272
-            p_tracep: u64,         // 280: trace pointer
-            p_traceflag: i32,      // 288
-            p_holdcnt: i32,        // 292
-            p_siglist: i32,        // 296
-            p_sigmask: u32,        // 300
-            p_sigignore: u32,      // 304
-            p_sigcatch: u32,       // 308
-            p_stat: i8,            // 312: process state
-            p_priority: i8,        // 313
-            p_usrpri: i8,          // 314
-            p_nice: i8,            // 315
-            p_xstat: u16,          // 316
-            p_spare: u16,          // 318
-            p_comm: [u8; 24],      // 320: command name
-            p_wmesg: [u8; 8],      // 344: wait message
-            p_wchan: u64,          // 352: wait channel
-            p_login: [u8; 32],     // 360: login name
-            p_vm_rssize: i32,      // 392: RSS in pages
-            p_vm_tsize: i32,       // 396: text size
-            p_vm_dsize: i32,       // 400: data size
-            p_vm_ssize: i32,       // 404: stack size
-            p_uvalid: i64,         // 408
-            p_ustart_sec: i64,     // 416
-            p_ustart_usec: i64,    // 424
-            p_uutime_sec: u32,     // 432
-            p_uutime_usec: u32,    // 436
-            p_ustime_sec: u32,     // 440
-            p_ustime_usec: u32,    // 444
-            p_uru_maxrss: u64,     // 448
-            p_uru_ixrss: u64,      // 456
-            p_uru_idrss: u64,      // 464
-            p_uru_isrss: u64,      // 472
-            p_uru_minflt: u64,     // 480
-            p_uru_majflt: u64,     // 488
-            p_uru_nswap: u64,      // 496
-            p_uru_inblock: u64,    // 504
-            p_uru_oublock: u64,    // 512
-            p_uru_msgsnd: u64,     // 520
-            p_uru_msgrcv: u64,     // 528
-            p_uru_nsignals: u64,   // 536
-            p_uru_nvcsw: u64,      // 544: voluntary ctx switches
-            p_uru_nivcsw: u64,     // 552: involuntary ctx switches
-            _rest: [u8; 256],      // padding for future fields
+            p_forw: u64,         // 0: forward link
+            p_back: u64,         // 8: backward link
+            p_paddr: u64,        // 16: address of proc
+            p_addr: u64,         // 24: kernel virtual addr
+            p_fd: u64,           // 32: ptr to open files
+            p_stats: u64,        // 40: accounting info
+            p_limit: u64,        // 48: process limits
+            p_vmspace: u64,      // 56: address space
+            p_sigacts: u64,      // 64: signal actions
+            p_sess: u64,         // 72: session
+            p_tsess: u64,        // 80: controlling tty session
+            p_ru: u64,           // 88: rusage pointer
+            p_eflag: i32,        // 96: various flags
+            p_exitsig: i32,      // 100: exit signal
+            p_flag: i32,         // 104: process flags
+            p_pid: i32,          // 108: process id
+            p_ppid: i32,         // 112: parent pid
+            p_sid: i32,          // 116: session id
+            _pgid: i32,          // 120
+            p_tpgid: i32,        // 124
+            p_uid: u32,          // 128: real uid
+            p_ruid: u32,         // 132: real uid
+            p_gid: u32,          // 136: real gid
+            p_rgid: u32,         // 140: real gid
+            p_groups: [u32; 16], // 144: groups
+            p_ngroups: i16,      // 208
+            p_jobc: i16,         // 210: job control
+            p_tdev: u32,         // 212: controlling tty
+            p_estcpu: u32,       // 216: time averaged cpu
+            p_rtime_sec: i64,    // 220: real time
+            p_rtime_usec: i64,   // 228
+            p_cpticks: i32,      // 236: cpu ticks
+            p_pctcpu: u32,       // 240: cpu usage %
+            p_swtime: u32,       // 244
+            p_slptime: u32,      // 248
+            p_schedflags: i32,   // 252
+            p_uticks: u64,       // 256
+            p_sticks: u64,       // 264
+            p_iticks: u64,       // 272
+            p_tracep: u64,       // 280: trace pointer
+            p_traceflag: i32,    // 288
+            p_holdcnt: i32,      // 292
+            p_siglist: i32,      // 296
+            p_sigmask: u32,      // 300
+            p_sigignore: u32,    // 304
+            p_sigcatch: u32,     // 308
+            p_stat: i8,          // 312: process state
+            p_priority: i8,      // 313
+            p_usrpri: i8,        // 314
+            p_nice: i8,          // 315
+            p_xstat: u16,        // 316
+            p_spare: u16,        // 318
+            p_comm: [u8; 24],    // 320: command name
+            p_wmesg: [u8; 8],    // 344: wait message
+            p_wchan: u64,        // 352: wait channel
+            p_login: [u8; 32],   // 360: login name
+            p_vm_rssize: i32,    // 392: RSS in pages
+            p_vm_tsize: i32,     // 396: text size
+            p_vm_dsize: i32,     // 400: data size
+            p_vm_ssize: i32,     // 404: stack size
+            p_uvalid: i64,       // 408
+            p_ustart_sec: i64,   // 416
+            p_ustart_usec: i64,  // 424
+            p_uutime_sec: u32,   // 432
+            p_uutime_usec: u32,  // 436
+            p_ustime_sec: u32,   // 440
+            p_ustime_usec: u32,  // 444
+            p_uru_maxrss: u64,   // 448
+            p_uru_ixrss: u64,    // 456
+            p_uru_idrss: u64,    // 464
+            p_uru_isrss: u64,    // 472
+            p_uru_minflt: u64,   // 480
+            p_uru_majflt: u64,   // 488
+            p_uru_nswap: u64,    // 496
+            p_uru_inblock: u64,  // 504
+            p_uru_oublock: u64,  // 512
+            p_uru_msgsnd: u64,   // 520
+            p_uru_msgrcv: u64,   // 528
+            p_uru_nsignals: u64, // 536
+            p_uru_nvcsw: u64,    // 544: voluntary ctx switches
+            p_uru_nivcsw: u64,   // 552: involuntary ctx switches
+            _rest: [u8; 256],    // padding for future fields
         }
 
         let mut mib = [
@@ -711,11 +711,11 @@ fn get_process_info_netbsd(pid: i32) -> Result<ProcessInfo> {
             p_nice: i8,
             p_xstat: u16,
             p_acflag: u16,
-            p_vm_rssize: i32,   // RSS in pages
-            p_vm_tsize: i64,    // text size
-            p_vm_dsize: i64,    // data size
-            p_vm_ssize: i64,    // stack size
-            p_vm_vsize: i64,    // total virtual size
+            p_vm_rssize: i32, // RSS in pages
+            p_vm_tsize: i64,  // text size
+            p_vm_dsize: i64,  // data size
+            p_vm_ssize: i64,  // stack size
+            p_vm_vsize: i64,  // total virtual size
             p_uru_maxrss: u64,
             p_uru_ixrss: u64,
             p_uru_idrss: u64,
@@ -728,10 +728,10 @@ fn get_process_info_netbsd(pid: i32) -> Result<ProcessInfo> {
             p_uru_msgsnd: u64,
             p_uru_msgrcv: u64,
             p_uru_nsignals: u64,
-            p_uru_nvcsw: u64,   // voluntary ctx switches
-            p_uru_nivcsw: u64,  // involuntary ctx switches
-            p_nlwps: i32,       // number of LWPs (threads)
-            p_nrlwps: i32,      // running LWPs
+            p_uru_nvcsw: u64,  // voluntary ctx switches
+            p_uru_nivcsw: u64, // involuntary ctx switches
+            p_nlwps: i32,      // number of LWPs (threads)
+            p_nrlwps: i32,     // running LWPs
             _rest: [u8; 256],
         }
 
@@ -877,7 +877,8 @@ fn list_pids_openbsd() -> Result<Vec<i32>> {
         }
 
         let actual_count = len / mem::size_of::<KinfoProcMin>();
-        let pids: Vec<i32> = kinfos[..actual_count].iter().map(|k| k.p_pid).filter(|&p| p > 0).collect();
+        let pids: Vec<i32> =
+            kinfos[..actual_count].iter().map(|k| k.p_pid).filter(|&p| p > 0).collect();
 
         Ok(pids)
     }
@@ -931,7 +932,8 @@ fn list_pids_netbsd() -> Result<Vec<i32>> {
         }
 
         let actual_count = len / mem::size_of::<KinfoProc2Min>();
-        let pids: Vec<i32> = kinfos[..actual_count].iter().map(|k| k.p_pid).filter(|&p| p > 0).collect();
+        let pids: Vec<i32> =
+            kinfos[..actual_count].iter().map(|k| k.p_pid).filter(|&p| p > 0).collect();
 
         Ok(pids)
     }
@@ -1237,12 +1239,8 @@ mod freebsd {
 
             // Initialize structures
             let mut dinfo: Devinfo = mem::zeroed();
-            let mut stats = Statinfo {
-                generation: 0,
-                snap_time_sec: 0,
-                snap_time_frac: 0,
-                dinfo: &mut dinfo,
-            };
+            let mut stats =
+                Statinfo { generation: 0, snap_time_sec: 0, snap_time_frac: 0, dinfo: &mut dinfo };
 
             // Get device statistics
             if devstat_getdevs(ptr::null_mut(), &mut stats) < 0 {
@@ -1270,7 +1268,7 @@ mod freebsd {
                 let device = format!("{}{}", name, ds.unit_number);
 
                 // Skip devices with no activity
-                let reads = ds.operations[0];  // DEVSTAT_READ
+                let reads = ds.operations[0]; // DEVSTAT_READ
                 let writes = ds.operations[1]; // DEVSTAT_WRITE
                 if reads == 0 && writes == 0 {
                     continue;
@@ -2268,7 +2266,8 @@ fn parse_tcp_pcblist_freebsd(buf: &[u8]) -> Result<Vec<NetworkConnection>> {
                     buf[local_ip_offset + 2],
                     buf[local_ip_offset + 3],
                 ]);
-                let local_port = u16::from_be_bytes([buf[local_port_offset], buf[local_port_offset + 1]]);
+                let local_port =
+                    u16::from_be_bytes([buf[local_port_offset], buf[local_port_offset + 1]]);
 
                 let remote_ip = u32::from_ne_bytes([
                     buf[remote_ip_offset],
@@ -2276,7 +2275,8 @@ fn parse_tcp_pcblist_freebsd(buf: &[u8]) -> Result<Vec<NetworkConnection>> {
                     buf[remote_ip_offset + 2],
                     buf[remote_ip_offset + 3],
                 ]);
-                let remote_port = u16::from_be_bytes([buf[remote_port_offset], buf[remote_port_offset + 1]]);
+                let remote_port =
+                    u16::from_be_bytes([buf[remote_port_offset], buf[remote_port_offset + 1]]);
 
                 let state_val = buf[state_offset] as i32;
                 let state = tcp_state_from_int(state_val);
@@ -2406,7 +2406,8 @@ fn list_udp_connections() -> Result<Vec<NetworkConnection>> {
                     buf[local_ip_offset + 2],
                     buf[local_ip_offset + 3],
                 ]);
-                let local_port = u16::from_be_bytes([buf[local_port_offset], buf[local_port_offset + 1]]);
+                let local_port =
+                    u16::from_be_bytes([buf[local_port_offset], buf[local_port_offset + 1]]);
 
                 if local_port > 0 {
                     let local_addr = format!(
@@ -2525,11 +2526,11 @@ fn parse_tcp_pcblist_openbsd(buf: &[u8]) -> Result<Vec<NetworkConnection>> {
     #[repr(C)]
     struct InpcbEntry {
         inp_len: u32,
-        inp_faddr: [u8; 4],  // Foreign IPv4 address
-        inp_fport: u16,       // Foreign port (network byte order)
-        inp_laddr: [u8; 4],   // Local IPv4 address
-        inp_lport: u16,       // Local port (network byte order)
-        t_state: u8,          // TCP state
+        inp_faddr: [u8; 4], // Foreign IPv4 address
+        inp_fport: u16,     // Foreign port (network byte order)
+        inp_laddr: [u8; 4], // Local IPv4 address
+        inp_lport: u16,     // Local port (network byte order)
+        t_state: u8,        // TCP state
         _padding: [u8; 3],
     }
 
@@ -2539,7 +2540,9 @@ fn parse_tcp_pcblist_openbsd(buf: &[u8]) -> Result<Vec<NetworkConnection>> {
         }
 
         // Read entry length
-        let entry_len = u32::from_ne_bytes([buf[offset], buf[offset + 1], buf[offset + 2], buf[offset + 3]]) as usize;
+        let entry_len =
+            u32::from_ne_bytes([buf[offset], buf[offset + 1], buf[offset + 2], buf[offset + 3]])
+                as usize;
         if entry_len == 0 || entry_len < 20 {
             break;
         }
@@ -2631,7 +2634,12 @@ fn list_udp_connections() -> Result<Vec<NetworkConnection>> {
         let mut offset = 16; // Skip header
 
         while offset + 20 < len {
-            let entry_len = u32::from_ne_bytes([buf[offset], buf[offset + 1], buf[offset + 2], buf[offset + 3]]) as usize;
+            let entry_len = u32::from_ne_bytes([
+                buf[offset],
+                buf[offset + 1],
+                buf[offset + 2],
+                buf[offset + 3],
+            ]) as usize;
             if entry_len == 0 || entry_len < 16 {
                 break;
             }
@@ -2724,21 +2732,21 @@ fn parse_tcp_pcblist_netbsd(buf: &[u8]) -> Result<Vec<NetworkConnection>> {
     // NetBSD kinfo_pcb structure
     #[repr(C)]
     struct KinfoPcb {
-        ki_pcbaddr: u64,      // PCB address
-        ki_ppcbaddr: u64,     // Parent PCB address
-        ki_sockaddr: u64,     // Socket address
-        ki_family: u32,       // Address family (AF_INET, AF_INET6)
-        ki_type: u32,         // Socket type (SOCK_STREAM, etc)
-        ki_protocol: u32,     // Protocol (IPPROTO_TCP, etc)
-        ki_pflags: u32,       // PCB flags
-        ki_sostate: u32,      // Socket state
-        ki_prstate: u32,      // Protocol state (TCP state)
-        ki_tstate: u32,       // Timer state
-        ki_rcvq: u32,         // Receive queue length
-        ki_sndq: u32,         // Send queue length
+        ki_pcbaddr: u64,  // PCB address
+        ki_ppcbaddr: u64, // Parent PCB address
+        ki_sockaddr: u64, // Socket address
+        ki_family: u32,   // Address family (AF_INET, AF_INET6)
+        ki_type: u32,     // Socket type (SOCK_STREAM, etc)
+        ki_protocol: u32, // Protocol (IPPROTO_TCP, etc)
+        ki_pflags: u32,   // PCB flags
+        ki_sostate: u32,  // Socket state
+        ki_prstate: u32,  // Protocol state (TCP state)
+        ki_tstate: u32,   // Timer state
+        ki_rcvq: u32,     // Receive queue length
+        ki_sndq: u32,     // Send queue length
         // Addresses follow in sockaddr_storage format
-        ki_s: [u8; 128],      // Local address
-        ki_d: [u8; 128],      // Remote address
+        ki_s: [u8; 128], // Local address
+        ki_d: [u8; 128], // Remote address
     }
 
     const KINFO_PCB_SIZE: usize = std::mem::size_of::<KinfoPcb>();
@@ -2762,17 +2770,13 @@ fn parse_tcp_pcblist_netbsd(buf: &[u8]) -> Result<Vec<NetworkConnection>> {
         // Parse local address from sockaddr_in at ki_s
         // sockaddr_in: family(2) + port(2) + addr(4) + zero(8)
         let local_port = u16::from_be_bytes([entry.ki_s[2], entry.ki_s[3]]);
-        let local_ip = format!(
-            "{}.{}.{}.{}",
-            entry.ki_s[4], entry.ki_s[5], entry.ki_s[6], entry.ki_s[7]
-        );
+        let local_ip =
+            format!("{}.{}.{}.{}", entry.ki_s[4], entry.ki_s[5], entry.ki_s[6], entry.ki_s[7]);
 
         // Parse remote address from sockaddr_in at ki_d
         let remote_port = u16::from_be_bytes([entry.ki_d[2], entry.ki_d[3]]);
-        let remote_ip = format!(
-            "{}.{}.{}.{}",
-            entry.ki_d[4], entry.ki_d[5], entry.ki_d[6], entry.ki_d[7]
-        );
+        let remote_ip =
+            format!("{}.{}.{}.{}", entry.ki_d[4], entry.ki_d[5], entry.ki_d[6], entry.ki_d[7]);
 
         let state = tcp_state_from_int(entry.ki_prstate as i32);
 
@@ -2864,10 +2868,8 @@ fn list_udp_connections() -> Result<Vec<NetworkConnection>> {
             }
 
             let local_port = u16::from_be_bytes([entry.ki_s[2], entry.ki_s[3]]);
-            let local_ip = format!(
-                "{}.{}.{}.{}",
-                entry.ki_s[4], entry.ki_s[5], entry.ki_s[6], entry.ki_s[7]
-            );
+            let local_ip =
+                format!("{}.{}.{}.{}", entry.ki_s[4], entry.ki_s[5], entry.ki_s[6], entry.ki_s[7]);
 
             if local_port > 0 {
                 connections.push(NetworkConnection {

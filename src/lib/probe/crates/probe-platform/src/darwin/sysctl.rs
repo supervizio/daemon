@@ -403,7 +403,12 @@ pub fn get_disk_io_stats() -> Result<Vec<DiskIOStats>> {
 
             // Get the disk's parent to find the device name
             let mut parent: u32 = 0;
-            if IORegistryEntryGetParentEntry(service, b"IOService\0".as_ptr() as *const libc::c_char, &mut parent) == 0 {
+            if IORegistryEntryGetParentEntry(
+                service,
+                b"IOService\0".as_ptr() as *const libc::c_char,
+                &mut parent,
+            ) == 0
+            {
                 // Get device name from parent
                 let mut name_buf = [0i8; 128];
                 if IORegistryEntryGetName(parent, name_buf.as_mut_ptr()) == 0 {
@@ -416,7 +421,8 @@ pub fn get_disk_io_stats() -> Result<Vec<DiskIOStats>> {
                         &mut props as *mut *mut libc::c_void as *mut _,
                         std::ptr::null(),
                         0,
-                    ) == 0 && !props.is_null()
+                    ) == 0
+                        && !props.is_null()
                     {
                         // Extract statistics from the dictionary
                         let stats_key = CFStringCreateWithCString(
@@ -426,7 +432,8 @@ pub fn get_disk_io_stats() -> Result<Vec<DiskIOStats>> {
                         );
 
                         if !stats_key.is_null() {
-                            let stats_dict = CFDictionaryGetValue(props as *const _, stats_key as *const _);
+                            let stats_dict =
+                                CFDictionaryGetValue(props as *const _, stats_key as *const _);
                             if !stats_dict.is_null() {
                                 let stats = parse_iokit_disk_stats(stats_dict, &device_name);
                                 if stats.reads_completed > 0 || stats.writes_completed > 0 {
@@ -764,13 +771,7 @@ pub fn list_network_connections() -> Result<Vec<NetworkConnection>> {
 fn list_process_connections(pid: i32) -> Result<Vec<NetworkConnection>> {
     unsafe {
         // First, get the buffer size needed
-        let buffer_size = libc::proc_pidinfo(
-            pid,
-            PROC_PIDLISTFDS,
-            0,
-            ptr::null_mut(),
-            0,
-        );
+        let buffer_size = libc::proc_pidinfo(pid, PROC_PIDLISTFDS, 0, ptr::null_mut(), 0);
 
         if buffer_size <= 0 {
             return Ok(Vec::new());
@@ -881,18 +882,17 @@ fn list_process_connections(pid: i32) -> Result<Vec<NetworkConnection>> {
 
 /// Parse IPv4 addresses from socket info.
 fn parse_inet4_addrs(in_info: &in_sockinfo) -> (String, String) {
-    let local_ip = std::net::Ipv4Addr::from(u32::from_be(in_info.insi_laddr.ina_46.i46a_addr4.s_addr));
+    let local_ip =
+        std::net::Ipv4Addr::from(u32::from_be(in_info.insi_laddr.ina_46.i46a_addr4.s_addr));
     let local_port = u16::from_be(in_info.insi_lport as u16);
 
-    let remote_ip = std::net::Ipv4Addr::from(u32::from_be(in_info.insi_faddr.ina_46.i46a_addr4.s_addr));
+    let remote_ip =
+        std::net::Ipv4Addr::from(u32::from_be(in_info.insi_faddr.ina_46.i46a_addr4.s_addr));
     let remote_port = u16::from_be(in_info.insi_fport as u16);
 
     let local_addr = format!("{}:{}", local_ip, local_port);
-    let remote_addr = if remote_port > 0 {
-        format!("{}:{}", remote_ip, remote_port)
-    } else {
-        String::new()
-    };
+    let remote_addr =
+        if remote_port > 0 { format!("{}:{}", remote_ip, remote_port) } else { String::new() };
 
     (local_addr, remote_addr)
 }
@@ -906,11 +906,8 @@ fn parse_inet6_addrs(in_info: &in_sockinfo) -> (String, String) {
     let remote_port = u16::from_be(in_info.insi_fport as u16);
 
     let local_addr = format!("[{}]:{}", local_ip, local_port);
-    let remote_addr = if remote_port > 0 {
-        format!("[{}]:{}", remote_ip, remote_port)
-    } else {
-        String::new()
-    };
+    let remote_addr =
+        if remote_port > 0 { format!("[{}]:{}", remote_ip, remote_port) } else { String::new() };
 
     (local_addr, remote_addr)
 }
@@ -1425,14 +1422,14 @@ const RUSAGE_INFO_V2: libc::c_int = 2;
 /// Task events info structure from Mach.
 #[repr(C)]
 struct TaskEventsInfo {
-    faults: i32,             // page faults
-    pageins: i32,            // actual pageins
-    cow_faults: i32,         // copy-on-write faults
-    messages_sent: i32,      // messages sent
-    messages_received: i32,  // messages received
-    syscalls_mach: i32,      // Mach system calls
-    syscalls_unix: i32,      // Unix system calls
-    csw: i32,                // context switches
+    faults: i32,            // page faults
+    pageins: i32,           // actual pageins
+    cow_faults: i32,        // copy-on-write faults
+    messages_sent: i32,     // messages sent
+    messages_received: i32, // messages received
+    syscalls_mach: i32,     // Mach system calls
+    syscalls_unix: i32,     // Unix system calls
+    csw: i32,               // context switches
 }
 
 /// Rusage info v2 structure (partial).
@@ -1638,7 +1635,7 @@ pub fn read_thermal_zones() -> Result<Vec<crate::ThermalZone>> {
                     name: "smc".to_string(),
                     label: label.to_string(),
                     temp_celsius: temp,
-                    temp_max: Some(100.0), // Default max temp
+                    temp_max: Some(100.0),  // Default max temp
                     temp_crit: Some(105.0), // Default critical temp
                 });
             }
@@ -1770,7 +1767,12 @@ unsafe fn read_smc_temperature(conn: u32, key: &str) -> Option<f64> {
 
     // 'flt ' = floating point
     if data_type == 0x666c7420 && output.key_info.data_size >= 4 {
-        let temp = f32::from_be_bytes([output.bytes[0], output.bytes[1], output.bytes[2], output.bytes[3]]);
+        let temp = f32::from_be_bytes([
+            output.bytes[0],
+            output.bytes[1],
+            output.bytes[2],
+            output.bytes[3],
+        ]);
         if temp > -40.0 && temp < 150.0 {
             return Some(f64::from(temp));
         }

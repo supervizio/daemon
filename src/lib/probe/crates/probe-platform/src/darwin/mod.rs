@@ -5,9 +5,9 @@
 mod sysctl;
 
 pub use sysctl::{
-    is_thermal_supported, list_network_connections, read_process_context_switches,
-    read_self_context_switches, read_system_context_switches, read_thermal_zones,
-    ConnectionProtocol, ConnectionState, ContextSwitches, NetworkConnection,
+    ConnectionProtocol, ConnectionState, ContextSwitches, NetworkConnection, is_thermal_supported,
+    list_network_connections, read_process_context_switches, read_self_context_switches,
+    read_system_context_switches, read_thermal_zones,
 };
 
 use crate::{

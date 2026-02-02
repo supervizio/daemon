@@ -137,23 +137,13 @@ fn read_thermal_zone_freebsd(zone_idx: usize) -> Result<ThermalZone> {
 
     // Read critical temperature (optional)
     let crit_sysctl = format!("hw.acpi.thermal.{name}._CRT");
-    let temp_crit = read_sysctl_i32(&crit_sysctl)
-        .ok()
-        .map(deci_kelvin_to_celsius);
+    let temp_crit = read_sysctl_i32(&crit_sysctl).ok().map(deci_kelvin_to_celsius);
 
     // Read hot temperature (optional, used as max if available)
     let hot_sysctl = format!("hw.acpi.thermal.{name}._HOT");
-    let temp_max = read_sysctl_i32(&hot_sysctl)
-        .ok()
-        .map(deci_kelvin_to_celsius);
+    let temp_max = read_sysctl_i32(&hot_sysctl).ok().map(deci_kelvin_to_celsius);
 
-    Ok(ThermalZone {
-        name: "acpi".to_string(),
-        label: name,
-        temp_celsius,
-        temp_max,
-        temp_crit,
-    })
+    Ok(ThermalZone { name: "acpi".to_string(), label: name, temp_celsius, temp_max, temp_crit })
 }
 
 #[cfg(target_os = "freebsd")]
@@ -204,7 +194,7 @@ fn read_thermal_zones_openbsd() -> Result<Vec<ThermalZone>> {
         tv_sec: i64,
         tv_usec: i64,
         value: i64,
-        sensor_type: i32,  // enum sensor_type
+        sensor_type: i32, // enum sensor_type
         flags: i32,
     }
 
@@ -213,7 +203,7 @@ fn read_thermal_zones_openbsd() -> Result<Vec<ThermalZone>> {
     struct Sensordev {
         num: i32,
         xname: [libc::c_char; 16],
-        maxnumt: [i32; 21],  // SENSOR_MAX_TYPES
+        maxnumt: [i32; 21], // SENSOR_MAX_TYPES
         sensors_count: i32,
     }
 
@@ -272,11 +262,7 @@ fn read_thermal_zones_openbsd() -> Result<Vec<ThermalZone>> {
                 let temp_celsius = micro_kelvin_to_celsius(sensor.value);
 
                 let desc = cstr_to_string(sensor.desc.as_ptr());
-                let label = if desc.is_empty() {
-                    format!("temp{sensor_num}")
-                } else {
-                    desc
-                };
+                let label = if desc.is_empty() { format!("temp{sensor_num}") } else { desc };
 
                 zones.push(ThermalZone {
                     name: dev_name.clone(),
@@ -417,16 +403,12 @@ fn parse_envstat_xml(xml: &str) -> Result<Vec<ThermalZone>> {
             if trimmed.contains("<key>type</key>") {
                 // Next line should have the value
             } else if trimmed.starts_with("<string>") && sensor_type.is_empty() {
-                let value = trimmed
-                    .trim_start_matches("<string>")
-                    .trim_end_matches("</string>");
+                let value = trimmed.trim_start_matches("<string>").trim_end_matches("</string>");
                 sensor_type = value.to_string();
             } else if trimmed.contains("<key>cur-value</key>") {
                 // Next line has the value
             } else if trimmed.starts_with("<integer>") {
-                let value = trimmed
-                    .trim_start_matches("<integer>")
-                    .trim_end_matches("</integer>");
+                let value = trimmed.trim_start_matches("<integer>").trim_end_matches("</integer>");
                 sensor_value = value.parse().ok();
             } else if trimmed.contains("<key>description</key>") {
                 // Next line has the description
@@ -507,10 +489,7 @@ mod tests {
         let supported = is_thermal_supported();
 
         #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
-        assert!(
-            !supported,
-            "OpenBSD/NetBSD should not support thermal monitoring"
-        );
+        assert!(!supported, "OpenBSD/NetBSD should not support thermal monitoring");
 
         #[cfg(target_os = "freebsd")]
         {
