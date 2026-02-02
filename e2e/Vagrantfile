@@ -49,7 +49,9 @@ end
 # Linux boxes have rsync pre-installed or install it early enough
 def configure_linux_synced_folders(v)
   v.vm.synced_folder "../setup", "/setup", type: "rsync"
-  v.vm.synced_folder "../bin", "/bin-local", type: "rsync" if File.exist?("../bin")
+  # Always configure bin folder - rsync will handle missing source gracefully
+  # CI creates bin/ before vagrant up, so this is safe
+  v.vm.synced_folder "../bin", "/bin-local", type: "rsync", create: true
   v.vm.synced_folder "../src", "/vagrant/src", type: "rsync"
   v.vm.synced_folder ".", "/vagrant", type: "rsync"
 end

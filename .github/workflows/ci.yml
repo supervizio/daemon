@@ -903,7 +903,10 @@ jobs:
             cd /vagrant/src
             export CGO_ENABLED=1
             export CGO_CFLAGS='-I/vagrant/src/lib/probe/include'
-            export CGO_LDFLAGS='-L/vagrant/dist/lib/bsd-amd64 -lprobe -lpthread -lm'
+            # BSD uses -pthread flag (not -lpthread)
+            export CGO_LDFLAGS='-L/vagrant/dist/lib/bsd-amd64 -lprobe -pthread -lm'
+            # Install Wire for code generation
+            go install github.com/google/wire/cmd/wire@v0.7.0
             go generate ./internal/bootstrap/
             go build -ldflags='-s -w' -o /usr/local/bin/supervizio ./cmd/daemon
             chmod +x /usr/local/bin/supervizio
@@ -1022,6 +1025,26 @@ jobs:
           # Rename musl binary to standard name for nfpm
           mv supervizio-linux-${{ matrix.arch }}-musl supervizio-linux-${{ matrix.arch }}
           chmod +x supervizio-linux-${{ matrix.arch }}
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
+
+      - name: Build package
+        env:
+          VERSION: "0.0.0"
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          envsubst < nfpm.yaml > nfpm-resolved.yaml
+          nfpm package --config nfpm-resolved.yaml --packager apk --target ./
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.arch }}.apk
+          path: "*.apk"
+          retention-days: 1
+
   # Generate BSD Packages (native build in VMs)
   # FreeBSD/DragonFly: .pkg (pkgng), OpenBSD/NetBSD: .tgz
   packages-bsd:
@@ -1138,7 +1161,10 @@ jobs:
             cd /vagrant/src
             export CGO_ENABLED=1
             export CGO_CFLAGS='-I/vagrant/src/lib/probe/include'
-            export CGO_LDFLAGS='-L/vagrant/dist/lib/bsd-amd64 -lprobe -lpthread -lm'
+            # BSD uses -pthread flag (not -lpthread)
+            export CGO_LDFLAGS='-L/vagrant/dist/lib/bsd-amd64 -lprobe -pthread -lm'
+            # Install Wire for code generation
+            go install github.com/google/wire/cmd/wire@v0.7.0
             go generate ./internal/bootstrap/
             go build -ldflags='-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci' \
               -o /vagrant/supervizio ./cmd/daemon
