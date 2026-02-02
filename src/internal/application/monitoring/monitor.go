@@ -95,6 +95,7 @@ func (m *ExternalMonitor) AddTarget(t *target.ExternalTarget) error {
 		}
 	}
 
+	// Return nil on successful target addition.
 	return nil
 }
 
@@ -135,6 +136,7 @@ func (m *ExternalMonitor) AddTargets(targets []*target.ExternalTarget) error {
 		}
 	}
 
+	// Return nil after all targets added successfully.
 	return nil
 }
 

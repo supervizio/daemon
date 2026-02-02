@@ -1,108 +1,171 @@
+// Package bootstrap provides internal tests for service provider.
 package bootstrap
 
 import (
 	"testing"
 
 	appsupervisor "github.com/kodflow/daemon/internal/application/supervisor"
+	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/model"
+	"github.com/stretchr/testify/assert"
 )
 
-// mockSnapshotsProvider is a test double for ServiceSnapshotsForTUIer.
-type mockSnapshotsProvider struct {
-	snapshots []appsupervisor.ServiceSnapshotForTUI
-}
-
-// ServiceSnapshotsForTUI returns the configured snapshots.
-//
-// Returns:
-//   - []appsupervisor.ServiceSnapshotForTUI: the configured snapshots.
-func (m *mockSnapshotsProvider) ServiceSnapshotsForTUI() []appsupervisor.ServiceSnapshotForTUI {
-	// Return configured snapshots.
-	return m.snapshots
-}
-
-// Test_supervisorServiceLister_ListServices verifies the ListServices method.
-//
-// Params:
-//   - t: testing context for assertions.
-func Test_supervisorServiceLister_ListServices(t *testing.T) {
+// TestCountTotalListeners tests the countTotalListeners helper function.
+func TestCountTotalListeners(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name      string
 		snapshots []appsupervisor.ServiceSnapshotForTUI
-		wantCount int
+		expected  int
 	}{
 		{
-			name:      "empty_snapshots",
-			snapshots: nil,
-			wantCount: 0,
+			name:      "empty snapshots returns zero",
+			snapshots: []appsupervisor.ServiceSnapshotForTUI{},
+			expected:  0,
 		},
 		{
-			name: "single_snapshot",
+			name: "single service with listeners",
 			snapshots: []appsupervisor.ServiceSnapshotForTUI{
-				{
-					Name:     "test-service",
-					StateInt: 1,
-					PID:      1234,
-				},
+				{Listeners: make([]appsupervisor.ListenerSnapshotForTUI, 3)},
 			},
-			wantCount: 1,
+			expected: 3,
 		},
 		{
-			name: "multiple_snapshots",
+			name: "multiple services with listeners",
 			snapshots: []appsupervisor.ServiceSnapshotForTUI{
-				{Name: "service-a", StateInt: 1},
-				{Name: "service-b", StateInt: 2},
-				{Name: "service-c", StateInt: 1},
+				{Listeners: make([]appsupervisor.ListenerSnapshotForTUI, 2)},
+				{Listeners: make([]appsupervisor.ListenerSnapshotForTUI, 3)},
 			},
-			wantCount: 3,
+			expected: 5,
 		},
 		{
-			name: "snapshot_with_listeners",
+			name: "service without listeners",
 			snapshots: []appsupervisor.ServiceSnapshotForTUI{
-				{
-					Name:     "service-with-listeners",
-					StateInt: 1,
-					Listeners: []appsupervisor.ListenerSnapshotForTUI{
-						{Name: "http", Port: 8080, Protocol: "tcp"},
-						{Name: "grpc", Port: 9090, Protocol: "tcp"},
-					},
-				},
+				{Listeners: nil},
 			},
-			wantCount: 1,
+			expected: 0,
 		},
 	}
 
-	// Run all test cases.
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+			result := countTotalListeners(tc.snapshots)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
 
-			// Create a mock lister with configured snapshots.
-			mock := &mockSnapshotsProvider{snapshots: tt.snapshots}
+// TestAppendConvertedListeners tests the appendConvertedListeners helper function.
+func TestAppendConvertedListeners(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		initialDest int
+		listeners   []appsupervisor.ListenerSnapshotForTUI
+		expectedLen int
+	}{
+		{
+			name:        "append to empty slice",
+			initialDest: 0,
+			listeners: []appsupervisor.ListenerSnapshotForTUI{
+				{Name: "http", Port: 8080},
+			},
+			expectedLen: 1,
+		},
+		{
+			name:        "append to existing slice",
+			initialDest: 2,
+			listeners: []appsupervisor.ListenerSnapshotForTUI{
+				{Name: "http", Port: 8080},
+				{Name: "grpc", Port: 9090},
+			},
+			expectedLen: 4,
+		},
+		{
+			name:        "append empty listeners",
+			initialDest: 1,
+			listeners:   []appsupervisor.ListenerSnapshotForTUI{},
+			expectedLen: 1,
+		},
+	}
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dest := make([]model.ListenerSnapshot, tc.initialDest)
+			result := appendConvertedListeners(dest, tc.listeners)
+			assert.Equal(t, tc.expectedLen, len(result))
+		})
+	}
+}
+
+// mockServiceSnapshotsForTUIer mocks the ServiceSnapshotsForTUIer interface.
+type mockServiceSnapshotsForTUIer struct {
+	snapshots []appsupervisor.ServiceSnapshotForTUI
+}
+
+// ServiceSnapshotsForTUI returns the mock snapshots.
+func (m *mockServiceSnapshotsForTUIer) ServiceSnapshotsForTUI() []appsupervisor.ServiceSnapshotForTUI {
+	// Return stored snapshots.
+	return m.snapshots
+}
+
+// TestListServices tests the ListServices method.
+func TestSupervisorServiceLister_ListServices(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		snapshots   []appsupervisor.ServiceSnapshotForTUI
+		expectedLen int
+	}{
+		{
+			name:        "empty snapshots",
+			snapshots:   []appsupervisor.ServiceSnapshotForTUI{},
+			expectedLen: 0,
+		},
+		{
+			name: "single service",
+			snapshots: []appsupervisor.ServiceSnapshotForTUI{
+				{Name: "test", StateInt: 1, PID: 123},
+			},
+			expectedLen: 1,
+		},
+		{
+			name: "service with listeners",
+			snapshots: []appsupervisor.ServiceSnapshotForTUI{
+				{
+					Name:     "web",
+					StateInt: 1,
+					Listeners: []appsupervisor.ListenerSnapshotForTUI{
+						{Name: "http", Port: 8080, Protocol: "tcp"},
+					},
+				},
+			},
+			expectedLen: 1,
+		},
+		{
+			name: "multiple services",
+			snapshots: []appsupervisor.ServiceSnapshotForTUI{
+				{Name: "svc1", StateInt: 1},
+				{Name: "svc2", StateInt: 0},
+			},
+			expectedLen: 2,
+		},
+	}
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			mock := &mockServiceSnapshotsForTUIer{snapshots: tc.snapshots}
 			lister := &supervisorServiceLister{sup: mock}
-
-			// Call ListServices.
 			result := lister.ListServices()
-
-			// Verify count matches expectation.
-			if len(result) != tt.wantCount {
-				t.Errorf("ListServices() returned %d items, want %d", len(result), tt.wantCount)
-			}
-
-			// Verify service names match (if any).
-			for i, snap := range result {
-				if i < len(tt.snapshots) && snap.Name != tt.snapshots[i].Name {
-					t.Errorf("ListServices()[%d].Name = %s, want %s", i, snap.Name, tt.snapshots[i].Name)
-				}
-			}
-
-			// Verify listener count for snapshot with listeners.
-			if tt.name == "snapshot_with_listeners" && len(result) > 0 {
-				if len(result[0].Listeners) != 2 {
-					t.Errorf("ListServices()[0].Listeners count = %d, want 2", len(result[0].Listeners))
-				}
-			}
+			assert.Len(t, result, tc.expectedLen)
 		})
 	}
 }

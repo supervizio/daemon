@@ -479,9 +479,11 @@ func (s *Store) getLatestFromBucket(ctx context.Context, bucket []byte, decodeFn
 func (s *Store) GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, error) {
 	var result metrics.SystemCPU
 	decodeFn := func(val []byte) error {
+		// Decode system CPU from raw bytes.
 		return decodeSystemCPU(val, &result)
 	}
 	err := s.getLatestFromBucket(ctx, bucketSystemCPU, decodeFn, "system CPU")
+	// Return decoded CPU metrics and any error from bucket retrieval.
 	return result, err
 }
 
@@ -496,9 +498,11 @@ func (s *Store) GetLatestSystemCPU(ctx context.Context) (metrics.SystemCPU, erro
 func (s *Store) GetLatestSystemMemory(ctx context.Context) (metrics.SystemMemory, error) {
 	var result metrics.SystemMemory
 	decodeFn := func(val []byte) error {
+		// Decode system memory from raw bytes.
 		return decodeSystemMemory(val, &result)
 	}
 	err := s.getLatestFromBucket(ctx, bucketSystemMemory, decodeFn, "system memory")
+	// Return decoded memory metrics and any error from bucket retrieval.
 	return result, err
 }
 
@@ -663,6 +667,7 @@ func (s *Store) pruneProcessMetricsBuckets(parent bucketReader, cutoffKey []byte
 			deleted += n
 		}
 
+		// Return nil after processing all buckets successfully.
 		return nil
 	})
 

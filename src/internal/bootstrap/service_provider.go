@@ -29,13 +29,8 @@ func (p *supervisorServiceLister) ListServices() []model.ServiceSnapshot {
 	snapshots := p.sup.ServiceSnapshotsForTUI()
 	result := make([]model.ServiceSnapshot, 0, len(snapshots))
 
-	// Pre-calculate total listener count to avoid allocations in hot loop (KTN-VAR-HOTLOOP).
-	totalListeners := int(0)
-	// calculate total listener count across all services
-	for i := range snapshots {
-		totalListeners += len(snapshots[i].Listeners)
-	}
-
+	// Pre-calculate total listener count to avoid allocations in hot loop.
+	totalListeners := countTotalListeners(snapshots)
 	allListeners := make([]model.ListenerSnapshot, 0, totalListeners)
 
 	// convert supervisor snapshots to model snapshots
@@ -43,20 +38,8 @@ func (p *supervisorServiceLister) ListServices() []model.ServiceSnapshot {
 		snap := &snapshots[i]
 		listenerStart := len(allListeners)
 
-		// convert each listener to model format
-		for j := range snap.Listeners {
-			l := &snap.Listeners[j]
-			// append converted listener
-			allListeners = append(allListeners, model.ListenerSnapshot{
-				Name:      l.Name,
-				Port:      l.Port,
-				Protocol:  l.Protocol,
-				Exposed:   l.Exposed,
-				Listening: l.Listening,
-				Status:    model.PortStatus(l.StatusInt),
-			})
-		}
-
+		// Convert and append all listeners for this service.
+		allListeners = appendConvertedListeners(allListeners, snap.Listeners)
 		listeners := allListeners[listenerStart:]
 
 		// append service snapshot with all fields
@@ -77,4 +60,47 @@ func (p *supervisorServiceLister) ListServices() []model.ServiceSnapshot {
 
 	// return all converted snapshots
 	return result
+}
+
+// countTotalListeners counts total listeners across all services.
+//
+// Params:
+//   - snapshots: service snapshots to count.
+//
+// Returns:
+//   - int: total listener count.
+func countTotalListeners(snapshots []appsupervisor.ServiceSnapshotForTUI) int {
+	total := 0
+	// sum listener counts across all services
+	for i := range snapshots {
+		total += len(snapshots[i].Listeners)
+	}
+	// return computed total
+	return total
+}
+
+// appendConvertedListeners converts and appends listeners to the slice.
+//
+// Params:
+//   - dest: destination slice to append to.
+//   - listeners: source listeners to convert.
+//
+// Returns:
+//   - []model.ListenerSnapshot: extended slice with converted listeners.
+func appendConvertedListeners(dest []model.ListenerSnapshot, listeners []appsupervisor.ListenerSnapshotForTUI) []model.ListenerSnapshot {
+	// convert each listener to model format
+	for j := range listeners {
+		lsn := &listeners[j]
+		// append converted listener with all fields
+		dest = append(dest, model.ListenerSnapshot{
+			Name:      lsn.Name,
+			Port:      lsn.Port,
+			Protocol:  lsn.Protocol,
+			Exposed:   lsn.Exposed,
+			Listening: lsn.Listening,
+			Status:    model.PortStatus(lsn.StatusInt),
+		})
+	}
+	// return extended slice
+	return dest
 }

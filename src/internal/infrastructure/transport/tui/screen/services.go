@@ -13,6 +13,12 @@ import (
 	"github.com/kodflow/daemon/internal/infrastructure/transport/tui/widget"
 )
 
+// compactBuilderSize is the pre-allocated buffer size for compact rendering.
+const compactBuilderSize int = 40
+
+// compactNameWidth is the width allocated for service names in compact mode.
+const compactNameWidth int = 10
+
 // AddRower defines the minimal interface for adding rows to a table (KTN-API-MINIF).
 type AddRower interface {
 	AddRow(cells ...string) *widget.Table
@@ -119,44 +125,11 @@ func (s *ServicesRenderer) renderEmpty() string {
 // Returns:
 //   - string: compact service listing
 func (s *ServicesRenderer) renderCompact(snap *model.Snapshot) string {
-	const (
-		// compactBuilderSize is the pre-allocated buffer size for compact rendering.
-		compactBuilderSize int = 40
-		// nameWidth is the width allocated for service names.
-		nameWidth int = 10
-	)
-
 	lines := make([]string, 0, len(snap.Services)+1)
 
 	// Format each service on a single line.
 	for i := range snap.Services {
-		svc := &snap.Services[i]
-		icon := s.status.ProcessState(svc.State)
-		name := widget.Truncate(svc.Name, nameWidth)
-		state := s.stateShort(svc.State)
-
-		var extra string
-		// Show CPU usage for running services.
-		if svc.State == process.StateRunning {
-			extra = widget.FormatPercent(svc.CPUPercent)
-		}
-
-		// Build line with strings.Builder to avoid fmt.Sprintf allocation.
-		var sb strings.Builder
-		sb.Grow(compactBuilderSize)
-		sb.WriteString("  ")
-		sb.WriteString(icon)
-		sb.WriteByte(' ')
-		sb.WriteString(name)
-		// Pad name to fixed width.
-		for i := len([]rune(name)); i < nameWidth; i++ {
-			sb.WriteByte(' ')
-		}
-		sb.WriteByte(' ')
-		sb.WriteString(state)
-		sb.WriteByte(' ')
-		sb.WriteString(extra)
-		lines = append(lines, sb.String())
+		lines = append(lines, s.buildCompactServiceLine(&snap.Services[i]))
 	}
 
 	// Add summary line.
@@ -170,6 +143,44 @@ func (s *ServicesRenderer) renderCompact(snap *model.Snapshot) string {
 
 	// Return rendered compact services box.
 	return box.Render()
+}
+
+// buildCompactServiceLine builds a single compact service line.
+//
+// Params:
+//   - svc: service snapshot to render
+//
+// Returns:
+//   - string: formatted compact service line
+func (s *ServicesRenderer) buildCompactServiceLine(svc *model.ServiceSnapshot) string {
+	icon := s.status.ProcessState(svc.State)
+	name := widget.Truncate(svc.Name, compactNameWidth)
+	state := s.stateShort(svc.State)
+
+	var extra string
+	// Show CPU usage for running services.
+	if svc.State == process.StateRunning {
+		extra = widget.FormatPercent(svc.CPUPercent)
+	}
+
+	// Build line with strings.Builder to avoid fmt.Sprintf allocation.
+	var sb strings.Builder
+	sb.Grow(compactBuilderSize)
+	sb.WriteString("  ")
+	sb.WriteString(icon)
+	sb.WriteByte(' ')
+	sb.WriteString(name)
+	// Pad name to fixed width.
+	for i := len([]rune(name)); i < compactNameWidth; i++ {
+		sb.WriteByte(' ')
+	}
+	sb.WriteByte(' ')
+	sb.WriteString(state)
+	sb.WriteByte(' ')
+	sb.WriteString(extra)
+
+	// Return formatted service line.
+	return sb.String()
 }
 
 // renderNormal renders a standard service table.

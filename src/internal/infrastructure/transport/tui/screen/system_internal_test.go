@@ -528,3 +528,66 @@ func TestSystemRenderer_appendLimitsRaw(t *testing.T) {
 		})
 	}
 }
+
+func TestSystemRenderer_appendLimits(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		lines     []string
+		limits    model.ResourceLimits
+		expectAdd bool
+	}{
+		{
+			name:      "no limits",
+			lines:     []string{"existing line"},
+			limits:    model.ResourceLimits{HasLimits: false},
+			expectAdd: false,
+		},
+		{
+			name:      "cpu quota only",
+			lines:     []string{"existing line"},
+			limits:    model.ResourceLimits{HasLimits: true, CPUQuota: 2.0},
+			expectAdd: true,
+		},
+		{
+			name:      "memory limit only",
+			lines:     []string{"existing line"},
+			limits:    model.ResourceLimits{HasLimits: true, MemoryMax: 1024 * 1024 * 1024},
+			expectAdd: true,
+		},
+		{
+			name:      "cpu set only",
+			lines:     []string{"existing line"},
+			limits:    model.ResourceLimits{HasLimits: true, CPUSet: "0-3"},
+			expectAdd: true,
+		},
+		{
+			name:  "all limits",
+			lines: []string{"existing line"},
+			limits: model.ResourceLimits{
+				HasLimits: true,
+				CPUQuota:  4.0,
+				CPUSet:    "0-7",
+				MemoryMax: 4 * 1024 * 1024 * 1024,
+			},
+			expectAdd: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			renderer := &SystemRenderer{
+				theme: ansi.DefaultTheme(),
+				width: 80,
+			}
+			result := renderer.appendLimits(tt.lines, tt.limits)
+			if tt.expectAdd {
+				assert.Greater(t, len(result), len(tt.lines))
+			} else {
+				assert.Equal(t, len(tt.lines), len(result))
+			}
+		})
+	}
+}

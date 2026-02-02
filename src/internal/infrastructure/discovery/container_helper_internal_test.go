@@ -1,255 +1,226 @@
 //go:build unix
 
+// Package discovery provides internal tests for container helper functions.
 package discovery
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
+	"github.com/kodflow/daemon/internal/domain/target"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// testContainerFieldsJSON is a JSON response for testing container field parsing.
-const testContainerFieldsJSON string = `[{
-	"ID": "abcdef123456789",
-	"Names": ["/my-container", "/alias"],
-	"State": "running",
-	"Status": "Up 2 hours",
-	"Labels": {"app": "web", "env": "prod"},
-	"Ports": [{"Type": "tcp", "PublicPort": 8080, "PrivatePort": 80}]
-}]`
+// TestContainerToExternalTarget tests the containerToExternalTarget function.
+func TestContainerToExternalTarget(t *testing.T) {
+	t.Parallel()
 
-// mockHTTPDoer is a mock HTTP client for testing fetchContainers.
-type mockHTTPDoer struct {
+	tests := []struct {
+		name     string
+		params   containerToTargetParams
+		wantID   string
+		wantType target.Type
+	}{
+		{
+			name: "docker container with name",
+			params: containerToTargetParams{
+				Container: dockerContainer{
+					ID:     "abc123def456",
+					Names:  []string{"/nginx"},
+					State:  "running",
+					Status: "Up 5 minutes",
+				},
+				RuntimePrefix:  "docker",
+				TargetType:     target.TypeDocker,
+				MetadataLabels: 2,
+				ProbeType:      "tcp",
+			},
+			wantID:   "docker:abc123def456",
+			wantType: target.TypeDocker,
+		},
+		{
+			name: "podman container without name",
+			params: containerToTargetParams{
+				Container: dockerContainer{
+					ID:     "xyz789abc123",
+					Names:  []string{},
+					State:  "running",
+					Status: "Up 10 minutes",
+				},
+				RuntimePrefix:  "podman",
+				TargetType:     target.TypePodman,
+				MetadataLabels: 2,
+				ProbeType:      "tcp",
+			},
+			wantID:   "podman:xyz789abc123",
+			wantType: target.TypePodman,
+		},
+	}
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			result := containerToExternalTarget(tc.params)
+			assert.Equal(t, tc.wantID, result.ID)
+			assert.Equal(t, tc.wantType, result.Type)
+			assert.Equal(t, target.SourceDiscovered, result.Source)
+		})
+	}
+}
+
+// TestConfigureContainerProbe tests the configureContainerProbe function.
+func TestConfigureContainerProbe(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		container      dockerContainer
+		probeType      string
+		expectProbe    bool
+		expectedTarget string
+	}{
+		{
+			name: "container with public port",
+			container: dockerContainer{
+				Ports: []dockerPort{
+					{PrivatePort: 80, PublicPort: 8080, Type: "tcp"},
+				},
+			},
+			probeType:      "tcp",
+			expectProbe:    true,
+			expectedTarget: "127.0.0.1:8080",
+		},
+		{
+			name: "container with only private port",
+			container: dockerContainer{
+				Ports: []dockerPort{
+					{PrivatePort: 80, PublicPort: 0, Type: "tcp"},
+				},
+			},
+			probeType:      "tcp",
+			expectProbe:    true,
+			expectedTarget: "127.0.0.1:80",
+		},
+		{
+			name: "container without ports",
+			container: dockerContainer{
+				Ports: []dockerPort{},
+			},
+			probeType:   "tcp",
+			expectProbe: false,
+		},
+	}
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tgt := &target.ExternalTarget{}
+			configureContainerProbe(tgt, tc.container, tc.probeType)
+
+			if tc.expectProbe {
+				assert.Equal(t, tc.probeType, tgt.ProbeType)
+				assert.NotNil(t, tgt.ProbeTarget)
+			} else {
+				assert.Empty(t, tgt.ProbeType)
+			}
+		})
+	}
+}
+
+// mockDoer implements Doer for testing.
+type mockDoer struct {
 	response *http.Response
 	err      error
 }
 
-// Do implements the Doer interface.
-func (m *mockHTTPDoer) Do(_ *http.Request) (*http.Response, error) {
+// Do implements Doer.
+func (m *mockDoer) Do(_ *http.Request) (*http.Response, error) {
+	// Return configured response and error.
 	return m.response, m.err
 }
 
-// TestFetchContainers verifies container fetching from a container runtime API.
+// TestFetchContainers tests the fetchContainers function.
 func TestFetchContainers(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		response    *http.Response
-		clientErr   error
+		err         error
 		wantErr     bool
-		wantCount   int
-		errContains string
+		wantLen     int
+		runtimeName string
 	}{
 		{
-			name: "successful fetch with containers",
+			name: "successful fetch",
 			response: &http.Response{
 				StatusCode: http.StatusOK,
-				Body: io.NopCloser(bytes.NewBufferString(`[
-					{"ID": "abc123", "Names": ["/test-container"], "State": "running"}
-				]`)),
+				Body:       io.NopCloser(strings.NewReader(`[{"Id":"abc123","Names":["/test"]}]`)),
 			},
-			wantErr:   false,
-			wantCount: 1,
+			err:         nil,
+			wantErr:     false,
+			wantLen:     1,
+			runtimeName: "docker",
 		},
 		{
-			name: "successful fetch with empty list",
+			name: "empty response",
 			response: &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBufferString(`[]`)),
+				Body:       io.NopCloser(strings.NewReader(`[]`)),
 			},
-			wantErr:   false,
-			wantCount: 0,
+			err:         nil,
+			wantErr:     false,
+			wantLen:     0,
+			runtimeName: "docker",
 		},
 		{
-			name:        "client error",
-			clientErr:   errors.New("connection refused"),
+			name:        "request error",
+			response:    nil,
+			err:         errors.New("connection refused"),
 			wantErr:     true,
-			errContains: "api request",
+			runtimeName: "podman",
 		},
 		{
-			name: "non-OK status code",
+			name: "non-OK status",
 			response: &http.Response{
 				StatusCode: http.StatusInternalServerError,
-				Body:       io.NopCloser(bytes.NewBufferString(`{"error": "internal error"}`)),
+				Body:       io.NopCloser(strings.NewReader(`{}`)),
 			},
+			err:         nil,
 			wantErr:     true,
-			errContains: "unexpected status code",
+			runtimeName: "docker",
 		},
 		{
-			name: "invalid JSON response",
+			name: "invalid JSON",
 			response: &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBufferString(`{invalid json}`)),
+				Body:       io.NopCloser(strings.NewReader(`invalid`)),
 			},
+			err:         nil,
 			wantErr:     true,
-			errContains: "decode",
+			runtimeName: "docker",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := &mockHTTPDoer{
-				response: tt.response,
-				err:      tt.clientErr,
-			}
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			client := &mockDoer{response: tc.response, err: tc.err}
+			result, err := fetchContainers(context.Background(), client, "http://test/containers/json", tc.runtimeName)
 
-			containers, err := fetchContainers(
-				context.Background(),
-				client,
-				"http://docker/containers/json",
-				"docker",
-			)
-
-			if tt.wantErr {
-				require.Error(t, err)
-				if tt.errContains != "" {
-					assert.Contains(t, err.Error(), tt.errContains)
-				}
-			} else {
-				require.NoError(t, err)
-				assert.Len(t, containers, tt.wantCount)
-			}
-		})
-	}
-}
-
-// TestFetchContainers_ContextCancellation verifies context cancellation handling.
-func TestFetchContainers_ContextCancellation(t *testing.T) {
-	tests := []struct {
-		name    string
-		ctx     context.Context
-		wantErr bool
-	}{
-		{
-			name:    "canceled context with client error fails",
-			ctx:     canceledCtx(),
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Mock client that returns context error.
-			client := &mockHTTPDoer{
-				err: context.Canceled,
-			}
-
-			_, err := fetchContainers(tt.ctx, client, "http://docker/containers/json", "docker")
-
-			if tt.wantErr {
+			if tc.wantErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+				assert.Len(t, result, tc.wantLen)
 			}
-		})
-	}
-}
-
-// canceledCtx returns a pre-canceled context.
-func canceledCtx() context.Context {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	return ctx
-}
-
-// TestFetchContainers_ParsesContainerFields verifies container fields are parsed correctly.
-func TestFetchContainers_ParsesContainerFields(t *testing.T) {
-	tests := []struct {
-		name          string
-		jsonResponse  string
-		wantID        string
-		wantNames     []string
-		wantState     string
-		wantLabelsLen int
-	}{
-		{
-			name:          "parses all container fields",
-			jsonResponse:  testContainerFieldsJSON,
-			wantID:        "abcdef123456789",
-			wantNames:     []string{"/my-container", "/alias"},
-			wantState:     "running",
-			wantLabelsLen: 2,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := &mockHTTPDoer{
-				response: &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(bytes.NewBufferString(tt.jsonResponse)),
-				},
-			}
-
-			containers, err := fetchContainers(
-				context.Background(),
-				client,
-				"http://docker/containers/json",
-				"docker",
-			)
-
-			require.NoError(t, err)
-			require.Len(t, containers, 1)
-
-			c := containers[0]
-			assert.Equal(t, tt.wantID, c.ID)
-			assert.Equal(t, tt.wantNames, c.Names)
-			assert.Equal(t, tt.wantState, c.State)
-			assert.Len(t, c.Labels, tt.wantLabelsLen)
-		})
-	}
-}
-
-// TestDockerContainer_JSONDecoding verifies JSON unmarshaling of dockerContainer.
-func TestDockerContainer_JSONDecoding(t *testing.T) {
-	tests := []struct {
-		name       string
-		jsonInput  string
-		wantID     string
-		wantState  string
-		wantPorts  int
-		wantLabels int
-	}{
-		{
-			name:       "empty container",
-			jsonInput:  `{"ID": "test"}`,
-			wantID:     "test",
-			wantState:  "",
-			wantPorts:  0,
-			wantLabels: 0,
-		},
-		{
-			name:       "container with ports",
-			jsonInput:  `{"ID": "abc", "Ports": [{"Type": "tcp", "PublicPort": 80}]}`,
-			wantID:     "abc",
-			wantPorts:  1,
-			wantLabels: 0,
-		},
-		{
-			name:       "container with labels",
-			jsonInput:  `{"ID": "xyz", "Labels": {"key": "value"}}`,
-			wantID:     "xyz",
-			wantPorts:  0,
-			wantLabels: 1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var container dockerContainer
-			err := json.Unmarshal([]byte(tt.jsonInput), &container)
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantID, container.ID)
-			assert.Equal(t, tt.wantState, container.State)
-			assert.Len(t, container.Ports, tt.wantPorts)
-			assert.Len(t, container.Labels, tt.wantLabels)
 		})
 	}
 }

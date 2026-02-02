@@ -503,7 +503,7 @@ func (l *LogsPanel) Update(msg tea.Msg) (*LogsPanel, tea.Cmd) {
 //   - tea.Cmd: command to execute
 func (l *LogsPanel) handleKeyMsg(msg Stringer) tea.Cmd {
 	// Delegate to shared viewport key handler.
-	return handleViewportKeyMsg(&l.viewport, msg)
+	return handleViewportKeyMsg(&l.viewport, &l.viewport, msg)
 }
 
 // View renders the logs panel with border and vertical scrollbar.
@@ -589,7 +589,7 @@ func (l *LogsPanel) renderContentLines(sb *strings.Builder, borderColor string, 
 	scrollbarChars := l.renderVerticalScrollbar()
 
 	// Delegate to shared helper for rendering.
-	renderContentLinesWithScrollbar(sb, lines, scrollbarChars, l.viewport.Height, innerWidth, borderColor, scrollTrack)
+	renderContentLinesWithScrollbar(sb, ScrollbarParams{Lines: lines, ScrollbarChars: scrollbarChars, Height: l.viewport.Height, InnerWidth: innerWidth, BorderColor: borderColor, TrackChar: scrollTrack})
 }
 
 // renderBottomBorder renders the bottom border.

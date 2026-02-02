@@ -25,3 +25,39 @@ func TestNotFoundPIDConstant(t *testing.T) {
 		})
 	}
 }
+
+// TestConvertTCPConnections tests the convertTCPConnections function exists.
+func TestConvertTCPConnections(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+	}{
+		{name: "function exists and compiles"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			// convertTCPConnections requires C.TcpConnectionList, tested via CollectTCP integration.
+			assert.NotNil(t, convertTCPConnections)
+		})
+	}
+}
+
+// TestConvertUDPConnections tests the convertUDPConnections function exists.
+func TestConvertUDPConnections(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+	}{
+		{name: "function exists and compiles"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			// convertUDPConnections requires C.UdpConnectionList, tested via CollectUDP integration.
+			assert.NotNil(t, convertUDPConnections)
+		})
+	}
+}

@@ -1,3 +1,4 @@
+// Package widget_test provides external tests for the widget package.
 package widget_test
 
 import (
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestNewStatusIndicator tests the NewStatusIndicator constructor.
 func TestNewStatusIndicator(t *testing.T) {
 	t.Parallel()
 
@@ -16,19 +18,25 @@ func TestNewStatusIndicator(t *testing.T) {
 		name string
 	}{
 		{
-			name: "creates_status_indicator",
+			name: "creates indicator with valid theme and icons",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			indicator := widget.NewStatusIndicator()
+
+			// Verify non-nil and valid theme.
 			assert.NotNil(t, indicator)
+			assert.NotEmpty(t, indicator.Theme.Success)
+			assert.NotEmpty(t, indicator.Icons.Running)
 		})
 	}
 }
 
+// TestStatusIndicator_ProcessState tests the ProcessState method.
 func TestStatusIndicator_ProcessState(t *testing.T) {
 	t.Parallel()
 
@@ -36,38 +44,27 @@ func TestStatusIndicator_ProcessState(t *testing.T) {
 		name  string
 		state process.State
 	}{
-		{
-			name:  "running_state",
-			state: process.StateRunning,
-		},
-		{
-			name:  "starting_state",
-			state: process.StateStarting,
-		},
-		{
-			name:  "stopped_state",
-			state: process.StateStopped,
-		},
-		{
-			name:  "stopping_state",
-			state: process.StateStopping,
-		},
-		{
-			name:  "failed_state",
-			state: process.StateFailed,
-		},
+		{name: "running", state: process.StateRunning},
+		{name: "starting", state: process.StateStarting},
+		{name: "stopped", state: process.StateStopped},
+		{name: "stopping", state: process.StateStopping},
+		{name: "failed", state: process.StateFailed},
+		{name: "unknown", state: process.State(99)},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	indicator := widget.NewStatusIndicator()
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			indicator := widget.NewStatusIndicator()
-			result := indicator.ProcessState(tt.state)
+			result := indicator.ProcessState(tc.state)
 			assert.NotEmpty(t, result)
 		})
 	}
 }
 
+// TestStatusIndicator_ProcessStateText tests the ProcessStateText method.
 func TestStatusIndicator_ProcessStateText(t *testing.T) {
 	t.Parallel()
 
@@ -75,38 +72,24 @@ func TestStatusIndicator_ProcessStateText(t *testing.T) {
 		name  string
 		state process.State
 	}{
-		{
-			name:  "running_text",
-			state: process.StateRunning,
-		},
-		{
-			name:  "starting_text",
-			state: process.StateStarting,
-		},
-		{
-			name:  "stopped_text",
-			state: process.StateStopped,
-		},
-		{
-			name:  "stopping_text",
-			state: process.StateStopping,
-		},
-		{
-			name:  "failed_text",
-			state: process.StateFailed,
-		},
+		{name: "running", state: process.StateRunning},
+		{name: "stopped", state: process.StateStopped},
+		{name: "failed", state: process.StateFailed},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	indicator := widget.NewStatusIndicator()
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			indicator := widget.NewStatusIndicator()
-			result := indicator.ProcessStateText(tt.state)
+			result := indicator.ProcessStateText(tc.state)
 			assert.NotEmpty(t, result)
 		})
 	}
 }
 
+// TestStatusIndicator_ProcessStateShort tests the ProcessStateShort method.
 func TestStatusIndicator_ProcessStateShort(t *testing.T) {
 	t.Parallel()
 
@@ -114,38 +97,23 @@ func TestStatusIndicator_ProcessStateShort(t *testing.T) {
 		name  string
 		state process.State
 	}{
-		{
-			name:  "running_short",
-			state: process.StateRunning,
-		},
-		{
-			name:  "starting_short",
-			state: process.StateStarting,
-		},
-		{
-			name:  "stopped_short",
-			state: process.StateStopped,
-		},
-		{
-			name:  "stopping_short",
-			state: process.StateStopping,
-		},
-		{
-			name:  "failed_short",
-			state: process.StateFailed,
-		},
+		{name: "running", state: process.StateRunning},
+		{name: "stopped", state: process.StateStopped},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	indicator := widget.NewStatusIndicator()
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			indicator := widget.NewStatusIndicator()
-			result := indicator.ProcessStateShort(tt.state)
+			result := indicator.ProcessStateShort(tc.state)
 			assert.NotEmpty(t, result)
 		})
 	}
 }
 
+// TestStatusIndicator_HealthStatus tests the HealthStatus method.
 func TestStatusIndicator_HealthStatus(t *testing.T) {
 	t.Parallel()
 
@@ -153,34 +121,25 @@ func TestStatusIndicator_HealthStatus(t *testing.T) {
 		name   string
 		status health.Status
 	}{
-		{
-			name:   "healthy_status",
-			status: health.StatusHealthy,
-		},
-		{
-			name:   "unhealthy_status",
-			status: health.StatusUnhealthy,
-		},
-		{
-			name:   "degraded_status",
-			status: health.StatusDegraded,
-		},
-		{
-			name:   "unknown_status",
-			status: health.StatusUnknown,
-		},
+		{name: "healthy", status: health.StatusHealthy},
+		{name: "unhealthy", status: health.StatusUnhealthy},
+		{name: "degraded", status: health.StatusDegraded},
+		{name: "unknown", status: health.StatusUnknown},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	indicator := widget.NewStatusIndicator()
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			indicator := widget.NewStatusIndicator()
-			result := indicator.HealthStatus(tt.status)
+			result := indicator.HealthStatus(tc.status)
 			assert.NotEmpty(t, result)
 		})
 	}
 }
 
+// TestStatusIndicator_HealthStatusText tests the HealthStatusText method.
 func TestStatusIndicator_HealthStatusText(t *testing.T) {
 	t.Parallel()
 
@@ -188,34 +147,25 @@ func TestStatusIndicator_HealthStatusText(t *testing.T) {
 		name   string
 		status health.Status
 	}{
-		{
-			name:   "healthy_text",
-			status: health.StatusHealthy,
-		},
-		{
-			name:   "unhealthy_text",
-			status: health.StatusUnhealthy,
-		},
-		{
-			name:   "degraded_text",
-			status: health.StatusDegraded,
-		},
-		{
-			name:   "unknown_text",
-			status: health.StatusUnknown,
-		},
+		{name: "healthy", status: health.StatusHealthy},
+		{name: "unhealthy", status: health.StatusUnhealthy},
+		{name: "degraded", status: health.StatusDegraded},
+		{name: "unknown", status: health.StatusUnknown},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	indicator := widget.NewStatusIndicator()
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			indicator := widget.NewStatusIndicator()
-			result := indicator.HealthStatusText(tt.status)
+			result := indicator.HealthStatusText(tc.status)
 			assert.NotEmpty(t, result)
 		})
 	}
 }
 
+// TestStatusIndicator_ListenerState tests the ListenerState method.
 func TestStatusIndicator_ListenerState(t *testing.T) {
 	t.Parallel()
 
@@ -223,34 +173,25 @@ func TestStatusIndicator_ListenerState(t *testing.T) {
 		name  string
 		state string
 	}{
-		{
-			name:  "ready_state",
-			state: "ready",
-		},
-		{
-			name:  "listening_state",
-			state: "listening",
-		},
-		{
-			name:  "closed_state",
-			state: "closed",
-		},
-		{
-			name:  "unknown_state",
-			state: "unknown",
-		},
+		{name: "ready", state: "ready"},
+		{name: "listening", state: "listening"},
+		{name: "closed", state: "closed"},
+		{name: "unknown", state: "unknown"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	indicator := widget.NewStatusIndicator()
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			indicator := widget.NewStatusIndicator()
-			result := indicator.ListenerState(tt.state)
+			result := indicator.ListenerState(tc.state)
 			assert.NotEmpty(t, result)
 		})
 	}
 }
 
+// TestStatusIndicator_LogLevel tests the LogLevel method.
 func TestStatusIndicator_LogLevel(t *testing.T) {
 	t.Parallel()
 
@@ -258,34 +199,26 @@ func TestStatusIndicator_LogLevel(t *testing.T) {
 		name  string
 		level string
 	}{
-		{
-			name:  "info_level",
-			level: "INFO",
-		},
-		{
-			name:  "warn_level",
-			level: "WARN",
-		},
-		{
-			name:  "error_level",
-			level: "ERROR",
-		},
-		{
-			name:  "debug_level",
-			level: "DEBUG",
-		},
+		{name: "info", level: "INFO"},
+		{name: "warn", level: "WARN"},
+		{name: "error", level: "ERROR"},
+		{name: "debug", level: "DEBUG"},
+		{name: "unknown", level: "TRACE"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	indicator := widget.NewStatusIndicator()
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			indicator := widget.NewStatusIndicator()
-			result := indicator.LogLevel(tt.level)
+			result := indicator.LogLevel(tc.level)
 			assert.NotEmpty(t, result)
 		})
 	}
 }
 
+// TestStatusIndicator_Bool tests the Bool method.
 func TestStatusIndicator_Bool(t *testing.T) {
 	t.Parallel()
 
@@ -293,26 +226,23 @@ func TestStatusIndicator_Bool(t *testing.T) {
 		name  string
 		value bool
 	}{
-		{
-			name:  "true_value",
-			value: true,
-		},
-		{
-			name:  "false_value",
-			value: false,
-		},
+		{name: "true", value: true},
+		{name: "false", value: false},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	indicator := widget.NewStatusIndicator()
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			indicator := widget.NewStatusIndicator()
-			result := indicator.Bool(tt.value)
+			result := indicator.Bool(tc.value)
 			assert.NotEmpty(t, result)
 		})
 	}
 }
 
+// TestStatusIndicator_Detected tests the Detected method.
 func TestStatusIndicator_Detected(t *testing.T) {
 	t.Parallel()
 
@@ -320,21 +250,17 @@ func TestStatusIndicator_Detected(t *testing.T) {
 		name     string
 		detected bool
 	}{
-		{
-			name:     "detected",
-			detected: true,
-		},
-		{
-			name:     "not_detected",
-			detected: false,
-		},
+		{name: "detected", detected: true},
+		{name: "not detected", detected: false},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	indicator := widget.NewStatusIndicator()
+
+	// Execute test cases.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			indicator := widget.NewStatusIndicator()
-			result := indicator.Detected(tt.detected)
+			result := indicator.Detected(tc.detected)
 			assert.NotEmpty(t, result)
 		})
 	}

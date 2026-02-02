@@ -478,9 +478,7 @@ func (s *ServicesPanel) getPortStatusColor(status model.PortStatus) string {
 	}
 }
 
-// getStateIcon returns the state icon with color.
-//
-// stateColorAndText returns the color function and state text for a process state.
+// stateColorAndText returns the theme color and text for a process state.
 //
 // Params:
 //   - state: the process state to look up
@@ -491,18 +489,30 @@ func (s *ServicesPanel) getPortStatusColor(status model.PortStatus) string {
 func stateColorAndText(state process.State) (colorFn func(*ansi.Theme) string, text string) {
 	// Use lookup for state display info.
 	switch state {
+	// Handle running state with success color.
 	case process.StateRunning:
-		return func(t *ansi.Theme) string { return t.Success }, "running"
+		// Return success color for active processes.
+		return func(th *ansi.Theme) string { return th.Success }, "running"
+	// Handle stopped state with muted color.
 	case process.StateStopped:
-		return func(t *ansi.Theme) string { return t.Muted }, "stopped"
+		// Return muted color for inactive processes.
+		return func(th *ansi.Theme) string { return th.Muted }, "stopped"
+	// Handle failed state with error color.
 	case process.StateFailed:
-		return func(t *ansi.Theme) string { return t.Error }, "failed"
+		// Return error color for failed processes.
+		return func(th *ansi.Theme) string { return th.Error }, "failed"
+	// Handle starting state with warning color.
 	case process.StateStarting:
-		return func(t *ansi.Theme) string { return t.Warning }, "starting"
+		// Return warning color for pending startup.
+		return func(th *ansi.Theme) string { return th.Warning }, "starting"
+	// Handle stopping state with warning color.
 	case process.StateStopping:
-		return func(t *ansi.Theme) string { return t.Warning }, "stopping"
+		// Return warning color for pending shutdown.
+		return func(th *ansi.Theme) string { return th.Warning }, "stopping"
+	// Handle unknown or future states.
 	default:
-		return func(t *ansi.Theme) string { return t.Muted }, "unknown"
+		// Return muted color for unknown states.
+		return func(th *ansi.Theme) string { return th.Muted }, "unknown"
 	}
 }
 
@@ -628,7 +638,7 @@ func (s *ServicesPanel) Update(msg tea.Msg) (*ServicesPanel, tea.Cmd) {
 //   - tea.Cmd: command to execute
 func (s *ServicesPanel) handleKeyMsg(msg Stringer) tea.Cmd {
 	// Delegate to shared viewport key handler.
-	return handleViewportKeyMsg(&s.viewport, msg)
+	return handleViewportKeyMsg(&s.viewport, &s.viewport, msg)
 }
 
 // View renders the services panel with border and vertical scrollbar.
@@ -740,7 +750,7 @@ func (s *ServicesPanel) renderContentLines(sb *strings.Builder, borderColor stri
 	contentHeight = max(contentHeight, minContentHeight)
 
 	// Delegate to shared helper for rendering.
-	renderContentLinesWithScrollbar(sb, lines, scrollbarChars, contentHeight, innerWidth, borderColor, scrollTrack)
+	renderContentLinesWithScrollbar(sb, ScrollbarParams{Lines: lines, ScrollbarChars: scrollbarChars, Height: contentHeight, InnerWidth: innerWidth, BorderColor: borderColor, TrackChar: scrollTrack})
 }
 
 // renderBottomBorder renders the bottom border.

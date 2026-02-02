@@ -87,6 +87,7 @@ func (l *Listener) SetState(state State) bool {
 	}
 	l.State = state
 
+	// Return true indicating state transition succeeded.
 	return true
 }
 

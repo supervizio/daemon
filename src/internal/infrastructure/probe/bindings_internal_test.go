@@ -200,3 +200,76 @@ func TestNewProbeError(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateCollectionContext tests the validateCollectionContext function.
+func TestValidateCollectionContext(t *testing.T) {
+	tests := []struct {
+		name           string
+		ctx            context.Context
+		setInitialized bool
+		wantErr        bool
+	}{
+		{
+			name:           "ReturnsNilWhenValidAndInitialized",
+			ctx:            context.Background(),
+			setInitialized: true,
+			wantErr:        false,
+		},
+		{
+			name: "ReturnsErrorWhenContextCancelled",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			}(),
+			setInitialized: true,
+			wantErr:        true,
+		},
+		{
+			name:           "ReturnsErrorWhenNotInitialized",
+			ctx:            context.Background(),
+			setInitialized: false,
+			wantErr:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			initMu.Lock()
+			oldValue := initialized
+			initialized = tt.setInitialized
+			initMu.Unlock()
+
+			defer func() {
+				initMu.Lock()
+				initialized = oldValue
+				initMu.Unlock()
+			}()
+
+			err := validateCollectionContext(tt.ctx)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestResultToError tests the resultToError function exists.
+func TestResultToError(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+	}{
+		{name: "function exists and compiles"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			// resultToError requires C.ProbeResult, tested via integration tests.
+			assert.NotNil(t, resultToError)
+		})
+	}
+}

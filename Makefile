@@ -9,8 +9,22 @@
 .PHONY: test test-unit test-e2e test-probe coverage
 .PHONY: clean clean-probe clean-go dirs header info
 .PHONY: install-rust install-rust-targets install-cbindgen
+.PHONY: ensure-probe
 
 .DEFAULT_GOAL := help
+
+# ==============================================================================
+# RUST/CARGO ENVIRONMENT
+# ==============================================================================
+
+# Source cargo env if available (for fresh installs)
+CARGO_ENV := $(HOME)/.cargo/env
+ifneq ($(wildcard $(HOME)/.cache/cargo/env),)
+    CARGO_ENV := $(HOME)/.cache/cargo/env
+endif
+
+# Export PATH to include cargo bin
+export PATH := $(HOME)/.cargo/bin:$(HOME)/.cache/cargo/bin:$(PATH)
 
 # ==============================================================================
 # CONFIGURATION
@@ -94,9 +108,13 @@ CURRENT_GO_OS ?= linux
 CURRENT_GO_ARCH ?= amd64
 CURRENT_RUST_TARGET ?= x86_64-unknown-linux-gnu
 
-# CGO flags for linking the Rust library
-CGO_CFLAGS := -I$(abspath $(INCLUDE_DIR))
-CGO_LDFLAGS := -L$(abspath $(DIST_LIB)/$(CURRENT_PLATFORM)) -lprobe -lpthread -ldl -lm
+# CGO flags for linking the Rust library (exported for all targets)
+export CGO_ENABLED := 1
+export CGO_CFLAGS := -I$(abspath $(INCLUDE_DIR))
+export CGO_LDFLAGS := -L$(abspath $(DIST_LIB)/$(CURRENT_PLATFORM)) -lprobe -lpthread -ldl -lm
+
+# Probe library path
+PROBE_LIB := $(DIST_LIB)/$(CURRENT_PLATFORM)/libprobe.a
 
 # ==============================================================================
 # HELP
@@ -118,6 +136,13 @@ help: ## Show this help
 # MAIN BUILD TARGETS
 # ==============================================================================
 
+# Ensure probe library exists, build if missing (silent prerequisite)
+ensure-probe: dirs
+	@if [ ! -f "$(PROBE_LIB)" ]; then \
+		echo "$(CYAN)Probe library not found, building...$(RESET)"; \
+		$(MAKE) build-probe; \
+	fi
+
 build: dirs build-probe build-daemon ## Build supervizio (Rust probe + Go daemon)
 	@echo "$(GREEN)Build complete: $(DIST_BIN)/$(CURRENT_PLATFORM)/$(BINARY_NAME)$(RESET)"
 
@@ -129,21 +154,13 @@ build-probe: dirs ## Build Rust probe library (libprobe.a)
 		exit 1; \
 	fi
 	cd $(PROBE_DIR) && cargo build --release --target $(CURRENT_RUST_TARGET)
-	cp $(PROBE_DIR)/target/$(CURRENT_RUST_TARGET)/release/libprobe.a $(DIST_LIB)/$(CURRENT_PLATFORM)/
-	@echo "$(GREEN)Probe built: $(DIST_LIB)/$(CURRENT_PLATFORM)/libprobe.a$(RESET)"
+	cp $(PROBE_DIR)/target/$(CURRENT_RUST_TARGET)/release/libprobe.a $(PROBE_LIB)
+	@echo "$(GREEN)Probe built: $(PROBE_LIB)$(RESET)"
 
-build-daemon: ## Build Go daemon with Rust probe linked
+build-daemon: ensure-probe ## Build Go daemon with Rust probe linked
 	@echo "$(CYAN)Building Go daemon for $(CURRENT_GO_OS)/$(CURRENT_GO_ARCH)...$(RESET)"
-	@if [ ! -f "$(DIST_LIB)/$(CURRENT_PLATFORM)/libprobe.a" ]; then \
-		echo "$(YELLOW)ERROR: libprobe.a not found. Run 'make build-probe' first.$(RESET)"; \
-		exit 1; \
-	fi
 	@mkdir -p $(DIST_BIN)/$(CURRENT_PLATFORM)
-	cd $(SRC_DIR) && \
-	    CGO_ENABLED=1 \
-	    CGO_CFLAGS="$(CGO_CFLAGS)" \
-	    CGO_LDFLAGS="$(CGO_LDFLAGS)" \
-	    go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=$(VERSION)" \
+	cd $(SRC_DIR) && go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=$(VERSION)" \
 	    -o ../$(DIST_BIN)/$(CURRENT_PLATFORM)/$(BINARY_NAME) ./cmd/daemon
 	@echo "$(GREEN)Daemon built: $(DIST_BIN)/$(CURRENT_PLATFORM)/$(BINARY_NAME)$(RESET)"
 
@@ -250,7 +267,7 @@ header: ## Generate C header from Rust code (requires cbindgen)
 
 test: test-unit test-e2e ## Run all tests (unit + E2E)
 
-test-unit: ## Run unit tests with race detection
+test-unit: ensure-probe ## Run unit tests with race detection
 	@cd $(SRC_DIR) && go test -race ./...
 
 test-probe: ## Run Rust tests
@@ -264,15 +281,11 @@ test-probe: ## Run Rust tests
 test-e2e: build-e2e ## Run E2E behavioral tests (requires Docker)
 	@cd e2e/behavioral && go test -v -timeout 15m ./...
 
-test-hybrid: build-probe ## Run Go tests with Rust probe linked
+test-hybrid: ensure-probe ## Run Go tests with Rust probe linked
 	@echo "$(CYAN)Testing Go code with Rust probe...$(RESET)"
-	cd $(SRC_DIR) && \
-	    CGO_ENABLED=1 \
-	    CGO_CFLAGS="$(CGO_CFLAGS)" \
-	    CGO_LDFLAGS="$(CGO_LDFLAGS)" \
-	    go test -race ./...
+	cd $(SRC_DIR) && go test -race ./...
 
-coverage: ## Run unit tests with coverage report
+coverage: ensure-probe ## Run unit tests with coverage report
 	@cd $(SRC_DIR) && go test -race -coverprofile=coverage.out ./...
 	@cd $(SRC_DIR) && go tool cover -func=coverage.out | tail -1
 	@rm -f $(SRC_DIR)/coverage.out
@@ -283,26 +296,10 @@ coverage: ## Run unit tests with coverage report
 
 lint: lint-golangci lint-ktn ## Run all linters
 
-lint-golangci: ## Run golangci-lint (CGO required)
-	@if [ -f "$(DIST_LIB)/$(CURRENT_PLATFORM)/libprobe.a" ]; then \
-		cd $(SRC_DIR) && CGO_ENABLED=1 \
-		CGO_CFLAGS="$(CGO_CFLAGS)" \
-		CGO_LDFLAGS="$(CGO_LDFLAGS)" \
-		golangci-lint run -c ../.golangci.yml; \
-	else \
-		echo "$(YELLOW)Warning: libprobe.a not found. Skipping probe package in lint.$(RESET)"; \
-		cd $(SRC_DIR) && golangci-lint run -c ../.golangci.yml \
-			--skip-dirs=internal/infrastructure/probe \
-			./cmd/... ./internal/application/... ./internal/domain/... \
-			./internal/infrastructure/observability/... \
-			./internal/infrastructure/persistence/... \
-			./internal/infrastructure/process/... \
-			./internal/infrastructure/transport/... \
-			./internal/infrastructure/discovery/... \
-			./internal/bootstrap/...; \
-	fi
+lint-golangci: ensure-probe ## Run golangci-lint (CGO required)
+	@cd $(SRC_DIR) && golangci-lint run -c ../.golangci.yml
 
-lint-ktn: ## Run ktn-linter
+lint-ktn: ensure-probe ## Run ktn-linter
 	@cd $(SRC_DIR) && ktn-linter lint --no-cache -c ../.ktn-linter.yaml ./...
 
 lint-probe: ## Run Rust linter (clippy)

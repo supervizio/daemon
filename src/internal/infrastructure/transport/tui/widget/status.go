@@ -72,21 +72,43 @@ func (s *StatusIndicator) ProcessState(state process.State) string {
 //   - func(*ansi.Theme) string: theme color getter
 //   - string: full state text
 //   - string: short state text
+//
+// stateColorText returns the theme color and text for a process state.
+//
+// Params:
+//   - state: the process state to look up
+//
+// Returns:
+//   - func(*ansi.Theme) string: theme color getter
+//   - string: full state text
+//   - string: short state text
 func stateColorText(state process.State) (colorFn func(*ansi.Theme) string, text, short string) {
 	// Use lookup table for state display info.
 	switch state {
+	// Handle running state with success color.
 	case process.StateRunning:
-		return func(t *ansi.Theme) string { return t.Success }, "running", "run"
+		// Return success color for active processes.
+		return func(th *ansi.Theme) string { return th.Success }, "running", "run"
+	// Handle starting state with warning color.
 	case process.StateStarting:
-		return func(t *ansi.Theme) string { return t.Warning }, "starting", "start"
+		// Return warning color for pending startup.
+		return func(th *ansi.Theme) string { return th.Warning }, "starting", "start"
+	// Handle stopped state with muted color.
 	case process.StateStopped:
-		return func(t *ansi.Theme) string { return t.Muted }, "stopped", "stop"
+		// Return muted color for inactive processes.
+		return func(th *ansi.Theme) string { return th.Muted }, "stopped", "stop"
+	// Handle stopping state with warning color.
 	case process.StateStopping:
-		return func(t *ansi.Theme) string { return t.Warning }, "stopping", "stopping"
+		// Return warning color for pending shutdown.
+		return func(th *ansi.Theme) string { return th.Warning }, "stopping", "stopping"
+	// Handle failed state with error color.
 	case process.StateFailed:
-		return func(t *ansi.Theme) string { return t.Error }, "failed", "fail"
+		// Return error color for failed processes.
+		return func(th *ansi.Theme) string { return th.Error }, "failed", "fail"
+	// Handle unknown or future states.
 	default:
-		return func(t *ansi.Theme) string { return t.Muted }, "unknown", "?"
+		// Return muted color for unknown states.
+		return func(th *ansi.Theme) string { return th.Muted }, "unknown", "?"
 	}
 }
 
