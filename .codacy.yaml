@@ -38,6 +38,11 @@ exclude_paths:
   - "**/*.gen.go"
   - "src/api/proto/**/*.go"
 
+  # C/C++ headers for FFI (used by Rust, false positives from cppcheck)
+  - "**/probe.h"
+  - "src/lib/probe/include/**"
+  - "src/internal/infrastructure/probe/probe.h"
+
   # E2E test infrastructure (not production code)
   - "e2e/.vagrant/**"
   - "e2e/behavioral/crasher/**"
@@ -61,6 +66,12 @@ languages:
 # Engines Configuration
 # -----------------------------------------------------------------------------
 engines:
+  # ---------------------------------------------------------------------------
+  # C/C++ Static Analysis (Disabled - false positives on FFI headers)
+  # ---------------------------------------------------------------------------
+  cppcheck:
+    enabled: false
+
   # ---------------------------------------------------------------------------
   # Go Static Analysis
   # ---------------------------------------------------------------------------
