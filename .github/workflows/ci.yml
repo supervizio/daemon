@@ -551,10 +551,11 @@ jobs:
   # =============================================================================
 
   # E2E Testcontainer (behavioral tests with testcontainers-go)
+  # Uses musl binary because Dockerfile.behavioral is Alpine-based
   e2e-testcontainer:
     name: E2E Testcontainer
     runs-on: ubuntu-24.04
-    needs: [matrix-unix, build-crasher]
+    needs: [matrix-unix-musl, build-crasher]
     continue-on-error: true  # E2E tests may be flaky
     timeout-minutes: 15
     steps:
@@ -568,10 +569,10 @@ jobs:
           cache: true
           cache-dependency-path: src/go.sum
 
-      - name: Download supervizio binary
+      - name: Download supervizio binary (musl for Alpine)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: supervizio-linux-amd64
+          name: supervizio-linux-amd64-musl
           path: bin/
 
       - name: Download crasher binary
@@ -584,13 +585,12 @@ jobs:
         run: |
           echo "=== Contents of bin/ before preparation ==="
           ls -la bin/
-          mv bin/supervizio-linux-amd64 bin/supervizio
+          mv bin/supervizio-linux-amd64-musl bin/supervizio
           # Crasher is downloaded as 'crasher' directly (artifact path preserves only filename)
           chmod +x bin/*
           echo "=== Contents of bin/ after preparation ==="
           ls -la bin/
           echo "=== Verify binaries work ==="
-          bin/supervizio --version || true
           file bin/supervizio bin/crasher
 
       - name: Download Go dependencies
@@ -637,7 +637,10 @@ jobs:
 
       - name: Prepare binary
         run: |
-          mv bin/${{ matrix.artifact }} bin/supervizio-linux-amd64
+          # Only rename if artifact name differs from target
+          if [ "${{ matrix.artifact }}" != "supervizio-linux-amd64" ]; then
+            mv bin/${{ matrix.artifact }} bin/supervizio-linux-amd64
+          fi
           file bin/supervizio-linux-amd64
 
       - name: Build container
