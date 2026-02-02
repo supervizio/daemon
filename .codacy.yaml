@@ -51,6 +51,16 @@ exclude_paths:
   - "e2e/.vagrant/**"
   - "e2e/behavioral/crasher/**"
 
+  # Go test files (table-driven tests naturally have more lines)
+  # Exclude from all linters to avoid Lizard complexity false positives
+  - "**/*_test.go"
+  - "**/*_external_test.go"
+  - "**/*_internal_test.go"
+
+  # Probe package (CGO/FFI bindings - uses unsafe legitimately)
+  # Exclude from Semgrep to avoid unsafe false positives
+  - "src/internal/infrastructure/probe/**"
+
   # Config files (linter configs, not code)
   - ".golangci.yml"
   - ".ktn-linter.yaml"
