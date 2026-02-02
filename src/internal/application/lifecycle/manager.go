@@ -183,8 +183,27 @@ func (m *Manager) runOnce() {
 
 	// send started event
 	m.sendEvent(domain.EventStarted, nil)
-	// wait for process exit
-	result := <-m.waitCh
+
+	// Wait for process exit or context cancellation.
+	var result domain.ExitResult
+	select {
+	// Handle context cancellation (shutdown).
+	case <-m.ctx.Done():
+		// Get current PID under lock.
+		m.mu.Lock()
+		pid := m.pid
+		m.mu.Unlock()
+		// Stop process if running (best-effort, errors discarded during shutdown).
+		if pid > 0 {
+			_ = m.executor.Stop(pid, defaultStopTimeout)
+		}
+		// send stopped event for clean shutdown
+		m.sendEvent(domain.EventStopped, nil)
+		// Return after handling shutdown.
+		return
+	// Wait for process exit.
+	case result = <-m.waitCh:
+	}
 
 	// Check if process exited with non-zero code.
 	if result.Code != 0 {
