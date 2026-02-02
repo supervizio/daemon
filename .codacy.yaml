@@ -16,10 +16,12 @@ exclude_paths:
   - ".github/**"
   - ".vscode/**"
 
-  # Documentation (analyzed separately)
+  # Documentation and markdown (analyzed separately or excluded)
   - "docs/**"
   - "website/**"
   - "examples/**"
+  - "**/*.md"
+  - "**/CLAUDE.md"
 
   # Build artifacts and dependencies
   - "vendor/**"
@@ -69,6 +71,13 @@ engines:
     # Security is covered by custom checks
     exclude:
       - "G304"
+
+  # ---------------------------------------------------------------------------
+  # Complexity Analysis
+  # ---------------------------------------------------------------------------
+  # Lizard - Cyclomatic complexity and code length
+  lizard:
+    enabled: true
 
   # revive - Go linter (disabled - using golangci-lint + ktn-linter)
   revive:
@@ -214,3 +223,34 @@ tools:
         - "src/lib/**/*.rs"
       exclude:
         - "**/target/**"
+
+  # Lizard - Complexity analysis
+  # Exclude test files from complexity checks (table-driven tests are naturally longer)
+  lizard:
+    patterns:
+      include:
+        - "src/**/*.go"
+        - "src/lib/**/*.rs"
+      exclude:
+        - "**/*_test.go"
+        - "**/*_external_test.go"
+        - "**/*_internal_test.go"
+        - "**/target/**"
+        - "e2e/**"
+
+  # Semgrep - Security scanner
+  # Exclude legitimate patterns for system-level code
+  semgrep:
+    patterns:
+      include:
+        - "src/**/*.go"
+        - "src/lib/**/*.rs"
+      exclude:
+        # Test files with mock HTTP servers (XSS false positives)
+        - "**/*_test.go"
+        - "**/*_external_test.go"
+        - "**/*_internal_test.go"
+        # Probe package uses unsafe for CGO/FFI (legitimate)
+        - "src/internal/infrastructure/probe/**"
+        # E2E test infrastructure
+        - "e2e/**"

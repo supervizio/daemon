@@ -1,4 +1,6 @@
 #!/bin/sh
+# shellcheck disable=SC2059
+# SC2059: ANSI color codes (RED, GREEN, etc.) are safe constants, not user input.
 # =============================================================================
 # Validate supervizio --probe JSON output
 # =============================================================================
