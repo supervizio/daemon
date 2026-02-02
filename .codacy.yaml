@@ -139,6 +139,11 @@ engines:
       # Go unsafe is necessary for CGO bindings
       - "go.lang.security.audit.unsafe.use-of-unsafe-block"
       - "go_unsafe_rule-unsafe"
+      # File read from variable path - false positives on procfs/kubeconfig readers
+      # Process supervisor legitimately reads /proc/{pid}/* and config files
+      - "go_filesystem_rule-fileread"
+      # SQL injection false positive - URL.Query() is not SQL
+      - "go_sql_rule-concat-sqli"
 
   # Trivy - Vulnerability scanner
   trivy:
