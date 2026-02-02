@@ -627,7 +627,7 @@ jobs:
               .timestamp and
               .platform and
               .cpu.usage_percent != null and
-              .cpu.count > 0 and
+              .cpu.cores > 0 and
               .memory.total_bytes > 0 and
               .memory.used_bytes >= 0 and
               .memory.available_bytes >= 0
@@ -735,7 +735,7 @@ jobs:
             echo \"\$OUTPUT\" | jq .
             echo \"\$OUTPUT\" | jq -e '
               .timestamp and .platform and
-              .cpu.usage_percent != null and .cpu.count > 0 and
+              .cpu.usage_percent != null and .cpu.cores > 0 and
               .memory.total_bytes > 0
             ' && echo 'Probe metrics validated'
           "
@@ -902,7 +902,7 @@ jobs:
             echo \"\$OUTPUT\" | jq .
             echo \"\$OUTPUT\" | jq -e '
               .timestamp and .platform and
-              .cpu.usage_percent != null and .cpu.count > 0 and
+              .cpu.usage_percent != null and .cpu.cores > 0 and
               .memory.total_bytes > 0 and .memory.used_bytes >= 0
             ' && echo 'All probe metrics validated successfully on ${{ matrix.name }}'
           "
@@ -1527,7 +1527,7 @@ jobs:
             echo \"\$OUTPUT\" | jq .
             echo \"\$OUTPUT\" | jq -e '
               .timestamp and .platform and
-              .cpu.usage_percent != null and .cpu.count > 0 and
+              .cpu.usage_percent != null and .cpu.cores > 0 and
               .memory.total_bytes > 0
             ' && echo 'Probe metrics validated on ${{ matrix.name }}'
           "
