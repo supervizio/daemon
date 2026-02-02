@@ -61,6 +61,12 @@ exclude_paths:
   # Exclude from Semgrep to avoid unsafe false positives
   - "src/internal/infrastructure/probe/**"
 
+  # Discovery package (Semgrep false positives: URL.Query != SQL, kubeconfig reads)
+  - "src/internal/infrastructure/discovery/**"
+
+  # Supervisor ports_linux.go (procfs reads are necessary for process management)
+  - "src/internal/application/supervisor/ports_linux.go"
+
   # Config files (linter configs, not code)
   - ".golangci.yml"
   - ".ktn-linter.yaml"
