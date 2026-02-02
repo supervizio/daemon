@@ -84,11 +84,13 @@ engines:
       - "G304"
 
   # ---------------------------------------------------------------------------
-  # Complexity Analysis
+  # Complexity Analysis (Disabled - using golangci-lint + clippy)
   # ---------------------------------------------------------------------------
   # Lizard - Cyclomatic complexity and code length
+  # Disabled: The project uses golangci-lint (Go) and clippy (Rust) for
+  # code quality analysis which provide better language-specific metrics.
   lizard:
-    enabled: true
+    enabled: false
 
   # revive - Go linter (disabled - using golangci-lint + ktn-linter)
   revive:
