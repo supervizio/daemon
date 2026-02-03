@@ -135,7 +135,7 @@ jobs:
         working-directory: src/lib/probe
         env:
           CC: ${{ matrix.musl && 'musl-gcc' || 'gcc' }}
-        run: cargo build --release --target ${{ matrix.rust_target }}
+        run: cargo build --release --target ${{ matrix.rust_target }} --package probe-ffi
 
       - name: Prepare artifact
         run: |
@@ -190,26 +190,27 @@ jobs:
       - name: Build libprobe.a (native)
         working-directory: src/lib/probe
         run: |
-          # Build with verbose output for debugging
-          cargo build --release -vv 2>&1 | tee cargo-build.log || {
+          # Build probe-ffi package explicitly (produces libprobe.a)
+          cargo build --release --package probe-ffi 2>&1 | tee cargo-build.log || {
             echo "=== Build failed, showing last 100 lines of log ==="
             tail -100 cargo-build.log
             exit 1
           }
 
-      - name: Verify library was built
-        run: |
-          echo "=== Checking for libprobe.a ==="
-          find src/lib/probe/target -name "libprobe.a" -ls || echo "libprobe.a not found"
-          echo ""
-          echo "=== Target directory structure ==="
-          ls -la src/lib/probe/target/ || true
-          ls -la src/lib/probe/target/release/ || true
-
       - name: Prepare artifact
         run: |
           mkdir -p dist/lib/darwin-arm64
-          cp src/lib/probe/target/release/libprobe.a dist/lib/darwin-arm64/
+          # Find libprobe.a - might be in target/release/ or target/<triple>/release/
+          LIBPROBE=$(find src/lib/probe/target -name "libprobe.a" -type f | head -1)
+          if [ -z "$LIBPROBE" ]; then
+            echo "ERROR: libprobe.a not found in target directory!"
+            echo "=== Target directory contents ==="
+            ls -laR src/lib/probe/target/ || true
+            exit 1
+          fi
+          echo "Found libprobe.a at: $LIBPROBE"
+          cp "$LIBPROBE" dist/lib/darwin-arm64/
+          file dist/lib/darwin-arm64/libprobe.a
 
       - name: Upload libprobe artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
