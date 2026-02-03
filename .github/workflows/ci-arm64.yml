@@ -199,17 +199,22 @@ jobs:
       - name: Build libprobe.a (native)
         working-directory: src/lib/probe
         id: build
+        env:
+          # Ensure we target a reasonable macOS version
+          MACOSX_DEPLOYMENT_TARGET: '14.0'
         run: |
           set -euo pipefail
           echo "=== Building probe-ffi package ==="
           echo "Target: aarch64-apple-darwin (native)"
           echo "Rust version: $(rustc --version)"
           echo "Host: $(rustc -vV | grep host)"
+          echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
           echo ""
-          # Build only staticlib output (skip cdylib to simplify)
-          cargo rustc --release --package probe-ffi --crate-type staticlib 2>&1 | tee /tmp/darwin-build.log || {
+          # Standard cargo build
+          cargo build --release --package probe-ffi 2>&1 | tee /tmp/darwin-build.log || {
             echo ""
-            echo "=== BUILD FAILED - Full cargo output above ==="
+            echo "=== BUILD FAILED - Full cargo output ==="
+            cat /tmp/darwin-build.log
             exit 1
           }
           echo ""
