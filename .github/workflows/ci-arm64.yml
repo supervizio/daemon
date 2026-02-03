@@ -746,6 +746,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           # Install libvirt stack, ARM64 UEFI firmware, and Vagrant dependencies
+          # qemu-efi-aarch64 provides AAVMF (ARM64 UEFI firmware)
           sudo apt-get install -y -qq \
             libvirt-daemon-system \
             libvirt-dev \
@@ -785,13 +786,51 @@ jobs:
           ls -la /dev/kvm || echo "KVM not available"
 
           echo ""
-          echo "=== AAVMF Firmware ==="
-          ls -la /usr/share/AAVMF/ || echo "AAVMF not found"
+          echo "=== UEFI Firmware Paths ==="
+          echo "--- AAVMF (standard ARM64 UEFI) ---"
+          ls -la /usr/share/AAVMF/ 2>/dev/null || echo "AAVMF not found"
+          echo "--- qemu-efi-aarch64 ---"
+          ls -la /usr/share/qemu-efi-aarch64/ 2>/dev/null || echo "qemu-efi-aarch64 not found"
+          echo "--- edk2 aarch64 ---"
+          ls -la /usr/share/edk2/aarch64/ 2>/dev/null || echo "edk2/aarch64 not found"
+          echo "--- Check specific files ---"
+          for f in /usr/share/AAVMF/AAVMF_CODE.fd /usr/share/qemu-efi-aarch64/QEMU_EFI.fd /usr/share/edk2/aarch64/QEMU_EFI.fd; do
+            if [ -f "$f" ]; then
+              echo "✓ Found: $f"
+            else
+              echo "✗ Missing: $f"
+            fi
+          done
+
+          echo ""
+          echo "=== Test Vagrantfile Loader Detection ==="
+          cd e2e && ruby -e '
+            puts "Host arch: #{`uname -m`.strip}"
+            is_arm = `uname -m`.strip == "aarch64"
+            puts "is_arm: #{is_arm}"
+            loader = nil
+            [
+              "/usr/share/AAVMF/AAVMF_CODE.fd",
+              "/usr/share/qemu-efi-aarch64/QEMU_EFI.fd",
+              "/usr/share/edk2/aarch64/QEMU_EFI.fd"
+            ].each do |fw_path|
+              if File.exist?(fw_path)
+                loader = fw_path
+                puts "Detected loader: #{loader}"
+                break
+              end
+            end
+            puts "ERROR: No UEFI loader found!" if loader.nil?
+          '
 
           echo ""
           echo "=== libvirt Status ==="
           sudo systemctl status libvirtd --no-pager || true
           sudo virsh version || true
+
+          echo ""
+          echo "=== libvirt ARM64 Domain Capabilities ==="
+          sudo virsh domcapabilities --machine virt --arch aarch64 2>/dev/null | grep -A20 '<os' | head -30 || echo "domcapabilities not available"
 
           echo ""
           echo "=== Vagrant Info ==="

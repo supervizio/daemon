@@ -118,10 +118,38 @@ Vagrant.configure("2") do |config|
       lv.cpu_model = is_arm ? "cortex-a72" : "qemu64"
     end
 
-    # ARM64-specific UEFI configuration
+    # ARM64-specific UEFI configuration (required for ACPI on aarch64)
+    # AAVMF is the ARM equivalent of OVMF (x86 UEFI)
     if is_arm
-      lv.loader = "/usr/share/AAVMF/AAVMF_CODE.fd"
       lv.machine_type = "virt"
+
+      # UEFI firmware paths (varies by distro/package)
+      firmware_paths = [
+        "/usr/share/AAVMF/AAVMF_CODE.fd",           # Ubuntu qemu-efi-aarch64
+        "/usr/share/qemu-efi-aarch64/QEMU_EFI.fd",  # Alternative Ubuntu path
+        "/usr/share/edk2/aarch64/QEMU_EFI.fd"       # Fedora/RHEL edk2
+      ]
+
+      # Find and set loader (UEFI firmware)
+      loader_found = firmware_paths.find { |p| File.exist?(p) }
+      if loader_found
+        lv.loader = loader_found
+      else
+        # Fallback: set primary path anyway (clearer error if missing)
+        lv.loader = "/usr/share/AAVMF/AAVMF_CODE.fd"
+        STDERR.puts "WARNING: No UEFI firmware found at: #{firmware_paths.join(', ')}"
+      end
+
+      # NVRAM template paths for UEFI variable storage
+      nvram_paths = [
+        "/usr/share/AAVMF/AAVMF_VARS.fd",                    # Ubuntu qemu-efi-aarch64
+        "/usr/share/qemu-efi-aarch64/vars-template-pflash.raw",
+        "/usr/share/edk2/aarch64/vars-template-pflash.raw"   # Fedora/RHEL
+      ]
+
+      # Find and set NVRAM template
+      nvram_found = nvram_paths.find { |p| File.exist?(p) }
+      lv.nvram = nvram_found if nvram_found
     end
   end
 
