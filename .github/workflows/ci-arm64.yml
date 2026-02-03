@@ -768,11 +768,12 @@ jobs:
           # Install vagrant-libvirt plugin
           vagrant plugin install vagrant-libvirt
 
-      - name: Cache Vagrant box
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ~/.vagrant.d/boxes
-          key: vagrant-arm64-${{ matrix.vm }}-v1
+      # Cache disabled - forcing fresh ARM64 box download
+      # - name: Cache Vagrant box
+      #   uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      #   with:
+      #     path: ~/.vagrant.d/boxes
+      #     key: vagrant-arm64-${{ matrix.vm }}-v2
 
       - name: Verify virtualization setup
         run: |
@@ -797,14 +798,49 @@ jobs:
           vagrant --version
           vagrant plugin list
 
+      - name: Force ARM64 box download
+        working-directory: e2e
+        run: |
+          echo "=== Host Architecture ==="
+          uname -m
+          echo ""
+
+          # Map VM name to box name
+          case "${{ matrix.vm }}" in
+            debian13) BOX="generic/debian12" ;;
+            fedora) BOX="generic/fedora39" ;;
+            alpine|alpine-runit) BOX="generic/alpine319" ;;
+            *) echo "Unknown VM: ${{ matrix.vm }}"; exit 1 ;;
+          esac
+
+          echo "=== Forcing ARM64 box for $BOX ==="
+
+          # Get the latest version
+          VERSION=$(curl -s "https://vagrantcloud.com/api/v2/box/$BOX" | jq -r '.versions[0].version')
+          echo "Latest version: $VERSION"
+
+          # Construct ARM64 box URL
+          BOX_URL="https://vagrantcloud.com/${BOX}/versions/${VERSION}/providers/libvirt/arm64/vagrant.box"
+          echo "Box URL: $BOX_URL"
+
+          # Add box explicitly with ARM64 architecture
+          sudo vagrant box add --force --name "$BOX" --provider libvirt "$BOX_URL" || {
+            echo "Failed to add box, trying without --force"
+            sudo vagrant box add --name "$BOX" --provider libvirt "$BOX_URL" || true
+          }
+
+          echo ""
+          echo "=== Installed boxes ==="
+          sudo vagrant box list
+
       - name: Start VM
         working-directory: e2e
         run: |
-          echo "=== Starting VM with debug output ==="
-          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt --debug 2>&1 | tail -200 || {
+          echo "=== Starting VM ==="
+          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt 2>&1 | tail -100 || {
             echo ""
-            echo "=== vagrant up failed, checking libvirt logs ==="
-            sudo journalctl -u libvirtd --no-pager -n 50 || true
+            echo "=== vagrant up failed ==="
+            sudo journalctl -u libvirtd --no-pager -n 30 || true
             exit 1
           }
 
