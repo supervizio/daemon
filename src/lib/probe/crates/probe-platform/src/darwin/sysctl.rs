@@ -240,7 +240,11 @@ pub fn get_process_info(pid: i32) -> Result<ProcessInfo> {
         );
 
         let (rss, vsize, num_threads) = if task_size > 0 {
-            (task_info.pti_resident_size, task_info.pti_virtual_size, task_info.pti_threadnum as u32)
+            (
+                task_info.pti_resident_size,
+                task_info.pti_virtual_size,
+                task_info.pti_threadnum as u32,
+            )
         } else {
             (0, 0, 1)
         };
@@ -903,8 +907,10 @@ fn list_process_connections(pid: i32) -> Result<Vec<NetworkConnection>> {
 fn parse_inet4_addrs(in_info: &in_sockinfo) -> (String, String) {
     // SAFETY: We know the socket family is AF_INET, so accessing ina_46 is valid
     let (local_ip, remote_ip) = unsafe {
-        let local = std::net::Ipv4Addr::from(u32::from_be(in_info.insi_laddr.ina_46.i46a_addr4.s_addr));
-        let remote = std::net::Ipv4Addr::from(u32::from_be(in_info.insi_faddr.ina_46.i46a_addr4.s_addr));
+        let local =
+            std::net::Ipv4Addr::from(u32::from_be(in_info.insi_laddr.ina_46.i46a_addr4.s_addr));
+        let remote =
+            std::net::Ipv4Addr::from(u32::from_be(in_info.insi_faddr.ina_46.i46a_addr4.s_addr));
         (local, remote)
     };
     let local_port = u16::from_be(in_info.insi_lport as u16);
@@ -1572,10 +1578,7 @@ unsafe extern "C" {
         t: *mut libc::mach_port_t,
     ) -> libc::c_int;
 
-    fn mach_port_deallocate(
-        task: libc::mach_port_t,
-        name: libc::mach_port_t,
-    ) -> libc::c_int;
+    fn mach_port_deallocate(task: libc::mach_port_t, name: libc::mach_port_t) -> libc::c_int;
 }
 
 // ============================================================================
