@@ -782,8 +782,31 @@ jobs:
         run: |
           echo "=== Testing scratch container (static binary, no OS) ==="
           # Scratch has no shell, can only run the binary directly
+
+          echo "--- Test --version ---"
           docker run --rm supervizio-e2e:scratch-amd64 --version
-          echo "✓ Scratch container runs successfully"
+          echo "✓ --version works"
+
+          echo ""
+          echo "--- Test --probe ---"
+          OUTPUT=$(docker run --rm supervizio-e2e:scratch-amd64 --probe 2>&1) || {
+            echo "ERROR: --probe failed"
+            echo "Output: $OUTPUT"
+            exit 1
+          }
+          echo "Probe output:"
+          echo "$OUTPUT"
+
+          # Validate JSON structure
+          echo ""
+          echo "--- Validate JSON ---"
+          echo "$OUTPUT" | jq -e '.timestamp' > /dev/null && echo "✓ timestamp present"
+          echo "$OUTPUT" | jq -e '.platform' > /dev/null && echo "✓ platform present"
+          echo "$OUTPUT" | jq -e '.cpu.cores > 0' > /dev/null && echo "✓ cpu.cores > 0"
+          echo "$OUTPUT" | jq -e '.memory.total > 0' > /dev/null && echo "✓ memory.total > 0"
+
+          echo ""
+          echo "✓ Scratch container tests passed"
 
   # =============================================================================
   # PHASE 7: E2E macOS TEST (native on Intel)

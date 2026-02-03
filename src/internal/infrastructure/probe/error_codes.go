@@ -1,3 +1,5 @@
+//go:build cgo
+
 // Package probe provides CGO bindings to the Rust probe library for
 // cross-platform system metrics collection.
 package probe
