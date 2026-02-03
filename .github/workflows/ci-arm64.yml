@@ -814,14 +814,35 @@ jobs:
         working-directory: e2e
         run: |
           set -uo pipefail
-          echo "=== Waiting for VM to be SSH-ready ==="
-          for i in $(seq 1 36); do
+
+          echo "=== Vagrant status ==="
+          sudo -E vagrant status ${{ matrix.vm }}
+
+          echo ""
+          echo "=== libvirt domain list ==="
+          sudo virsh list --all || true
+
+          echo ""
+          echo "=== Waiting for VM to be SSH-ready (up to 5 min) ==="
+          for i in $(seq 1 60); do
             if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
-              echo "=== VM is SSH-accessible ==="
+              echo "=== VM is SSH-accessible after $((i*5)) seconds ==="
               break
             fi
-            if [ "$i" = "36" ]; then
-              echo "ERROR: VM not SSH-accessible after 180 seconds"
+            if [ "$i" = "60" ]; then
+              echo "ERROR: VM not SSH-accessible after 300 seconds"
+              echo ""
+              echo "=== Debug: vagrant ssh-config ==="
+              sudo -E vagrant ssh-config ${{ matrix.vm }} || true
+              echo ""
+              echo "=== Debug: libvirt domain info ==="
+              DOMAIN=$(sudo virsh list --all --name | grep -i ${{ matrix.vm }} | head -1)
+              if [ -n "$DOMAIN" ]; then
+                sudo virsh dominfo "$DOMAIN" || true
+                echo ""
+                echo "=== Debug: VM console (last 50 lines) ==="
+                sudo virsh console "$DOMAIN" --force --timeout 5 2>&1 | tail -50 || true
+              fi
               exit 1
             fi
             sleep 5
