@@ -191,8 +191,8 @@ jobs:
         working-directory: src/lib/probe
         id: build
         run: |
-          # Build and capture output
-          cargo build --release 2>&1 | tee /tmp/darwin-build.log
+          # Build only probe-ffi package (same as Linux builds)
+          cargo build --release --package probe-ffi 2>&1 | tee /tmp/darwin-build.log
           EXIT_CODE=${PIPESTATUS[0]}
           echo "build_status=$EXIT_CODE" >> $GITHUB_OUTPUT
           exit $EXIT_CODE
