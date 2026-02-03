@@ -247,7 +247,7 @@ jobs:
   # macOS x86_64 probe (native on Intel runner)
   build-probe-darwin:
     name: Probe darwin-amd64
-    runs-on: macos-13
+    runs-on: macos-15-intel
     needs: [rust-test]
     steps:
       - name: Checkout code
@@ -463,7 +463,7 @@ jobs:
   # macOS x86_64 binary (native on Intel runner)
   build-darwin-amd64:
     name: Build darwin-amd64
-    runs-on: macos-13
+    runs-on: macos-15-intel
     needs: [build-probe-darwin, go-test]
     steps:
       - name: Checkout code
@@ -815,7 +815,7 @@ jobs:
   e2e-macos:
     name: E2E macOS x86_64
     needs: [verify-artifacts]
-    runs-on: macos-13
+    runs-on: macos-15-intel
     timeout-minutes: 10
     steps:
       - name: Checkout code

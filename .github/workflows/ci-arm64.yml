@@ -160,7 +160,7 @@ jobs:
   # macOS ARM64 probe (native on Apple Silicon)
   build-probe-darwin:
     name: Probe darwin-arm64
-    runs-on: macos-14
+    runs-on: macos-latest
     needs: [rust-test]
     steps:
       - name: Checkout code
@@ -301,7 +301,7 @@ jobs:
   # macOS ARM64 binary (native on Apple Silicon)
   build-darwin-arm64:
     name: Build darwin-arm64
-    runs-on: macos-14
+    runs-on: macos-latest
     needs: [build-probe-darwin]
     steps:
       - name: Checkout code
@@ -833,7 +833,7 @@ jobs:
   e2e-macos:
     name: E2E macOS ARM64
     needs: [verify-artifacts]
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 10
     steps:
       - name: Checkout code

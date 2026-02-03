@@ -37,7 +37,7 @@ rust-test                           rust-test
     │                                   │
 build-probe-linux                   build-probe-linux (ARM runner)
 build-probe-bsd (Zig cross)         build-probe-bsd (Zig cross)
-build-probe-darwin (macos-13)       build-probe-darwin (macos-14)
+build-probe-darwin (macos-15-intel)       build-probe-darwin (macos-latest)
     │                                   │
 go-test                             (skipped, uses x86 results)
     │                                   │
