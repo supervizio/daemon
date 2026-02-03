@@ -124,9 +124,9 @@ Vagrant.configure("2") do |config|
     v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl jq rsync"
   end
 
-  # Fedora 38 - RPM/dnf + systemd (replaces Rocky which has SSH issues)
+  # Fedora 39 - RPM/dnf + systemd (39 has ARM64 libvirt boxes, 38 does not)
   config.vm.define "fedora", autostart: false do |v|
-    v.vm.box = "generic/fedora38"
+    v.vm.box = "generic/fedora39"
     v.vm.hostname = "e2e-fedora"
     configure_linux_synced_folders(v)
     v.vm.provision "shell", inline: <<-SHELL

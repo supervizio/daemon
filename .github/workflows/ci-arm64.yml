@@ -710,10 +710,8 @@ jobs:
             vm: alpine
             artifact: supervizio-linux-arm64-musl
 
-          # SysVinit + .deb + glibc
-          - name: Devuan (SysVinit/deb)
-            vm: devuan
-            artifact: supervizio-linux-arm64
+          # NOTE: Devuan skipped on ARM64 - no libvirt ARM64 box available
+          # SysVinit tested on x86 workflow only
 
           # runit + .apk + musl
           - name: Alpine-runit (runit/apk)
