@@ -23,5 +23,5 @@ log.workspace = true
 libc.workspace = true
 parking_lot.workspace = true
 
-[build-dependencies]
-cbindgen = "0.27"
+# Note: cbindgen is used manually to generate include/probe.h when API changes
+# It's not a build dependency since we don't auto-generate headers
