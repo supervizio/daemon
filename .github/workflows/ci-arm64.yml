@@ -149,83 +149,12 @@ jobs:
           path: dist/lib/${{ matrix.platform }}/libprobe.a
           retention-days: 1
 
-  # BSD ARM64 probes (cross-compile with Zig)
-  build-probe-bsd:
-    name: Probe ${{ matrix.platform }}
-    runs-on: ubuntu-24.04
-    needs: [rust-test]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - rust_target: aarch64-unknown-freebsd
-            platform: freebsd-arm64
-            zig_target: aarch64-freebsd
-          - rust_target: aarch64-unknown-openbsd
-            platform: openbsd-arm64
-            zig_target: aarch64-openbsd
-          - rust_target: aarch64-unknown-netbsd
-            platform: netbsd-arm64
-            zig_target: aarch64-netbsd
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Install Zig
-        uses: goto-bus-stop/setup-zig@7ab2955eb728f5440978d5824358023be3a2802d # v2.2.1
-        with:
-          version: ${{ env.ZIG_VERSION }}
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: ${{ matrix.rust_target }}
-
-      - name: Cache Cargo
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src/lib/probe/target
-          key: rust-probe-${{ matrix.rust_target }}-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
-          restore-keys: |
-            rust-probe-${{ matrix.rust_target }}-
-
-      - name: Configure Cargo for Zig cross-compilation
-        run: |
-          mkdir -p ~/.cargo
-          cat >> ~/.cargo/config.toml << EOF
-          [target.${{ matrix.rust_target }}]
-          linker = "${{ github.workspace }}/zig-wrapper.sh"
-          ar = "zig"
-          EOF
-
-          cat > zig-wrapper.sh << 'WRAPPER'
-          #!/bin/sh
-          exec zig cc -target ${{ matrix.zig_target }} "$@"
-          WRAPPER
-          chmod +x zig-wrapper.sh
-
-      - name: Build libprobe.a (cross-compile)
-        working-directory: src/lib/probe
-        env:
-          CC: "${{ github.workspace }}/zig-wrapper.sh"
-          AR: "zig ar"
-        run: cargo build --release --target ${{ matrix.rust_target }}
-
-      - name: Prepare artifact
-        run: |
-          mkdir -p dist/lib/${{ matrix.platform }}
-          cp src/lib/probe/target/${{ matrix.rust_target }}/release/libprobe.a dist/lib/${{ matrix.platform }}/
-
-      - name: Upload libprobe artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: libprobe-${{ matrix.platform }}
-          path: dist/lib/${{ matrix.platform }}/libprobe.a
-          retention-days: 1
+  # NOTE: BSD ARM64 probes are disabled because:
+  # 1. aarch64-unknown-{freebsd,openbsd,netbsd} are Rust Tier 3 targets
+  #    (not available via `rustup target add`, requires -Z build-std on nightly)
+  # 2. No Vagrant/VM boxes available for BSD ARM64 testing
+  # 3. x86 workflow already tests BSD builds adequately
+  # When BSD ARM64 becomes Tier 2 or testing VMs become available, re-enable.
 
   # macOS ARM64 probe (native on Apple Silicon runner)
   build-probe-darwin:
@@ -252,9 +181,30 @@ jobs:
           restore-keys: |
             rust-probe-darwin-arm64-
 
+      - name: Show Rust version and target
+        run: |
+          rustc --version --verbose
+          cargo --version
+          rustup show
+
       - name: Build libprobe.a (native)
         working-directory: src/lib/probe
-        run: cargo build --release
+        run: |
+          # Build with verbose output for debugging
+          cargo build --release -vv 2>&1 | tee cargo-build.log || {
+            echo "=== Build failed, showing last 100 lines of log ==="
+            tail -100 cargo-build.log
+            exit 1
+          }
+
+      - name: Verify library was built
+        run: |
+          echo "=== Checking for libprobe.a ==="
+          find src/lib/probe/target -name "libprobe.a" -ls || echo "libprobe.a not found"
+          echo ""
+          echo "=== Target directory structure ==="
+          ls -la src/lib/probe/target/ || true
+          ls -la src/lib/probe/target/release/ || true
 
       - name: Prepare artifact
         run: |
@@ -361,77 +311,7 @@ jobs:
           path: supervizio-linux-arm64-musl
           retention-days: 1
 
-  # BSD ARM64 binaries (cross-compiled with Zig)
-  build-bsd-arm64:
-    name: Build ${{ matrix.goos }}-arm64
-    runs-on: ubuntu-24.04
-    needs: [build-probe-bsd]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: freebsd
-            probe: freebsd-arm64
-          - goos: openbsd
-            probe: openbsd-arm64
-          - goos: netbsd
-            probe: netbsd-arm64
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: src/go.sum
-
-      - name: Install Zig
-        uses: goto-bus-stop/setup-zig@7ab2955eb728f5440978d5824358023be3a2802d # v2.2.1
-        with:
-          version: ${{ env.ZIG_VERSION }}
-
-      - name: Download libprobe
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: libprobe-${{ matrix.probe }}
-          path: dist/lib/${{ matrix.probe }}/
-
-      - name: Install Wire
-        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
-
-      - name: Generate code
-        working-directory: src
-        run: wire ./internal/bootstrap/
-
-      - name: Setup Zig as C compiler for CGO
-        run: |
-          cat > /usr/local/bin/zig-cc-${{ matrix.goos }}-arm64 << 'EOF'
-          #!/bin/sh
-          exec zig cc -target aarch64-${{ matrix.goos }} "$@"
-          EOF
-          chmod +x /usr/local/bin/zig-cc-${{ matrix.goos }}-arm64
-
-      - name: Build binary (cross-compile)
-        working-directory: src
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: arm64
-          CGO_ENABLED: 1
-          CC: zig-cc-${{ matrix.goos }}-arm64
-          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
-          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.probe }} -lprobe -lm"
-        run: |
-          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" \
-            -o ../supervizio-${{ matrix.goos }}-arm64 ./cmd/daemon
-
-      - name: Upload binary
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: supervizio-${{ matrix.goos }}-arm64
-          path: supervizio-${{ matrix.goos }}-arm64
-          retention-days: 1
+  # NOTE: BSD ARM64 binary builds disabled - see note above build-probe-bsd
 
   # macOS ARM64 binary (native on Apple Silicon)
   build-darwin-arm64:
@@ -489,7 +369,6 @@ jobs:
     needs:
       - build-arm64
       - build-arm64-musl
-      - build-bsd-arm64
       - build-darwin-arm64
     steps:
       - name: Download ALL ARM64 binaries
@@ -504,23 +383,20 @@ jobs:
           echo "=== All ARM64 artifacts ==="
           ls -la bin/
           echo ""
-          echo "=== Expected artifacts ==="
+          echo "=== Expected artifacts (ARM64) ==="
           echo "  - supervizio-linux-arm64 (glibc)"
           echo "  - supervizio-linux-arm64-musl (static)"
-          echo "  - supervizio-freebsd-arm64"
-          echo "  - supervizio-openbsd-arm64"
-          echo "  - supervizio-netbsd-arm64"
           echo "  - supervizio-darwin-arm64"
+          echo ""
+          echo "NOTE: BSD ARM64 binaries disabled (Rust Tier 3, no test VMs)"
 
       - name: Verify all binaries exist
         run: |
           set -euo pipefail
+          # NOTE: BSD ARM64 binaries disabled - Rust Tier 3 targets, no test VMs
           EXPECTED=(
             "supervizio-linux-arm64"
             "supervizio-linux-arm64-musl"
-            "supervizio-freebsd-arm64"
-            "supervizio-openbsd-arm64"
-            "supervizio-netbsd-arm64"
             "supervizio-darwin-arm64"
           )
           MISSING=0
