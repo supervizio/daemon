@@ -540,6 +540,10 @@ jobs:
             dockerfile: Dockerfile.alpine-script
             artifact: supervizio-linux-arm64-musl
             description: "Alpine with musl (OpenRC)"
+          - name: scratch
+            dockerfile: Dockerfile.scratch
+            artifact: supervizio-linux-arm64-musl
+            description: "Scratch (static binary, no OS)"
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -552,10 +556,15 @@ jobs:
 
       - name: Prepare binary
         run: |
-          # Dockerfile expects bin/supervizio-linux-amd64 (legacy naming)
-          mv bin/${{ matrix.artifact }} bin/supervizio-linux-amd64
-          chmod +x bin/supervizio-linux-amd64
-          file bin/supervizio-linux-amd64
+          chmod +x bin/${{ matrix.artifact }}
+          # Dockerfile.scratch expects bin/supervizio, others expect bin/supervizio-linux-amd64
+          if [ "${{ matrix.dockerfile }}" = "Dockerfile.scratch" ]; then
+            mv bin/${{ matrix.artifact }} bin/supervizio
+            file bin/supervizio
+          else
+            mv bin/${{ matrix.artifact }} bin/supervizio-linux-amd64
+            file bin/supervizio-linux-amd64
+          fi
 
       - name: Build container
         run: |
@@ -566,6 +575,7 @@ jobs:
           docker run --rm supervizio-e2e:${{ matrix.name }}-arm64
 
       - name: Validate probe metrics
+        if: matrix.dockerfile != 'Dockerfile.scratch'
         run: |
           docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }}-arm64 -c "
             set -e
@@ -593,6 +603,14 @@ jobs:
             echo \"\$OUTPUT\" | jq -e '.timestamp and .platform and .cpu.cores > 0' && \
               echo '✓ Probe validation passed: ${{ matrix.description }}'
           "
+
+      - name: Test scratch container (no shell)
+        if: matrix.dockerfile == 'Dockerfile.scratch'
+        run: |
+          echo "=== Testing scratch container (static binary, no OS) ==="
+          # Scratch has no shell, can only run the binary directly
+          docker run --rm supervizio-e2e:scratch-arm64 --version
+          echo "✓ Scratch container runs successfully"
 
   # =============================================================================
   # PHASE 7: E2E LINUX VM TESTS (Vagrant + libvirt on ARM64)
@@ -664,23 +682,31 @@ jobs:
           chmod +x bin/${{ matrix.artifact }}
           file bin/${{ matrix.artifact }}
 
-      - name: Install Vagrant and libvirt
+      - name: Setup KVM
         run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
+      - name: Install libvirt and Vagrant
+        run: |
+          set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            vagrant \
-            libvirt-daemon-system \
-            libvirt-clients \
-            qemu-kvm \
-            qemu-system-arm \
-            virtinst
-          sudo usermod -aG libvirt "$USER"
+          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm qemu-system-arm ruby-dev ruby-libvirt build-essential
+          sudo systemctl start libvirtd
+          sudo usermod -aG libvirt,kvm $USER
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg arch=arm64] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
           vagrant plugin install vagrant-libvirt
 
-      - name: Start libvirt
-        run: |
-          sudo systemctl start libvirtd
-          sudo systemctl enable libvirtd
+      - name: Cache Vagrant box
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.vagrant.d/boxes
+          key: vagrant-arm64-${{ matrix.box }}-v1
 
       - name: Create Vagrantfile
         working-directory: e2e
@@ -703,24 +729,32 @@ jobs:
       - name: Boot VM
         working-directory: e2e
         run: |
-          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant up --provider=libvirt
-          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant ssh -c "uname -a"
+          sudo -E vagrant up --provider=libvirt
+          sudo -E vagrant ssh -c "uname -a"
+        env:
+          VAGRANT_VAGRANTFILE: Vagrantfile.ci
 
       - name: Install dependencies in VM
         working-directory: e2e
         run: |
-          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant ssh -c "sudo ${{ matrix.pkg_install }}"
+          sudo -E vagrant ssh -c "sudo ${{ matrix.pkg_install }}"
+        env:
+          VAGRANT_VAGRANTFILE: Vagrantfile.ci
 
       - name: Copy binary to VM
         working-directory: e2e
         run: |
-          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant ssh -c "mkdir -p /tmp/bin"
-          cat ../bin/${{ matrix.artifact }} | VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant ssh -c "cat > /tmp/bin/supervizio && chmod +x /tmp/bin/supervizio"
+          sudo -E vagrant ssh -c "mkdir -p /tmp/bin"
+          cat ../bin/${{ matrix.artifact }} | sudo -E vagrant ssh -c "cat > /tmp/bin/supervizio && chmod +x /tmp/bin/supervizio"
+        env:
+          VAGRANT_VAGRANTFILE: Vagrantfile.ci
 
       - name: Run E2E test in VM
         working-directory: e2e
+        env:
+          VAGRANT_VAGRANTFILE: Vagrantfile.ci
         run: |
-          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant ssh -c '
+          sudo -E vagrant ssh -c '
             set -e
             echo "=== System Info ==="
             uname -a
@@ -756,8 +790,10 @@ jobs:
       - name: Cleanup VM
         if: always()
         working-directory: e2e
+        env:
+          VAGRANT_VAGRANTFILE: Vagrantfile.ci
         run: |
-          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant destroy -f || true
+          sudo -E vagrant destroy -f || true
 
   # =============================================================================
   # PHASE 8: E2E macOS TEST (native on Apple Silicon)

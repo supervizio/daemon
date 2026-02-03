@@ -713,6 +713,10 @@ jobs:
             dockerfile: Dockerfile.alpine-script
             artifact: supervizio-linux-amd64-musl
             description: "Alpine with musl (OpenRC)"
+          - name: scratch
+            dockerfile: Dockerfile.scratch
+            artifact: supervizio-linux-amd64-musl
+            description: "Scratch (static binary, no OS)"
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -725,10 +729,15 @@ jobs:
 
       - name: Prepare binary
         run: |
-          # Dockerfile expects bin/supervizio-linux-amd64
-          mv bin/${{ matrix.artifact }} bin/supervizio-linux-amd64
-          chmod +x bin/supervizio-linux-amd64
-          file bin/supervizio-linux-amd64
+          chmod +x bin/${{ matrix.artifact }}
+          # Dockerfile.scratch expects bin/supervizio, others expect bin/supervizio-linux-amd64
+          if [ "${{ matrix.dockerfile }}" = "Dockerfile.scratch" ]; then
+            mv bin/${{ matrix.artifact }} bin/supervizio
+            file bin/supervizio
+          else
+            mv bin/${{ matrix.artifact }} bin/supervizio-linux-amd64
+            file bin/supervizio-linux-amd64
+          fi
 
       - name: Build container
         run: |
@@ -739,6 +748,7 @@ jobs:
           docker run --rm supervizio-e2e:${{ matrix.name }}-amd64
 
       - name: Validate probe metrics
+        if: matrix.dockerfile != 'Dockerfile.scratch'
         run: |
           docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }}-amd64 -c "
             set -e
@@ -766,6 +776,14 @@ jobs:
             echo \"\$OUTPUT\" | jq -e '.timestamp and .platform and .cpu.cores > 0' && \
               echo '✓ Probe validation passed: ${{ matrix.description }}'
           "
+
+      - name: Test scratch container (no shell)
+        if: matrix.dockerfile == 'Dockerfile.scratch'
+        run: |
+          echo "=== Testing scratch container (static binary, no OS) ==="
+          # Scratch has no shell, can only run the binary directly
+          docker run --rm supervizio-e2e:scratch-amd64 --version
+          echo "✓ Scratch container runs successfully"
 
   # =============================================================================
   # PHASE 7: E2E macOS TEST (native on Intel)
