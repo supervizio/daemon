@@ -762,7 +762,7 @@ jobs:
           sudo usermod -aG libvirt,kvm $USER
 
           # Install Vagrant via Ruby gem (HashiCorp doesn't provide ARM64 packages)
-          sudo gem install vagrant -v '2.4.3' --no-document
+          sudo gem install vagrant --no-document
           vagrant --version
 
           # Install vagrant-libvirt plugin
