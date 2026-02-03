@@ -759,7 +759,24 @@ jobs:
             build-essential \
             pkg-config \
             libarchive-tools
-          sudo systemctl start libvirtd
+
+          # Disable AppArmor for libvirt (prevents profile loading errors with custom UEFI)
+          # This is safe in CI as we're in an isolated environment
+          if command -v apparmor_parser >/dev/null 2>&1; then
+            for profile in usr.sbin.libvirtd usr.lib.libvirt.virt-aa-helper; do
+              if [ -f "/etc/apparmor.d/$profile" ]; then
+                sudo ln -sf "/etc/apparmor.d/$profile" /etc/apparmor.d/disable/ 2>/dev/null || true
+                sudo apparmor_parser -R "/etc/apparmor.d/$profile" 2>/dev/null || true
+              fi
+            done
+          fi
+
+          # Configure libvirt to not use AppArmor security driver
+          if [ -f /etc/libvirt/qemu.conf ]; then
+            echo 'security_driver = "none"' | sudo tee -a /etc/libvirt/qemu.conf
+          fi
+
+          sudo systemctl restart libvirtd
           sudo usermod -aG libvirt,kvm $USER
 
           # Install Vagrant via Ruby gem (HashiCorp doesn't provide ARM64 packages)
