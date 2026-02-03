@@ -817,43 +817,42 @@ jobs:
           sudo -E vagrant status ${{ matrix.vm }}
 
           echo ""
+          echo "=== Vagrant box list (check architecture) ==="
+          sudo -E vagrant box list
+
+          echo ""
           echo "=== libvirt domain list ==="
           sudo virsh list --all || true
 
           echo ""
-          echo "=== Waiting for VM to be SSH-ready (up to 5 min) ==="
-          for i in $(seq 1 60); do
+          echo "=== libvirt domain info ==="
+          DOMAIN=$(sudo virsh list --all --name | grep -i ${{ matrix.vm }} | head -1)
+          if [ -n "$DOMAIN" ]; then
+            sudo virsh dominfo "$DOMAIN" || true
+            echo ""
+            echo "=== Domain XML (arch info) ==="
+            sudo virsh dumpxml "$DOMAIN" | grep -E '<type|<arch|<machine|<loader' || true
+          fi
+
+          echo ""
+          echo "=== vagrant ssh-config ==="
+          sudo -E vagrant ssh-config ${{ matrix.vm }} || true
+
+          echo ""
+          echo "=== Waiting for VM to be SSH-ready (up to 1 min) ==="
+          for i in $(seq 1 12); do
             if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
               echo "=== VM is SSH-accessible after $((i*5)) seconds ==="
-              break
-            fi
-            if [ "$i" = "60" ]; then
-              echo "ERROR: VM not SSH-accessible after 300 seconds"
+              sudo -E vagrant ssh ${{ matrix.vm }} -c 'uname -a; cat /etc/os-release 2>/dev/null || true'
               echo ""
-              echo "=== Debug: vagrant ssh-config ==="
-              sudo -E vagrant ssh-config ${{ matrix.vm }} || true
-              echo ""
-              echo "=== Debug: libvirt domain info ==="
-              DOMAIN=$(sudo virsh list --all --name | grep -i ${{ matrix.vm }} | head -1)
-              if [ -n "$DOMAIN" ]; then
-                sudo virsh dominfo "$DOMAIN" || true
-                echo ""
-                echo "=== Debug: VM console (last 50 lines) ==="
-                sudo virsh console "$DOMAIN" --force --timeout 5 2>&1 | tail -50 || true
-              fi
-              exit 1
+              echo "✓ VM ${{ matrix.name }} booted successfully!"
+              exit 0
             fi
             sleep 5
           done
 
-          echo ""
-          echo "=== VM System Info ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c '
-            uname -a
-            cat /etc/os-release 2>/dev/null || true
-          '
-          echo ""
-          echo "✓ VM ${{ matrix.name }} booted successfully!"
+          echo "ERROR: VM not SSH-accessible after 60 seconds"
+          exit 1
 
       # TODO: restore after VM setup works
       # - name: Run E2E test in VM
