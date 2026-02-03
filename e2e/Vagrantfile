@@ -118,10 +118,18 @@ Vagrant.configure("2") do |config|
       lv.cpu_model = is_arm ? "cortex-a72" : "qemu64"
     end
 
-    # ARM64-specific UEFI configuration (required for ACPI on aarch64)
+    # ARM64-specific configuration
     # AAVMF is the ARM equivalent of OVMF (x86 UEFI)
     if is_arm
       lv.machine_type = "virt"
+
+      # ARM64 doesn't support PS/2 - use virtio input devices
+      # Clear default inputs and add virtio ones
+      lv.inputs = []
+      lv.input :type => "tablet", :bus => "virtio"
+
+      # Video type for ARM64 (virtio instead of cirrus)
+      lv.video_type = "virtio"
 
       # UEFI firmware paths (varies by distro/package)
       firmware_paths = [
