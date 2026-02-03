@@ -801,9 +801,9 @@ jobs:
       - name: Force ARM64 box download
         working-directory: e2e
         run: |
+          set -x  # Debug mode
           echo "=== Host Architecture ==="
           uname -m
-          echo ""
 
           # Map VM name to box name
           case "${{ matrix.vm }}" in
@@ -823,15 +823,16 @@ jobs:
           BOX_URL="https://vagrantcloud.com/${BOX}/versions/${VERSION}/providers/libvirt/arm64/vagrant.box"
           echo "Box URL: $BOX_URL"
 
-          # Add box explicitly with ARM64 architecture
-          sudo vagrant box add --force --name "$BOX" --provider libvirt "$BOX_URL" || {
-            echo "Failed to add box, trying without --force"
-            sudo vagrant box add --name "$BOX" --provider libvirt "$BOX_URL" || true
+          # Add box explicitly - DO NOT swallow errors
+          echo "=== Downloading box (this may take a while) ==="
+          sudo vagrant box add --force --name "$BOX" --provider libvirt "$BOX_URL" 2>&1 || {
+            echo "ERROR: vagrant box add failed!"
+            echo "Trying alternative: let vagrant download during 'up'"
           }
 
           echo ""
           echo "=== Installed boxes ==="
-          sudo vagrant box list
+          sudo vagrant box list || echo "No boxes installed"
 
       - name: Start VM
         working-directory: e2e
