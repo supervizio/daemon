@@ -87,7 +87,7 @@ jobs:
   go-test:
     name: Go Test
     runs-on: ubuntu-24.04
-    needs: [rust-lint]
+    needs: [build-probe-linux]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -99,8 +99,25 @@ jobs:
           cache: true
           cache-dependency-path: src/go.sum
 
+      - name: Download libprobe
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-linux-amd64
+          path: dist/lib/linux-amd64/
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
       - name: Run tests
         working-directory: src
+        env:
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/linux-amd64 -lprobe -lm"
         run: go test -race ./...
 
   # =============================================================================

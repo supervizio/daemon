@@ -204,6 +204,46 @@ jobs:
           retention-days: 1
 
   # =============================================================================
+  # PHASE 2.5: GO TESTS (requires libprobe)
+  # =============================================================================
+
+  go-test:
+    name: Go Test
+    runs-on: ubuntu-24.04-arm
+    needs: [build-probe-linux]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download libprobe
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-linux-arm64
+          path: dist/lib/linux-arm64/
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Run tests
+        working-directory: src
+        env:
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/linux-arm64 -lprobe -lm"
+        run: go test -race ./...
+
+  # =============================================================================
   # PHASE 3: BUILD BINARIES (ARM64)
   # =============================================================================
 
@@ -211,7 +251,7 @@ jobs:
   build-arm64:
     name: Build arm64
     runs-on: ubuntu-24.04-arm
-    needs: [build-probe-linux]
+    needs: [build-probe-linux, go-test]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -257,7 +297,7 @@ jobs:
   build-arm64-musl:
     name: Build arm64-musl
     runs-on: ubuntu-24.04-arm
-    needs: [build-probe-linux]
+    needs: [build-probe-linux, go-test]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -302,7 +342,7 @@ jobs:
   build-darwin-arm64:
     name: Build darwin-arm64
     runs-on: macos-latest
-    needs: [build-probe-darwin]
+    needs: [build-probe-darwin, go-test]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
