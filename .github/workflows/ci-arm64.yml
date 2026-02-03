@@ -819,8 +819,10 @@ jobs:
           VERSION=$(curl -s "https://vagrantcloud.com/api/v2/box/$BOX" | jq -r '.versions[0].version')
           echo "Latest version: $VERSION"
 
-          # Construct ARM64 box URL
-          BOX_URL="https://vagrantcloud.com/${BOX}/versions/${VERSION}/providers/libvirt/arm64/vagrant.box"
+          # Construct ARM64 box URL (format: /OWNER/boxes/NAME/versions/VER/providers/PROV/ARCH/vagrant.box)
+          OWNER=$(echo "$BOX" | cut -d/ -f1)
+          NAME=$(echo "$BOX" | cut -d/ -f2)
+          BOX_URL="https://vagrantcloud.com/${OWNER}/boxes/${NAME}/versions/${VERSION}/providers/libvirt/arm64/vagrant.box"
           echo "Box URL: $BOX_URL"
 
           # Add box explicitly - DO NOT swallow errors
