@@ -698,7 +698,7 @@ jobs:
         working-directory: e2e
         run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
 
-      - name: Sync folders
+      - name: Sync folders 
         working-directory: e2e
         run: |
           set -uo pipefail
@@ -854,33 +854,33 @@ jobs:
         run: |
           set -euo pipefail
           echo "=== Syncing source code to ${{ matrix.vm }} ==="
-          
+
           # Create directories with proper permissions
           # BSD systems may need explicit directory creation
           echo "Creating directories..."
           sudo -E vagrant ssh ${{ matrix.vm }} -c "
-            sudo mkdir -p /vagrant/src /vagrant/e2e /setup && 
-            sudo chmod 755 /vagrant /setup && 
+            sudo mkdir -p /vagrant/src /vagrant/e2e /setup &&
+            sudo chmod 755 /vagrant /setup &&
             ls -la / | grep -E 'vagrant|setup'"
-          
+
           # Sync setup scripts (to /setup at root)
           echo "Syncing setup..."
           tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xvf - 2>&1 | tail -5"
-          
+
           # Sync src directory (to /vagrant/src)
           echo "Syncing src..."
           tar -cf - -C .. src | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd /vagrant && sudo tar -xvf - 2>&1 | tail -5"
-          
+
           # Sync e2e directory contents (to /vagrant)
           echo "Syncing e2e..."
           tar -cf - . | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd /vagrant && sudo tar -xvf - 2>&1 | tail -5"
-          
+
           # Fix ownership and verify
           sudo -E vagrant ssh ${{ matrix.vm }} -c "
-            sudo chown -R root: /setup && 
-            echo '=== Verifying sync ===' && 
-            ls -la /vagrant/ && 
-            ls -la /vagrant/src/ | head -10 && 
+            sudo chown -R root: /setup &&
+            echo '=== Verifying sync ===' &&
+            ls -la /vagrant/ &&
+            ls -la /vagrant/src/ | head -10 &&
             ls -la /setup/ | head -5"
           echo "Sync complete"
 
@@ -936,6 +936,21 @@ jobs:
         run: |
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo chmod +x /setup/*.sh && sudo /setup/install.sh"
           sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo sh -x /vagrant/test-install.sh --skip-install"
+
+      - name: Extract binary from VM
+        working-directory: e2e
+        run: |
+          mkdir -p ../bin
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "cat /usr/local/bin/supervizio" > ../bin/supervizio-${{ matrix.vm }}-amd64
+          chmod +x ../bin/supervizio-${{ matrix.vm }}-amd64
+          file ../bin/supervizio-${{ matrix.vm }}-amd64
+
+      - name: Upload BSD binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.vm }}-amd64
+          path: bin/supervizio-${{ matrix.vm }}-amd64
+          retention-days: 1
 
       - name: Cleanup VM
         if: always()
@@ -1045,14 +1060,14 @@ jobs:
           path: "*.apk"
           retention-days: 1
 
-  # Generate BSD Packages (native build in VMs)
+  # Generate BSD Packages (uses pre-built binaries from e2e-vm-bsd)
   # FreeBSD/DragonFly: .pkg (pkgng), OpenBSD/NetBSD: .tgz
   packages-bsd:
     name: Package BSD ${{ matrix.name }}
-    needs: [e2e-vm-bsd]  # Reuses VM setup patterns, runs after script tests
+    needs: [e2e-vm-bsd]  # Uses binaries built and tested in e2e-vm-bsd
     runs-on: ubuntu-24.04
     continue-on-error: true  # BSD packaging is experimental
-    timeout-minutes: 30
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -1084,6 +1099,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download BSD binary (pre-built in e2e-vm-bsd)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-${{ matrix.vm }}-amd64
+          path: bin/
 
       - name: Setup KVM
         run: |
@@ -1118,16 +1139,16 @@ jobs:
           set -euo pipefail
           sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
 
-      - name: Wait for VM readiness
+      - name: Wait for VM SSH
         working-directory: e2e
-        timeout-minutes: 5
+        timeout-minutes: 3
         run: |
           set -uo pipefail
           sudo -E vagrant ssh-config ${{ matrix.vm }} 2>&1 | tee /tmp/ssh-config-${{ matrix.vm }} || true
           VM_IP=$(grep HostName /tmp/ssh-config-${{ matrix.vm }} | awk '{print $2}')
           for i in $(seq 1 36); do
             if timeout 5 bash -c "echo >/dev/tcp/$VM_IP/22" 2>/dev/null; then
-              if sudo -E vagrant ssh ${{ matrix.vm }} -c "command -v cargo && command -v go" 2>/dev/null; then
+              if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'SSH ready'" 2>/dev/null; then
                 break
               fi
             fi
@@ -1135,39 +1156,20 @@ jobs:
             sleep 5
           done
 
-      - name: Sync source code
+      - name: Copy binary and setup to VM
         working-directory: e2e
         run: |
           set -euo pipefail
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /vagrant/src /setup && sudo chmod 777 /vagrant /setup"
+          # Create directories
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /setup /vagrant && sudo chmod 777 /setup /vagrant"
+          # Sync setup scripts
           tar -cf - -C .. setup | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd / && sudo tar -xf -"
-          tar -cf - -C .. src | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tar -xf - -C /vagrant"
-
-      - name: Build binary with probe (native)
-        working-directory: e2e
-        timeout-minutes: 10
-        run: |
-          set -euo pipefail
-          echo "=== Build Rust probe library ==="
+          # Copy pre-built binary
+          tar -cf - -C .. bin | sudo -E vagrant ssh ${{ matrix.vm }} -c "cd /vagrant && sudo tar -xf -"
           sudo -E vagrant ssh ${{ matrix.vm }} -c "
-            cd /vagrant/src/lib/probe
-            cargo build --release
-            mkdir -p /vagrant/dist/lib/bsd-amd64
-            cp target/release/libprobe.a /vagrant/dist/lib/bsd-amd64/
-          "
-
-          echo "=== Build Go binary with CGO ==="
-          sudo -E vagrant ssh ${{ matrix.vm }} -c "
-            cd /vagrant/src
-            export CGO_ENABLED=1
-            export CGO_CFLAGS='-I/vagrant/src/lib/probe/include'
-            # BSD uses -pthread flag (not -lpthread)
-            export CGO_LDFLAGS='-L/vagrant/dist/lib/bsd-amd64 -lprobe -pthread -lm'
-            # Install Wire for code generation
-            go install github.com/google/wire/cmd/wire@v0.7.0
-            go generate ./internal/bootstrap/
-            go build -ldflags='-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci' \
-              -o /vagrant/supervizio ./cmd/daemon
+            cp /vagrant/bin/supervizio-${{ matrix.vm }}-amd64 /vagrant/supervizio
+            chmod +x /vagrant/supervizio
+            /vagrant/supervizio --version
           "
 
       - name: Create package staging
@@ -1177,7 +1179,7 @@ jobs:
           sudo -E vagrant ssh ${{ matrix.vm }} -c "
             set -euo pipefail
             CONFIG_BASE='${{ matrix.config_base }}'
-            
+
             mkdir -p /tmp/staging/usr/local/bin
             mkdir -p /tmp/staging/usr/local/etc/rc.d
             mkdir -p /tmp/staging\${CONFIG_BASE}/supervizio
@@ -1193,7 +1195,7 @@ jobs:
             cp /setup/init/${{ matrix.os }}/supervizio /tmp/staging/usr/local/etc/rc.d/supervizio 2>/dev/null || \
               cp /setup/init/freebsd/supervizio /tmp/staging/usr/local/etc/rc.d/supervizio
             chmod 755 /tmp/staging/usr/local/etc/rc.d/supervizio
-            
+
             echo '=== Staging contents ==='
             find /tmp/staging -type f
           "
@@ -1267,7 +1269,7 @@ jobs:
 
             # Comment (one-line description)
             echo 'PID1-capable process supervisor' > /tmp/comment
-            
+
             # Description (multi-line)
             cat > /tmp/description << 'DESC_EOF'
           Process supervisor for containers and Unix systems with health probes.
@@ -1304,7 +1306,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ../packages
-          
+
           # Find and extract the package file
           PKG_FILE=$(sudo -E vagrant ssh ${{ matrix.vm }} -c "ls /tmp/supervizio*.${{ matrix.pkg_format }} 2>/dev/null | head -1" | tr -d '\r\n')
           if [ -z "$PKG_FILE" ]; then
@@ -1312,7 +1314,7 @@ jobs:
             sudo -E vagrant ssh ${{ matrix.vm }} -c "ls -la /tmp/" || true
             exit 1
           fi
-          
+
           echo "Found package: $PKG_FILE"
           sudo -E vagrant ssh ${{ matrix.vm }} -c "cat '$PKG_FILE'" > ../packages/supervizio-${{ matrix.os }}-amd64.${{ matrix.pkg_format }}
           ls -la ../packages/
