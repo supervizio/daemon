@@ -189,39 +189,23 @@ jobs:
 
       - name: Build libprobe.a (native)
         working-directory: src/lib/probe
+        run: cargo build --release
+
+      - name: Debug - List build outputs
+        working-directory: src/lib/probe
+        if: always()
         run: |
-          # Build all workspace members
-          cargo build --release
-
-          # Show what was produced
-          echo "=== Listing all .a files in target ==="
-          find target -name "*.a" -type f 2>/dev/null | while read f; do
-            ls -la "$f"
-          done || echo "No .a files found"
-
-          echo "=== Target/release contents ==="
-          ls -la target/release/ 2>/dev/null | head -20 || echo "No release directory"
-
-          # Check if libprobe.a exists (don't fail if missing, let Prepare step fail)
-          if [ -f "target/release/libprobe.a" ]; then
-            echo "✓ libprobe.a found at target/release/libprobe.a"
-            ls -la target/release/libprobe.a
-          else
-            echo "⚠ libprobe.a NOT found at target/release/libprobe.a"
-            echo "Looking in other locations..."
-            find target -name "libprobe*" -type f -ls 2>/dev/null || echo "No libprobe files found"
-          fi
+          echo "=== Target release directory ==="
+          ls -la target/release/ 2>/dev/null | grep -E "\.a$|\.dylib$|^total" || echo "No release outputs found"
+          echo ""
+          echo "=== All .a files ==="
+          find target -name "*.a" -type f -exec ls -la {} \; 2>/dev/null || echo "No .a files"
 
       - name: Prepare artifact
         working-directory: src/lib/probe
         run: |
-          # Create artifact directory at repo root
           mkdir -p ${{ github.workspace }}/dist/lib/darwin-arm64
-
-          # Copy from local target to artifact directory
           cp target/release/libprobe.a ${{ github.workspace }}/dist/lib/darwin-arm64/
-
-          # Verify
           ls -la ${{ github.workspace }}/dist/lib/darwin-arm64/
 
       - name: Upload libprobe artifact
