@@ -125,7 +125,7 @@ pub fn get_memory_info() -> Result<MemInfo> {
         let mut memsize: u64 = 0;
         let mut len = mem::size_of::<u64>();
 
-        libc::sysctl(
+        let result = libc::sysctl(
             mib.as_mut_ptr(),
             2,
             &mut memsize as *mut _ as *mut libc::c_void,
@@ -134,28 +134,44 @@ pub fn get_memory_info() -> Result<MemInfo> {
             0,
         );
 
-        // Get page size
-        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
+        if result != 0 || memsize == 0 {
+            return Err(Error::Platform("failed to get total memory".to_string()));
+        }
 
-        // Get VM statistics via host_statistics64
+        // Get page size - must check for error (-1)
+        let page_size_raw = libc::sysconf(libc::_SC_PAGESIZE);
+        if page_size_raw <= 0 {
+            return Err(Error::Platform("failed to get page size".to_string()));
+        }
+        let page_size = page_size_raw as u64;
+
+        // Get memory stats via host_statistics (canonical macOS API)
         let host = libc::mach_host_self();
-        let mut vm_stat: vm_statistics64 = mem::zeroed();
-        let mut count = (mem::size_of::<vm_statistics64>() / mem::size_of::<libc::c_int>()) as u32;
+        let mut vm_stat: vm_statistics = mem::zeroed();
+        let mut count = (mem::size_of::<vm_statistics>() / mem::size_of::<u32>()) as u32;
 
-        let result = host_statistics64(
+        let result = host_statistics(
             host,
-            HOST_VM_INFO64,
+            HOST_VM_INFO,
             &mut vm_stat as *mut _ as *mut libc::c_int,
             &mut count,
         );
 
-        let (available, cached) = if result == 0 {
-            let free = vm_stat.free_count as u64 * page_size;
-            let inactive = vm_stat.inactive_count as u64 * page_size;
-            let cached = vm_stat.external_page_count as u64 * page_size;
-            (free + inactive, cached)
+        let available = if result == 0 {
+            // Available = free + inactive + speculative + purgeable (all can be reclaimed)
+            let free = u64::from(vm_stat.free_count);
+            let inactive = u64::from(vm_stat.inactive_count);
+            let speculative = u64::from(vm_stat.speculative_count);
+            let purgeable = u64::from(vm_stat.purgeable_count);
+
+            // Use checked arithmetic to prevent overflow
+            let total_pages =
+                free.saturating_add(inactive).saturating_add(speculative).saturating_add(purgeable);
+
+            total_pages.saturating_mul(page_size)
         } else {
-            (memsize / 4, 0) // Fallback
+            // Fallback: estimate available as 10% of total (conservative)
+            memsize / 10
         };
 
         // Get swap info via sysctl
@@ -174,7 +190,7 @@ pub fn get_memory_info() -> Result<MemInfo> {
         let (swap_total, swap_used) =
             if swap_result == 0 { (swap.xsu_total, swap.xsu_used) } else { (0, 0) };
 
-        Ok(MemInfo { total: memsize, available, cached, swap_total, swap_used })
+        Ok(MemInfo { total: memsize, available, cached: 0, swap_total, swap_used })
     }
 }
 
@@ -306,19 +322,14 @@ fn proc_pidinfo_fdcount(pid: i32) -> u32 {
 
 pub fn get_mounts() -> Result<Vec<Partition>> {
     unsafe {
-        let count = libc::getmntinfo(ptr::null_mut(), libc::MNT_NOWAIT);
-        if count <= 0 {
-            return Ok(Vec::new());
-        }
-
         let mut fs_list: *mut libc::statfs = ptr::null_mut();
-        let actual = libc::getmntinfo(&mut fs_list, libc::MNT_NOWAIT);
-        if actual <= 0 || fs_list.is_null() {
+        let count = libc::getmntinfo(&mut fs_list, libc::MNT_NOWAIT);
+        if count <= 0 || fs_list.is_null() {
             return Ok(Vec::new());
         }
 
         let mut partitions = Vec::new();
-        for i in 0..actual {
+        for i in 0..count {
             let fs = &*fs_list.add(i as usize);
 
             let device = cstr_to_string(fs.f_mntfromname.as_ptr());
@@ -1161,7 +1172,7 @@ const CPU_STATE_SYSTEM: libc::c_int = 1;
 const CPU_STATE_IDLE: libc::c_int = 2;
 const CPU_STATE_MAX: usize = 4;
 
-const HOST_VM_INFO64: libc::c_int = 4;
+const HOST_VM_INFO: libc::c_int = 2;
 
 const SIDL: u32 = 1;
 const SRUN: u32 = 2;
@@ -1226,32 +1237,24 @@ struct ProcTaskInfo {
 
 const RTM_IFINFO2: i32 = 0x12;
 
+/// vm_statistics structure (32-bit counters) - more reliable for memory info.
 #[repr(C)]
-struct vm_statistics64 {
-    free_count: u64,
-    active_count: u64,
-    inactive_count: u64,
-    wire_count: u64,
-    zero_fill_count: u64,
-    reactivations: u64,
-    pageins: u64,
-    pageouts: u64,
-    faults: u64,
-    cow_faults: u64,
-    lookups: u64,
-    hits: u64,
-    purges: u64,
-    purgeable_count: u64,
-    speculative_count: u64,
-    decompressions: u64,
-    compressions: u64,
-    swapins: u64,
-    swapouts: u64,
-    compressor_page_count: u64,
-    throttled_count: u64,
-    external_page_count: u64,
-    internal_page_count: u64,
-    total_uncompressed_pages_in_compressor: u64,
+struct vm_statistics {
+    free_count: u32,
+    active_count: u32,
+    inactive_count: u32,
+    wire_count: u32,
+    zero_fill_count: u32,
+    reactivations: u32,
+    pageins: u32,
+    pageouts: u32,
+    faults: u32,
+    cow_faults: u32,
+    lookups: u32,
+    hits: u32,
+    purgeable_count: u32,
+    purges: u32,
+    speculative_count: u32,
 }
 
 #[repr(C)]
@@ -1558,7 +1561,7 @@ unsafe extern "C" {
         out_processor_infoCnt: *mut libc::c_uint,
     ) -> libc::c_int;
 
-    fn host_statistics64(
+    fn host_statistics(
         host: libc::mach_port_t,
         flavor: libc::c_int,
         host_info_out: *mut libc::c_int,

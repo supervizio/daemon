@@ -22,14 +22,7 @@ pub struct CpuInfo {
 
 pub fn get_cpu_times() -> Result<CpuTimes> {
     unsafe {
-        // kern.cp_time on FreeBSD/NetBSD, kern.cp_time2 on OpenBSD
-        #[cfg(target_os = "freebsd")]
-        let name = CString::new("kern.cp_time")
-            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
-        #[cfg(target_os = "openbsd")]
-        let name = CString::new("kern.cp_time")
-            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
-        #[cfg(target_os = "netbsd")]
+        // kern.cp_time on FreeBSD/OpenBSD/NetBSD
         let name = CString::new("kern.cp_time")
             .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
 
@@ -122,8 +115,12 @@ pub struct MemInfo {
 
 pub fn get_memory_info() -> Result<MemInfo> {
     unsafe {
-        // Get page size
-        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
+        // Get page size - must check for error (-1)
+        let page_size_raw = libc::sysconf(libc::_SC_PAGESIZE);
+        if page_size_raw <= 0 {
+            return Err(Error::Platform("failed to get page size".to_string()));
+        }
+        let page_size = page_size_raw as u64;
 
         // Get total physical memory
         let name = CString::new("hw.physmem")
@@ -143,15 +140,12 @@ pub fn get_memory_info() -> Result<MemInfo> {
         #[cfg(target_os = "freebsd")]
         let free_name = CString::new("vm.stats.vm.v_free_count")
             .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
-        #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
-        let free_name = CString::new("vm.uvmexp")
-            .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
 
         let mut free_pages: u64 = 0;
-        let mut free_len = mem::size_of::<u64>();
 
         #[cfg(target_os = "freebsd")]
         {
+            let mut free_len = mem::size_of::<u64>();
             libc::sysctlbyname(
                 free_name.as_ptr(),
                 &mut free_pages as *mut _ as *mut libc::c_void,
@@ -161,12 +155,17 @@ pub fn get_memory_info() -> Result<MemInfo> {
             );
         }
 
+        // OpenBSD/NetBSD: Use single uvmexp call for all metrics (optimization)
+        // This consolidates 3 separate get_uvmexp() calls into 1
         #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
-        {
-            // OpenBSD/NetBSD use uvmexp structure via VM_UVMEXP sysctl
+        let (cached, swap_total, swap_used) = {
             let uvm = get_uvmexp()?;
             free_pages = uvm.free as u64;
-        }
+            let cached = (uvm.vnodepages as u64).saturating_mul(page_size);
+            let swap_total = (uvm.swpages as u64).saturating_mul(page_size);
+            let swap_used = (uvm.swpginuse as u64).saturating_mul(page_size);
+            (cached, swap_total, swap_used)
+        };
 
         // Get cached pages (FreeBSD specific)
         #[cfg(target_os = "freebsd")]
@@ -182,35 +181,16 @@ pub fn get_memory_info() -> Result<MemInfo> {
                 ptr::null_mut(),
                 0,
             );
-            cache_pages * page_size
+            cache_pages.saturating_mul(page_size)
         };
-
-        #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
-        let cached = {
-            let uvm = get_uvmexp().unwrap_or_default();
-            // vnodepages represents file cache on BSD
-            uvm.vnodepages as u64 * page_size
-        };
-
-        #[cfg(not(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd")))]
-        let cached = 0u64;
 
         // Get swap info
         #[cfg(target_os = "freebsd")]
         let (swap_total, swap_used) = get_swap_freebsd();
-        #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
-        let (swap_total, swap_used) = {
-            let uvm = get_uvmexp().unwrap_or_default();
-            let swap_total = uvm.swpages as u64 * page_size;
-            let swap_used = uvm.swpginuse as u64 * page_size;
-            (swap_total, swap_used)
-        };
-        #[cfg(not(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd")))]
-        let (swap_total, swap_used) = (0u64, 0u64);
 
         Ok(MemInfo {
             total: physmem,
-            available: free_pages * page_size,
+            available: free_pages.saturating_mul(page_size),
             cached,
             buffers: 0,
             swap_total,
@@ -268,7 +248,13 @@ fn get_swap_freebsd() -> (u64, u64) {
         }
 
         // Query each swap device via vm.swap_info.<index>
-        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
+        // Check page_size for error (-1 would cause overflow)
+        let page_size_raw = libc::sysconf(libc::_SC_PAGESIZE);
+        if page_size_raw <= 0 {
+            return (0, 0);
+        }
+        let page_size = page_size_raw as u64;
+
         let mut total_blocks: u64 = 0;
         let mut used_blocks: u64 = 0;
 
@@ -303,8 +289,9 @@ fn get_swap_freebsd() -> (u64, u64) {
         }
 
         // Convert blocks to bytes (blocks are in pages on FreeBSD)
-        let total_bytes = total_blocks * page_size;
-        let used_bytes = used_blocks * page_size;
+        // Use saturating_mul to prevent overflow
+        let total_bytes = total_blocks.saturating_mul(page_size);
+        let used_bytes = used_blocks.saturating_mul(page_size);
 
         (total_bytes, used_bytes)
     }
@@ -314,7 +301,12 @@ fn get_swap_freebsd() -> (u64, u64) {
 #[cfg(target_os = "freebsd")]
 fn get_swap_freebsd_fallback() -> (u64, u64) {
     unsafe {
-        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
+        // Check page_size for error (-1 would cause overflow)
+        let page_size_raw = libc::sysconf(libc::_SC_PAGESIZE);
+        if page_size_raw <= 0 {
+            return (0, 0);
+        }
+        let page_size = page_size_raw as u64;
 
         // Try vm.swap_total (total swap pages)
         let total_name = match CString::new("vm.swap_total") {
@@ -339,7 +331,7 @@ fn get_swap_freebsd_fallback() -> (u64, u64) {
         // Try vm.swap_reserved (reserved/used swap pages)
         let reserved_name = match CString::new("vm.swap_reserved") {
             Ok(n) => n,
-            Err(_) => return (total_pages * page_size, 0),
+            Err(_) => return (total_pages.saturating_mul(page_size), 0),
         };
 
         let mut reserved_pages: u64 = 0;
@@ -353,7 +345,7 @@ fn get_swap_freebsd_fallback() -> (u64, u64) {
             0,
         );
 
-        (total_pages * page_size, reserved_pages * page_size)
+        (total_pages.saturating_mul(page_size), reserved_pages.saturating_mul(page_size))
     }
 }
 
@@ -633,11 +625,17 @@ fn get_process_info_openbsd(pid: i32) -> Result<ProcessInfo> {
             return Err(Error::NotFound(format!("process {} not found", pid)));
         }
 
-        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
+        // Check page_size for error (-1 would cause overflow)
+        let page_size_raw = libc::sysconf(libc::_SC_PAGESIZE);
+        if page_size_raw <= 0 {
+            return Err(Error::Platform("failed to get page size".to_string()));
+        }
+        let page_size = page_size_raw as u64;
 
         Ok(ProcessInfo {
-            rss: kinfo.p_vm_rssize as u64 * page_size,
-            vsize: (kinfo.p_vm_tsize + kinfo.p_vm_dsize + kinfo.p_vm_ssize) as u64 * page_size,
+            rss: (kinfo.p_vm_rssize as u64).saturating_mul(page_size),
+            vsize: ((kinfo.p_vm_tsize + kinfo.p_vm_dsize + kinfo.p_vm_ssize) as u64)
+                .saturating_mul(page_size),
             num_threads: 1, // OpenBSD doesn't expose thread count easily
             num_fds: 0,     // Would need KERN_FILE sysctl
             state: match kinfo.p_stat {
@@ -762,10 +760,15 @@ fn get_process_info_netbsd(pid: i32) -> Result<ProcessInfo> {
             return Err(Error::NotFound(format!("process {} not found", pid)));
         }
 
-        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
+        // Check page_size for error (-1 would cause overflow)
+        let page_size_raw = libc::sysconf(libc::_SC_PAGESIZE);
+        if page_size_raw <= 0 {
+            return Err(Error::Platform("failed to get page size".to_string()));
+        }
+        let page_size = page_size_raw as u64;
 
         Ok(ProcessInfo {
-            rss: kinfo.p_vm_rssize as u64 * page_size,
+            rss: (kinfo.p_vm_rssize as u64).saturating_mul(page_size),
             vsize: kinfo.p_vm_vsize as u64,
             num_threads: kinfo.p_nlwps as u32,
             num_fds: 0, // Would need KERN_FILE sysctl

@@ -3,7 +3,7 @@
 //! This crate provides system metrics collection for each supported platform:
 //! - Linux: via /proc filesystem
 //! - macOS: via Mach APIs and sysctl
-//! - BSD: via sysctl and kvm
+//! - BSD (FreeBSD, OpenBSD, NetBSD): via sysctl and kvm
 
 pub use probe_metrics::{
     AddressFamily, CPUCollector, CPUPressure, ConnectionCollector, ContextSwitches, DiskCollector,
