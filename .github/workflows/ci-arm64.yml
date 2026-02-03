@@ -191,8 +191,8 @@ jobs:
       - name: Check compilation (type check only)
         working-directory: src/lib/probe
         run: |
-          echo "=== Type checking probe-ffi ==="
-          cargo check --package probe-ffi 2>&1 | tee /tmp/darwin-check.log || {
+          echo "=== Type checking probe-ffi for aarch64-apple-darwin ==="
+          cargo check --target aarch64-apple-darwin --package probe-ffi 2>&1 | tee /tmp/darwin-check.log || {
             echo "=== CHECK FAILED ==="
             exit 1
           }
