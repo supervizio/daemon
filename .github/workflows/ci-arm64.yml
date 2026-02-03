@@ -523,7 +523,6 @@ jobs:
     name: E2E Docker ${{ matrix.name }}
     needs: [packages-glibc, packages-musl]
     runs-on: ubuntu-24.04-arm
-    continue-on-error: true
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -565,9 +564,30 @@ jobs:
       - name: Validate probe metrics
         run: |
           docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }}-arm64 -c "
-            OUTPUT=\$(/usr/local/bin/supervizio --probe) &&
-            echo \"\$OUTPUT\" | jq -e '.timestamp and .platform and .cpu.cores > 0' &&
-            echo 'Probe validation passed: ${{ matrix.description }}'
+            set -e
+            echo '=== System Info ==='
+            uname -a
+            cat /etc/os-release 2>/dev/null || true
+
+            echo ''
+            echo '=== Running --probe ==='
+            OUTPUT=\$(/usr/local/bin/supervizio --probe 2>&1) || {
+              echo 'ERROR: --probe failed'
+              echo \"Output: \$OUTPUT\"
+              exit 1
+            }
+
+            echo 'Raw JSON:'
+            echo \"\$OUTPUT\"
+
+            echo ''
+            echo '=== Validation ==='
+            echo \"\$OUTPUT\" | jq -e '.timestamp' > /dev/null && echo '✓ timestamp'
+            echo \"\$OUTPUT\" | jq -e '.platform' > /dev/null && echo '✓ platform'
+            echo \"\$OUTPUT\" | jq -r '.cpu.cores // \"null\"' | xargs -I {} echo 'cpu.cores = {}'
+
+            echo \"\$OUTPUT\" | jq -e '.timestamp and .platform and .cpu.cores > 0' && \
+              echo '✓ Probe validation passed: ${{ matrix.description }}'
           "
 
   # =============================================================================
@@ -578,7 +598,6 @@ jobs:
     name: E2E macOS ARM64
     needs: [verify-artifacts]
     runs-on: macos-14
-    continue-on-error: true
     timeout-minutes: 10
     steps:
       - name: Checkout code
@@ -597,17 +616,46 @@ jobs:
 
       - name: Run macOS E2E test
         run: |
+          set -euo pipefail
           export PATH="$PWD/bin:$PATH"
           mv bin/supervizio-darwin-arm64 bin/supervizio
           chmod +x bin/supervizio
 
-          # Test version
-          bin/supervizio --version || echo "Version check (expected to work)"
+          echo "=== System Info ==="
+          uname -a
+          sysctl hw.ncpu || true
+          sw_vers || true
 
-          # Test probe
-          OUTPUT=$(bin/supervizio --probe)
-          echo "$OUTPUT" | jq .
+          echo ""
+          echo "=== Test version ==="
+          bin/supervizio --version
 
-          # Validate probe structure
+          echo ""
+          echo "=== Test probe ==="
+          OUTPUT=$(bin/supervizio --probe 2>&1) || {
+            echo "ERROR: --probe command failed with exit code $?"
+            echo "Output: $OUTPUT"
+            exit 1
+          }
+
+          echo "Raw JSON output:"
+          echo "$OUTPUT"
+
+          echo ""
+          echo "=== Validate JSON structure ==="
+          echo "$OUTPUT" | jq -e 'type == "object"' > /dev/null || {
+            echo "ERROR: Output is not valid JSON object"
+            exit 1
+          }
+
+          echo "Checking required fields..."
+          echo "$OUTPUT" | jq -e '.timestamp' > /dev/null && echo "✓ timestamp present"
+          echo "$OUTPUT" | jq -e '.platform' > /dev/null && echo "✓ platform present"
+          echo "$OUTPUT" | jq -e '.cpu' > /dev/null && echo "✓ cpu present" || echo "✗ cpu MISSING"
+          echo "$OUTPUT" | jq -r '.cpu.cores // "null"' | xargs -I {} echo "  cpu.cores = {}"
+
+          # Final validation
+          echo ""
+          echo "=== Final validation ==="
           echo "$OUTPUT" | jq -e '.timestamp and .platform and .cpu.cores > 0' && \
-            echo "Probe validation passed on macOS ARM64"
+            echo "✓ Probe validation passed on macOS ARM64"
