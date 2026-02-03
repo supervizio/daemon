@@ -225,6 +225,15 @@ jobs:
           echo ""
           echo "=== Build completed successfully ==="
 
+      - name: Show build errors (if any)
+        if: failure()
+        run: |
+          echo "=== Last 100 lines of build log ==="
+          tail -100 /tmp/darwin-build.log 2>/dev/null || echo "No build log found"
+          echo ""
+          echo "=== Error patterns in log ==="
+          grep -iE "error|failed|fatal|undefined|unresolved" /tmp/darwin-build.log 2>/dev/null | tail -50 || echo "No error patterns found"
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
