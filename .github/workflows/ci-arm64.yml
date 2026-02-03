@@ -194,11 +194,23 @@ jobs:
           cargo build --release
 
           # Show what was produced
-          echo "=== Listing .a files in target ==="
-          find target -name "*.a" -type f -ls 2>/dev/null || echo "No .a files found"
+          echo "=== Listing all .a files in target ==="
+          find target -name "*.a" -type f 2>/dev/null | while read f; do
+            ls -la "$f"
+          done || echo "No .a files found"
 
-          # Verify libprobe.a exists
-          ls -la target/release/libprobe.a
+          echo "=== Target/release contents ==="
+          ls -la target/release/ 2>/dev/null | head -20 || echo "No release directory"
+
+          # Check if libprobe.a exists (don't fail if missing, let Prepare step fail)
+          if [ -f "target/release/libprobe.a" ]; then
+            echo "✓ libprobe.a found at target/release/libprobe.a"
+            ls -la target/release/libprobe.a
+          else
+            echo "⚠ libprobe.a NOT found at target/release/libprobe.a"
+            echo "Looking in other locations..."
+            find target -name "libprobe*" -type f -ls 2>/dev/null || echo "No libprobe files found"
+          fi
 
       - name: Prepare artifact
         working-directory: src/lib/probe
