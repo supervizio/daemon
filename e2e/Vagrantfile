@@ -22,7 +22,6 @@
 #   - freebsd: FreeBSD 14 (pkg)
 #   - openbsd: OpenBSD 7 (pkg)
 #   - netbsd: NetBSD 9 (pkgin)
-#   - dragonfly: DragonFlyBSD 6 (pkg)
 #
 # Note: Vagrant boxes may lag behind latest versions. Using latest available.
 #
@@ -239,18 +238,6 @@ Vagrant.configure("2") do |config|
       # Update pkgin database and install packages
       pkgin -y update || true
       pkgin -y install curl jq rsync rust go
-      # Verify installations
-      rustc --version && cargo --version && go version
-    SHELL
-  end
-
-  # DragonFlyBSD 6.4
-  config.vm.define "dragonfly", autostart: false do |v|
-    v.vm.box = "generic/dragonflybsd6"  # DragonFlyBSD 6.x
-    v.vm.hostname = "e2e-dragonfly"
-    configure_bsd_synced_folders(v)
-    v.vm.provision "shell", inline: <<-SHELL
-      pkg install -y curl jq rsync rust go
       # Verify installations
       rustc --version && cargo --version && go version
     SHELL

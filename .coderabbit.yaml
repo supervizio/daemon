@@ -193,7 +193,7 @@ reviews:
 
     - path: "src/**/*_bsd.go"
       instructions: |
-        **BSD-specific code (FreeBSD/OpenBSD/NetBSD/DragonFly):**
+        **BSD-specific code (FreeBSD/OpenBSD/NetBSD):**
         - procfs may not be mounted by default
         - kqueue for event notification
         - Different init system integration (rc.d)

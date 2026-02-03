@@ -14,7 +14,6 @@ End-to-end testing across all supported platforms and init systems (AMD64 only).
 | BSD rc.d | FreeBSD 14 | pkg | ✅ | - | 98% |
 | BSD rc.d | OpenBSD 7 | pkg | ✅ | - | 92% |
 | BSD rc.d | NetBSD 9 | pkgin | ✅ | - | 90% |
-| BSD rc.d | DragonFlyBSD 6 | pkg | ✅ | - | 0% (stub) |
 | launchd | macOS | - | - | - | 95% |
 
 **Note**: macOS testing via GitHub Actions macOS runners only (no Vagrant support).
@@ -71,7 +70,6 @@ Comprehensive per-platform validation of `--probe` JSON output:
 | macOS | 95% | All except: PSI, iowait, steal, buffers |
 | OpenBSD | 92% | All except: PSI, iowait, steal, buffers, temp_max/crit |
 | NetBSD | 90% | All except: PSI, iowait, steal, buffers, temp_max/crit |
-| DragonFlyBSD | 0% | Stub only (no metrics) |
 
 ### Sections Validated
 

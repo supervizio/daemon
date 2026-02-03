@@ -1,4 +1,4 @@
-//go:build linux || darwin || freebsd || openbsd || netbsd || dragonfly
+//go:build linux || darwin || freebsd || openbsd || netbsd
 
 // Package terminal provides internal tests for size_unix.go.
 // It tests internal implementation details using white-box testing.

@@ -35,7 +35,7 @@ Bugs here crash entire containers. Optimize for correctness, concurrency safety,
 CONTEXT: supervizio/daemon
 - PID1-capable process supervisor for containers and Unix systems
 - Hexagonal architecture (domain → application → infrastructure)
-- Go 1.25+ with zero CGO, multi-platform (Linux, FreeBSD, OpenBSD, NetBSD, DragonFly, macOS)
+- Go 1.25+ with zero CGO, multi-platform (Linux, FreeBSD, OpenBSD, NetBSD, macOS)
 - Wire for DI, gRPC API, Bubble Tea TUI, BoltDB storage
 
 SCOPE (DIFF-FIRST)

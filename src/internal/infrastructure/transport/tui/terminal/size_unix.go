@@ -1,4 +1,4 @@
-//go:build linux || darwin || freebsd || openbsd || netbsd || dragonfly
+//go:build linux || darwin || freebsd || openbsd || netbsd
 
 // Package terminal provides Unix-specific terminal size detection.
 package terminal

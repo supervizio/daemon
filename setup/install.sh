@@ -35,7 +35,6 @@ detect_os() {
         FreeBSD) echo "freebsd" ;;
         OpenBSD) echo "openbsd" ;;
         NetBSD)  echo "netbsd" ;;
-        DragonFly) echo "dragonfly" ;;
         *)       log_error "Unsupported OS: $OS"; exit 1 ;;
     esac
 }
@@ -157,7 +156,7 @@ create_config_dir() {
     OS="$1"
 
     case "$OS" in
-        freebsd|dragonfly)
+        freebsd)
             CONFIG_DIR="/usr/local/etc/supervizio"
             ;;
     esac
@@ -263,13 +262,6 @@ install_init() {
             log_info "Installing launchd service"
             cp "$SCRIPT_DIR/init/launchd/io.superviz.daemon.plist" /Library/LaunchDaemons/
             log_info "Service installed. Start with: launchctl load /Library/LaunchDaemons/io.superviz.daemon.plist"
-            ;;
-        dragonfly)
-            log_info "Installing DragonFlyBSD rc.d service"
-            cp "$SCRIPT_DIR/init/freebsd/supervizio" /usr/local/etc/rc.d/
-            chmod +x /usr/local/etc/rc.d/supervizio
-            echo 'supervizio_enable="YES"' >> /etc/rc.conf
-            log_info "Service enabled. Start with: service supervizio start"
             ;;
     esac
 }

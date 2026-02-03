@@ -213,7 +213,6 @@ coverage:
     - "**/*_freebsd.go"
     - "**/*_openbsd.go"
     - "**/*_netbsd.go"
-    - "**/*_dragonfly.go"
 
     # Scratch/stub implementations (CI-only)
     - "**/*_scratch.go"

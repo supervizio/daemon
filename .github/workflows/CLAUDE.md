@@ -57,7 +57,6 @@ packages                            packages
 | FreeBSD | Zig cross-compile | Go cross + Zig CC |
 | OpenBSD | Zig cross-compile | Go cross + Zig CC |
 | NetBSD | Zig cross-compile | Go cross + Zig CC |
-| DragonFlyBSD | Zig cross-compile | Go cross + Zig CC |
 | macOS | Native (GitHub macOS runner) | Native |
 
 ### Key Tools

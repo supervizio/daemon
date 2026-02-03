@@ -13,7 +13,6 @@
 #   macOS:         95% (missing: PSI, iowait, steal, buffers)
 #   OpenBSD:       92% (missing: PSI, iowait, steal, buffers, temp_max/crit)
 #   NetBSD:        90% (missing: PSI, iowait, steal, buffers, temp_max/crit)
-#   DragonFlyBSD:   0% (stub only)
 #
 # Usage: validate-probe.sh
 #
@@ -34,10 +33,6 @@ NC='\033[0m'
 
 # Detect platform
 PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
-case "$PLATFORM" in
-    dragonfly) PLATFORM="dragonfly" ;;
-    *) ;;
-esac
 
 echo "=============================================="
 echo " Probe Metrics E2E Validation"
@@ -160,13 +155,8 @@ check_field_numeric ".cpu.frequency_mhz"
 # =============================================================================
 printf "\n${BLUE}=== Section 3: Memory Metrics ===${NC}\n"
 
-# All platforms except DragonFlyBSD
-case "$PLATFORM" in
-    dragonfly)
-        skip_field ".memory.*" "DragonFlyBSD not supported"
-        ;;
-    *)
-        check_field_numeric ".memory.total_bytes"
+# All platforms
+check_field_numeric ".memory.total_bytes"
         check_field_numeric ".memory.available_bytes"
         check_field_numeric ".memory.used_bytes"
         check_field_numeric ".memory.cached_bytes"
@@ -174,15 +164,13 @@ case "$PLATFORM" in
         check_field_numeric ".memory.swap_used_bytes"
         check_field_numeric ".memory.used_percent"
 
-        # buffers_bytes: Linux only
-        case "$PLATFORM" in
-            linux)
-                check_field_numeric ".memory.buffers_bytes"
-                ;;
-            *)
-                skip_field ".memory.buffers_bytes" "Linux page cache architecture only"
-                ;;
-        esac
+# buffers_bytes: Linux only
+case "$PLATFORM" in
+    linux)
+        check_field_numeric ".memory.buffers_bytes"
+        ;;
+    *)
+        skip_field ".memory.buffers_bytes" "Linux page cache architecture only"
         ;;
 esac
 
@@ -230,59 +218,38 @@ esac
 # =============================================================================
 printf "\n${BLUE}=== Section 5: Load Average ===${NC}\n"
 
-case "$PLATFORM" in
-    dragonfly)
-        skip_field ".load.*" "DragonFlyBSD not supported"
-        ;;
-    *)
-        check_field_numeric ".load.load_1min"
-        check_field_numeric ".load.load_5min"
-        check_field_numeric ".load.load_15min"
-        ;;
-esac
+check_field_numeric ".load.load_1min"
+check_field_numeric ".load.load_5min"
+check_field_numeric ".load.load_15min"
 
 # =============================================================================
 # SECTION 6: Process Metrics
 # =============================================================================
 printf "\n${BLUE}=== Section 6: Process Metrics ===${NC}\n"
 
-case "$PLATFORM" in
-    dragonfly)
-        skip_field ".process.*" "DragonFlyBSD not supported"
-        ;;
-    *)
-        check_field_not_null ".process.current_pid"
-        # Process metrics are in top_processes array
-        if echo "$JSON" | jq -e '.process.top_processes | length > 0' >/dev/null 2>&1; then
-            check_field_numeric ".process.top_processes[0].memory_rss_bytes"
-            check_field_numeric ".process.top_processes[0].memory_vms_bytes"
-        else
-            printf "${YELLOW}[WARN]${NC} No process info in top_processes (may be expected)\n"
-        fi
-        ;;
-esac
+check_field_not_null ".process.current_pid"
+# Process metrics are in top_processes array
+if echo "$JSON" | jq -e '.process.top_processes | length > 0' >/dev/null 2>&1; then
+    check_field_numeric ".process.top_processes[0].memory_rss_bytes"
+    check_field_numeric ".process.top_processes[0].memory_vms_bytes"
+else
+    printf "${YELLOW}[WARN]${NC} No process info in top_processes (may be expected)\n"
+fi
 
 # =============================================================================
 # SECTION 7: Disk Metrics
 # =============================================================================
 printf "\n${BLUE}=== Section 7: Disk Metrics ===${NC}\n"
 
-case "$PLATFORM" in
-    dragonfly)
-        skip_field ".disk.*" "DragonFlyBSD not supported"
-        ;;
-    *)
-        # Disk usage is under .disk.usage array
-        check_field ".disk"
-        check_array_not_empty ".disk.usage"
+# Disk usage is under .disk.usage array
+check_field ".disk"
+check_array_not_empty ".disk.usage"
 
-        # Verify first disk has expected fields
-        check_field_not_null ".disk.usage[0].path"
-        check_field_numeric ".disk.usage[0].total_bytes"
-        check_field_numeric ".disk.usage[0].used_bytes"
-        check_field_numeric ".disk.usage[0].free_bytes"
-        ;;
-esac
+# Verify first disk has expected fields
+check_field_not_null ".disk.usage[0].path"
+check_field_numeric ".disk.usage[0].total_bytes"
+check_field_numeric ".disk.usage[0].used_bytes"
+check_field_numeric ".disk.usage[0].free_bytes"
 
 # =============================================================================
 # SECTION 8: Disk I/O Stats
@@ -290,9 +257,6 @@ esac
 printf "\n${BLUE}=== Section 8: Disk I/O Stats ===${NC}\n"
 
 case "$PLATFORM" in
-    dragonfly)
-        skip_field ".disk.io.*" "DragonFlyBSD not supported"
-        ;;
     linux|freebsd|openbsd|netbsd|darwin)
         # Disk I/O is under .disk.io array
         if echo "$JSON" | jq -e '.disk.io != null and (.disk.io | type) == "array"' >/dev/null 2>&1; then
@@ -319,40 +283,26 @@ esac
 # =============================================================================
 printf "\n${BLUE}=== Section 9: Network Interfaces ===${NC}\n"
 
-case "$PLATFORM" in
-    dragonfly)
-        skip_field ".network.*" "DragonFlyBSD not supported"
-        ;;
-    *)
-        check_field ".network.interfaces"
-        check_array_not_empty ".network.interfaces"
+check_field ".network.interfaces"
+check_array_not_empty ".network.interfaces"
 
-        # Check first interface has expected fields
-        check_field_not_null ".network.interfaces[0].name"
-        ;;
-esac
+# Check first interface has expected fields
+check_field_not_null ".network.interfaces[0].name"
 
 # =============================================================================
 # SECTION 10: Network Stats
 # =============================================================================
 printf "\n${BLUE}=== Section 10: Network Stats ===${NC}\n"
 
-case "$PLATFORM" in
-    dragonfly)
-        skip_field ".network.stats.*" "DragonFlyBSD not supported"
-        ;;
-    *)
-        check_field ".network.stats"
-        check_array_not_empty ".network.stats"
+check_field ".network.stats"
+check_array_not_empty ".network.stats"
 
-        # Check first stat has expected fields (using actual field names)
-        check_field_not_null ".network.stats[0].interface"
-        check_field_numeric ".network.stats[0].bytes_recv"
-        check_field_numeric ".network.stats[0].bytes_sent"
-        check_field_numeric ".network.stats[0].packets_recv"
-        check_field_numeric ".network.stats[0].packets_sent"
-        ;;
-esac
+# Check first stat has expected fields (using actual field names)
+check_field_not_null ".network.stats[0].interface"
+check_field_numeric ".network.stats[0].bytes_recv"
+check_field_numeric ".network.stats[0].bytes_sent"
+check_field_numeric ".network.stats[0].packets_recv"
+check_field_numeric ".network.stats[0].packets_sent"
 
 # =============================================================================
 # SECTION 11: Network Connections
@@ -360,9 +310,6 @@ esac
 printf "\n${BLUE}=== Section 11: Network Connections ===${NC}\n"
 
 case "$PLATFORM" in
-    dragonfly)
-        skip_field ".connections.*" "DragonFlyBSD not supported"
-        ;;
     linux|freebsd|openbsd|netbsd|darwin)
         # TCP stats should exist
         check_field ".connections.tcp_stats"
@@ -381,38 +328,24 @@ esac
 # =============================================================================
 printf "\n${BLUE}=== Section 12: Aggregated I/O ===${NC}\n"
 
-case "$PLATFORM" in
-    dragonfly)
-        skip_field ".io.*" "DragonFlyBSD not supported"
-        ;;
-    *)
-        check_field_numeric ".io.read_bytes"
-        check_field_numeric ".io.write_bytes"
-        check_field_numeric ".io.read_ops"
-        check_field_numeric ".io.write_ops"
-        ;;
-esac
+check_field_numeric ".io.read_bytes"
+check_field_numeric ".io.write_bytes"
+check_field_numeric ".io.read_ops"
+check_field_numeric ".io.write_ops"
 
 # =============================================================================
 # SECTION 13: Context Switches
 # =============================================================================
 printf "\n${BLUE}=== Section 13: Context Switches ===${NC}\n"
 
-case "$PLATFORM" in
-    dragonfly)
-        skip_field ".context_switches.*" "DragonFlyBSD not supported"
-        ;;
-    *)
-        check_field_numeric ".context_switches.system_total"
-        # Self context switches are nested under .self
-        if echo "$JSON" | jq -e '.context_switches.self != null' >/dev/null 2>&1; then
-            check_field_numeric ".context_switches.self.voluntary"
-            check_field_numeric ".context_switches.self.involuntary"
-        else
-            printf "${YELLOW}[WARN]${NC} context_switches.self not present\n"
-        fi
-        ;;
-esac
+check_field_numeric ".context_switches.system_total"
+# Self context switches are nested under .self
+if echo "$JSON" | jq -e '.context_switches.self != null' >/dev/null 2>&1; then
+    check_field_numeric ".context_switches.self.voluntary"
+    check_field_numeric ".context_switches.self.involuntary"
+else
+    printf "${YELLOW}[WARN]${NC} context_switches.self not present\n"
+fi
 
 # =============================================================================
 # SECTION 14: Thermal Monitoring
@@ -420,9 +353,6 @@ esac
 printf "\n${BLUE}=== Section 14: Thermal Monitoring ===${NC}\n"
 
 case "$PLATFORM" in
-    dragonfly)
-        skip_field ".thermal.*" "DragonFlyBSD not supported"
-        ;;
     linux|freebsd|darwin)
         check_field_not_null ".thermal.supported"
 
@@ -459,16 +389,8 @@ esac
 # =============================================================================
 printf "\n${BLUE}=== Section 15: Container/Runtime Detection ===${NC}\n"
 
-case "$PLATFORM" in
-    dragonfly)
-        skip_field ".container.*" "DragonFlyBSD not supported"
-        skip_field ".runtime.*" "DragonFlyBSD not supported"
-        ;;
-    *)
-        check_field_not_null ".container.is_containerized"
-        check_field_not_null ".runtime.is_containerized"
-        ;;
-esac
+check_field_not_null ".container.is_containerized"
+check_field_not_null ".runtime.is_containerized"
 
 # =============================================================================
 # SECTION 16: Quota Information
@@ -529,9 +451,6 @@ case "$PLATFORM" in
         ;;
     netbsd)
         EXPECTED=80
-        ;;
-    dragonfly)
-        EXPECTED=0  # Stub only
         ;;
     *)
         EXPECTED=50

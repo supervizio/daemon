@@ -54,7 +54,7 @@ echo ""
 echo "=== Test 3: Config directory ==="
 OS="$(uname -s)"
 case "$OS" in
-    FreeBSD|DragonFly)
+    FreeBSD)
         CONFIG_DIR="/usr/local/etc/supervizio"
         ;;
     *)
@@ -107,7 +107,7 @@ case "$OS" in
             fail "No service file found"
         fi
         ;;
-    FreeBSD|DragonFly)
+    FreeBSD)
         if [ -f /usr/local/etc/rc.d/supervizio ]; then
             pass "FreeBSD rc.d service installed"
         else
