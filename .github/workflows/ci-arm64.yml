@@ -190,45 +190,27 @@ jobs:
       - name: Build libprobe.a (native)
         working-directory: src/lib/probe
         run: |
-          set -x  # Enable command tracing
           # Build all workspace members
-          cargo build --release 2>&1 | tee build.log
-          BUILD_EXIT=$?
-
-          echo "=== Build exit code: $BUILD_EXIT ==="
+          cargo build --release
 
           # Show what was produced
           echo "=== Listing .a files in target ==="
           find target -name "*.a" -type f -ls 2>/dev/null || echo "No .a files found"
 
-          # Save build log for artifact upload
-          mkdir -p /tmp/build-logs
-          cp build.log /tmp/build-logs/darwin-build.log
-
-          exit $BUILD_EXIT
-
-      - name: Upload build log on failure
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: darwin-build-log
-          path: /tmp/build-logs/
-          retention-days: 1
+          # Verify libprobe.a exists
+          ls -la target/release/libprobe.a
 
       - name: Prepare artifact
+        working-directory: src/lib/probe
         run: |
-          set -x  # Enable command tracing
-          mkdir -p dist/lib/darwin-arm64
+          # Create artifact directory at repo root
+          mkdir -p ${{ github.workspace }}/dist/lib/darwin-arm64
 
-          # List what's in the target directory
-          echo "=== Target directory contents ==="
-          ls -la src/lib/probe/target/release/ 2>&1 || echo "No release directory"
-
-          # Copy the library (should be at standard location)
-          cp src/lib/probe/target/release/libprobe.a dist/lib/darwin-arm64/
+          # Copy from local target to artifact directory
+          cp target/release/libprobe.a ${{ github.workspace }}/dist/lib/darwin-arm64/
 
           # Verify
-          ls -la dist/lib/darwin-arm64/
+          ls -la ${{ github.workspace }}/dist/lib/darwin-arm64/
 
       - name: Upload libprobe artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
