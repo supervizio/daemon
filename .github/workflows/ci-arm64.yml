@@ -203,22 +203,24 @@ jobs:
         id: build
         env:
           MACOSX_DEPLOYMENT_TARGET: '14.0'
-          RUST_BACKTRACE: '1'
+          RUST_BACKTRACE: 'full'
         run: |
-          set -euo pipefail
+          set -eo pipefail
           echo "=== Building probe-ffi package ==="
           echo "Target: aarch64-apple-darwin (explicit)"
           echo "Rust version: $(rustc --version)"
           echo "Host: $(rustc -vV | grep host)"
           echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
           echo ""
-          # Build with explicit target (same pattern as Linux builds)
-          # Use --verbose and capture both stdout and stderr
-          if ! cargo build --release --target aarch64-apple-darwin --package probe-ffi --verbose 2>&1; then
+          # Build with verbose output, capturing to both console and file
+          cargo build --release --target aarch64-apple-darwin --package probe-ffi --verbose 2>&1 | tee /tmp/darwin-build.log
+          BUILD_EXIT=${PIPESTATUS[0]}
+          if [ "$BUILD_EXIT" -ne 0 ]; then
             echo ""
-            echo "=== BUILD FAILED ==="
-            echo "Exit code: $?"
-            exit 1
+            echo "=== BUILD FAILED (exit code: $BUILD_EXIT) ==="
+            echo "=== Full build output ==="
+            cat /tmp/darwin-build.log
+            exit $BUILD_EXIT
           fi
           echo ""
           echo "=== Build completed successfully ==="
