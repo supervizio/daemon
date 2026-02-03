@@ -16,7 +16,7 @@ concurrency:
 env:
   GO_VERSION: '1.25.6'
   WIRE_VERSION: 'v0.7.0'
-  RUST_VERSION: '1.85.0'  # Minimum version for edition 2024
+  RUST_VERSION: 'stable'
   ZIG_VERSION: '0.13.0'
 
 jobs:
