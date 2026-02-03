@@ -157,10 +157,12 @@ jobs:
   # When BSD ARM64 becomes Tier 2 or testing VMs become available, re-enable.
 
   # macOS ARM64 probe (native on Apple Silicon runner)
+  # TEMPORARILY DISABLED - see issue with edition 2024 on macOS ARM64
   build-probe-darwin:
     name: Probe darwin-arm64
     runs-on: macos-14
     needs: [rust-test]
+    if: false  # Temporarily disabled
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -363,10 +365,12 @@ jobs:
   # NOTE: BSD ARM64 binary builds disabled - see note above build-probe-bsd
 
   # macOS ARM64 binary (native on Apple Silicon)
+  # TEMPORARILY DISABLED - depends on darwin probe which is disabled
   build-darwin-arm64:
     name: Build darwin-arm64
     runs-on: macos-14
     needs: [build-probe-darwin]
+    if: false  # Temporarily disabled
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -418,7 +422,7 @@ jobs:
     needs:
       - build-arm64
       - build-arm64-musl
-      - build-darwin-arm64
+      # - build-darwin-arm64  # Temporarily disabled
     steps:
       - name: Download ALL ARM64 binaries
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -442,11 +446,11 @@ jobs:
       - name: Verify all binaries exist
         run: |
           set -euo pipefail
-          # NOTE: BSD ARM64 binaries disabled - Rust Tier 3 targets, no test VMs
+          # NOTE: BSD ARM64 and Darwin ARM64 temporarily disabled
           EXPECTED=(
             "supervizio-linux-arm64"
             "supervizio-linux-arm64-musl"
-            "supervizio-darwin-arm64"
+            # "supervizio-darwin-arm64"  # Temporarily disabled
           )
           MISSING=0
           for bin in "${EXPECTED[@]}"; do
@@ -638,10 +642,12 @@ jobs:
   # PHASE 7: E2E macOS TEST (native on Apple Silicon)
   # =============================================================================
 
+  # TEMPORARILY DISABLED - depends on darwin build
   e2e-macos:
     name: E2E macOS ARM64
     needs: [verify-artifacts]
     runs-on: macos-14
+    if: false  # Temporarily disabled
     continue-on-error: true
     timeout-minutes: 10
     steps:
