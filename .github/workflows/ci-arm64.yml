@@ -786,12 +786,15 @@ jobs:
           # Install vagrant-libvirt plugin
           vagrant plugin install vagrant-libvirt
 
-      # Cache disabled - forcing fresh ARM64 box download
-      # - name: Cache Vagrant box
-      #   uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-      #   with:
-      #     path: ~/.vagrant.d/boxes
-      #     key: vagrant-arm64-${{ matrix.vm }}-v2
+      - name: Cache Vagrant box
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.vagrant.d/boxes
+            /root/.vagrant.d/boxes
+          key: vagrant-arm64-${{ matrix.vm }}-v3
+          restore-keys: |
+            vagrant-arm64-${{ matrix.vm }}-
 
       - name: Verify virtualization setup
         run: |
@@ -896,7 +899,7 @@ jobs:
         working-directory: e2e
         run: |
           echo "=== Starting VM ==="
-          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt 2>&1 | tail -100 || {
+          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt 2>&1 || {
             echo ""
             echo "=== vagrant up failed ==="
             sudo journalctl -u libvirtd --no-pager -n 30 || true
