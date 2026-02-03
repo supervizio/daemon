@@ -21,7 +21,7 @@ env:
 
 jobs:
   # =============================================================================
-  # PHASE 1: QUALITY GATES (shared with x86, but run in parallel)
+  # PHASE 1: QUALITY GATES
   # =============================================================================
 
   rust-lint:
@@ -85,12 +85,12 @@ jobs:
         run: cargo test
 
   # =============================================================================
-  # PHASE 2: BUILD LIBPROBE (ARM64 platforms)
+  # PHASE 2: BUILD PROBES (ARM64)
   # =============================================================================
 
-  # Native ARM64 Linux builds
+  # Linux ARM64 probes (native on ARM runner)
   build-probe-linux:
-    name: Build Probe linux-${{ matrix.platform }}
+    name: Probe linux-arm64${{ matrix.suffix }}
     runs-on: ubuntu-24.04-arm
     needs: [rust-test]
     strategy:
@@ -98,8 +98,10 @@ jobs:
       matrix:
         include:
           - rust_target: aarch64-unknown-linux-gnu
+            suffix: ""
             platform: linux-arm64
           - rust_target: aarch64-unknown-linux-musl
+            suffix: "-musl"
             platform: linux-arm64-musl
             musl: true
     steps:
@@ -147,9 +149,9 @@ jobs:
           path: dist/lib/${{ matrix.platform }}/libprobe.a
           retention-days: 1
 
-  # BSD ARM64 cross-compilation with Zig
+  # BSD ARM64 probes (cross-compile with Zig)
   build-probe-bsd:
-    name: Build Probe ${{ matrix.platform }}
+    name: Probe ${{ matrix.platform }}
     runs-on: ubuntu-24.04
     needs: [rust-test]
     strategy:
@@ -225,9 +227,9 @@ jobs:
           path: dist/lib/${{ matrix.platform }}/libprobe.a
           retention-days: 1
 
-  # macOS Apple Silicon (native)
-  build-probe-darwin-arm64:
-    name: Build Probe darwin-arm64
+  # macOS ARM64 probe (native on Apple Silicon runner)
+  build-probe-darwin:
+    name: Probe darwin-arm64
     runs-on: macos-14
     needs: [rust-test]
     steps:
@@ -267,18 +269,12 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # PHASE 3: GO TESTS (uses linux-arm64 probe)
-  # Note: Go tests run on x86 workflow with shared results
-  # ARM64 workflow skips separate go-test to avoid duplication
+  # PHASE 3: BUILD BINARIES (ARM64)
   # =============================================================================
 
-  # =============================================================================
-  # PHASE 4: BUILD BINARIES (ARM64 platforms)
-  # =============================================================================
-
-  # Linux ARM64 glibc binary
-  build-linux-arm64:
-    name: Build linux-arm64
+  # Linux ARM64 glibc binary (standard)
+  build-arm64:
+    name: Build arm64
     runs-on: ubuntu-24.04-arm
     needs: [build-probe-linux]
     steps:
@@ -322,9 +318,9 @@ jobs:
           path: supervizio-linux-arm64
           retention-days: 1
 
-  # Linux ARM64 musl (static) binary
-  build-linux-arm64-musl:
-    name: Build linux-arm64-musl
+  # Linux ARM64 musl binary (static)
+  build-arm64-musl:
+    name: Build arm64-musl
     runs-on: ubuntu-24.04-arm
     needs: [build-probe-linux]
     steps:
@@ -365,7 +361,7 @@ jobs:
           path: supervizio-linux-arm64-musl
           retention-days: 1
 
-  # BSD ARM64 binaries (cross-compiled)
+  # BSD ARM64 binaries (cross-compiled with Zig)
   build-bsd-arm64:
     name: Build ${{ matrix.goos }}-arm64
     runs-on: ubuntu-24.04
@@ -437,11 +433,11 @@ jobs:
           path: supervizio-${{ matrix.goos }}-arm64
           retention-days: 1
 
-  # macOS Apple Silicon binary
+  # macOS ARM64 binary (native on Apple Silicon)
   build-darwin-arm64:
     name: Build darwin-arm64
     runs-on: macos-14
-    needs: [build-probe-darwin-arm64]
+    needs: [build-probe-darwin]
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -484,103 +480,93 @@ jobs:
           retention-days: 1
 
   # =============================================================================
-  # PHASE 5: VERIFY ARTIFACTS
+  # PHASE 4: VERIFY ALL ARTIFACTS
   # =============================================================================
 
   verify-artifacts:
-    name: Verify Artifacts
+    name: Verify All Artifacts
     runs-on: ubuntu-24.04
-    needs: [build-linux-arm64, build-linux-arm64-musl]
+    needs:
+      - build-arm64
+      - build-arm64-musl
+      - build-bsd-arm64
+      - build-darwin-arm64
     steps:
-      - name: Download all ARM64 Linux binaries
+      - name: Download ALL ARM64 binaries
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          pattern: supervizio-linux-arm64*
+          pattern: supervizio-*-arm64*
           merge-multiple: true
           path: bin/
 
-      - name: Verify binaries
+      - name: List all artifacts
+        run: |
+          echo "=== All ARM64 artifacts ==="
+          ls -la bin/
+          echo ""
+          echo "=== Expected artifacts ==="
+          echo "  - supervizio-linux-arm64 (glibc)"
+          echo "  - supervizio-linux-arm64-musl (static)"
+          echo "  - supervizio-freebsd-arm64"
+          echo "  - supervizio-openbsd-arm64"
+          echo "  - supervizio-netbsd-arm64"
+          echo "  - supervizio-darwin-arm64"
+
+      - name: Verify all binaries exist
         run: |
           set -euo pipefail
-          echo "=== Verifying ARM64 binaries ==="
-          for bin in bin/supervizio-*; do
-            if [ -f "$bin" ]; then
-              echo "Checking $bin..."
-              file "$bin"
+          EXPECTED=(
+            "supervizio-linux-arm64"
+            "supervizio-linux-arm64-musl"
+            "supervizio-freebsd-arm64"
+            "supervizio-openbsd-arm64"
+            "supervizio-netbsd-arm64"
+            "supervizio-darwin-arm64"
+          )
+          MISSING=0
+          for bin in "${EXPECTED[@]}"; do
+            if [ -f "bin/$bin" ]; then
+              echo "✓ $bin found"
+              file "bin/$bin"
+            else
+              echo "✗ $bin MISSING!"
+              MISSING=$((MISSING + 1))
             fi
           done
+          if [ "$MISSING" -gt 0 ]; then
+            echo "ERROR: $MISSING binaries missing!"
+            exit 1
+          fi
+          echo ""
+          echo "All ${#EXPECTED[@]} binaries present."
 
       - name: Verify musl is static
         run: |
           if [ -f bin/supervizio-linux-arm64-musl ]; then
             if ! file bin/supervizio-linux-arm64-musl | grep -qE "statically linked|static-pie"; then
               echo "ERROR: musl binary is NOT statically linked!"
+              file bin/supervizio-linux-arm64-musl
               exit 1
             fi
-            echo "OK: musl binary is static"
+            echo "✓ musl binary is statically linked"
           fi
 
       - name: Generate checksums
         run: |
           cd bin
-          sha256sum supervizio-* > checksums.txt
-          cat checksums.txt
+          sha256sum supervizio-* > checksums-arm64.txt
+          echo "=== Checksums ==="
+          cat checksums-arm64.txt
 
       - name: Upload checksums
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: checksums-arm64
-          path: bin/checksums.txt
+          path: bin/checksums-arm64.txt
           retention-days: 1
 
   # =============================================================================
-  # PHASE 6: E2E TESTS (ARM64)
-  # =============================================================================
-
-  e2e-docker-linux:
-    name: E2E Docker ARM64 ${{ matrix.name }}
-    needs: [build-linux-arm64, build-linux-arm64-musl]
-    runs-on: ubuntu-24.04-arm
-    continue-on-error: true
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Debian-glibc
-            dockerfile: Dockerfile.debian-script
-            artifact: supervizio-linux-arm64
-          - name: Alpine-musl
-            dockerfile: Dockerfile.alpine-script
-            artifact: supervizio-linux-arm64-musl
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Download binary
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: ${{ matrix.artifact }}
-          path: bin
-
-      - name: Prepare binary
-        run: |
-          # Rename to linux-amd64 for Dockerfile compatibility (it expects this name)
-          mv bin/${{ matrix.artifact }} bin/supervizio-linux-amd64
-          file bin/supervizio-linux-amd64
-
-      - name: Build and test container
-        run: |
-          docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-e2e:${{ matrix.name }}-arm64 .
-          docker run --rm supervizio-e2e:${{ matrix.name }}-arm64
-          docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }}-arm64 -c "
-            OUTPUT=\$(/usr/local/bin/supervizio --probe) &&
-            echo \"\$OUTPUT\" | jq -e '.timestamp and .platform and .cpu.cores > 0' &&
-            echo 'Probe validation passed on ARM64'
-          "
-
-  # =============================================================================
-  # PHASE 7: PACKAGES (ARM64)
+  # PHASE 5: BUILD PACKAGES (after verify)
   # =============================================================================
 
   packages-glibc:
@@ -606,11 +592,7 @@ jobs:
           name: supervizio-linux-arm64
 
       - name: Prepare binary
-        run: |
-          # Rename to match nfpm expected name
-          mv supervizio-linux-arm64 supervizio-linux-arm64-orig
-          mv supervizio-linux-arm64-orig supervizio-linux-arm64
-          chmod +x supervizio-linux-arm64
+        run: chmod +x supervizio-linux-arm64
 
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
@@ -650,6 +632,7 @@ jobs:
 
       - name: Prepare binary
         run: |
+          # nfpm expects supervizio-linux-arm64, rename musl version
           mv supervizio-linux-arm64-musl supervizio-linux-arm64
           chmod +x supervizio-linux-arm64
 
@@ -670,3 +653,100 @@ jobs:
           name: supervizio-arm64.apk
           path: "*.apk"
           retention-days: 1
+
+  # =============================================================================
+  # PHASE 6: E2E DOCKER TESTS (after packages)
+  # =============================================================================
+
+  e2e-docker:
+    name: E2E Docker ${{ matrix.name }}
+    needs: [packages-glibc, packages-musl]
+    runs-on: ubuntu-24.04-arm
+    continue-on-error: true
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: debian-glibc
+            dockerfile: Dockerfile.debian-script
+            artifact: supervizio-linux-arm64
+            description: "Debian with glibc (systemd)"
+          - name: alpine-musl
+            dockerfile: Dockerfile.alpine-script
+            artifact: supervizio-linux-arm64-musl
+            description: "Alpine with musl (OpenRC)"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ matrix.artifact }}
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          # Dockerfile expects bin/supervizio-linux-amd64 (legacy naming)
+          mv bin/${{ matrix.artifact }} bin/supervizio-linux-amd64
+          chmod +x bin/supervizio-linux-amd64
+          file bin/supervizio-linux-amd64
+
+      - name: Build container
+        run: |
+          docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-e2e:${{ matrix.name }}-arm64 .
+
+      - name: Test container startup
+        run: |
+          docker run --rm supervizio-e2e:${{ matrix.name }}-arm64
+
+      - name: Validate probe metrics
+        run: |
+          docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }}-arm64 -c "
+            OUTPUT=\$(/usr/local/bin/supervizio --probe) &&
+            echo \"\$OUTPUT\" | jq -e '.timestamp and .platform and .cpu.cores > 0' &&
+            echo 'Probe validation passed: ${{ matrix.description }}'
+          "
+
+  # =============================================================================
+  # PHASE 7: E2E macOS TEST (native on Apple Silicon)
+  # =============================================================================
+
+  e2e-macos:
+    name: E2E macOS ARM64
+    needs: [verify-artifacts]
+    runs-on: macos-14
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-darwin-arm64
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          chmod +x bin/supervizio-darwin-arm64
+          file bin/supervizio-darwin-arm64
+
+      - name: Run macOS E2E test
+        run: |
+          export PATH="$PWD/bin:$PATH"
+          mv bin/supervizio-darwin-arm64 bin/supervizio
+          chmod +x bin/supervizio
+
+          # Test version
+          bin/supervizio --version || echo "Version check (expected to work)"
+
+          # Test probe
+          OUTPUT=$(bin/supervizio --probe)
+          echo "$OUTPUT" | jq .
+
+          # Validate probe structure
+          echo "$OUTPUT" | jq -e '.timestamp and .platform and .cpu.cores > 0' && \
+            echo "Probe validation passed on macOS ARM64"
