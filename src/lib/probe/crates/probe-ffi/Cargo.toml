@@ -9,7 +9,8 @@ description = "FFI interface for probe metrics library"
 
 [lib]
 name = "probe"
-crate-type = ["staticlib", "cdylib"]
+# Only staticlib for Go CGO linking; cdylib not needed for our use case
+crate-type = ["staticlib"]
 
 [dependencies]
 probe-metrics = { path = "../probe-metrics" }
