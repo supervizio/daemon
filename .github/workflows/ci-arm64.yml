@@ -690,46 +690,35 @@ jobs:
       matrix:
         include:
           # ==============================================================
-          # Optimal matrix covering ALL init systems, packages, and libc:
+          # VM names MUST match e2e/Vagrantfile definitions
           # - Init: systemd, OpenRC, SysVinit, runit (4 systems)
-          # - Packages: .deb, .rpm, .apk (3 formats we ship)
           # - Libc: glibc, musl (2 variants)
           # ==============================================================
 
           # systemd + .deb + glibc
           - name: Debian (systemd/deb)
-            vm: debian
+            vm: debian13
             artifact: supervizio-linux-arm64
-            box: generic/debian12
-            pkg_install: "apt-get update -qq && apt-get install -y -qq curl jq"
 
-          # systemd + .rpm + glibc (validates rpm package format)
+          # systemd + .rpm + glibc
           - name: Fedora (systemd/rpm)
             vm: fedora
             artifact: supervizio-linux-arm64
-            box: generic/fedora39
-            pkg_install: "dnf install -y -q curl jq"
 
-          # OpenRC + .apk + musl (Alpine's native init)
+          # OpenRC + .apk + musl
           - name: Alpine (OpenRC/apk)
             vm: alpine
             artifact: supervizio-linux-arm64-musl
-            box: generic/alpine319
-            pkg_install: "apk update && apk add --no-cache curl jq"
 
-          # SysVinit + .deb + glibc (classic Unix init)
+          # SysVinit + .deb + glibc
           - name: Devuan (SysVinit/deb)
             vm: devuan
             artifact: supervizio-linux-arm64
-            box: generic/devuan4
-            pkg_install: "apt-get update -qq && apt-get install -y -qq curl jq"
 
-          # runit + .apk + musl (Alpine with runit replacing OpenRC)
+          # runit + .apk + musl
           - name: Alpine-runit (runit/apk)
             vm: alpine-runit
             artifact: supervizio-linux-arm64-musl
-            box: generic/alpine319
-            pkg_install: "sed -i 's/#.*community/community/' /etc/apk/repositories && apk update && apk del openrc --force-broken-world 2>/dev/null || true && apk add --no-cache curl jq runit"
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -757,7 +746,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          # Install libvirt stack and Vagrant from Ubuntu repos
+          # Install libvirt stack, Vagrant, and ARM64 UEFI firmware
           # Note: HashiCorp doesn't provide ARM64 Linux packages for Vagrant
           sudo apt-get install -y -qq \
             libvirt-daemon-system \
@@ -765,6 +754,7 @@ jobs:
             libvirt-clients \
             qemu-kvm \
             qemu-system-arm \
+            qemu-efi-aarch64 \
             ruby-dev \
             ruby-libvirt \
             build-essential \
@@ -777,55 +767,37 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.vagrant.d/boxes
-          key: vagrant-arm64-${{ matrix.box }}-v1
+          key: vagrant-arm64-${{ matrix.vm }}-v1
 
-      - name: Create Vagrantfile
+      - name: Start VM
+        working-directory: e2e
+        run: sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt
+
+      - name: Wait for VM and copy binary
         working-directory: e2e
         run: |
-          cat > Vagrantfile.ci << 'EOF'
-          Vagrant.configure("2") do |config|
-            config.vm.box = "${{ matrix.box }}"
-            config.vm.hostname = "e2e-${{ matrix.vm }}"
-            config.vm.synced_folder ".", "/vagrant", disabled: true
-            config.vm.provider "libvirt" do |lv|
-              lv.memory = 2048
-              lv.cpus = 2
-              lv.driver = "kvm"
-              lv.machine_type = "virt"
-              lv.cpu_mode = "host-passthrough"
-            end
-          end
-          EOF
+          set -uo pipefail
+          echo "=== Waiting for VM to be SSH-ready ==="
+          for i in $(seq 1 36); do
+            if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
+              echo "=== VM is SSH-accessible ==="
+              break
+            fi
+            if [ "$i" = "36" ]; then
+              echo "ERROR: VM not SSH-accessible after 180 seconds"
+              exit 1
+            fi
+            sleep 5
+          done
 
-      - name: Boot VM
-        working-directory: e2e
-        run: |
-          sudo -E vagrant up --provider=libvirt
-          sudo -E vagrant ssh -c "uname -a"
-        env:
-          VAGRANT_VAGRANTFILE: Vagrantfile.ci
-
-      - name: Install dependencies in VM
-        working-directory: e2e
-        run: |
-          sudo -E vagrant ssh -c "sudo ${{ matrix.pkg_install }}"
-        env:
-          VAGRANT_VAGRANTFILE: Vagrantfile.ci
-
-      - name: Copy binary to VM
-        working-directory: e2e
-        run: |
-          sudo -E vagrant ssh -c "mkdir -p /tmp/bin"
-          cat ../bin/${{ matrix.artifact }} | sudo -E vagrant ssh -c "cat > /tmp/bin/supervizio && chmod +x /tmp/bin/supervizio"
-        env:
-          VAGRANT_VAGRANTFILE: Vagrantfile.ci
+          echo "=== Copying binary to VM ==="
+          sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo mkdir -p /tmp/bin && sudo chmod 755 /tmp/bin"
+          cat ../bin/${{ matrix.artifact }} | sudo -E vagrant ssh ${{ matrix.vm }} -c "sudo tee /tmp/bin/supervizio > /dev/null && sudo chmod +x /tmp/bin/supervizio"
 
       - name: Run E2E test in VM
         working-directory: e2e
-        env:
-          VAGRANT_VAGRANTFILE: Vagrantfile.ci
         run: |
-          sudo -E vagrant ssh -c '
+          sudo -E vagrant ssh ${{ matrix.vm }} -c '
             set -e
             echo "=== System Info ==="
             uname -a
@@ -861,10 +833,7 @@ jobs:
       - name: Cleanup VM
         if: always()
         working-directory: e2e
-        env:
-          VAGRANT_VAGRANTFILE: Vagrantfile.ci
-        run: |
-          sudo -E vagrant destroy -f || true
+        run: sudo -E vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
 
   # =============================================================================
   # PHASE 8: E2E macOS TEST (native on Apple Silicon)
