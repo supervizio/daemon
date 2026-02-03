@@ -746,8 +746,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          # Install libvirt stack, Vagrant, and ARM64 UEFI firmware
-          # Note: HashiCorp doesn't provide ARM64 Linux packages for Vagrant
+          # Install libvirt stack and ARM64 UEFI firmware
           sudo apt-get install -y -qq \
             libvirt-daemon-system \
             libvirt-dev \
@@ -756,12 +755,18 @@ jobs:
             qemu-system-arm \
             qemu-efi-aarch64 \
             ruby-dev \
-            ruby-libvirt \
+            ruby-bundler \
             build-essential \
-            vagrant \
-            vagrant-libvirt
+            pkg-config
           sudo systemctl start libvirtd
           sudo usermod -aG libvirt,kvm $USER
+
+          # Install Vagrant via Ruby gem (HashiCorp doesn't provide ARM64 packages)
+          sudo gem install vagrant -v '2.4.3' --no-document
+          vagrant --version
+
+          # Install vagrant-libvirt plugin
+          vagrant plugin install vagrant-libvirt
 
       - name: Cache Vagrant box
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
