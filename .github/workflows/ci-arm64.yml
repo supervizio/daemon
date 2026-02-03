@@ -717,13 +717,21 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libvirt-daemon-system libvirt-dev libvirt-clients qemu-kvm qemu-system-arm ruby-dev ruby-libvirt build-essential
+          # Install libvirt stack and Vagrant from Ubuntu repos
+          # Note: HashiCorp doesn't provide ARM64 Linux packages for Vagrant
+          sudo apt-get install -y -qq \
+            libvirt-daemon-system \
+            libvirt-dev \
+            libvirt-clients \
+            qemu-kvm \
+            qemu-system-arm \
+            ruby-dev \
+            ruby-libvirt \
+            build-essential \
+            vagrant \
+            vagrant-libvirt
           sudo systemctl start libvirtd
           sudo usermod -aG libvirt,kvm $USER
-          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg arch=arm64] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt-get update -qq && sudo apt-get install -y -qq vagrant
-          vagrant plugin install vagrant-libvirt
 
       - name: Cache Vagrant box
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
