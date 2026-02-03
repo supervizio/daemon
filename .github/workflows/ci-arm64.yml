@@ -203,6 +203,7 @@ jobs:
         id: build
         env:
           MACOSX_DEPLOYMENT_TARGET: '14.0'
+          RUST_BACKTRACE: '1'
         run: |
           set -euo pipefail
           echo "=== Building probe-ffi package ==="
@@ -212,12 +213,13 @@ jobs:
           echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
           echo ""
           # Build with explicit target (same pattern as Linux builds)
-          cargo build --release --target aarch64-apple-darwin --package probe-ffi 2>&1 | tee /tmp/darwin-build.log || {
+          # Use --verbose and capture both stdout and stderr
+          if ! cargo build --release --target aarch64-apple-darwin --package probe-ffi --verbose 2>&1; then
             echo ""
-            echo "=== BUILD FAILED - Full cargo output ==="
-            cat /tmp/darwin-build.log
+            echo "=== BUILD FAILED ==="
+            echo "Exit code: $?"
             exit 1
-          }
+          fi
           echo ""
           echo "=== Build completed successfully ==="
 
