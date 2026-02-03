@@ -190,24 +190,19 @@ jobs:
       - name: Build libprobe.a (native)
         working-directory: src/lib/probe
         run: |
-          # Build probe-ffi package explicitly (produces libprobe.a)
-          echo "Building probe-ffi package..."
-          cargo build --release --package probe-ffi || {
-            echo "=== Build failed ==="
-            exit 1
-          }
-          echo "Build completed successfully"
+          # Build all workspace members to ensure dependencies are built
+          cargo build --release
 
           # Show what was produced
-          echo "=== Checking target directory structure ==="
-          ls -la target/ || true
-          ls -la target/release/ || true
-
-          echo "=== Looking for .a files ==="
+          echo "=== Listing .a files in target ==="
           find target -name "*.a" -type f -ls 2>/dev/null || echo "No .a files found"
 
-          echo "=== Looking for probe-related files ==="
-          find target -name "*probe*" -type f -ls 2>/dev/null || echo "No probe files found"
+          # Verify libprobe.a exists
+          if [ ! -f "target/release/libprobe.a" ]; then
+            echo "WARNING: libprobe.a not at expected location"
+            echo "=== Target/release contents ==="
+            ls -la target/release/ 2>/dev/null || echo "No release directory"
+          fi
 
       - name: Prepare artifact
         run: |
