@@ -191,26 +191,50 @@ jobs:
         working-directory: src/lib/probe
         run: |
           # Build probe-ffi package explicitly (produces libprobe.a)
-          cargo build --release --package probe-ffi 2>&1 | tee cargo-build.log || {
-            echo "=== Build failed, showing last 100 lines of log ==="
-            tail -100 cargo-build.log
+          echo "Building probe-ffi package..."
+          cargo build --release --package probe-ffi || {
+            echo "=== Build failed ==="
             exit 1
           }
+          echo "Build completed successfully"
+
+          # Show what was produced
+          echo "=== Checking target directory structure ==="
+          ls -la target/ || true
+          ls -la target/release/ || true
+
+          echo "=== Looking for .a files ==="
+          find target -name "*.a" -type f -ls 2>/dev/null || echo "No .a files found"
+
+          echo "=== Looking for probe-related files ==="
+          find target -name "*probe*" -type f -ls 2>/dev/null || echo "No probe files found"
 
       - name: Prepare artifact
         run: |
           mkdir -p dist/lib/darwin-arm64
-          # Find libprobe.a - might be in target/release/ or target/<triple>/release/
-          LIBPROBE=$(find src/lib/probe/target -name "libprobe.a" -type f | head -1)
-          if [ -z "$LIBPROBE" ]; then
-            echo "ERROR: libprobe.a not found in target directory!"
-            echo "=== Target directory contents ==="
-            ls -laR src/lib/probe/target/ || true
-            exit 1
+
+          # Check expected location first
+          if [ -f "src/lib/probe/target/release/libprobe.a" ]; then
+            echo "Found at expected location: src/lib/probe/target/release/libprobe.a"
+            cp src/lib/probe/target/release/libprobe.a dist/lib/darwin-arm64/
+          else
+            echo "Not at expected location, searching..."
+            LIBPROBE=$(find src/lib/probe/target -name "libprobe.a" -type f 2>/dev/null | head -1)
+            if [ -n "$LIBPROBE" ]; then
+              echo "Found at: $LIBPROBE"
+              cp "$LIBPROBE" dist/lib/darwin-arm64/
+            else
+              echo "ERROR: libprobe.a not found anywhere!"
+              echo "=== Full target directory listing ==="
+              find src/lib/probe/target -type f -name "*.a" -ls 2>/dev/null || echo "No .a files"
+              ls -laR src/lib/probe/target/release/ 2>/dev/null || echo "No release directory"
+              exit 1
+            fi
           fi
-          echo "Found libprobe.a at: $LIBPROBE"
-          cp "$LIBPROBE" dist/lib/darwin-arm64/
+
+          echo "=== Verifying artifact ==="
           file dist/lib/darwin-arm64/libprobe.a
+          ls -la dist/lib/darwin-arm64/
 
       - name: Upload libprobe artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
