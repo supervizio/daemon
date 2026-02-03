@@ -1198,6 +1198,15 @@ struct proc_fdinfo {
     proc_fdtype: u32,
 }
 
+/// 32-bit timeval structure for interface statistics.
+/// Defined locally since `libc::timeval32` may not be available on all platforms.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct Timeval32 {
+    tv_sec: i32,
+    tv_usec: i32,
+}
+
 #[repr(C)]
 struct if_data64 {
     ifi_type: u8,
@@ -1224,7 +1233,7 @@ struct if_data64 {
     ifi_noproto: u64,
     ifi_recvtiming: u32,
     ifi_xmittiming: u32,
-    ifi_lastchange: libc::timeval32,
+    ifi_lastchange: Timeval32,
 }
 
 #[repr(C)]
