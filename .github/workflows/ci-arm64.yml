@@ -157,12 +157,11 @@ jobs:
   # When BSD ARM64 becomes Tier 2 or testing VMs become available, re-enable.
 
   # macOS ARM64 probe (native on Apple Silicon runner)
-  # TEMPORARILY DISABLED - see issue with edition 2024 on macOS ARM64
+  # macOS ARM64 probe (native on Apple Silicon)
   build-probe-darwin:
     name: Probe darwin-arm64
     runs-on: macos-14
     needs: [rust-test]
-    if: false  # Temporarily disabled
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -173,92 +172,27 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: aarch64-apple-darwin
 
-      # NOTE: Cargo cache temporarily disabled to debug build failures
-      # - name: Cache Cargo
-      #   uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-      #   with:
-      #     path: |
-      #       ~/.cargo/registry
-      #       ~/.cargo/git
-      #       src/lib/probe/target
-      #     key: rust-probe-darwin-arm64-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
-      #     restore-keys: |
-      #       rust-probe-darwin-arm64-
-
-      - name: Show Rust version and target
-        run: |
-          rustc --version --verbose
-          cargo --version
-          rustup show
-
-      - name: Check compilation (type check only)
-        working-directory: src/lib/probe
-        run: |
-          echo "=== Type checking probe-ffi for aarch64-apple-darwin ==="
-          cargo check --target aarch64-apple-darwin --package probe-ffi 2>&1 | tee /tmp/darwin-check.log || {
-            echo "=== CHECK FAILED ==="
-            exit 1
-          }
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-probe-darwin-arm64-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-probe-darwin-arm64-
 
       - name: Build libprobe.a
         working-directory: src/lib/probe
-        id: build
         env:
           MACOSX_DEPLOYMENT_TARGET: '14.0'
-          RUST_BACKTRACE: 'full'
-        run: |
-          set -eo pipefail
-          echo "=== Building probe-ffi package ==="
-          echo "Target: aarch64-apple-darwin (explicit)"
-          echo "Rust version: $(rustc --version)"
-          echo "Host: $(rustc -vV | grep host)"
-          echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
-          echo ""
-          # Build with verbose output, capturing to both console and file
-          cargo build --release --target aarch64-apple-darwin --package probe-ffi --verbose 2>&1 | tee /tmp/darwin-build.log
-          BUILD_EXIT=${PIPESTATUS[0]}
-          if [ "$BUILD_EXIT" -ne 0 ]; then
-            echo ""
-            echo "=== BUILD FAILED (exit code: $BUILD_EXIT) ==="
-            echo "=== Full build output ==="
-            cat /tmp/darwin-build.log
-            exit $BUILD_EXIT
-          fi
-          echo ""
-          echo "=== Build completed successfully ==="
-
-      - name: Show build errors (if any)
-        if: failure()
-        run: |
-          echo "=== Last 100 lines of build log ==="
-          tail -100 /tmp/darwin-build.log 2>/dev/null || echo "No build log found"
-          echo ""
-          echo "=== Error patterns in log ==="
-          grep -iE "error|failed|fatal|undefined|unresolved" /tmp/darwin-build.log 2>/dev/null | tail -50 || echo "No error patterns found"
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: darwin-build-log
-          path: /tmp/darwin-build.log
-          retention-days: 1
-
-      - name: Debug - List build outputs
-        working-directory: src/lib/probe
-        if: always()
-        run: |
-          echo "=== Target aarch64-apple-darwin/release directory ==="
-          ls -la target/aarch64-apple-darwin/release/ 2>/dev/null | grep -E "\.a$|\.dylib$|^total" || echo "No release outputs found"
-          echo ""
-          echo "=== All .a files ==="
-          find target -name "*.a" -type f -exec ls -la {} \; 2>/dev/null || echo "No .a files"
+        run: cargo build --release --target aarch64-apple-darwin --package probe-ffi
 
       - name: Prepare artifact
         working-directory: src/lib/probe
         run: |
           mkdir -p ${{ github.workspace }}/dist/lib/darwin-arm64
-          # Output is in target/<target>/release/ when using explicit --target
           cp target/aarch64-apple-darwin/release/libprobe.a ${{ github.workspace }}/dist/lib/darwin-arm64/
           ls -la ${{ github.workspace }}/dist/lib/darwin-arm64/
 
@@ -365,12 +299,10 @@ jobs:
   # NOTE: BSD ARM64 binary builds disabled - see note above build-probe-bsd
 
   # macOS ARM64 binary (native on Apple Silicon)
-  # TEMPORARILY DISABLED - depends on darwin probe which is disabled
   build-darwin-arm64:
     name: Build darwin-arm64
     runs-on: macos-14
     needs: [build-probe-darwin]
-    if: false  # Temporarily disabled
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -422,7 +354,7 @@ jobs:
     needs:
       - build-arm64
       - build-arm64-musl
-      # - build-darwin-arm64  # Temporarily disabled
+      - build-darwin-arm64
     steps:
       - name: Download ALL ARM64 binaries
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -446,11 +378,11 @@ jobs:
       - name: Verify all binaries exist
         run: |
           set -euo pipefail
-          # NOTE: BSD ARM64 and Darwin ARM64 temporarily disabled
+          # NOTE: BSD ARM64 disabled (Rust Tier 3, no test VMs)
           EXPECTED=(
             "supervizio-linux-arm64"
             "supervizio-linux-arm64-musl"
-            # "supervizio-darwin-arm64"  # Temporarily disabled
+            "supervizio-darwin-arm64"
           )
           MISSING=0
           for bin in "${EXPECTED[@]}"; do
@@ -642,12 +574,10 @@ jobs:
   # PHASE 7: E2E macOS TEST (native on Apple Silicon)
   # =============================================================================
 
-  # TEMPORARILY DISABLED - depends on darwin build
   e2e-macos:
     name: E2E macOS ARM64
     needs: [verify-artifacts]
     runs-on: macos-14
-    if: false  # Temporarily disabled
     continue-on-error: true
     timeout-minutes: 10
     steps:

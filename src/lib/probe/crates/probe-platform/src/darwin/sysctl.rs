@@ -215,33 +215,45 @@ pub struct ProcessInfo {
 
 pub fn get_process_info(pid: i32) -> Result<ProcessInfo> {
     unsafe {
-        let mut mib = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PID, pid as libc::c_int];
-
-        let mut kinfo: libc::kinfo_proc = mem::zeroed();
-        let mut len = mem::size_of::<libc::kinfo_proc>();
-
-        let result = libc::sysctl(
-            mib.as_mut_ptr(),
-            4,
-            &mut kinfo as *mut _ as *mut libc::c_void,
-            &mut len,
-            ptr::null_mut(),
+        // Use proc_pidinfo with PROC_PIDTBSDINFO for modern macOS API
+        let mut bsd_info: ProcBsdInfo = mem::zeroed();
+        let size = libc::proc_pidinfo(
+            pid,
+            PROC_PIDTBSDINFO,
             0,
+            &mut bsd_info as *mut _ as *mut libc::c_void,
+            mem::size_of::<ProcBsdInfo>() as i32,
         );
 
-        if result != 0 || len == 0 {
+        if size <= 0 {
             return Err(Error::NotFound(format!("process {} not found", pid)));
         }
+
+        // Get task info for memory stats
+        let mut task_info: ProcTaskInfo = mem::zeroed();
+        let task_size = libc::proc_pidinfo(
+            pid,
+            PROC_PIDTASKINFO,
+            0,
+            &mut task_info as *mut _ as *mut libc::c_void,
+            mem::size_of::<ProcTaskInfo>() as i32,
+        );
+
+        let (rss, vsize, num_threads) = if task_size > 0 {
+            (task_info.pti_resident_size, task_info.pti_virtual_size, task_info.pti_threadnum as u32)
+        } else {
+            (0, 0, 1)
+        };
 
         // Count file descriptors using proc_pidinfo
         let num_fds = proc_pidinfo_fdcount(pid);
 
         Ok(ProcessInfo {
-            rss: kinfo.kp_eproc.e_xrssize as u64 * 4096,
-            vsize: kinfo.kp_eproc.e_vm.vm_map as u64,
-            num_threads: 1, // Would need task_info for accurate count
+            rss,
+            vsize,
+            num_threads,
             num_fds,
-            state: match kinfo.kp_proc.p_stat as i32 {
+            state: match bsd_info.pbi_status {
                 SIDL => 1,
                 SRUN => 1,
                 SSLEEP => 2,
@@ -484,24 +496,31 @@ unsafe fn parse_iokit_disk_stats(stats_dict: *const libc::c_void, device: &str) 
     ];
 
     for (key_bytes, value_ptr) in keys {
-        let key = CFStringCreateWithCString(
-            std::ptr::null(),
-            key_bytes as *const libc::c_char,
-            0x08000100,
-        );
+        // SAFETY: Calling CoreFoundation functions with valid parameters
+        let key = unsafe {
+            CFStringCreateWithCString(
+                std::ptr::null(),
+                key_bytes as *const libc::c_char,
+                0x08000100,
+            )
+        };
         if key.is_null() {
             continue;
         }
 
-        let value = CFDictionaryGetValue(stats_dict, key as *const _);
+        // SAFETY: stats_dict is a valid CFDictionary, key is a valid CFString
+        let value = unsafe { CFDictionaryGetValue(stats_dict, key as *const _) };
         if !value.is_null() {
             let mut num: i64 = 0;
-            if CFNumberGetValue(value, 4, &mut num as *mut _ as *mut _) {
+            // SAFETY: value is a valid CFNumber, num is a valid pointer
+            if unsafe { CFNumberGetValue(value, 4, &mut num as *mut _ as *mut _) } {
                 // 4 = kCFNumberSInt64Type
-                *value_ptr = num as u64;
+                // SAFETY: value_ptr points to a field in stats which is valid
+                unsafe { *value_ptr = num as u64 };
             }
         }
-        CFRelease(key as *const _);
+        // SAFETY: key is a valid CF object that we created above
+        unsafe { CFRelease(key as *const _) };
     }
 
     // Convert bytes to sectors (512 bytes per sector)
@@ -882,12 +901,13 @@ fn list_process_connections(pid: i32) -> Result<Vec<NetworkConnection>> {
 
 /// Parse IPv4 addresses from socket info.
 fn parse_inet4_addrs(in_info: &in_sockinfo) -> (String, String) {
-    let local_ip =
-        std::net::Ipv4Addr::from(u32::from_be(in_info.insi_laddr.ina_46.i46a_addr4.s_addr));
+    // SAFETY: We know the socket family is AF_INET, so accessing ina_46 is valid
+    let (local_ip, remote_ip) = unsafe {
+        let local = std::net::Ipv4Addr::from(u32::from_be(in_info.insi_laddr.ina_46.i46a_addr4.s_addr));
+        let remote = std::net::Ipv4Addr::from(u32::from_be(in_info.insi_faddr.ina_46.i46a_addr4.s_addr));
+        (local, remote)
+    };
     let local_port = u16::from_be(in_info.insi_lport as u16);
-
-    let remote_ip =
-        std::net::Ipv4Addr::from(u32::from_be(in_info.insi_faddr.ina_46.i46a_addr4.s_addr));
     let remote_port = u16::from_be(in_info.insi_fport as u16);
 
     let local_addr = format!("{}:{}", local_ip, local_port);
@@ -899,10 +919,13 @@ fn parse_inet4_addrs(in_info: &in_sockinfo) -> (String, String) {
 
 /// Parse IPv6 addresses from socket info.
 fn parse_inet6_addrs(in_info: &in_sockinfo) -> (String, String) {
-    let local_ip = std::net::Ipv6Addr::from(in_info.insi_laddr.ina_6.__u6_addr.__u6_addr8);
+    // SAFETY: We know the socket family is AF_INET6, so accessing ina_6 is valid
+    let (local_ip, remote_ip) = unsafe {
+        let local = std::net::Ipv6Addr::from(in_info.insi_laddr.ina_6.s6_addr);
+        let remote = std::net::Ipv6Addr::from(in_info.insi_faddr.ina_6.s6_addr);
+        (local, remote)
+    };
     let local_port = u16::from_be(in_info.insi_lport as u16);
-
-    let remote_ip = std::net::Ipv6Addr::from(in_info.insi_faddr.ina_6.__u6_addr.__u6_addr8);
     let remote_port = u16::from_be(in_info.insi_fport as u16);
 
     let local_addr = format!("[{}]:{}", local_ip, local_port);
@@ -1118,7 +1141,8 @@ unsafe fn cstr_to_string(ptr: *const libc::c_char) -> String {
     if ptr.is_null() {
         return String::new();
     }
-    std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned()
+    // SAFETY: Caller guarantees ptr is valid and null-terminated
+    unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() }
 }
 
 // ============================================================================
@@ -1133,13 +1157,66 @@ const CPU_STATE_MAX: usize = 4;
 
 const HOST_VM_INFO64: libc::c_int = 4;
 
-const SIDL: i32 = 1;
-const SRUN: i32 = 2;
-const SSLEEP: i32 = 3;
-const SSTOP: i32 = 4;
-const SZOMB: i32 = 5;
+const SIDL: u32 = 1;
+const SRUN: u32 = 2;
+const SSLEEP: u32 = 3;
+const SSTOP: u32 = 4;
+const SZOMB: u32 = 5;
 
 const PROC_PIDLISTFDS: libc::c_int = 1;
+const PROC_PIDTBSDINFO: libc::c_int = 3;
+const PROC_PIDTASKINFO: libc::c_int = 4;
+const RUSAGE_INFO_V4: libc::c_int = 4;
+
+/// BSD process info structure from proc_pidinfo(PROC_PIDTBSDINFO)
+#[repr(C)]
+struct ProcBsdInfo {
+    pbi_flags: u32,
+    pbi_status: u32,
+    pbi_xstatus: u32,
+    pbi_pid: u32,
+    pbi_ppid: u32,
+    pbi_uid: libc::uid_t,
+    pbi_gid: libc::gid_t,
+    pbi_ruid: libc::uid_t,
+    pbi_rgid: libc::gid_t,
+    pbi_svuid: libc::uid_t,
+    pbi_svgid: libc::gid_t,
+    _reserved: u32,
+    pbi_comm: [libc::c_char; 16],
+    pbi_name: [libc::c_char; 32],
+    pbi_nfiles: u32,
+    pbi_pgid: u32,
+    pbi_pjobc: u32,
+    e_tdev: u32,
+    e_tpgid: u32,
+    pbi_nice: i32,
+    pbi_start_tvsec: u64,
+    pbi_start_tvusec: u64,
+}
+
+/// Task info structure from proc_pidinfo(PROC_PIDTASKINFO)
+#[repr(C)]
+struct ProcTaskInfo {
+    pti_virtual_size: u64,
+    pti_resident_size: u64,
+    pti_total_user: u64,
+    pti_total_system: u64,
+    pti_threads_user: u64,
+    pti_threads_system: u64,
+    pti_policy: i32,
+    pti_faults: i32,
+    pti_pageins: i32,
+    pti_cow_faults: i32,
+    pti_messages_sent: i32,
+    pti_messages_received: i32,
+    pti_syscalls_mach: i32,
+    pti_syscalls_unix: i32,
+    pti_csw: i32,
+    pti_threadnum: i32,
+    pti_numrunning: i32,
+    pti_priority: i32,
+}
 
 const RTM_IFINFO2: i32 = 0x12;
 
@@ -1193,6 +1270,7 @@ struct sockaddr_dl {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 struct proc_fdinfo {
     proc_fd: i32,
     proc_fdtype: u32,
@@ -1349,7 +1427,7 @@ pub fn read_process_context_switches(pid: i32) -> Result<ContextSwitches> {
         );
 
         // Deallocate the task port
-        libc::mach_port_deallocate(libc::mach_task_self(), task);
+        mach_port_deallocate(libc::mach_task_self(), task);
 
         if result != 0 {
             return Err(Error::Platform(format!("task_info failed: {}", result)));
@@ -1362,10 +1440,10 @@ pub fn read_process_context_switches(pid: i32) -> Result<ContextSwitches> {
 fn read_process_context_switches_via_rusage(pid: i32) -> Result<ContextSwitches> {
     unsafe {
         // Use proc_pid_rusage for processes we can't get task ports for
-        let mut usage: RusageInfoV2 = mem::zeroed();
+        let mut usage: RusageInfoV4 = mem::zeroed();
         let result = libc::proc_pid_rusage(
             pid,
-            RUSAGE_INFO_V2,
+            RUSAGE_INFO_V4,
             &mut usage as *mut _ as *mut libc::rusage_info_t,
         );
 
@@ -1373,29 +1451,10 @@ fn read_process_context_switches_via_rusage(pid: i32) -> Result<ContextSwitches>
             return Err(Error::NotFound(format!("process {} not found or not accessible", pid)));
         }
 
-        // rusage_info_v2 doesn't have context switches directly
-        // Fall back to kinfo_proc rusage
-        let mut mib = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PID, pid as libc::c_int];
-        let mut kinfo: libc::kinfo_proc = mem::zeroed();
-        let mut len = mem::size_of::<libc::kinfo_proc>();
-
-        let result = libc::sysctl(
-            mib.as_mut_ptr(),
-            4,
-            &mut kinfo as *mut _ as *mut libc::c_void,
-            &mut len,
-            ptr::null_mut(),
-            0,
-        );
-
-        if result != 0 || len == 0 {
-            return Err(Error::NotFound(format!("process {} not found", pid)));
-        }
-
-        // kinfo_proc contains rusage on macOS
+        // rusage_info_v4 contains context switches
         Ok(ContextSwitches {
-            voluntary: kinfo.kp_proc.p_ru.as_ref().map_or(0, |ru| ru.ru_nvcsw as u64),
-            involuntary: kinfo.kp_proc.p_ru.as_ref().map_or(0, |ru| ru.ru_nivcsw as u64),
+            voluntary: usage.ri_voluntary_context_switches,
+            involuntary: usage.ri_involuntary_context_switches,
         })
     }
 }
@@ -1426,7 +1485,6 @@ pub fn read_system_context_switches() -> Result<ContextSwitches> {
 // ============================================================================
 
 const TASK_EVENTS_INFO: libc::c_int = 2;
-const RUSAGE_INFO_V2: libc::c_int = 2;
 
 /// Task events info structure from Mach.
 #[repr(C)]
@@ -1441,9 +1499,9 @@ struct TaskEventsInfo {
     csw: i32,               // context switches
 }
 
-/// Rusage info v2 structure (partial).
+/// Rusage info v4 structure with context switches.
 #[repr(C)]
-struct RusageInfoV2 {
+struct RusageInfoV4 {
     ri_uuid: [u8; 16],
     ri_user_time: u64,
     ri_system_time: u64,
@@ -1463,10 +1521,29 @@ struct RusageInfoV2 {
     ri_child_elapsed_abstime: u64,
     ri_diskio_bytesread: u64,
     ri_diskio_byteswritten: u64,
+    ri_cpu_time_qos_default: u64,
+    ri_cpu_time_qos_maintenance: u64,
+    ri_cpu_time_qos_background: u64,
+    ri_cpu_time_qos_utility: u64,
+    ri_cpu_time_qos_legacy: u64,
+    ri_cpu_time_qos_user_initiated: u64,
+    ri_cpu_time_qos_user_interactive: u64,
+    ri_billed_system_time: u64,
+    ri_serviced_system_time: u64,
+    ri_logical_writes: u64,
+    ri_lifetime_max_phys_footprint: u64,
+    ri_instructions: u64,
+    ri_cycles: u64,
+    ri_billed_energy: u64,
+    ri_serviced_energy: u64,
+    ri_interval_max_phys_footprint: u64,
+    ri_runnable_time: u64,
+    ri_voluntary_context_switches: u64,
+    ri_involuntary_context_switches: u64,
 }
 
 // External Mach functions
-extern "C" {
+unsafe extern "C" {
     fn host_processor_info(
         host: libc::mach_port_t,
         flavor: libc::c_int,
@@ -1494,6 +1571,11 @@ extern "C" {
         pid: libc::c_int,
         t: *mut libc::mach_port_t,
     ) -> libc::c_int;
+
+    fn mach_port_deallocate(
+        task: libc::mach_port_t,
+        name: libc::mach_port_t,
+    ) -> libc::c_int;
 }
 
 // ============================================================================
@@ -1502,7 +1584,7 @@ extern "C" {
 
 // IOKit functions for disk I/O statistics
 #[link(name = "IOKit", kind = "framework")]
-extern "C" {
+unsafe extern "C" {
     fn IOMainPort(
         bootstrap_port: libc::mach_port_t,
         master_port: *mut libc::mach_port_t,
@@ -1543,7 +1625,7 @@ extern "C" {
 
 // CoreFoundation functions for dictionary access
 #[link(name = "CoreFoundation", kind = "framework")]
-extern "C" {
+unsafe extern "C" {
     fn CFRelease(cf: *const libc::c_void);
 
     fn CFStringCreateWithCString(
@@ -1711,23 +1793,26 @@ unsafe fn read_smc_temperature(conn: u32, key: &str) -> Option<f64> {
     }
     let key_code = u32::from_be_bytes([key_bytes[0], key_bytes[1], key_bytes[2], key_bytes[3]]);
 
-    // Read key info first
-    let mut input: SmcKeyData = mem::zeroed();
+    // SAFETY: SmcKeyData is a C-compatible struct that can be safely zero-initialized
+    let mut input: SmcKeyData = unsafe { mem::zeroed() };
     input.key = key_code;
     input.data8 = SMC_CMD_READ_KEYINFO;
 
-    let mut output: SmcKeyData = mem::zeroed();
+    let mut output: SmcKeyData = unsafe { mem::zeroed() };
     let input_size = mem::size_of::<SmcKeyData>();
     let mut output_size = mem::size_of::<SmcKeyData>();
 
-    if IOConnectCallStructMethod(
-        conn,
-        2, // kSMCHandleYPCEvent
-        &input as *const _ as *const libc::c_void,
-        input_size,
-        &mut output as *mut _ as *mut libc::c_void,
-        &mut output_size,
-    ) != 0
+    // SAFETY: Calling IOKit function with valid parameters
+    if unsafe {
+        IOConnectCallStructMethod(
+            conn,
+            2, // kSMCHandleYPCEvent
+            &input as *const _ as *const libc::c_void,
+            input_size,
+            &mut output as *mut _ as *mut libc::c_void,
+            &mut output_size,
+        )
+    } != 0
     {
         return None;
     }
@@ -1741,16 +1826,19 @@ unsafe fn read_smc_temperature(conn: u32, key: &str) -> Option<f64> {
     input.key_info.data_size = output.key_info.data_size;
     input.data8 = SMC_CMD_READ_BYTES;
 
-    output = mem::zeroed();
+    output = unsafe { mem::zeroed() };
 
-    if IOConnectCallStructMethod(
-        conn,
-        2,
-        &input as *const _ as *const libc::c_void,
-        input_size,
-        &mut output as *mut _ as *mut libc::c_void,
-        &mut output_size,
-    ) != 0
+    // SAFETY: Calling IOKit function with valid parameters
+    if unsafe {
+        IOConnectCallStructMethod(
+            conn,
+            2,
+            &input as *const _ as *const libc::c_void,
+            input_size,
+            &mut output as *mut _ as *mut libc::c_void,
+            &mut output_size,
+        )
+    } != 0
     {
         return None;
     }
@@ -1797,7 +1885,8 @@ pub fn is_thermal_supported() -> bool {
 }
 
 // Additional IOKit functions for SMC access
-extern "C" {
+#[link(name = "IOKit", kind = "framework")]
+unsafe extern "C" {
     fn IOServiceOpen(
         service: u32,
         owning_task: libc::mach_port_t,
