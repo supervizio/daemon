@@ -204,9 +204,10 @@ jobs:
           echo "=== Building probe-ffi package ==="
           echo "Target: aarch64-apple-darwin (native)"
           echo "Rust version: $(rustc --version)"
+          echo "Host: $(rustc -vV | grep host)"
           echo ""
-          # Build with verbose output directly
-          cargo build --release --package probe-ffi 2>&1 | tee /tmp/darwin-build.log || {
+          # Build only staticlib output (skip cdylib to simplify)
+          cargo rustc --release --package probe-ffi --crate-type staticlib 2>&1 | tee /tmp/darwin-build.log || {
             echo ""
             echo "=== BUILD FAILED - Full cargo output above ==="
             exit 1
