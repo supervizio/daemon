@@ -16,7 +16,7 @@ concurrency:
 env:
   GO_VERSION: '1.25.6'
   WIRE_VERSION: 'v0.7.0'
-  RUST_VERSION: 'stable'
+  RUST_VERSION: '1.85.0'  # Minimum version for edition 2024
   ZIG_VERSION: '0.13.0'
 
 jobs:
@@ -191,11 +191,20 @@ jobs:
         working-directory: src/lib/probe
         id: build
         run: |
-          # Build only probe-ffi package (same as Linux builds)
-          cargo build --release --package probe-ffi 2>&1 | tee /tmp/darwin-build.log
-          EXIT_CODE=${PIPESTATUS[0]}
-          echo "build_status=$EXIT_CODE" >> $GITHUB_OUTPUT
-          exit $EXIT_CODE
+          set -e
+          echo "=== Building probe-ffi package ==="
+          echo "Target: aarch64-apple-darwin (native)"
+          echo ""
+          # Build with verbose output to capture any errors
+          if ! cargo build --release --package probe-ffi 2>&1 | tee /tmp/darwin-build.log; then
+            echo ""
+            echo "=== BUILD FAILED ==="
+            echo "Last 100 lines of build output:"
+            tail -100 /tmp/darwin-build.log
+            exit 1
+          fi
+          echo ""
+          echo "=== Build completed successfully ==="
 
       - name: Upload build log
         if: always()
