@@ -191,18 +191,17 @@ jobs:
         working-directory: src/lib/probe
         id: build
         run: |
-          set -e
+          set -euo pipefail
           echo "=== Building probe-ffi package ==="
           echo "Target: aarch64-apple-darwin (native)"
+          echo "Rust version: $(rustc --version)"
           echo ""
-          # Build with verbose output to capture any errors
-          if ! cargo build --release --package probe-ffi 2>&1 | tee /tmp/darwin-build.log; then
+          # Build with verbose output directly
+          cargo build --release --package probe-ffi -vv 2>&1 | tee /tmp/darwin-build.log || {
             echo ""
-            echo "=== BUILD FAILED ==="
-            echo "Last 100 lines of build output:"
-            tail -100 /tmp/darwin-build.log
+            echo "=== BUILD FAILED - Full cargo output above ==="
             exit 1
-          fi
+          }
           echo ""
           echo "=== Build completed successfully ==="
 
