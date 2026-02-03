@@ -595,7 +595,155 @@ jobs:
           "
 
   # =============================================================================
-  # PHASE 7: E2E macOS TEST (native on Apple Silicon)
+  # PHASE 7: E2E LINUX VM TESTS (Vagrant + libvirt on ARM64)
+  # =============================================================================
+  # NOTE: BSD ARM64 VMs disabled - Rust Tier 3 targets, no binaries built
+
+  e2e-vm:
+    name: E2E VM ${{ matrix.name }}
+    needs: [packages-glibc, packages-musl]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # systemd - most common Linux init
+          - name: Debian (systemd)
+            vm: debian
+            artifact: supervizio-linux-arm64
+            box: generic/debian12
+            pkg_install: "apt-get update -qq && apt-get install -y -qq curl jq"
+          # OpenRC - created by Gentoo
+          - name: Gentoo (OpenRC)
+            vm: gentoo
+            artifact: supervizio-linux-arm64
+            box: generic/gentoo
+            pkg_install: "emerge --sync -q && emerge -q app-misc/jq net-misc/curl"
+          # SysVinit - classic Unix init
+          - name: Devuan (SysVinit)
+            vm: devuan
+            artifact: supervizio-linux-arm64
+            box: generic/devuan4
+            pkg_install: "apt-get update -qq && apt-get install -y -qq curl jq"
+          # runit - lightweight supervision suite
+          - name: Alpine (runit)
+            vm: alpine
+            artifact: supervizio-linux-arm64-musl
+            box: generic/alpine319
+            pkg_install: "sed -i 's/#.*community/community/' /etc/apk/repositories && apk update && apk del openrc --force-broken-world 2>/dev/null || true && apk add --no-cache curl jq runit"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ matrix.artifact }}
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          chmod +x bin/${{ matrix.artifact }}
+          file bin/${{ matrix.artifact }}
+
+      - name: Install Vagrant and libvirt
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            vagrant \
+            libvirt-daemon-system \
+            libvirt-clients \
+            qemu-kvm \
+            qemu-system-arm \
+            virtinst
+          sudo usermod -aG libvirt "$USER"
+          vagrant plugin install vagrant-libvirt
+
+      - name: Start libvirt
+        run: |
+          sudo systemctl start libvirtd
+          sudo systemctl enable libvirtd
+
+      - name: Create Vagrantfile
+        working-directory: e2e
+        run: |
+          cat > Vagrantfile.ci << 'EOF'
+          Vagrant.configure("2") do |config|
+            config.vm.box = "${{ matrix.box }}"
+            config.vm.hostname = "e2e-${{ matrix.vm }}"
+            config.vm.synced_folder ".", "/vagrant", disabled: true
+            config.vm.provider "libvirt" do |lv|
+              lv.memory = 2048
+              lv.cpus = 2
+              lv.driver = "kvm"
+              lv.machine_type = "virt"
+              lv.cpu_mode = "host-passthrough"
+            end
+          end
+          EOF
+
+      - name: Boot VM
+        working-directory: e2e
+        run: |
+          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant up --provider=libvirt
+          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant ssh -c "uname -a"
+
+      - name: Install dependencies in VM
+        working-directory: e2e
+        run: |
+          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant ssh -c "sudo ${{ matrix.pkg_install }}"
+
+      - name: Copy binary to VM
+        working-directory: e2e
+        run: |
+          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant ssh -c "mkdir -p /tmp/bin"
+          cat ../bin/${{ matrix.artifact }} | VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant ssh -c "cat > /tmp/bin/supervizio && chmod +x /tmp/bin/supervizio"
+
+      - name: Run E2E test in VM
+        working-directory: e2e
+        run: |
+          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant ssh -c '
+            set -e
+            echo "=== System Info ==="
+            uname -a
+            cat /etc/os-release 2>/dev/null || true
+
+            echo ""
+            echo "=== Test version ==="
+            /tmp/bin/supervizio --version
+
+            echo ""
+            echo "=== Test probe ==="
+            OUTPUT=$(/tmp/bin/supervizio --probe 2>&1) || {
+              echo "ERROR: --probe command failed"
+              echo "Output: $OUTPUT"
+              exit 1
+            }
+
+            echo "Raw JSON output:"
+            echo "$OUTPUT"
+
+            echo ""
+            echo "=== Validate JSON ==="
+            echo "$OUTPUT" | jq -e ".timestamp" > /dev/null && echo "✓ timestamp"
+            echo "$OUTPUT" | jq -e ".platform" > /dev/null && echo "✓ platform"
+            echo "$OUTPUT" | jq -e ".cpu.cores > 0" > /dev/null && echo "✓ cpu.cores > 0"
+            echo "$OUTPUT" | jq -e ".memory.total_bytes > 0" > /dev/null && echo "✓ memory present"
+            echo "$OUTPUT" | jq -e ".load" > /dev/null && echo "✓ load present"
+
+            echo ""
+            echo "✓ E2E VM test passed on ${{ matrix.name }}"
+          '
+
+      - name: Cleanup VM
+        if: always()
+        working-directory: e2e
+        run: |
+          VAGRANT_VAGRANTFILE=Vagrantfile.ci vagrant destroy -f || true
+
+  # =============================================================================
+  # PHASE 8: E2E macOS TEST (native on Apple Silicon)
   # =============================================================================
 
   e2e-macos:
