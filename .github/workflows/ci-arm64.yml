@@ -169,6 +169,7 @@ jobs:
         uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-apple-darwin
 
       - name: Cache Cargo
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -196,22 +197,21 @@ jobs:
             exit 1
           }
 
-      - name: Build libprobe.a (native)
+      - name: Build libprobe.a
         working-directory: src/lib/probe
         id: build
         env:
-          # Ensure we target a reasonable macOS version
           MACOSX_DEPLOYMENT_TARGET: '14.0'
         run: |
           set -euo pipefail
           echo "=== Building probe-ffi package ==="
-          echo "Target: aarch64-apple-darwin (native)"
+          echo "Target: aarch64-apple-darwin (explicit)"
           echo "Rust version: $(rustc --version)"
           echo "Host: $(rustc -vV | grep host)"
           echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
           echo ""
-          # Standard cargo build
-          cargo build --release --package probe-ffi 2>&1 | tee /tmp/darwin-build.log || {
+          # Build with explicit target (same pattern as Linux builds)
+          cargo build --release --target aarch64-apple-darwin --package probe-ffi 2>&1 | tee /tmp/darwin-build.log || {
             echo ""
             echo "=== BUILD FAILED - Full cargo output ==="
             cat /tmp/darwin-build.log
@@ -232,8 +232,8 @@ jobs:
         working-directory: src/lib/probe
         if: always()
         run: |
-          echo "=== Target release directory ==="
-          ls -la target/release/ 2>/dev/null | grep -E "\.a$|\.dylib$|^total" || echo "No release outputs found"
+          echo "=== Target aarch64-apple-darwin/release directory ==="
+          ls -la target/aarch64-apple-darwin/release/ 2>/dev/null | grep -E "\.a$|\.dylib$|^total" || echo "No release outputs found"
           echo ""
           echo "=== All .a files ==="
           find target -name "*.a" -type f -exec ls -la {} \; 2>/dev/null || echo "No .a files"
@@ -242,7 +242,8 @@ jobs:
         working-directory: src/lib/probe
         run: |
           mkdir -p ${{ github.workspace }}/dist/lib/darwin-arm64
-          cp target/release/libprobe.a ${{ github.workspace }}/dist/lib/darwin-arm64/
+          # Output is in target/<target>/release/ when using explicit --target
+          cp target/aarch64-apple-darwin/release/libprobe.a ${{ github.workspace }}/dist/lib/darwin-arm64/
           ls -la ${{ github.workspace }}/dist/lib/darwin-arm64/
 
       - name: Upload libprobe artifact
