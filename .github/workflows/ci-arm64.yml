@@ -934,21 +934,21 @@ jobs:
 
           # VM is running - wait for SSH to become available
           # QEMU TCG on ARM64 is very slow, especially for glibc distros like Debian
-          # Allow up to 5 minutes (30 checks * 10 seconds)
+          # Allow up to 10 minutes (60 checks * 10 seconds) for systemd-based VMs
           echo ""
-          echo "=== Waiting for SSH (up to 5 min for slow QEMU TCG) ==="
-          for i in $(seq 1 30); do
+          echo "=== Waiting for SSH (up to 10 min for slow QEMU TCG) ==="
+          for i in $(seq 1 60); do
             if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'SSH ready'" 2>/dev/null; then
               echo ""
               echo "✓ VM SSH accessible after ~$((i*10)) seconds"
               exit 0
             fi
-            echo "  Check $i/30: Waiting for SSH..."
+            echo "  Check $i/60: Waiting for SSH..."
             sleep 10
           done
 
           echo ""
-          echo "=== SSH not accessible after 5 minutes ==="
+          echo "=== SSH not accessible after 10 minutes ==="
           echo "Checking VM console output..."
           sudo virsh console "$DOMAIN" --force 2>/dev/null || true
           exit 1
