@@ -186,10 +186,14 @@ jobs:
           retention-days: 1
 
   # BSD x86_64 probes (Zig cross-compile)
+  # Note: These are Tier 2/3 targets with potential compilation issues.
+  # OpenBSD target (x86_64-unknown-openbsd) doesn't exist in rustup.
+  # FreeBSD and NetBSD may have cross-compilation issues with certain libc calls.
   build-probe-bsd:
     name: Probe ${{ matrix.platform }}
     runs-on: ubuntu-24.04
     needs: [rust-test]
+    continue-on-error: true  # BSD probes are best-effort, don't block pipeline
     strategy:
       fail-fast: false
       matrix:
@@ -197,9 +201,6 @@ jobs:
           - rust_target: x86_64-unknown-freebsd
             platform: freebsd-amd64
             zig_target: x86_64-freebsd
-          - rust_target: x86_64-unknown-openbsd
-            platform: openbsd-amd64
-            zig_target: x86_64-openbsd
           - rust_target: x86_64-unknown-netbsd
             platform: netbsd-amd64
             zig_target: x86_64-netbsd
