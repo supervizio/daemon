@@ -684,7 +684,7 @@ jobs:
     name: E2E VM ${{ matrix.name }}
     # TODO: restore needs: [packages-glibc, packages-musl] after VM setup works
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -697,6 +697,11 @@ jobs:
           # NOTE: ARM64 VMs run on QEMU TCG (software emulation) because
           # GitHub ARM64 runners don't have KVM. This makes VMs very slow.
           # ==============================================================
+
+          # systemd + .deb + glibc
+          - name: Debian (systemd/deb)
+            vm: debian13
+            artifact: supervizio-linux-arm64
 
           # systemd + .rpm + glibc
           - name: Fedora (systemd/rpm)
@@ -713,8 +718,6 @@ jobs:
             vm: alpine-runit
             artifact: supervizio-linux-arm64-musl
 
-          # NOTE: Debian skipped on ARM64 - QEMU TCG is too slow, consistently
-          # times out (>30min). Debian systemd is tested on x86 with KVM.
           # NOTE: Devuan skipped on ARM64 - no libvirt ARM64 box available.
           # SysVinit tested on x86 workflow only.
     steps:
@@ -898,64 +901,56 @@ jobs:
       - name: Start VM
         working-directory: e2e
         run: |
-          echo "=== Starting VM with retry (fog-libvirt IP timeout workaround) ==="
+          echo "=== Starting VM with fog-libvirt IP timeout workaround ==="
           # fog-libvirt has a hardcoded 2-second timeout for IP address detection.
           # On ARM64 QEMU TCG (software emulation), VMs boot slowly and may exceed this.
-          # Workaround: retry vagrant up with progressive strategies.
+          # Strategy: Let fog timeout, then verify VM is running and wait for SSH.
 
-          MAX_ATTEMPTS=3
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            echo ""
-            echo "=== Attempt $attempt of $MAX_ATTEMPTS ==="
+          # Start vagrant - expect it to fail due to fog timeout
+          echo "Starting vagrant (fog timeout expected on slow QEMU TCG)..."
+          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt 2>&1 || true
 
-            # Clean up any partial state from previous attempt
-            if [ $attempt -gt 1 ]; then
-              echo "Cleaning up previous attempt..."
-              sudo -E vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
-              sudo virsh list --all --name | grep -i "${{ matrix.vm }}" | xargs -r -I {} sudo virsh destroy {} 2>/dev/null || true
-              sudo virsh list --all --name | grep -i "${{ matrix.vm }}" | xargs -r -I {} sudo virsh undefine {} --remove-all-storage 2>/dev/null || true
-              sleep 5
-            fi
+          # Give VM time to boot (QEMU TCG is slow, especially for Debian)
+          echo ""
+          echo "=== Waiting for VM to boot (QEMU TCG software emulation) ==="
 
-            # Try vagrant up
-            if sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt 2>&1; then
-              echo "✓ vagrant up succeeded on attempt $attempt"
+          # Check if domain is running
+          DOMAIN=$(sudo virsh list --all --name | grep -i "${{ matrix.vm }}" | head -1)
+          if [ -z "$DOMAIN" ]; then
+            echo "ERROR: No libvirt domain found for ${{ matrix.vm }}"
+            sudo virsh list --all
+            exit 1
+          fi
+
+          echo "Domain: $DOMAIN"
+          STATE=$(sudo virsh domstate "$DOMAIN" 2>/dev/null || echo "unknown")
+          echo "State: $STATE"
+
+          if [ "$STATE" != "running" ]; then
+            echo "ERROR: Domain is not running (state: $STATE)"
+            sudo journalctl -u libvirtd --no-pager -n 30 || true
+            exit 1
+          fi
+
+          # VM is running - wait for SSH to become available
+          # QEMU TCG on ARM64 is very slow, especially for glibc distros like Debian
+          # Allow up to 5 minutes (30 checks * 10 seconds)
+          echo ""
+          echo "=== Waiting for SSH (up to 5 min for slow QEMU TCG) ==="
+          for i in $(seq 1 30); do
+            if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'SSH ready'" 2>/dev/null; then
+              echo ""
+              echo "✓ VM SSH accessible after ~$((i*10)) seconds"
               exit 0
             fi
-
-            # Check if VM is actually running despite fog timeout error
-            echo "vagrant up reported failure, checking if VM is actually running..."
-            sleep 10  # Give VM time to fully boot
-
-            # Check if domain exists and is running
-            DOMAIN=$(sudo virsh list --all --name | grep -i "${{ matrix.vm }}" | head -1)
-            if [ -n "$DOMAIN" ]; then
-              STATE=$(sudo virsh domstate "$DOMAIN" 2>/dev/null || echo "unknown")
-              echo "Domain '$DOMAIN' state: $STATE"
-
-              if [ "$STATE" = "running" ]; then
-                # Try to get SSH access via vagrant
-                echo "VM is running, checking SSH access..."
-                for i in $(seq 1 6); do
-                  if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'SSH ready'" 2>/dev/null; then
-                    echo "✓ VM running and SSH accessible despite fog timeout"
-                    exit 0
-                  fi
-                  sleep 10
-                done
-              fi
-            fi
-
-            echo "Attempt $attempt failed, VM not accessible"
-            if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              echo "Retrying in 10 seconds..."
-              sleep 10
-            fi
+            echo "  Check $i/30: Waiting for SSH..."
+            sleep 10
           done
 
           echo ""
-          echo "=== All $MAX_ATTEMPTS attempts failed ==="
-          sudo journalctl -u libvirtd --no-pager -n 50 || true
+          echo "=== SSH not accessible after 5 minutes ==="
+          echo "Checking VM console output..."
+          sudo virsh console "$DOMAIN" --force 2>/dev/null || true
           exit 1
 
       - name: Test VM is accessible
