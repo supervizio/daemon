@@ -898,13 +898,65 @@ jobs:
       - name: Start VM
         working-directory: e2e
         run: |
-          echo "=== Starting VM ==="
-          sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt 2>&1 || {
+          echo "=== Starting VM with retry (fog-libvirt IP timeout workaround) ==="
+          # fog-libvirt has a hardcoded 2-second timeout for IP address detection.
+          # On ARM64 QEMU TCG (software emulation), VMs boot slowly and may exceed this.
+          # Workaround: retry vagrant up with progressive strategies.
+
+          MAX_ATTEMPTS=3
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
             echo ""
-            echo "=== vagrant up failed ==="
-            sudo journalctl -u libvirtd --no-pager -n 30 || true
-            exit 1
-          }
+            echo "=== Attempt $attempt of $MAX_ATTEMPTS ==="
+
+            # Clean up any partial state from previous attempt
+            if [ $attempt -gt 1 ]; then
+              echo "Cleaning up previous attempt..."
+              sudo -E vagrant destroy ${{ matrix.vm }} -f 2>/dev/null || true
+              sudo virsh list --all --name | grep -i "${{ matrix.vm }}" | xargs -r -I {} sudo virsh destroy {} 2>/dev/null || true
+              sudo virsh list --all --name | grep -i "${{ matrix.vm }}" | xargs -r -I {} sudo virsh undefine {} --remove-all-storage 2>/dev/null || true
+              sleep 5
+            fi
+
+            # Try vagrant up
+            if sudo -E vagrant up ${{ matrix.vm }} --provider=libvirt 2>&1; then
+              echo "✓ vagrant up succeeded on attempt $attempt"
+              exit 0
+            fi
+
+            # Check if VM is actually running despite fog timeout error
+            echo "vagrant up reported failure, checking if VM is actually running..."
+            sleep 10  # Give VM time to fully boot
+
+            # Check if domain exists and is running
+            DOMAIN=$(sudo virsh list --all --name | grep -i "${{ matrix.vm }}" | head -1)
+            if [ -n "$DOMAIN" ]; then
+              STATE=$(sudo virsh domstate "$DOMAIN" 2>/dev/null || echo "unknown")
+              echo "Domain '$DOMAIN' state: $STATE"
+
+              if [ "$STATE" = "running" ]; then
+                # Try to get SSH access via vagrant
+                echo "VM is running, checking SSH access..."
+                for i in $(seq 1 6); do
+                  if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'SSH ready'" 2>/dev/null; then
+                    echo "✓ VM running and SSH accessible despite fog timeout"
+                    exit 0
+                  fi
+                  sleep 10
+                done
+              fi
+            fi
+
+            echo "Attempt $attempt failed, VM not accessible"
+            if [ $attempt -lt $MAX_ATTEMPTS ]; then
+              echo "Retrying in 10 seconds..."
+              sleep 10
+            fi
+          done
+
+          echo ""
+          echo "=== All $MAX_ATTEMPTS attempts failed ==="
+          sudo journalctl -u libvirtd --no-pager -n 50 || true
+          exit 1
 
       - name: Test VM is accessible
         working-directory: e2e
@@ -937,19 +989,19 @@ jobs:
           sudo -E vagrant ssh-config ${{ matrix.vm }} || true
 
           echo ""
-          echo "=== Waiting for VM to be SSH-ready (up to 1 min) ==="
-          for i in $(seq 1 12); do
+          echo "=== Waiting for VM to be SSH-ready (up to 3 min for slow QEMU TCG) ==="
+          for i in $(seq 1 18); do
             if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'VM ready'" 2>/dev/null; then
-              echo "=== VM is SSH-accessible after $((i*5)) seconds ==="
+              echo "=== VM is SSH-accessible after $((i*10)) seconds ==="
               sudo -E vagrant ssh ${{ matrix.vm }} -c 'uname -a; cat /etc/os-release 2>/dev/null || true'
               echo ""
               echo "✓ VM ${{ matrix.name }} booted successfully!"
               exit 0
             fi
-            sleep 5
+            sleep 10
           done
 
-          echo "ERROR: VM not SSH-accessible after 60 seconds"
+          echo "ERROR: VM not SSH-accessible after 180 seconds"
           exit 1
 
       # TODO: restore after VM setup works

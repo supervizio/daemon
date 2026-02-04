@@ -584,12 +584,13 @@ func TestServicesPanel_handleKeyMsg(t *testing.T) {
 		{name: "down key", key: "down"},
 	}
 
-	panel := NewServicesPanel(80, 20)
-
 	// Execute test cases.
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+			// Create a new panel for each subtest to avoid data races.
+			// The viewport.Model is not thread-safe for concurrent access.
+			panel := NewServicesPanel(80, 20)
 			msg := mockKeyMsg{str: tc.key}
 			cmd := panel.handleKeyMsg(msg)
 			// Verify function completes without error.
