@@ -691,14 +691,12 @@ jobs:
         include:
           # ==============================================================
           # VM names MUST match e2e/Vagrantfile definitions
-          # - Init: systemd, OpenRC, SysVinit, runit (4 systems)
-          # - Libc: glibc, musl (2 variants)
+          # - Init: systemd, OpenRC, runit
+          # - Libc: glibc, musl
+          #
+          # NOTE: ARM64 VMs run on QEMU TCG (software emulation) because
+          # GitHub ARM64 runners don't have KVM. This makes VMs very slow.
           # ==============================================================
-
-          # systemd + .deb + glibc
-          - name: Debian (systemd/deb)
-            vm: debian13
-            artifact: supervizio-linux-arm64
 
           # systemd + .rpm + glibc
           - name: Fedora (systemd/rpm)
@@ -710,13 +708,15 @@ jobs:
             vm: alpine
             artifact: supervizio-linux-arm64-musl
 
-          # NOTE: Devuan skipped on ARM64 - no libvirt ARM64 box available
-          # SysVinit tested on x86 workflow only
-
           # runit + .apk + musl
           - name: Alpine-runit (runit/apk)
             vm: alpine-runit
             artifact: supervizio-linux-arm64-musl
+
+          # NOTE: Debian skipped on ARM64 - QEMU TCG is too slow, consistently
+          # times out (>30min). Debian systemd is tested on x86 with KVM.
+          # NOTE: Devuan skipped on ARM64 - no libvirt ARM64 box available.
+          # SysVinit tested on x86 workflow only.
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
