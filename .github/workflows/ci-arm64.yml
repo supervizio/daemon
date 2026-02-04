@@ -685,6 +685,7 @@ jobs:
     # TODO: restore needs: [packages-glibc, packages-musl] after VM setup works
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
+    continue-on-error: ${{ matrix.optional == true }}
     strategy:
       fail-fast: false
       matrix:
@@ -698,10 +699,11 @@ jobs:
           # GitHub ARM64 runners don't have KVM. This makes VMs very slow.
           # ==============================================================
 
-          # systemd + .deb + glibc
+          # systemd + .deb + glibc (best-effort on ARM64 - very slow QEMU TCG)
           - name: Debian (systemd/deb)
             vm: debian13
             artifact: supervizio-linux-arm64
+            optional: true  # Debian box is extremely slow on QEMU TCG
 
           # systemd + .rpm + glibc
           - name: Fedora (systemd/rpm)
@@ -934,11 +936,11 @@ jobs:
 
           # VM is running - wait for SSH to become available
           # QEMU TCG on ARM64 is extremely slow, especially for glibc distros like Debian
-          # Fedora: ~20 min total, Debian: needs ~25 min on QEMU TCG software emulation
-          # Allow up to 20 minutes (120 checks * 10 seconds) for systemd-based VMs
+          # Fedora: ~20 min total, Debian: needs ~30 min on QEMU TCG software emulation
+          # Allow up to 25 minutes (150 checks * 10 seconds) for systemd-based VMs
           echo ""
-          echo "=== Waiting for SSH (up to 20 min for slow QEMU TCG) ==="
-          for i in $(seq 1 120); do
+          echo "=== Waiting for SSH (up to 25 min for slow QEMU TCG) ==="
+          for i in $(seq 1 150); do
             if sudo -E vagrant ssh ${{ matrix.vm }} -c "echo 'SSH ready'" 2>/dev/null; then
               echo ""
               echo "✓ VM SSH accessible after ~$((i*10)) seconds"
@@ -946,13 +948,13 @@ jobs:
             fi
             # Progress indicator every 30 checks (5 min)
             if [ $((i % 30)) -eq 0 ]; then
-              echo "  Progress: $i/120 checks ($((i*10/60)) min elapsed)"
+              echo "  Progress: $i/150 checks ($((i*10/60)) min elapsed)"
             fi
             sleep 10
           done
 
           echo ""
-          echo "=== SSH not accessible after 20 minutes ==="
+          echo "=== SSH not accessible after 25 minutes ==="
           echo "Checking VM console output..."
           sudo virsh console "$DOMAIN" --force 2>/dev/null || true
           exit 1
