@@ -213,18 +213,6 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.rust_target }}
 
-      - name: Verify Rust target installed
-        run: |
-          # Explicitly ensure target is installed (cache may have stale state)
-          rustup target add ${{ matrix.rust_target }} || true
-          rustup target list --installed | grep -q "${{ matrix.rust_target }}" || {
-            echo "ERROR: Target ${{ matrix.rust_target }} not installed!"
-            echo "Available targets:"
-            rustup target list
-            exit 1
-          }
-          echo "✓ Target ${{ matrix.rust_target }} installed"
-
       - name: Install Zig
         uses: mlugg/setup-zig@v2
         with:
@@ -237,9 +225,32 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src/lib/probe/target
-          key: rust-probe-x86-${{ matrix.rust_target }}-v2-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          key: rust-probe-x86-${{ matrix.rust_target }}-v3-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
           restore-keys: |
-            rust-probe-x86-${{ matrix.rust_target }}-v2-
+            rust-probe-x86-${{ matrix.rust_target }}-v3-
+
+      - name: Verify and install Rust target
+        run: |
+          # Re-add target after cache restore (cache may affect toolchain state)
+          echo "Installed targets before:"
+          rustup target list --installed
+          echo ""
+          echo "Adding target ${{ matrix.rust_target }}..."
+          rustup target add ${{ matrix.rust_target }}
+          echo ""
+          echo "Installed targets after:"
+          rustup target list --installed
+          echo ""
+          # Verify the target's std library exists
+          SYSROOT=$(rustc --print sysroot)
+          TARGET_LIB="$SYSROOT/lib/rustlib/${{ matrix.rust_target }}/lib"
+          if [ -d "$TARGET_LIB" ]; then
+            echo "✓ Target library directory exists: $TARGET_LIB"
+            ls "$TARGET_LIB" | head -5
+          else
+            echo "ERROR: Target library directory missing: $TARGET_LIB"
+            exit 1
+          fi
 
       - name: Create Zig CC wrapper
         run: |
