@@ -213,6 +213,18 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.rust_target }}
 
+      - name: Verify Rust target installed
+        run: |
+          # Explicitly ensure target is installed (cache may have stale state)
+          rustup target add ${{ matrix.rust_target }} || true
+          rustup target list --installed | grep -q "${{ matrix.rust_target }}" || {
+            echo "ERROR: Target ${{ matrix.rust_target }} not installed!"
+            echo "Available targets:"
+            rustup target list
+            exit 1
+          }
+          echo "✓ Target ${{ matrix.rust_target }} installed"
+
       - name: Install Zig
         uses: mlugg/setup-zig@v2
         with:
@@ -225,9 +237,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src/lib/probe/target
-          key: rust-probe-x86-${{ matrix.rust_target }}-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          key: rust-probe-x86-${{ matrix.rust_target }}-v2-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
           restore-keys: |
-            rust-probe-x86-${{ matrix.rust_target }}-
+            rust-probe-x86-${{ matrix.rust_target }}-v2-
 
       - name: Create Zig CC wrapper
         run: |
