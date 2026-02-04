@@ -270,7 +270,10 @@ jobs:
           CARGO_TARGET_X86_64_UNKNOWN_FREEBSD_LINKER: zigcc
           CARGO_TARGET_X86_64_UNKNOWN_OPENBSD_LINKER: zigcc
           CARGO_TARGET_X86_64_UNKNOWN_NETBSD_LINKER: zigcc
-        run: cargo build --release --target ${{ matrix.rust_target }} --package probe-ffi
+        run: |
+          # Re-add target immediately before build (cargo may trigger rustup sync)
+          rustup target add ${{ matrix.rust_target }}
+          cargo build --release --target ${{ matrix.rust_target }} --package probe-ffi
 
       - name: Prepare artifact
         run: |
