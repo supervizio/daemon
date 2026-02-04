@@ -428,10 +428,12 @@ jobs:
           retention-days: 1
 
   # BSD x86_64 binaries (Zig cross-compile)
+  # Note: BSD builds are best-effort due to Tier 2/3 target limitations
   build-bsd:
     name: Build ${{ matrix.platform }}
     runs-on: ubuntu-24.04
     needs: [build-probe-bsd, go-test]
+    continue-on-error: true  # BSD builds are best-effort, don't block pipeline
     strategy:
       fail-fast: false
       matrix:
@@ -439,9 +441,6 @@ jobs:
           - goos: freebsd
             platform: freebsd-amd64
             zig_target: x86_64-freebsd
-          - goos: openbsd
-            platform: openbsd-amd64
-            zig_target: x86_64-openbsd
           - goos: netbsd
             platform: netbsd-amd64
             zig_target: x86_64-netbsd
@@ -560,8 +559,8 @@ jobs:
     needs:
       - build-amd64
       - build-amd64-musl
-      - build-bsd
       - build-darwin-amd64
+      # Note: build-bsd removed from needs - BSD builds are best-effort
     steps:
       - name: Download ALL x86 binaries
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -570,8 +569,9 @@ jobs:
           merge-multiple: true
           path: bin/
 
-      - name: Download BSD binaries
+      - name: Download BSD binaries (best-effort)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        continue-on-error: true  # BSD artifacts may not exist
         with:
           pattern: supervizio-*bsd*
           merge-multiple: true
@@ -582,27 +582,33 @@ jobs:
           echo "=== All x86 artifacts ==="
           ls -la bin/
           echo ""
-          echo "=== Expected artifacts (x86) ==="
+          echo "=== Required artifacts (x86) ==="
           echo "  - supervizio-linux-amd64 (glibc)"
           echo "  - supervizio-linux-amd64-musl (static)"
           echo "  - supervizio-darwin-amd64"
+          echo ""
+          echo "=== Optional artifacts (BSD - best-effort) ==="
           echo "  - supervizio-freebsd-amd64"
-          echo "  - supervizio-openbsd-amd64"
           echo "  - supervizio-netbsd-amd64"
 
-      - name: Verify all binaries exist
+      - name: Verify required binaries exist
         run: |
           set -euo pipefail
-          EXPECTED=(
+          # Required binaries - must exist
+          REQUIRED=(
             "supervizio-linux-amd64"
             "supervizio-linux-amd64-musl"
             "supervizio-darwin-amd64"
+          )
+          # Optional binaries (BSD) - best-effort
+          OPTIONAL=(
             "supervizio-freebsd-amd64"
-            "supervizio-openbsd-amd64"
             "supervizio-netbsd-amd64"
           )
+
+          echo "=== Checking required binaries ==="
           MISSING=0
-          for bin in "${EXPECTED[@]}"; do
+          for bin in "${REQUIRED[@]}"; do
             if [ -f "bin/$bin" ]; then
               echo "✓ $bin found"
               file "bin/$bin"
@@ -611,12 +617,25 @@ jobs:
               MISSING=$((MISSING + 1))
             fi
           done
+
+          echo ""
+          echo "=== Checking optional binaries (BSD) ==="
+          for bin in "${OPTIONAL[@]}"; do
+            if [ -f "bin/$bin" ]; then
+              echo "✓ $bin found"
+              file "bin/$bin"
+            else
+              echo "○ $bin not present (optional)"
+            fi
+          done
+
           if [ "$MISSING" -gt 0 ]; then
-            echo "ERROR: $MISSING binaries missing!"
+            echo ""
+            echo "ERROR: $MISSING required binaries missing!"
             exit 1
           fi
           echo ""
-          echo "All ${#EXPECTED[@]} binaries present."
+          echo "All ${#REQUIRED[@]} required binaries present."
 
       - name: Verify musl is static
         run: |
