@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 )
 
 // TestDefaultDaemonLogging tests config.DefaultDaemonLogging function.

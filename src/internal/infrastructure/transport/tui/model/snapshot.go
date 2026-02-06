@@ -396,9 +396,9 @@ func (s *Snapshot) RunningCount() int {
 	count := 0
 
 	// Iterate through all services to count running ones.
-	for _, svc := range s.Services {
+	for i := range s.Services {
 		// Check if the service is in running state.
-		if svc.State == process.StateRunning {
+		if s.Services[i].State == process.StateRunning {
 			count++
 		}
 	}
@@ -415,9 +415,9 @@ func (s *Snapshot) FailedCount() int {
 	count := 0
 
 	// Iterate through all services to count failed ones.
-	for _, svc := range s.Services {
+	for i := range s.Services {
 		// Check if the service is in failed state.
-		if svc.State == process.StateFailed {
+		if s.Services[i].State == process.StateFailed {
 			count++
 		}
 	}
@@ -434,9 +434,9 @@ func (s *Snapshot) HealthyCount() int {
 	count := 0
 
 	// Iterate through all services to count healthy ones.
-	for _, svc := range s.Services {
+	for i := range s.Services {
 		// Check if the service has healthy status.
-		if svc.Health == health.StatusHealthy {
+		if s.Services[i].Health == health.StatusHealthy {
 			count++
 		}
 	}

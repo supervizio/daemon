@@ -1094,3 +1094,39 @@ func TestServicesRenderer_renderNamesOnlyBox(t *testing.T) {
 		})
 	}
 }
+
+func TestServicesRenderer_buildCompactServiceLine(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		svc  *model.ServiceSnapshot
+	}{
+		{
+			name: "running_service",
+			svc:  &model.ServiceSnapshot{Name: "web", State: process.StateRunning, CPUPercent: 25.5},
+		},
+		{
+			name: "stopped_service",
+			svc:  &model.ServiceSnapshot{Name: "db", State: process.StateStopped},
+		},
+		{
+			name: "long_name",
+			svc:  &model.ServiceSnapshot{Name: "very-long-service-name", State: process.StateRunning},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			renderer := &ServicesRenderer{
+				theme:  ansi.DefaultTheme(),
+				icons:  ansi.DefaultIcons(),
+				width:  80,
+				status: widget.NewStatusIndicator(),
+			}
+			result := renderer.buildCompactServiceLine(tt.svc)
+			assert.NotEmpty(t, result)
+		})
+	}
+}

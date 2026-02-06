@@ -1,0 +1,301 @@
+version: 1
+strict_mode: true
+skip_generated: true
+serialization_tags:
+  - json
+  - xml
+  - yaml
+  - toml
+  - protobuf
+exclude:
+  - vendor/**
+  - e2e/**
+  - "**/api/proto/**"
+  - "**/*.pb.go"
+  - "**/wire_gen.go"
+  - api/**
+rules:
+  KTN-API-MINIF:
+    enabled: true
+  KTN-COMMENT-BLOCK:
+    enabled: true
+  KTN-COMMENT-CONST:
+    enabled: true
+  KTN-COMMENT-FUNC:
+    enabled: true
+  KTN-COMMENT-LINELEN:
+    enabled: true
+  KTN-COMMENT-PKGDOC:
+    enabled: true
+  KTN-COMMENT-STRUCT:
+    enabled: true
+  KTN-COMMENT-VAR:
+    enabled: true
+  KTN-CONST-CAMEL:
+    enabled: true
+  KTN-CONST-MAXLEN:
+    enabled: true
+  KTN-CONST-MINLEN:
+    enabled: true
+  KTN-CONST-ORDER:
+    enabled: true
+  KTN-CONST-SHADOW:
+    enabled: true
+  KTN-CONST-TYPED:
+    enabled: true
+  KTN-FUNC-BLANKPARAM:
+    enabled: true
+  KTN-FUNC-CTXFIRST:
+    enabled: true
+  KTN-FUNC-CYCLO:
+    enabled: true
+  KTN-FUNC-DEADCODE:
+    enabled: true
+  KTN-FUNC-EARLYRET:
+    enabled: true
+  KTN-FUNC-ERRFMT:
+    enabled: true
+  KTN-FUNC-ERRLAST:
+    enabled: true
+  KTN-FUNC-GROUPARG:
+    enabled: true
+  KTN-FUNC-MAXLOC:
+    enabled: true
+  KTN-FUNC-MAXPARAM:
+    enabled: true
+  KTN-FUNC-MAXSTMT:
+    enabled: true
+  KTN-FUNC-MINMAX:
+    enabled: true
+  KTN-FUNC-NAKEDRET:
+    enabled: true
+  KTN-FUNC-NAMERET:
+    enabled: true
+  KTN-FUNC-NOMAGIC:
+    enabled: true
+  KTN-FUNC-PUREGET:
+    enabled: true
+  KTN-FUNC-RANGEINT:
+    enabled: true
+  KTN-FUNC-UNUSEDARG:
+    enabled: true
+  KTN-FUNC-USECLEAR:
+    enabled: true
+  KTN-GENERIC-CMPEQ:
+    enabled: true
+  KTN-GENERIC-NOANY:
+    enabled: true
+  KTN-GENERIC-ORDERED:
+    enabled: true
+  KTN-GENERIC-SHADOW:
+    enabled: true
+  KTN-GENERIC-USECMP:
+    enabled: true
+  KTN-GOROUTINE-DEFER:
+    enabled: true
+  KTN-GOROUTINE-LIFECYCLE:
+    enabled: true
+  KTN-GOVET-APPENDS:
+    enabled: true
+  KTN-GOVET-ASSIGN:
+    enabled: true
+  KTN-GOVET-ATOMIC:
+    enabled: true
+  KTN-GOVET-BOOLS:
+    enabled: true
+  KTN-GOVET-COPYLOCKS:
+    enabled: true
+  KTN-GOVET-DIRECTIVE:
+    enabled: true
+  KTN-GOVET-ERRORSAS:
+    enabled: true
+  KTN-GOVET-HTTPRESPONSE:
+    enabled: true
+  KTN-GOVET-IFACEASSERT:
+    enabled: true
+  KTN-GOVET-LOOPCLOSURE:
+    enabled: true
+  KTN-GOVET-NILFUNC:
+    enabled: true
+  KTN-GOVET-SHIFT:
+    enabled: true
+  KTN-GOVET-SIGCHANYZER:
+    enabled: true
+  KTN-GOVET-SLOG:
+    enabled: true
+  KTN-GOVET-SORTSLICE:
+    enabled: true
+  KTN-GOVET-STDMETHODS:
+    enabled: true
+  KTN-GOVET-STRINGINTCONV:
+    enabled: true
+  KTN-GOVET-STRUCTTAG:
+    enabled: true
+  KTN-GOVET-TESTINGGOROUTINE:
+    enabled: true
+  KTN-GOVET-TESTS:
+    enabled: true
+  KTN-GOVET-TIMEFORMAT:
+    enabled: true
+  KTN-GOVET-UNMARSHAL:
+    enabled: true
+  KTN-GOVET-UNREACHABLE:
+    enabled: true
+  KTN-GOVET-UNUSEDRESULT:
+    enabled: true
+  KTN-GOVET-WAITGROUP:
+    enabled: true
+  KTN-INTERFACE-ANYUSE:
+    enabled: true
+  KTN-INTERFACE-ERNAME:
+    enabled: true
+  KTN-INTERFACE-UNUSED:
+    enabled: true
+  KTN-ITER-COLLECT:
+    enabled: true
+  KTN-ITER-MAPKEYS:
+    enabled: true
+  KTN-ITER-PULLSTOP:
+    enabled: true
+  KTN-ITER-SIGNATURE:
+    enabled: true
+  KTN-ITER-YIELD:
+    enabled: true
+  KTN-RECEIVER-GENERIC:
+    enabled: true
+  KTN-RECEIVER-MIXPTR:
+    enabled: true
+  KTN-RECEIVER-NAME:
+    enabled: true
+  KTN-RECEIVER-PTRMAP:
+    enabled: true
+  KTN-STRUCT-ACCESSOR:
+    enabled: true
+  KTN-STRUCT-CTOR:
+    enabled: true
+  KTN-STRUCT-JSONTAG:
+    enabled: true
+  KTN-STRUCT-NOGET:
+    enabled: true
+  KTN-STRUCT-ONEFILE:
+    enabled: true
+  KTN-STRUCT-PRIVTAG:
+    enabled: true
+  KTN-STRUCT-PUBFIRST:
+    enabled: true
+  KTN-STRUCT-RECVNAME:
+    enabled: true
+  KTN-STRUCT-RECVTYPE:
+    enabled: true
+  KTN-TEST-ASSERT:
+    enabled: true
+  KTN-TEST-CASECNT:
+    enabled: true
+  KTN-TEST-CHDIR:
+    enabled: true
+  KTN-TEST-CLEANUP:
+    enabled: true
+  KTN-TEST-COVERAGE:
+    enabled: true
+  KTN-TEST-ERRCASES:
+    enabled: true
+  KTN-TEST-EXTPUB:
+    enabled: true
+  KTN-TEST-HASGO:
+    enabled: true
+  KTN-TEST-INTPRIV:
+    enabled: true
+  KTN-TEST-MKDIR:
+    enabled: true
+  KTN-TEST-NOSKIP:
+    enabled: true
+  KTN-TEST-PARALLELPOS:
+    enabled: true
+  KTN-TEST-PKGNAME:
+    enabled: true
+  KTN-TEST-SETENV:
+    enabled: true
+  KTN-TEST-SPLIT:
+    enabled: true
+  KTN-TEST-SUBPARALLEL:
+    enabled: true
+  KTN-TEST-SUFFIX:
+    enabled: true
+  KTN-TEST-TABLE:
+    enabled: true
+  KTN-TEST-TMPDIR:
+    enabled: true
+  KTN-TEST-TMPFILE:
+    enabled: true
+  KTN-VAR-ARRAY:
+    enabled: true
+  KTN-VAR-BIGSTRUCT:
+    enabled: true
+  KTN-VAR-CAMEL:
+    enabled: true
+  KTN-VAR-CMPOR:
+    enabled: true
+  KTN-VAR-COLLECTKEYS:
+    enabled: true
+  KTN-VAR-CONTAINS:
+    enabled: true
+  KTN-VAR-EXPLICIT:
+    enabled: true
+  KTN-VAR-GROUP:
+    enabled: true
+  KTN-VAR-GROW:
+    enabled: true
+  KTN-VAR-HOTLOOP:
+    enabled: true
+  KTN-VAR-INDEX:
+    enabled: true
+  KTN-VAR-LOOPVAR:
+    enabled: true
+  KTN-VAR-MAKEAPPEND:
+    enabled: true
+  KTN-VAR-MAPCAP:
+    enabled: true
+  KTN-VAR-MAPCLONE:
+    enabled: true
+  KTN-VAR-MAXLEN:
+    enabled: true
+  KTN-VAR-MINLEN:
+    enabled: true
+  KTN-VAR-NILSLICE:
+    enabled: true
+  KTN-VAR-ORDER:
+    enabled: true
+  KTN-VAR-PTRINTF:
+    enabled: true
+  KTN-VAR-RANGEINT:
+    enabled: true
+  KTN-VAR-RECVCONS:
+    enabled: true
+  KTN-VAR-SHADOW:
+    enabled: true
+  KTN-VAR-SHORTDECL:
+    enabled: true
+  KTN-VAR-SLICECAP:
+    enabled: true
+  KTN-VAR-SLICECLONE:
+    enabled: true
+  KTN-VAR-SLICEGROW:
+    enabled: true
+  KTN-VAR-STRBUILDER:
+    enabled: true
+  KTN-VAR-STRCONV:
+    enabled: true
+  KTN-VAR-SYNCPOOL:
+    enabled: true
+  KTN-VAR-TYPEASSERT:
+    enabled: true
+  KTN-VAR-USEANY:
+    enabled: true
+  KTN-VAR-USECLEAR:
+    enabled: true
+  KTN-VAR-USEMINMAX:
+    enabled: true
+  KTN-VAR-WEAKRAND:
+    enabled: true
+  KTN-VAR-WGGO:
+    enabled: true

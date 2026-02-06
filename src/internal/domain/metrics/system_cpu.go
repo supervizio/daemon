@@ -42,6 +42,7 @@ type SystemCPU struct {
 // Returns:
 //   - *SystemCPU: initialized system CPU metrics struct.
 func NewSystemCPU(params *SystemCPUParams) *SystemCPU {
+	// initialize with all system CPU fields
 	return &SystemCPU{
 		User:         params.User,
 		Nice:         params.Nice,
@@ -63,6 +64,7 @@ func NewSystemCPU(params *SystemCPUParams) *SystemCPU {
 // Returns:
 //   - uint64: total CPU time across all states in jiffies.
 func (c *SystemCPU) Total() uint64 {
+	// sum all CPU time components
 	return c.User + c.Nice + c.System + c.Idle + c.IOWait + c.IRQ + c.SoftIRQ + c.Steal + c.Guest + c.GuestNice
 }
 
@@ -71,5 +73,6 @@ func (c *SystemCPU) Total() uint64 {
 // Returns:
 //   - uint64: active CPU time excluding idle and iowait states.
 func (c *SystemCPU) Active() uint64 {
+	// subtract idle time from total
 	return c.Total() - c.Idle - c.IOWait
 }

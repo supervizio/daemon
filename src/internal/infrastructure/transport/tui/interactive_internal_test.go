@@ -285,11 +285,11 @@ func Test_Model_handleMouseMsg(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		focus      FocusPanel
-		mouseType  tea.MouseEventType
-		mouseX     int
-		mouseY     int
+		name      string
+		focus     FocusPanel
+		mouseType tea.MouseEventType
+		mouseX    int
+		mouseY    int
 	}{
 		{
 			name:      "mouse wheel down in logs panel",
@@ -341,6 +341,7 @@ func Test_Model_handleMouseMsg(t *testing.T) {
 		})
 	}
 }
+
 // Test_Model_handleTickMsg verifies tick message handling with various scenarios.
 func Test_Model_handleTickMsg(t *testing.T) {
 	t.Parallel()
@@ -393,6 +394,7 @@ func Test_Model_handleTickMsg(t *testing.T) {
 		})
 	}
 }
+
 // Test_Model_updatePanelSizes verifies panel size calculation.
 func Test_Model_updatePanelSizes(t *testing.T) {
 	t.Parallel()
@@ -472,6 +474,7 @@ func Test_Model_renderCompact(t *testing.T) {
 		})
 	}
 }
+
 // Test_Model_renderNormal verifies normal layout rendering with edge cases.
 func Test_Model_renderNormal(t *testing.T) {
 	t.Parallel()
@@ -529,6 +532,7 @@ func Test_Model_renderNormal(t *testing.T) {
 		})
 	}
 }
+
 // Test_Model_renderWide verifies wide layout rendering with edge cases.
 func Test_Model_renderWide(t *testing.T) {
 	t.Parallel()
@@ -586,6 +590,7 @@ func Test_Model_renderWide(t *testing.T) {
 		})
 	}
 }
+
 // Test_Model_renderSystemNetworkSideBySide verifies side-by-side rendering with edge cases.
 func Test_Model_renderSystemNetworkSideBySide(t *testing.T) {
 	t.Parallel()
@@ -635,6 +640,7 @@ func Test_Model_renderSystemNetworkSideBySide(t *testing.T) {
 		})
 	}
 }
+
 // Test_trimTrailingEmptyLines verifies trailing empty line removal.
 func Test_trimTrailingEmptyLines(t *testing.T) {
 	t.Parallel()
@@ -812,6 +818,7 @@ func Test_Model_renderStatusBar(t *testing.T) {
 		})
 	}
 }
+
 // Helper functions for test setup.
 
 // createTestTUI creates a minimal TUI instance for testing.
@@ -826,13 +833,16 @@ func createTestTUI(interval time.Duration) *TUI {
 
 // createTestModel creates a minimal test model without snapshot.
 func createTestModel(interval time.Duration) Model {
-	return NewModel(ModelConfig{
+	theme := ansi.DefaultTheme()
+	logsPanel := component.NewLogsPanel(80, 10)
+	servicesPanel := component.NewServicesPanel(80, 6)
+	return NewModel(&ModelConfig{
 		TUI:           createTestTUI(interval),
 		Width:         80,
 		Height:        24,
-		Theme:         ansi.DefaultTheme(),
-		LogsPanel:     component.NewLogsPanel(80, 10),
-		ServicesPanel: component.NewServicesPanel(80, 6),
+		Theme:         &theme,
+		LogsPanel:     &logsPanel,
+		ServicesPanel: &servicesPanel,
 	})
 }
 
@@ -857,13 +867,16 @@ func createTestModelWithSnapshot(interval time.Duration) Model {
 		},
 	}
 
-	return NewModel(ModelConfig{
+	theme := ansi.DefaultTheme()
+	logsPanel := component.NewLogsPanel(80, 10)
+	servicesPanel := component.NewServicesPanel(80, 6)
+	return NewModel(&ModelConfig{
 		TUI:           tui,
 		Width:         80,
 		Height:        24,
-		Theme:         ansi.DefaultTheme(),
-		LogsPanel:     component.NewLogsPanel(80, 10),
-		ServicesPanel: component.NewServicesPanel(80, 6),
+		Theme:         &theme,
+		LogsPanel:     &logsPanel,
+		ServicesPanel: &servicesPanel,
 	})
 }
 
@@ -878,13 +891,16 @@ func createTestModelWithCollectors(interval time.Duration) Model {
 		snapshot:   model.NewSnapshot(),
 	}
 
-	return NewModel(ModelConfig{
+	theme := ansi.DefaultTheme()
+	logsPanel := component.NewLogsPanel(80, 10)
+	servicesPanel := component.NewServicesPanel(80, 6)
+	return NewModel(&ModelConfig{
 		TUI:           tui,
 		Width:         80,
 		Height:        24,
-		Theme:         ansi.DefaultTheme(),
-		LogsPanel:     component.NewLogsPanel(80, 10),
-		ServicesPanel: component.NewServicesPanel(80, 6),
+		Theme:         &theme,
+		LogsPanel:     &logsPanel,
+		ServicesPanel: &servicesPanel,
 	})
 }
 
@@ -1172,13 +1188,16 @@ func Test_TUI_runTeaProgram(t *testing.T) {
 				snapshot:   model.NewSnapshot(),
 			}
 
-			m := NewModel(ModelConfig{
+			theme := ansi.DefaultTheme()
+			logsPanel := component.NewLogsPanel(80, 10)
+			servicesPanel := component.NewServicesPanel(80, 6)
+			m := NewModel(&ModelConfig{
 				TUI:           tui,
 				Width:         80,
 				Height:        24,
-				Theme:         ansi.DefaultTheme(),
-				LogsPanel:     component.NewLogsPanel(80, 10),
-				ServicesPanel: component.NewServicesPanel(80, 6),
+				Theme:         &theme,
+				LogsPanel:     &logsPanel,
+				ServicesPanel: &servicesPanel,
 			})
 
 			ctx, cancel := context.WithCancel(context.Background())

@@ -11,6 +11,7 @@ FROM alpine:3.21
 # Install minimal dependencies for testing (including OpenRC for init detection)
 RUN apk add --no-cache \
     curl \
+    jq \
     procps \
     openrc
 

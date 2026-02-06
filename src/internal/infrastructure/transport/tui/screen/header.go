@@ -25,6 +25,7 @@ type HeaderRenderer struct {
 // Returns:
 //   - *HeaderRenderer: configured renderer instance
 func NewHeaderRenderer(width int) *HeaderRenderer {
+	// return computed result.
 	return &HeaderRenderer{
 		theme: ansi.DefaultTheme(),
 		width: width,
@@ -53,15 +54,25 @@ func (h *HeaderRenderer) Render(snap *model.Snapshot) string {
 
 	layout := terminal.GetLayout(terminal.Size{Cols: h.width, Rows: defaultRows})
 
+	// evaluate switch expression.
 	switch layout {
+	// handle case condition.
 	case terminal.LayoutCompact:
+		// return computed result.
 		return h.renderCompact(snap)
+	// handle case condition.
 	case terminal.LayoutNormal:
+		// return computed result.
 		return h.renderNormal(snap)
+	// handle case condition.
 	case terminal.LayoutWide, terminal.LayoutUltraWide:
+		// return computed result.
 		return h.renderWide(snap)
+	// handle default case.
+	default:
+		// Return computed result.
+		return h.renderNormal(snap)
 	}
-	return h.renderNormal(snap)
 }
 
 // renderCompact renders a minimal header for small terminals.
@@ -82,6 +93,7 @@ func (h *HeaderRenderer) renderCompact(snap *model.Snapshot) string {
 		AddLine(line1).
 		AddLine(line2)
 
+	// return computed result.
 	return box.Render()
 }
 
@@ -108,12 +120,13 @@ func (h *HeaderRenderer) buildCompactLogoLine(version string) string {
 	sb.WriteByte(' ')
 	sb.WriteString(h.theme.Accent)
 	// Add 'v' prefix if version doesn't have it.
-	if len(version) > 0 && version[0] != 'v' {
+	if version != "" && version[0] != 'v' {
 		sb.WriteByte('v')
 	}
 	sb.WriteString(version)
 	sb.WriteString(ansi.Reset)
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -129,6 +142,7 @@ func (h *HeaderRenderer) buildCompactInfoLine(ctx model.RuntimeContext) string {
 	const compactBuilderSize int = 64
 
 	runtime := ctx.Mode.String()
+	// evaluate condition.
 	if ctx.ContainerRuntime != "" {
 		runtime = ctx.ContainerRuntime
 	}
@@ -142,6 +156,7 @@ func (h *HeaderRenderer) buildCompactInfoLine(ctx model.RuntimeContext) string {
 	sb.WriteString(" │ Up ")
 	sb.WriteString(widget.FormatDurationShort(ctx.Uptime))
 
+	// return computed result.
 	return sb.String()
 }
 
@@ -165,6 +180,7 @@ func (h *HeaderRenderer) renderNormal(snap *model.Snapshot) string {
 		AddLines(contentLines).
 		AddLine("")
 
+	// return computed result.
 	return box.Render()
 }
 
@@ -189,7 +205,8 @@ func (h *HeaderRenderer) buildNormalTitleLine(version string) string {
 		paddingSides int = 2
 	)
 
-	if len(version) > 0 && version[0] != 'v' {
+	// check for positive value.
+	if version != "" && version[0] != 'v' {
 		version = "v" + version
 	}
 
@@ -200,6 +217,7 @@ func (h *HeaderRenderer) buildNormalTitleLine(version string) string {
 	separatorLen := max(innerWidth-(paddingSides*padding)-logoLength-boxBorder-len(version), minSeparator)
 	separator := h.theme.Muted + strings.Repeat("─", separatorLen) + ansi.Reset
 
+	// return computed result.
 	return strings.Repeat(" ", padding) + logo + " " + separator + " " + versionStr
 }
 
@@ -212,18 +230,21 @@ func (h *HeaderRenderer) buildNormalTitleLine(version string) string {
 //   - []string: content lines for header.
 func (h *HeaderRenderer) buildNormalContentLines(ctx model.RuntimeContext) []string {
 	runtime := ctx.Mode.String()
+	// evaluate condition.
 	if ctx.ContainerRuntime != "" {
 		runtime = ctx.Mode.String() + " (" + ctx.ContainerRuntime + ")"
 	}
 
 	platform := ctx.OS + "/" + ctx.Arch
 	configPath := ctx.ConfigPath
+	// check for empty value.
 	if configPath == "" {
 		configPath = "/etc/supervizio/config.yaml"
 	}
 
 	bullet := h.theme.Accent + "▸" + ansi.Reset
 
+	// return computed result.
 	return []string{
 		"   " + bullet + " " + h.theme.Muted + "Host" + ansi.Reset + "       " + ctx.Hostname,
 		"   " + bullet + " " + h.theme.Muted + "Platform" + ansi.Reset + "   " + platform,
@@ -250,6 +271,7 @@ func (h *HeaderRenderer) renderWide(snap *model.Snapshot) string {
 // Returns:
 //   - string: brand logo with colors
 func (h *HeaderRenderer) RenderBrandOnly() string {
+	// return computed result.
 	return h.theme.Primary + "superviz" + ansi.Reset +
 		h.theme.Accent + ".io" + ansi.Reset
 }

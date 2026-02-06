@@ -54,7 +54,7 @@ echo ""
 echo "=== Test 3: Config directory ==="
 OS="$(uname -s)"
 case "$OS" in
-    FreeBSD|DragonFly)
+    FreeBSD)
         CONFIG_DIR="/usr/local/etc/supervizio"
         ;;
     *)
@@ -107,7 +107,7 @@ case "$OS" in
             fail "No service file found"
         fi
         ;;
-    FreeBSD|DragonFly)
+    FreeBSD)
         if [ -f /usr/local/etc/rc.d/supervizio ]; then
             pass "FreeBSD rc.d service installed"
         else
@@ -145,6 +145,23 @@ if /usr/local/bin/supervizio --version 2>/dev/null; then
 else
     # Version may not be set in test builds
     echo "[WARN] Version check returned non-zero (may be expected)"
+fi
+
+# Test 6.5: Probe metrics validation (requires jq)
+echo ""
+echo "=== Test 6.5: Probe metrics ==="
+if command -v jq >/dev/null 2>&1; then
+    if [ -x /vagrant/validate-probe.sh ]; then
+        if /vagrant/validate-probe.sh; then
+            pass "Probe metrics valid"
+        else
+            fail "Probe metrics validation failed"
+        fi
+    else
+        echo "[WARN] validate-probe.sh not found, skipping probe validation"
+    fi
+else
+    echo "[WARN] jq not installed, skipping probe validation"
 fi
 
 # Test 7: Uninstall (skip if installed via package manager)

@@ -18,7 +18,7 @@
     // "./features/languages/php": {},
     // "./features/languages/python": {},
     // "./features/languages/ruby": {},
-    // "./features/languages/rust": {},
+    "./features/languages/rust": {},
     // "./features/languages/scala": {},
     // ========== EXTERNAL ==========
     // Docker support
@@ -54,7 +54,8 @@
         "redhat.vscode-yaml",
         "tamasfe.even-better-toml",
         "bierner.markdown-mermaid",
-        "golang.go"
+        "golang.go",
+        "rust-lang.rust-analyzer"
       ]
     }
   },

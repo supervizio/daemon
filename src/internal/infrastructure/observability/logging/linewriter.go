@@ -46,6 +46,7 @@ type LineWriter struct {
 // Returns:
 //   - *LineWriter: the initialized line writer instance.
 func NewLineWriter(w io.Writer, prefix string) *LineWriter {
+	// return configured line writer with buffers
 	return &LineWriter{
 		writer:      w,
 		prefix:      prefix,
@@ -67,8 +68,10 @@ func NewLineWriter(w io.Writer, prefix string) *LineWriter {
 func (lw *LineWriter) Write(p []byte) (n int, err error) {
 	lw.buf = append(lw.buf, p...)
 
+	// process all complete lines in buffer
 	for {
 		idx := bytes.IndexByte(lw.buf, newlineChar)
+		// no more complete lines in buffer
 		if idx == indexNotFound {
 			break
 		}
@@ -77,20 +80,26 @@ func (lw *LineWriter) Write(p []byte) (n int, err error) {
 		lw.buf = lw.buf[idx+1:]
 
 		// Batch prefix + line into single write to reduce syscalls.
+		// write prefixed line
 		if len(lw.prefixBytes) > 0 {
 			lw.writeBuf = lw.writeBuf[:0]
 			lw.writeBuf = append(lw.writeBuf, lw.prefixBytes...)
 			lw.writeBuf = append(lw.writeBuf, line...)
+			// write batched prefix and line
 			if _, err := lw.writer.Write(lw.writeBuf); err != nil {
+				// propagate write error to caller
 				return zeroBytes, err
 			}
 		} else {
+			// write line without prefix
 			if _, err := lw.writer.Write(line); err != nil {
+				// propagate write error to caller
 				return zeroBytes, err
 			}
 		}
 	}
 
+	// return bytes consumed from input
 	return len(p), nil
 }
 
@@ -101,19 +110,24 @@ func (lw *LineWriter) Write(p []byte) (n int, err error) {
 // Returns:
 //   - error: an error if writing to the underlying writer fails.
 func (lw *LineWriter) Flush() error {
+	// write remaining buffer with newline
 	if len(lw.buf) > zeroBytes {
 		lw.writeBuf = lw.writeBuf[:0]
+		// add prefix if configured
 		if len(lw.prefixBytes) > 0 {
 			lw.writeBuf = append(lw.writeBuf, lw.prefixBytes...)
 		}
 		lw.writeBuf = append(lw.writeBuf, lw.buf...)
 		lw.writeBuf = append(lw.writeBuf, newlineChar)
 
+		// write buffered content with newline
 		if _, err := lw.writer.Write(lw.writeBuf); err != nil {
+			// propagate write error to caller
 			return err
 		}
 		lw.buf = nil
 	}
 
+	// return success after flush
 	return nil
 }

@@ -1,0 +1,183 @@
+//go:build unix
+
+package discovery
+
+import (
+	"testing"
+
+	"github.com/kodflow/daemon/internal/domain/target"
+	"github.com/stretchr/testify/assert"
+)
+
+// TestDockerDiscoverer_matchesLabels verifies label filtering logic.
+func TestDockerDiscoverer_matchesLabels(t *testing.T) {
+	tests := []struct {
+		name        string
+		filter      map[string]string
+		container   dockerContainer
+		shouldMatch bool
+	}{
+		{
+			name:   "no filter accepts all",
+			filter: nil,
+			container: dockerContainer{
+				Labels: map[string]string{"app": "web"},
+			},
+			shouldMatch: true,
+		},
+		{
+			name:   "empty filter accepts all",
+			filter: map[string]string{},
+			container: dockerContainer{
+				Labels: map[string]string{"app": "web"},
+			},
+			shouldMatch: true,
+		},
+		{
+			name:   "matching label",
+			filter: map[string]string{"app": "web"},
+			container: dockerContainer{
+				Labels: map[string]string{"app": "web"},
+			},
+			shouldMatch: true,
+		},
+		{
+			name:   "non-matching value",
+			filter: map[string]string{"app": "web"},
+			container: dockerContainer{
+				Labels: map[string]string{"app": "db"},
+			},
+			shouldMatch: false,
+		},
+		{
+			name:   "missing label",
+			filter: map[string]string{"app": "web"},
+			container: dockerContainer{
+				Labels: map[string]string{},
+			},
+			shouldMatch: false,
+		},
+		{
+			name:   "multiple labels all match",
+			filter: map[string]string{"app": "web", "env": "prod"},
+			container: dockerContainer{
+				Labels: map[string]string{"app": "web", "env": "prod"},
+			},
+			shouldMatch: true,
+		},
+		{
+			name:   "multiple labels partial match",
+			filter: map[string]string{"app": "web", "env": "prod"},
+			container: dockerContainer{
+				Labels: map[string]string{"app": "web", "env": "dev"},
+			},
+			shouldMatch: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &DockerDiscoverer{
+				labelFilter: tt.filter,
+			}
+
+			result := d.matchesLabels(tt.container)
+
+			assert.Equal(t, tt.shouldMatch, result)
+		})
+	}
+}
+
+// TestDockerDiscoverer_containerToTarget verifies container conversion.
+func TestDockerDiscoverer_containerToTarget(t *testing.T) {
+	tests := []struct {
+		name      string
+		container dockerContainer
+		wantID    string
+		wantName  string
+		wantType  target.Type
+	}{
+		{
+			name: "container with name",
+			container: dockerContainer{
+				ID:     "abcdef123456789",
+				Names:  []string{"/my-container"},
+				State:  "running",
+				Status: "Up 2 hours",
+				Labels: map[string]string{"app": "web"},
+				Ports:  []dockerPort{{Type: "tcp", PublicPort: 8080, PrivatePort: 80}},
+			},
+			wantID:   "docker:abcdef123456",
+			wantName: "my-container",
+			wantType: target.TypeDocker,
+		},
+		{
+			name: "container without name uses ID",
+			container: dockerContainer{
+				ID:     "abcdef123456789",
+				Names:  []string{},
+				State:  "running",
+				Status: "Up 2 hours",
+			},
+			wantID:   "docker:abcdef123456",
+			wantName: "abcdef123456",
+			wantType: target.TypeDocker,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &DockerDiscoverer{}
+
+			target := d.containerToTarget(tt.container)
+
+			assert.Equal(t, tt.wantID, target.ID)
+			assert.Equal(t, tt.wantName, target.Name)
+			assert.Equal(t, tt.wantType, target.Type)
+		})
+	}
+}
+
+// TestDockerDiscoverer_configureProbe verifies probe configuration.
+func TestDockerDiscoverer_configureProbe(t *testing.T) {
+	tests := []struct {
+		name      string
+		container dockerContainer
+		wantProbe bool
+	}{
+		{
+			name: "uses public port",
+			container: dockerContainer{
+				Ports: []dockerPort{{Type: "tcp", PublicPort: 8080, PrivatePort: 80}},
+			},
+			wantProbe: true,
+		},
+		{
+			name: "falls back to private port",
+			container: dockerContainer{
+				Ports: []dockerPort{{Type: "tcp", PrivatePort: 80}},
+			},
+			wantProbe: true,
+		},
+		{
+			name:      "no ports",
+			container: dockerContainer{},
+			wantProbe: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tgt := target.ExternalTarget{}
+
+			configureContainerProbe(&tgt, tt.container, dockerProbeTypeTCP)
+
+			// check if probe was configured based on ProbeType
+			if tt.wantProbe {
+				assert.NotEmpty(t, tgt.ProbeType)
+			} else {
+				assert.Empty(t, tgt.ProbeType)
+			}
+		})
+	}
+}

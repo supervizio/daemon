@@ -22,7 +22,6 @@
 #   - freebsd: FreeBSD 14 (pkg)
 #   - openbsd: OpenBSD 7 (pkg)
 #   - netbsd: NetBSD 9 (pkgin)
-#   - dragonfly: DragonFlyBSD 6 (pkg)
 #
 # Note: Vagrant boxes may lag behind latest versions. Using latest available.
 #
@@ -45,16 +44,24 @@ def ci_mode?
   ENV['CI'] == 'true' || ENV['GITHUB_ACTIONS'] == 'true'
 end
 
-Vagrant.configure("2") do |config|
-  # ===========================================================================
-  # Shared folders (rsync works with all providers)
-  # Note: rsync must be installed on guest for these to work
-  # ===========================================================================
-  config.vm.synced_folder "../setup", "/setup", type: "rsync"
-  # bin folder is optional - only synced for script-based tests, not package tests
-  config.vm.synced_folder "../bin", "/bin-local", type: "rsync" if File.exist?("../bin")
-  config.vm.synced_folder ".", "/vagrant", type: "rsync"
+# Helper to configure rsync synced folders for Linux VMs
+# Linux boxes have rsync pre-installed or install it early enough
+def configure_linux_synced_folders(v)
+  v.vm.synced_folder "../setup", "/setup", type: "rsync"
+  # Always configure bin folder - rsync will handle missing source gracefully
+  # CI creates bin/ before vagrant up, so this is safe
+  v.vm.synced_folder "../bin", "/bin-local", type: "rsync", create: true
+  v.vm.synced_folder "../src", "/vagrant/src", type: "rsync"
+  v.vm.synced_folder ".", "/vagrant", type: "rsync"
+end
 
+# Helper to disable synced folders for BSD VMs
+# BSD boxes don't have rsync pre-installed; CI uses tar-over-SSH instead
+def configure_bsd_synced_folders(v)
+  v.vm.synced_folder ".", "/vagrant", disabled: true
+end
+
+Vagrant.configure("2") do |config|
   # ===========================================================================
   # QEMU Provider (macOS)
   # ===========================================================================
@@ -89,19 +96,74 @@ Vagrant.configure("2") do |config|
   end
 
   # ===========================================================================
+  # Global settings for all VMs
+  # ===========================================================================
+  # Increase boot timeout for slow QEMU TCG emulation (default 300s)
+  config.vm.boot_timeout = 900
+
+  # ===========================================================================
   # Libvirt Provider (Linux CI - AMD64 and ARM64)
   # ===========================================================================
   config.vm.provider "libvirt" do |lv|
     lv.memory = 2048
     lv.cpus = 2
-    lv.driver = "kvm"
+
+    # Detect ARM64 architecture
+    is_arm = RUBY_PLATFORM.include?("aarch64") || `uname -m`.strip == "aarch64"
+
+    # Check if KVM is available (CI runners may not have it)
+    kvm_available = File.exist?('/dev/kvm') && File.readable?('/dev/kvm')
+
+    if kvm_available
+      lv.driver = "kvm"
+      lv.cpu_mode = "host-passthrough" if is_arm
+    else
+      # Use QEMU TCG (software emulation) when KVM not available
+      lv.driver = "qemu"
+      lv.cpu_mode = "custom"
+      lv.cpu_model = is_arm ? "cortex-a72" : "qemu64"
+    end
 
     # ARM64-specific configuration
-    is_arm = RUBY_PLATFORM.include?("aarch64") || `uname -m`.strip == "aarch64"
+    # AAVMF is the ARM equivalent of OVMF (x86 UEFI)
     if is_arm
-      lv.loader = "/usr/share/AAVMF/AAVMF_CODE.fd"
       lv.machine_type = "virt"
-      lv.cpu_mode = "host-passthrough"
+
+      # ARM64 doesn't support PS/2 - use virtio input devices
+      # Clear default inputs and add virtio ones
+      lv.inputs = []
+      lv.input :type => "tablet", :bus => "virtio"
+
+      # Video type for ARM64 (virtio instead of cirrus)
+      lv.video_type = "virtio"
+
+      # UEFI firmware paths (varies by distro/package)
+      firmware_paths = [
+        "/usr/share/AAVMF/AAVMF_CODE.fd",           # Ubuntu qemu-efi-aarch64
+        "/usr/share/qemu-efi-aarch64/QEMU_EFI.fd",  # Alternative Ubuntu path
+        "/usr/share/edk2/aarch64/QEMU_EFI.fd"       # Fedora/RHEL edk2
+      ]
+
+      # Find and set loader (UEFI firmware)
+      loader_found = firmware_paths.find { |p| File.exist?(p) }
+      if loader_found
+        lv.loader = loader_found
+      else
+        # Fallback: set primary path anyway (clearer error if missing)
+        lv.loader = "/usr/share/AAVMF/AAVMF_CODE.fd"
+        STDERR.puts "WARNING: No UEFI firmware found at: #{firmware_paths.join(', ')}"
+      end
+
+      # NVRAM template paths for UEFI variable storage
+      nvram_paths = [
+        "/usr/share/AAVMF/AAVMF_VARS.fd",                    # Ubuntu qemu-efi-aarch64
+        "/usr/share/qemu-efi-aarch64/vars-template-pflash.raw",
+        "/usr/share/edk2/aarch64/vars-template-pflash.raw"   # Fedora/RHEL
+      ]
+
+      # Find and set NVRAM template
+      nvram_found = nvram_paths.find { |p| File.exist?(p) }
+      lv.nvram = nvram_found if nvram_found
     end
   end
 
@@ -113,17 +175,19 @@ Vagrant.configure("2") do |config|
   config.vm.define "debian13", primary: true do |v|
     v.vm.box = "generic/debian12"  # Use debian12 box until debian13 is available
     v.vm.hostname = "e2e-debian13"
-    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl rsync"
+    configure_linux_synced_folders(v)
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl jq rsync"
   end
 
-  # Fedora 38 - RPM/dnf + systemd (replaces Rocky which has SSH issues)
+  # Fedora 39 - RPM/dnf + systemd (39 has ARM64 libvirt boxes, 38 does not)
   config.vm.define "fedora", autostart: false do |v|
-    v.vm.box = "generic/fedora38"
+    v.vm.box = "generic/fedora39"
     v.vm.hostname = "e2e-fedora"
+    configure_linux_synced_folders(v)
     v.vm.provision "shell", inline: <<-SHELL
       # Update package cache and install rsync
       dnf makecache --refresh || true
-      dnf install -y curl rsync
+      dnf install -y curl jq rsync
       # Verify rsync is installed
       which rsync && rsync --version | head -1
     SHELL
@@ -137,7 +201,8 @@ Vagrant.configure("2") do |config|
   config.vm.define "alpine", autostart: false do |v|
     v.vm.box = "generic/alpine319"
     v.vm.hostname = "e2e-alpine"
-    v.vm.provision "shell", inline: "apk update && apk add curl rsync"
+    configure_linux_synced_folders(v)
+    v.vm.provision "shell", inline: "apk update && apk add curl jq rsync"
   end
 
   # ===========================================================================
@@ -148,7 +213,8 @@ Vagrant.configure("2") do |config|
   config.vm.define "devuan", autostart: false do |v|
     v.vm.box = "generic/devuan4"  # Use devuan4 (chimaera) until devuan5 box available
     v.vm.hostname = "e2e-devuan"
-    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl rsync"
+    configure_linux_synced_folders(v)
+    v.vm.provision "shell", inline: "apt-get update -qq && apt-get install -y -qq curl jq rsync"
   end
 
   # ===========================================================================
@@ -160,6 +226,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "alpine-runit", autostart: false do |v|
     v.vm.box = "generic/alpine319"
     v.vm.hostname = "e2e-alpine-runit"
+    configure_linux_synced_folders(v)
     v.vm.provision "shell", inline: <<-SHELL
       # Enable community repo for runit
       sed -i 's/#.*community/community/' /etc/apk/repositories
@@ -167,7 +234,7 @@ Vagrant.configure("2") do |config|
 
       # Remove OpenRC and install runit
       apk del openrc --force-broken-world 2>/dev/null || true
-      apk add curl rsync runit
+      apk add curl jq rsync runit
 
       # Create runit service directories
       mkdir -p /etc/sv /var/service
@@ -186,39 +253,49 @@ Vagrant.configure("2") do |config|
   # ===========================================================================
   # BSD: rc.d (FreeBSD style)
   # ===========================================================================
+  # NOTE: BSD VMs use disabled synced_folders because:
+  # 1. BSD boxes don't have rsync pre-installed
+  # 2. rsync is installed during provisioning (after synced_folders would run)
+  # 3. CI workflow syncs files via tar-over-SSH after provisioning completes
+  # ===========================================================================
 
   # FreeBSD 14
   config.vm.define "freebsd", autostart: false do |v|
     v.vm.box = "generic/freebsd14"
     v.vm.hostname = "e2e-freebsd"
-    v.vm.provision "shell", inline: "pkg install -y curl rsync"
+    configure_bsd_synced_folders(v)
+    v.vm.provision "shell", inline: <<-SHELL
+      pkg install -y curl jq rsync rust go
+      # Verify installations
+      rustc --version && cargo --version && go version
+    SHELL
   end
 
   # OpenBSD 7.x
   config.vm.define "openbsd", autostart: false do |v|
     v.vm.box = "generic/openbsd7"
     v.vm.hostname = "e2e-openbsd"
-    v.vm.provision "shell", inline: "pkg_add curl rsync--"
+    configure_bsd_synced_folders(v)
+    v.vm.provision "shell", inline: <<-SHELL
+      # Install packages (rsync-- means rsync with no flavor suffix)
+      pkg_add curl jq rsync rust go
+      # Verify installations
+      rustc --version && cargo --version && go version
+    SHELL
   end
 
   # NetBSD 9 (netbsd10 box not yet available on Vagrant Cloud)
   config.vm.define "netbsd", autostart: false do |v|
     v.vm.box = "generic/netbsd9"
     v.vm.hostname = "e2e-netbsd"
+    configure_bsd_synced_folders(v)
     v.vm.provision "shell", inline: <<-SHELL
       # Update pkgin database and install packages
       pkgin -y update || true
-      pkgin -y install curl rsync
-      # Verify rsync is installed
-      which rsync && rsync --version | head -1
+      pkgin -y install curl jq rsync rust go
+      # Verify installations
+      rustc --version && cargo --version && go version
     SHELL
-  end
-
-  # DragonFlyBSD 6.4
-  config.vm.define "dragonfly", autostart: false do |v|
-    v.vm.box = "generic/dragonflybsd6"  # DragonFlyBSD 6.x
-    v.vm.hostname = "e2e-dragonfly"
-    v.vm.provision "shell", inline: "pkg install -y curl rsync"
   end
 
 end

@@ -147,17 +147,17 @@ func (c *ContextCollector) Gather(snap *model.Snapshot) error {
 // Returns:
 //   - model.RuntimeMode: detected runtime mode (container, VM, or host)
 //   - string: container runtime name (docker, kubernetes, etc.) or empty
-func detectRuntimeMode() (model.RuntimeMode, string) {
+func detectRuntimeMode() (mode model.RuntimeMode, runtimeName string) {
 	// Check for container indicators.
-	if mode, runtime, found := detectContainerByFiles(); found {
+	if mode, rtInfo, found := detectContainerByFiles(); found {
 		// Container detected via files.
-		return mode, runtime
+		return mode, rtInfo
 	}
 
 	// Check cgroup-based container detection.
-	if mode, runtime, found := detectContainerByCgroup(); found {
+	if mode, rtInfo, found := detectContainerByCgroup(); found {
 		// Container detected via cgroup.
-		return mode, runtime
+		return mode, rtInfo
 	}
 
 	// Check for VM indicators.
@@ -249,12 +249,17 @@ func detectContainerByCgroup() (model.RuntimeMode, string, bool) {
 func isVM() bool {
 	// Check DMI/SMBIOS paths for VM vendors.
 	if checkDMIForVM("/sys/class/dmi/id/product_name") {
+		// return true for success.
 		return true
 	}
+	// evaluate condition.
 	if checkDMIForVM("/sys/class/dmi/id/sys_vendor") {
+		// return true for success.
 		return true
 	}
+	// evaluate condition.
 	if checkDMIForVM("/sys/class/dmi/id/board_vendor") {
+		// return true for success.
 		return true
 	}
 
@@ -281,7 +286,9 @@ func isVM() bool {
 //   - bool: true if VM vendor detected
 func checkDMIForVM(path string) bool {
 	content, err := os.ReadFile(path)
+	// handle non-nil condition.
 	if err != nil {
+		// return false for failure.
 		return false
 	}
 	contentStr := string(content)
@@ -298,11 +305,15 @@ func checkDMIForVM(path string) bool {
 // Returns:
 //   - bool: true if any VM vendor pattern found
 func containsAnyVMVendor(content string) bool {
+	// iterate over collection.
 	for _, vendor := range vmVendorPatterns {
+		// evaluate condition.
 		if strings.Contains(content, vendor) {
+			// return true for success.
 			return true
 		}
 	}
+	// return false for failure.
 	return false
 }
 

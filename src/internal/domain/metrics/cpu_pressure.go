@@ -30,6 +30,7 @@ type CPUPressure struct {
 // Returns:
 //   - CPUPressure: the created CPUPressure instance
 func NewCPUPressure(someAvg10, someAvg60, someAvg300 float64, someTotal uint64, timestamp time.Time) CPUPressure {
+	// initialize with all pressure metrics
 	return CPUPressure{
 		SomeAvg10:  someAvg10,
 		SomeAvg60:  someAvg60,
@@ -44,5 +45,6 @@ func NewCPUPressure(someAvg10, someAvg60, someAvg300 float64, someTotal uint64, 
 // Returns:
 //   - bool: true if CPU pressure exceeds the threshold
 func (p CPUPressure) IsUnderPressure() bool {
+	// check if 10s average exceeds threshold
 	return p.SomeAvg10 > PressureThreshold
 }

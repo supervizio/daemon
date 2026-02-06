@@ -31,7 +31,6 @@ setup/
 | FreeBSD | rc.d | `/usr/local/etc/supervizio` |
 | OpenBSD | rc.d | `/etc/supervizio` |
 | NetBSD | rc.d | `/etc/supervizio` |
-| DragonFlyBSD | rc.d | `/usr/local/etc/supervizio` |
 | macOS | launchd | `/etc/supervizio` |
 
 ## Usage
@@ -55,7 +54,7 @@ sudo ./setup/uninstall.sh
 ## Detection Logic
 
 ### OS Detection
-Uses `uname -s` to detect: Linux, Darwin, FreeBSD, OpenBSD, NetBSD, DragonFly
+Uses `uname -s` to detect: Linux, Darwin, FreeBSD, OpenBSD, NetBSD
 
 ### Architecture Detection
 Uses `uname -m` to detect: amd64, arm64, arm, 386, riscv64

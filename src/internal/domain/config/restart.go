@@ -46,6 +46,7 @@ const (
 // Returns:
 //   - string: the policy value as a string.
 func (p RestartPolicy) String() string {
+	// convert policy to string
 	return string(p)
 }
 
@@ -58,19 +59,32 @@ func (p RestartPolicy) String() string {
 // Returns:
 //   - bool: true if the service should be restarted, false otherwise.
 func (r *RestartConfig) ShouldRestartOnExit(exitCode, attempts int) bool {
+	// determine restart based on policy
 	switch r.Policy {
+	// always restart if under retry limit
 	case RestartAlways:
+		// restart if under retry limit
 		return attempts < r.MaxRetries
+	// restart only on failure
 	case RestartOnFailure:
+		// skip restart on clean exit
 		if exitCode == 0 {
+			// no restart on success
 			return false
 		}
+		// restart on failure if under limit
 		return attempts < r.MaxRetries
+	// never restart the service
 	case RestartNever:
+		// never restart
 		return false
+	// restart unless explicitly stopped
 	case RestartUnless:
+		// restart unless explicitly stopped
 		return true
+	// unknown policy
 	default:
+		// unknown policy defaults to no restart
 		return false
 	}
 }
@@ -80,6 +94,7 @@ func (r *RestartConfig) ShouldRestartOnExit(exitCode, attempts int) bool {
 // Returns:
 //   - RestartConfig: a configuration with on-failure policy and standard retry settings.
 func DefaultRestartConfig() RestartConfig {
+	// create config with on-failure policy
 	return RestartConfig{
 		Policy:     RestartOnFailure,
 		MaxRetries: defaultRestartMaxRetries,
@@ -95,6 +110,7 @@ func DefaultRestartConfig() RestartConfig {
 // Returns:
 //   - RestartConfig: a restart configuration with the given policy and default settings.
 func NewRestartConfig(policy RestartPolicy) RestartConfig {
+	// create config with specified policy
 	return RestartConfig{
 		Policy:     policy,
 		MaxRetries: defaultRestartMaxRetries,

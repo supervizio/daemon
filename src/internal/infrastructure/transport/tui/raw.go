@@ -175,7 +175,7 @@ func (r *RawRenderer) renderHeader(snap *model.Snapshot) string {
 //   - string: formatted title line.
 func (r *RawRenderer) buildTitleLine(version string) string {
 	// Ensure version starts with 'v' prefix.
-	if len(version) > 0 && version[0] != 'v' {
+	if version != "" && version[0] != 'v' {
 		version = "v" + version
 	}
 

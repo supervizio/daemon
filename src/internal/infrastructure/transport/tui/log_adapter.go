@@ -41,6 +41,7 @@ type LogAdapter struct {
 // Returns:
 //   - *LogAdapter: the created adapter.
 func NewLogAdapter() *LogAdapter {
+	// return computed result.
 	return &LogAdapter{
 		buffer: NewLogBuffer(defaultLogBufferSize),
 	}
@@ -54,6 +55,7 @@ func NewLogAdapter() *LogAdapter {
 // Returns:
 //   - *LogAdapter: the created adapter.
 func NewLogAdapterWithBuffer(buffer *LogBuffer) *LogAdapter {
+	// return computed result.
 	return &LogAdapter{
 		buffer: buffer,
 	}
@@ -64,9 +66,12 @@ func NewLogAdapterWithBuffer(buffer *LogBuffer) *LogAdapter {
 // Returns:
 //   - model.LogSummary: the log summary.
 func (a *LogAdapter) Summarize() model.LogSummary {
+	// handle nil condition.
 	if a.buffer == nil {
+		// return computed result.
 		return model.LogSummary{}
 	}
+	// return computed result.
 	return a.buffer.Summary()
 }
 
@@ -75,6 +80,7 @@ func (a *LogAdapter) Summarize() model.LogSummary {
 // Params:
 //   - entry: the log entry to add.
 func (a *LogAdapter) AddLog(entry model.LogEntry) {
+	// handle non-nil condition.
 	if a.buffer != nil {
 		a.buffer.Add(entry)
 	}
@@ -85,6 +91,7 @@ func (a *LogAdapter) AddLog(entry model.LogEntry) {
 // Params:
 //   - event: the domain log event.
 func (a *LogAdapter) AddDomainEvent(event domainlogging.LogEvent) {
+	// handle non-nil condition.
 	if a.buffer != nil {
 		a.buffer.AddFromDomainEvent(event)
 	}
@@ -95,6 +102,7 @@ func (a *LogAdapter) AddDomainEvent(event domainlogging.LogEvent) {
 // Returns:
 //   - *LogBuffer: the log buffer.
 func (a *LogAdapter) Buffer() *LogBuffer {
+	// return computed result.
 	return a.buffer
 }
 
@@ -108,25 +116,33 @@ func (a *LogAdapter) Buffer() *LogBuffer {
 // Returns:
 //   - error: nil on success, error on failure (file not found is not an error).
 func (a *LogAdapter) LoadLogHistory(path string, maxLines int) error {
+	// handle nil condition.
 	if a.buffer == nil || path == "" {
+		// return nil to indicate no error.
 		return nil
 	}
 
+	// evaluate condition.
 	if maxLines <= 0 {
 		maxLines = defaultMaxLines
 	}
 
 	lines, err := readLastLines(path, maxLines)
+	// handle non-nil condition.
 	if err != nil {
+		// return computed result.
 		return err
 	}
 
+	// iterate over collection.
 	for _, line := range lines {
+		// evaluate condition.
 		if entry, ok := parseLogLine(line); ok {
 			a.buffer.Add(entry)
 		}
 	}
 
+	// return nil to indicate no error.
 	return nil
 }
 
@@ -146,12 +162,16 @@ var logLineRegex *regexp.Regexp = regexp.MustCompile(
 //   - bool: true if parsing succeeded, false otherwise.
 func parseLogLine(line string) (model.LogEntry, bool) {
 	matches := logLineRegex.FindStringSubmatch(line)
+	// evaluate condition.
 	if len(matches) < minRegexGroups {
+		// return false for failure.
 		return model.LogEntry{}, false
 	}
 
 	ts, ok := parseLogTimestamp(matches[1])
+	// evaluate condition.
 	if !ok {
+		// return false for failure.
 		return model.LogEntry{}, false
 	}
 
@@ -168,6 +188,7 @@ func parseLogLine(line string) (model.LogEntry, bool) {
 
 	parseLogRemainder(&entry, remainder)
 
+	// return true for success.
 	return entry, true
 }
 
@@ -181,15 +202,20 @@ func parseLogLine(line string) (model.LogEntry, bool) {
 func isServiceName(s string) bool {
 	// Service names are typically alphanumeric with dashes/underscores.
 	// They don't start with uppercase words like "Service", "Daemon", etc.
-	if len(s) == 0 {
+	if s == "" {
+		// return false for failure.
 		return false
 	}
 	commonStarters := []string{"Service", "Daemon", "Supervisor", "Failed", "Started", "Stopped"}
+	// iterate over collection.
 	for _, starter := range commonStarters {
+		// evaluate condition.
 		if s == starter {
+			// return false for failure.
 			return false
 		}
 	}
+	// return true for success.
 	return true
 }
 
@@ -204,12 +230,16 @@ func isServiceName(s string) bool {
 //   - bool: true if parsing succeeded, false otherwise.
 func parseLogTimestamp(s string) (time.Time, bool) {
 	ts, err := time.Parse(time.RFC3339, s)
+	// handle non-nil condition.
 	if err != nil {
 		ts, err = time.Parse("2006-01-02T15:04:05Z", s)
+		// handle non-nil condition.
 		if err != nil {
+			// return false for failure.
 			return time.Time{}, false
 		}
 	}
+	// return true for success.
 	return ts, true
 }
 
@@ -221,7 +251,9 @@ func parseLogTimestamp(s string) (time.Time, bool) {
 //   - remainder: the remainder of the log line after timestamp and level.
 func parseLogRemainder(entry *model.LogEntry, remainder string) {
 	parts := strings.Fields(remainder)
+	// check for empty value.
 	if len(parts) == 0 {
+		// return early when no parts to process.
 		return
 	}
 
@@ -252,10 +284,13 @@ func extractServiceName(entry *model.LogEntry, parts []string) int {
 	hasMultipleParts := len(parts) > 1
 	isNotMetadata := !strings.Contains(parts[0], "=")
 	isService := isServiceName(parts[0])
+	// evaluate condition.
 	if hasMultipleParts && isNotMetadata && isService {
 		entry.Service = parts[0]
+		// return computed result.
 		return 1
 	}
+	// return computed result.
 	return 0
 }
 
@@ -268,11 +303,15 @@ func extractServiceName(entry *model.LogEntry, parts []string) int {
 // Returns:
 //   - int: index of first metadata pair, or len(parts) if none found.
 func findMetadataStart(parts []string, startIdx int) int {
+	// execute loop.
 	for i := startIdx; i < len(parts); i++ {
+		// evaluate condition.
 		if strings.Contains(parts[i], "=") {
+			// return computed result.
 			return i
 		}
 	}
+	// return computed result.
 	return len(parts)
 }
 
@@ -283,8 +322,10 @@ func findMetadataStart(parts []string, startIdx int) int {
 //   - parts: parsed parts of the log line.
 //   - startIdx: index where metadata begins.
 func extractMetadata(entry *model.LogEntry, parts []string, startIdx int) {
+	// execute loop.
 	for i := startIdx; i < len(parts); i++ {
 		idx := strings.Index(parts[i], "=")
+		// evaluate condition.
 		if idx <= 0 {
 			continue
 		}
@@ -306,26 +347,36 @@ func extractMetadata(entry *model.LogEntry, parts []string, startIdx int) {
 //   - error: nil on success, error on failure.
 func readLastLines(path string, maxLines int) ([]string, error) {
 	file, err := os.Open(path)
+	// handle non-nil condition.
 	if err != nil {
+		// evaluate condition.
 		if os.IsNotExist(err) {
+			// return nil to indicate no error.
 			return nil, nil
 		}
+		// return nil to indicate no error.
 		return nil, err
 	}
+	// schedule deferred execution.
 	defer func() { _ = file.Close() }()
 
 	lines := make([]string, 0, maxLines)
 	scanner := bufio.NewScanner(file)
+	// execute loop.
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
+		// evaluate condition.
 		if len(lines) > maxLines {
 			copy(lines, lines[1:])
 			lines = lines[:maxLines]
 		}
 	}
+	// handle non-nil condition.
 	if err := scanner.Err(); err != nil {
+		// return nil to indicate no error.
 		return nil, err
 	}
 
+	// return nil to indicate no error.
 	return lines, nil
 }

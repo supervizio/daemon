@@ -187,6 +187,9 @@ func Test_detectRuntimeMode(t *testing.T) {
 			case model.ModeHost:
 				// Host mode has no runtime.
 				assert.Empty(t, runtime)
+			default:
+				// Unknown mode - fail test.
+				t.Fatalf("unexpected mode: %v", mode)
 			}
 		})
 	}

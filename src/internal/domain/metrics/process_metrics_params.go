@@ -22,6 +22,12 @@ type ProcessMetricsParams struct {
 	CPU ProcessCPU
 	// Memory contains memory usage metrics for the process.
 	Memory ProcessMemory
+	// NumFDs is the number of open file descriptors for the process.
+	NumFDs uint32
+	// ReadBytesPerSec is the disk read rate in bytes per second.
+	ReadBytesPerSec uint64
+	// WriteBytesPerSec is the disk write rate in bytes per second.
+	WriteBytesPerSec uint64
 	// StartTime is when the current process instance started.
 	StartTime time.Time
 	// Uptime is the duration since StartTime.

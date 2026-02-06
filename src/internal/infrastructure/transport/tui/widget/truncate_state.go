@@ -24,26 +24,34 @@ type truncateState struct {
 // Returns:
 //   - bool: true if limit reached
 func (ts *truncateState) processRune(result *strings.Builder, r rune) bool {
+	// evaluate condition.
 	if r == escapeStart {
 		ts.inEscape = true
 		result.WriteRune(r)
+		// return false for failure.
 		return false
 	}
 
+	// evaluate condition.
 	if ts.inEscape {
 		result.WriteRune(r)
+		// evaluate condition.
 		if isEscapeTerminator(r) {
 			ts.inEscape = false
 		}
+		// return false for failure.
 		return false
 	}
 
+	// evaluate condition.
 	if ts.visible >= ts.maxLen {
+		// return true for success.
 		return true
 	}
 
 	result.WriteRune(r)
 	ts.visible++
+	// return false for failure.
 	return false
 }
 
@@ -56,20 +64,25 @@ func (ts *truncateState) processRune(result *strings.Builder, r rune) bool {
 // Returns:
 //   - string: truncated string with ANSI reset appended.
 func truncateVisible(s string, maxLen int) string {
+	// evaluate condition.
 	if maxLen <= 0 {
+		// return computed result.
 		return ""
 	}
 
 	var result strings.Builder
 	state := truncateState{inEscape: false, visible: 0, maxLen: maxLen}
 
+	// iterate over collection.
 	for _, r := range s {
+		// evaluate condition.
 		if state.processRune(&result, r) {
 			break
 		}
 	}
 
 	result.WriteString(ansi.Reset)
+	// return computed result.
 	return result.String()
 }
 
@@ -94,5 +107,6 @@ func TruncateVisible(s string, maxLen int) string {
 // Returns:
 //   - bool: true if rune is a letter (escape terminator)
 func isEscapeTerminator(r rune) bool {
+	// return computed result.
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
 }

@@ -1,45 +1,785 @@
-// Package yaml_test provides black-box tests for the yaml package.
-// It tests the public API of YAML configuration types and their domain conversions.
 package yaml_test
 
 import (
-	"github.com/kodflow/daemon/internal/infrastructure/persistence/config/yaml"
 	"testing"
 	"time"
 
+	"github.com/kodflow/daemon/internal/infrastructure/persistence/config/yaml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yamlv3 "gopkg.in/yaml.v3"
-
 )
 
-// MarshalTexter defines the interface for types that can marshal to text.
-type MarshalTexter interface {
-	MarshalText() ([]byte, error)
-}
-
-// marshalDurationText is a helper that converts MarshalText result to string.
+// TestMonitoringConfigDTO_ToDomain tests yaml.MonitoringConfigDTO to domain conversion.
+// It verifies that monitoring configuration fields are correctly mapped.
 //
 // Params:
-//   - d: the text marshaler to marshal
-//
-// Returns:
-//   - string: the marshaled text as string
-//   - error: any marshaling error
-func marshalDurationText(d MarshalTexter) (string, error) {
-	bytes, err := d.MarshalText()
+//   - t: testing context
+func TestMonitoringConfigDTO_ToDomain(t *testing.T) {
+	t.Parallel()
 
-	// Return empty string on error
-	if err != nil {
-		return "", err
+	tests := []struct {
+		name                     string
+		dto                      *yaml.MonitoringConfigDTO
+		expectedInterval         time.Duration
+		expectedTimeout          time.Duration
+		expectedSuccessThreshold int
+		expectedFailureThreshold int
+		expectedTargetCount      int
+	}{
+		{
+			name: "full monitoring config converts correctly",
+			dto: &yaml.MonitoringConfigDTO{
+				Defaults: yaml.MonitoringDefaultsDTO{
+					Interval:         yaml.Duration(30 * time.Second),
+					Timeout:          yaml.Duration(5 * time.Second),
+					SuccessThreshold: 1,
+					FailureThreshold: 3,
+				},
+				Discovery: yaml.DiscoveryConfigDTO{
+					Systemd: &yaml.SystemdDiscoveryDTO{
+						Enabled:  true,
+						Patterns: []string{"nginx.service"},
+					},
+				},
+				Targets: []yaml.TargetConfigDTO{
+					{
+						Name:    "test-target",
+						Address: "localhost:8080",
+						Probe: yaml.ProbeDTO{
+							Type: "http",
+							Path: "/health",
+						},
+					},
+				},
+			},
+			expectedInterval:         30 * time.Second,
+			expectedTimeout:          5 * time.Second,
+			expectedSuccessThreshold: 1,
+			expectedFailureThreshold: 3,
+			expectedTargetCount:      1,
+		},
 	}
 
-	// Return the string representation
-	return string(bytes), nil
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			// Verify defaults
+			assert.Equal(t, tt.expectedInterval, result.Defaults.Interval.Duration())
+			assert.Equal(t, tt.expectedTimeout, result.Defaults.Timeout.Duration())
+			assert.Equal(t, tt.expectedSuccessThreshold, result.Defaults.SuccessThreshold)
+			assert.Equal(t, tt.expectedFailureThreshold, result.Defaults.FailureThreshold)
+
+			// Verify targets
+			assert.Len(t, result.Targets, tt.expectedTargetCount)
+		})
+	}
 }
 
-// TestDuration_UnmarshalYAML tests yaml.Duration unmarshaling from YAML.
-// It verifies that duration strings are correctly parsed.
+// TestDiscoveryConfigDTO_ToDomain tests yaml.DiscoveryConfigDTO to domain conversion.
+// It verifies that discovery configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestDiscoveryConfigDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                   string
+		dto                    *yaml.DiscoveryConfigDTO
+		expectedSystemdEnabled bool
+		expectedDockerEnabled  bool
+	}{
+		{
+			name: "systemd discovery enabled",
+			dto: &yaml.DiscoveryConfigDTO{
+				Systemd: &yaml.SystemdDiscoveryDTO{
+					Enabled:  true,
+					Patterns: []string{"*.service"},
+				},
+			},
+			expectedSystemdEnabled: true,
+			expectedDockerEnabled:  false,
+		},
+		{
+			name: "docker discovery enabled",
+			dto: &yaml.DiscoveryConfigDTO{
+				Docker: &yaml.DockerDiscoveryDTO{
+					Enabled:    true,
+					SocketPath: "/var/run/docker.sock",
+				},
+			},
+			expectedSystemdEnabled: false,
+			expectedDockerEnabled:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			if tt.expectedSystemdEnabled {
+				require.NotNil(t, result.Systemd)
+				assert.True(t, result.Systemd.Enabled)
+			}
+
+			if tt.expectedDockerEnabled {
+				require.NotNil(t, result.Docker)
+				assert.True(t, result.Docker.Enabled)
+			}
+		})
+	}
+}
+
+// TestTargetConfigDTO_ToDomain tests yaml.TargetConfigDTO to domain conversion.
+// It verifies that target configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestTargetConfigDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		dto             *yaml.TargetConfigDTO
+		expectedName    string
+		expectedAddress string
+		expectedType    string
+	}{
+		{
+			name: "http target",
+			dto: &yaml.TargetConfigDTO{
+				Name:    "api",
+				Type:    "remote",
+				Address: "api.example.com:443",
+				Probe: yaml.ProbeDTO{
+					Type: "http",
+					Path: "/health",
+				},
+				Interval: yaml.Duration(60 * time.Second),
+				Timeout:  yaml.Duration(10 * time.Second),
+			},
+			expectedName:    "api",
+			expectedAddress: "api.example.com:443",
+			expectedType:    "remote",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			assert.Equal(t, tt.expectedName, result.Name)
+			assert.Equal(t, tt.expectedAddress, result.Address)
+			assert.Equal(t, tt.expectedType, result.Type)
+		})
+	}
+}
+
+// TestMonitoringDefaultsDTO_ToDomain tests yaml.MonitoringDefaultsDTO to domain conversion.
+// It verifies that monitoring default values are correctly mapped and defaults applied.
+//
+// Params:
+//   - t: testing context
+func TestMonitoringDefaultsDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                     string
+		dto                      *yaml.MonitoringDefaultsDTO
+		expectedInterval         time.Duration
+		expectedTimeout          time.Duration
+		expectedSuccessThreshold int
+		expectedFailureThreshold int
+	}{
+		{
+			name: "all values specified",
+			dto: &yaml.MonitoringDefaultsDTO{
+				Interval:         yaml.Duration(30 * time.Second),
+				Timeout:          yaml.Duration(5 * time.Second),
+				SuccessThreshold: 2,
+				FailureThreshold: 5,
+			},
+			expectedInterval:         30 * time.Second,
+			expectedTimeout:          5 * time.Second,
+			expectedSuccessThreshold: 2,
+			expectedFailureThreshold: 5,
+		},
+		{
+			name: "defaults applied when zero values",
+			dto: &yaml.MonitoringDefaultsDTO{
+				Interval:         0,
+				Timeout:          0,
+				SuccessThreshold: 0,
+				FailureThreshold: 0,
+			},
+			expectedInterval:         30 * time.Second,
+			expectedTimeout:          5 * time.Second,
+			expectedSuccessThreshold: 1,
+			expectedFailureThreshold: 3,
+		},
+		{
+			name: "partial values with defaults",
+			dto: &yaml.MonitoringDefaultsDTO{
+				Interval:         yaml.Duration(60 * time.Second),
+				Timeout:          0,
+				SuccessThreshold: 3,
+				FailureThreshold: 0,
+			},
+			expectedInterval:         60 * time.Second,
+			expectedTimeout:          5 * time.Second,
+			expectedSuccessThreshold: 3,
+			expectedFailureThreshold: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			assert.Equal(t, tt.expectedInterval, result.Interval.Duration())
+			assert.Equal(t, tt.expectedTimeout, result.Timeout.Duration())
+			assert.Equal(t, tt.expectedSuccessThreshold, result.SuccessThreshold)
+			assert.Equal(t, tt.expectedFailureThreshold, result.FailureThreshold)
+		})
+	}
+}
+
+// TestSystemdDiscoveryDTO_ToDomain tests yaml.SystemdDiscoveryDTO to domain conversion.
+// It verifies that systemd discovery configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestSystemdDiscoveryDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		dto              *yaml.SystemdDiscoveryDTO
+		expectedEnabled  bool
+		expectedPatterns []string
+	}{
+		{
+			name: "enabled with patterns",
+			dto: &yaml.SystemdDiscoveryDTO{
+				Enabled:  true,
+				Patterns: []string{"nginx.service", "postgres.service"},
+			},
+			expectedEnabled:  true,
+			expectedPatterns: []string{"nginx.service", "postgres.service"},
+		},
+		{
+			name: "disabled without patterns",
+			dto: &yaml.SystemdDiscoveryDTO{
+				Enabled:  false,
+				Patterns: nil,
+			},
+			expectedEnabled:  false,
+			expectedPatterns: nil,
+		},
+		{
+			name: "enabled with wildcard pattern",
+			dto: &yaml.SystemdDiscoveryDTO{
+				Enabled:  true,
+				Patterns: []string{"*.service"},
+			},
+			expectedEnabled:  true,
+			expectedPatterns: []string{"*.service"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedEnabled, result.Enabled)
+			assert.Equal(t, tt.expectedPatterns, result.Patterns)
+		})
+	}
+}
+
+// TestOpenRCDiscoveryDTO_ToDomain tests yaml.OpenRCDiscoveryDTO to domain conversion.
+// It verifies that OpenRC discovery configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestOpenRCDiscoveryDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		dto              *yaml.OpenRCDiscoveryDTO
+		expectedEnabled  bool
+		expectedPatterns []string
+	}{
+		{
+			name: "enabled with patterns",
+			dto: &yaml.OpenRCDiscoveryDTO{
+				Enabled:  true,
+				Patterns: []string{"nginx", "postgresql"},
+			},
+			expectedEnabled:  true,
+			expectedPatterns: []string{"nginx", "postgresql"},
+		},
+		{
+			name: "disabled without patterns",
+			dto: &yaml.OpenRCDiscoveryDTO{
+				Enabled:  false,
+				Patterns: nil,
+			},
+			expectedEnabled:  false,
+			expectedPatterns: nil,
+		},
+		{
+			name: "enabled with wildcard pattern",
+			dto: &yaml.OpenRCDiscoveryDTO{
+				Enabled:  true,
+				Patterns: []string{"*"},
+			},
+			expectedEnabled:  true,
+			expectedPatterns: []string{"*"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedEnabled, result.Enabled)
+			assert.Equal(t, tt.expectedPatterns, result.Patterns)
+		})
+	}
+}
+
+// TestBSDRCDiscoveryDTO_ToDomain tests yaml.BSDRCDiscoveryDTO to domain conversion.
+// It verifies that BSD rc.d discovery configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestBSDRCDiscoveryDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		dto              *yaml.BSDRCDiscoveryDTO
+		expectedEnabled  bool
+		expectedPatterns []string
+	}{
+		{
+			name: "enabled with patterns",
+			dto: &yaml.BSDRCDiscoveryDTO{
+				Enabled:  true,
+				Patterns: []string{"nginx", "postgresql"},
+			},
+			expectedEnabled:  true,
+			expectedPatterns: []string{"nginx", "postgresql"},
+		},
+		{
+			name: "disabled without patterns",
+			dto: &yaml.BSDRCDiscoveryDTO{
+				Enabled:  false,
+				Patterns: nil,
+			},
+			expectedEnabled:  false,
+			expectedPatterns: nil,
+		},
+		{
+			name: "enabled with wildcard pattern",
+			dto: &yaml.BSDRCDiscoveryDTO{
+				Enabled:  true,
+				Patterns: []string{"*"},
+			},
+			expectedEnabled:  true,
+			expectedPatterns: []string{"*"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedEnabled, result.Enabled)
+			assert.Equal(t, tt.expectedPatterns, result.Patterns)
+		})
+	}
+}
+
+// TestDockerDiscoveryDTO_ToDomain tests yaml.DockerDiscoveryDTO to domain conversion.
+// It verifies that Docker discovery configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestDockerDiscoveryDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		dto                *yaml.DockerDiscoveryDTO
+		expectedEnabled    bool
+		expectedSocketPath string
+		expectedLabels     map[string]string
+	}{
+		{
+			name: "enabled with socket and labels",
+			dto: &yaml.DockerDiscoveryDTO{
+				Enabled:    true,
+				SocketPath: "/var/run/docker.sock",
+				Labels:     map[string]string{"app": "web", "env": "prod"},
+			},
+			expectedEnabled:    true,
+			expectedSocketPath: "/var/run/docker.sock",
+			expectedLabels:     map[string]string{"app": "web", "env": "prod"},
+		},
+		{
+			name: "disabled without socket",
+			dto: &yaml.DockerDiscoveryDTO{
+				Enabled:    false,
+				SocketPath: "",
+				Labels:     nil,
+			},
+			expectedEnabled:    false,
+			expectedSocketPath: "",
+			expectedLabels:     nil,
+		},
+		{
+			name: "enabled with custom socket path",
+			dto: &yaml.DockerDiscoveryDTO{
+				Enabled:    true,
+				SocketPath: "/custom/docker.sock",
+				Labels:     nil,
+			},
+			expectedEnabled:    true,
+			expectedSocketPath: "/custom/docker.sock",
+			expectedLabels:     nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedEnabled, result.Enabled)
+			assert.Equal(t, tt.expectedSocketPath, result.SocketPath)
+			assert.Equal(t, tt.expectedLabels, result.Labels)
+		})
+	}
+}
+
+// TestPodmanDiscoveryDTO_ToDomain tests yaml.PodmanDiscoveryDTO to domain conversion.
+// It verifies that Podman discovery configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestPodmanDiscoveryDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		dto                *yaml.PodmanDiscoveryDTO
+		expectedEnabled    bool
+		expectedSocketPath string
+		expectedLabels     map[string]string
+	}{
+		{
+			name: "enabled with socket and labels",
+			dto: &yaml.PodmanDiscoveryDTO{
+				Enabled:    true,
+				SocketPath: "/run/podman/podman.sock",
+				Labels:     map[string]string{"app": "api", "tier": "backend"},
+			},
+			expectedEnabled:    true,
+			expectedSocketPath: "/run/podman/podman.sock",
+			expectedLabels:     map[string]string{"app": "api", "tier": "backend"},
+		},
+		{
+			name: "disabled without socket",
+			dto: &yaml.PodmanDiscoveryDTO{
+				Enabled:    false,
+				SocketPath: "",
+				Labels:     nil,
+			},
+			expectedEnabled:    false,
+			expectedSocketPath: "",
+			expectedLabels:     nil,
+		},
+		{
+			name: "enabled with custom socket path",
+			dto: &yaml.PodmanDiscoveryDTO{
+				Enabled:    true,
+				SocketPath: "/custom/podman.sock",
+				Labels:     nil,
+			},
+			expectedEnabled:    true,
+			expectedSocketPath: "/custom/podman.sock",
+			expectedLabels:     nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedEnabled, result.Enabled)
+			assert.Equal(t, tt.expectedSocketPath, result.SocketPath)
+			assert.Equal(t, tt.expectedLabels, result.Labels)
+		})
+	}
+}
+
+// TestKubernetesDiscoveryDTO_ToDomain tests yaml.KubernetesDiscoveryDTO to domain conversion.
+// It verifies that Kubernetes discovery configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestKubernetesDiscoveryDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                   string
+		dto                    *yaml.KubernetesDiscoveryDTO
+		expectedEnabled        bool
+		expectedKubeconfigPath string
+		expectedNamespaces     []string
+		expectedLabelSelector  string
+	}{
+		{
+			name: "enabled with full config",
+			dto: &yaml.KubernetesDiscoveryDTO{
+				Enabled:        true,
+				KubeconfigPath: "/home/user/.kube/config",
+				Namespaces:     []string{"default", "production"},
+				LabelSelector:  "app=web",
+			},
+			expectedEnabled:        true,
+			expectedKubeconfigPath: "/home/user/.kube/config",
+			expectedNamespaces:     []string{"default", "production"},
+			expectedLabelSelector:  "app=web",
+		},
+		{
+			name: "disabled without config",
+			dto: &yaml.KubernetesDiscoveryDTO{
+				Enabled:        false,
+				KubeconfigPath: "",
+				Namespaces:     nil,
+				LabelSelector:  "",
+			},
+			expectedEnabled:        false,
+			expectedKubeconfigPath: "",
+			expectedNamespaces:     nil,
+			expectedLabelSelector:  "",
+		},
+		{
+			name: "enabled with in-cluster config",
+			dto: &yaml.KubernetesDiscoveryDTO{
+				Enabled:        true,
+				KubeconfigPath: "",
+				Namespaces:     []string{"monitoring"},
+				LabelSelector:  "tier=backend",
+			},
+			expectedEnabled:        true,
+			expectedKubeconfigPath: "",
+			expectedNamespaces:     []string{"monitoring"},
+			expectedLabelSelector:  "tier=backend",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedEnabled, result.Enabled)
+			assert.Equal(t, tt.expectedKubeconfigPath, result.KubeconfigPath)
+			assert.Equal(t, tt.expectedNamespaces, result.Namespaces)
+			assert.Equal(t, tt.expectedLabelSelector, result.LabelSelector)
+		})
+	}
+}
+
+// TestNomadDiscoveryDTO_ToDomain tests yaml.NomadDiscoveryDTO to domain conversion.
+// It verifies that Nomad discovery configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestNomadDiscoveryDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		dto               *yaml.NomadDiscoveryDTO
+		expectedEnabled   bool
+		expectedAddress   string
+		expectedNamespace string
+		expectedJobFilter string
+	}{
+		{
+			name: "enabled with full config",
+			dto: &yaml.NomadDiscoveryDTO{
+				Enabled:   true,
+				Address:   "http://nomad.service.consul:4646",
+				Namespace: "production",
+				JobFilter: "web-*",
+			},
+			expectedEnabled:   true,
+			expectedAddress:   "http://nomad.service.consul:4646",
+			expectedNamespace: "production",
+			expectedJobFilter: "web-*",
+		},
+		{
+			name: "disabled without config",
+			dto: &yaml.NomadDiscoveryDTO{
+				Enabled:   false,
+				Address:   "",
+				Namespace: "",
+				JobFilter: "",
+			},
+			expectedEnabled:   false,
+			expectedAddress:   "",
+			expectedNamespace: "",
+			expectedJobFilter: "",
+		},
+		{
+			name: "enabled with default namespace",
+			dto: &yaml.NomadDiscoveryDTO{
+				Enabled:   true,
+				Address:   "http://localhost:4646",
+				Namespace: "default",
+				JobFilter: "",
+			},
+			expectedEnabled:   true,
+			expectedAddress:   "http://localhost:4646",
+			expectedNamespace: "default",
+			expectedJobFilter: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedEnabled, result.Enabled)
+			assert.Equal(t, tt.expectedAddress, result.Address)
+			assert.Equal(t, tt.expectedNamespace, result.Namespace)
+			assert.Equal(t, tt.expectedJobFilter, result.JobFilter)
+		})
+	}
+}
+
+// TestPortScanConfigDTO_ToDomain tests yaml.PortScanConfigDTO to domain conversion.
+// It verifies that port scan configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestPortScanConfigDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                 string
+		dto                  *yaml.PortScanConfigDTO
+		expectedEnabled      bool
+		expectedInterfaces   []string
+		expectedExcludePorts []int
+		expectedIncludePorts []int
+	}{
+		{
+			name: "enabled with full config",
+			dto: &yaml.PortScanConfigDTO{
+				Enabled:      true,
+				Interfaces:   []string{"eth0", "lo"},
+				ExcludePorts: []int{22, 3306},
+				IncludePorts: []int{80, 443, 8080},
+			},
+			expectedEnabled:      true,
+			expectedInterfaces:   []string{"eth0", "lo"},
+			expectedExcludePorts: []int{22, 3306},
+			expectedIncludePorts: []int{80, 443, 8080},
+		},
+		{
+			name: "disabled without config",
+			dto: &yaml.PortScanConfigDTO{
+				Enabled:      false,
+				Interfaces:   nil,
+				ExcludePorts: nil,
+				IncludePorts: nil,
+			},
+			expectedEnabled:      false,
+			expectedInterfaces:   nil,
+			expectedExcludePorts: nil,
+			expectedIncludePorts: nil,
+		},
+		{
+			name: "enabled with only exclude ports",
+			dto: &yaml.PortScanConfigDTO{
+				Enabled:      true,
+				Interfaces:   []string{"eth0"},
+				ExcludePorts: []int{22, 23, 25},
+				IncludePorts: nil,
+			},
+			expectedEnabled:      true,
+			expectedInterfaces:   []string{"eth0"},
+			expectedExcludePorts: []int{22, 23, 25},
+			expectedIncludePorts: nil,
+		},
+		{
+			name: "enabled with only include ports",
+			dto: &yaml.PortScanConfigDTO{
+				Enabled:      true,
+				Interfaces:   nil,
+				ExcludePorts: nil,
+				IncludePorts: []int{80, 443},
+			},
+			expectedEnabled:      true,
+			expectedInterfaces:   nil,
+			expectedExcludePorts: nil,
+			expectedIncludePorts: []int{80, 443},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedEnabled, result.Enabled)
+			assert.Equal(t, tt.expectedInterfaces, result.Interfaces)
+			assert.Equal(t, tt.expectedExcludePorts, result.ExcludePorts)
+			assert.Equal(t, tt.expectedIncludePorts, result.IncludePorts)
+		})
+	}
+}
+
+// TestDuration_UnmarshalYAML tests yaml.Duration YAML unmarshaling.
+// It verifies that duration strings are correctly parsed from YAML.
 //
 // Params:
 //   - t: testing context
@@ -47,113 +787,67 @@ func TestDuration_UnmarshalYAML(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		input    string
-		expected time.Duration
-		wantErr  bool
+		name           string
+		yamlInput      string
+		expectedResult time.Duration
+		expectError    bool
 	}{
 		{
-			name:     "valid seconds",
-			input:    "30s",
-			expected: 30 * time.Second,
-			wantErr:  false,
+			name:           "parse seconds",
+			yamlInput:      "30s",
+			expectedResult: 30 * time.Second,
+			expectError:    false,
 		},
 		{
-			name:     "valid minutes",
-			input:    "5m",
-			expected: 5 * time.Minute,
-			wantErr:  false,
+			name:           "parse minutes",
+			yamlInput:      "5m",
+			expectedResult: 5 * time.Minute,
+			expectError:    false,
 		},
 		{
-			name:     "valid hours",
-			input:    "2h",
-			expected: 2 * time.Hour,
-			wantErr:  false,
+			name:           "parse complex duration",
+			yamlInput:      "1h30m",
+			expectedResult: 90 * time.Minute,
+			expectError:    false,
 		},
 		{
-			name:     "valid complex duration",
-			input:    "1h30m",
-			expected: 90 * time.Minute,
-			wantErr:  false,
+			name:           "parse milliseconds",
+			yamlInput:      "500ms",
+			expectedResult: 500 * time.Millisecond,
+			expectError:    false,
 		},
 		{
-			name:     "invalid duration",
-			input:    "invalid",
-			expected: 0,
-			wantErr:  true,
+			name:        "invalid duration string",
+			yamlInput:   "invalid",
+			expectError: true,
 		},
 	}
 
-	// Iterate through test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			var d yaml.Duration
-			yamlInput := tt.input
-
-			err := yamlv3.Unmarshal([]byte(yamlInput), &d)
-
-			// Check error expectation
-			if tt.wantErr {
-				// Expect an error for invalid input
-				assert.Error(t, err)
-
-				// Return early on expected error
-				return
+			unmarshal := func(v any) error {
+				ptr := v.(*string)
+				*ptr = tt.yamlInput
+				return nil
 			}
 
-			// Expect no error for valid input
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, time.Duration(d))
+			err := d.UnmarshalYAML(unmarshal)
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedResult, time.Duration(d))
+			}
 		})
 	}
 }
 
-// TestDuration_UnmarshalYAML_NonStringValue tests yaml.Duration unmarshaling when
-// the YAML value is not a string (e.g., array, map, or number).
-// This tests the error path when unmarshal(&s) fails.
-//
-// Params:
-//   - t: testing context
-func TestDuration_UnmarshalYAML_NonStringValue(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name  string
-		input string
-	}{
-		{
-			name:  "array value fails unmarshal",
-			input: "[1, 2, 3]",
-		},
-		{
-			name:  "map value fails unmarshal",
-			input: "key: value",
-		},
-		{
-			name:  "nested object fails unmarshal",
-			input: "outer:\n  inner: value",
-		},
-	}
-
-	// Iterate through test cases
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var d yaml.Duration
-
-			err := yamlv3.Unmarshal([]byte(tt.input), &d)
-
-			// Expect an error when value is not a string
-			assert.Error(t, err)
-		})
-	}
-}
-
-// TestDuration_MarshalText tests yaml.Duration marshaling via TextMarshaler.
-// It verifies that yaml.Duration values are correctly serialized to strings.
+// TestDuration_MarshalText tests yaml.Duration text marshaling.
+// It verifies that durations are correctly converted to text format.
 //
 // Params:
 //   - t: testing context
@@ -161,385 +855,386 @@ func TestDuration_MarshalText(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		duration yaml.Duration
-		expected string
+		name           string
+		duration       yaml.Duration
+		expectedResult string
 	}{
 		{
-			name:     "zero duration",
-			duration: yaml.Duration(0),
-			expected: "0s",
+			name:           "marshal seconds",
+			duration:       yaml.Duration(30 * time.Second),
+			expectedResult: "30s",
 		},
 		{
-			name:     "seconds",
-			duration: yaml.Duration(30 * time.Second),
-			expected: "30s",
+			name:           "marshal minutes",
+			duration:       yaml.Duration(5 * time.Minute),
+			expectedResult: "5m0s",
 		},
 		{
-			name:     "minutes",
-			duration: yaml.Duration(5 * time.Minute),
-			expected: "5m0s",
+			name:           "marshal hour and minutes",
+			duration:       yaml.Duration(90 * time.Minute),
+			expectedResult: "1h30m0s",
 		},
 		{
-			name:     "hours",
-			duration: yaml.Duration(2 * time.Hour),
-			expected: "2h0m0s",
+			name:           "marshal zero duration",
+			duration:       yaml.Duration(0),
+			expectedResult: "0s",
 		},
 	}
 
-	// Iterate through test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			resultStr, err := marshalDurationText(&tt.duration)
+			result, err := tt.duration.MarshalText()
 
-			// Expect no error for marshaling
 			require.NoError(t, err)
-			assert.Equal(t, tt.expected, resultStr)
+			assert.Equal(t, tt.expectedResult, string(result))
 		})
 	}
 }
 
 // TestConfigDTO_ToDomain tests yaml.ConfigDTO to domain conversion.
-// It verifies that all fields are correctly mapped to the domain model.
+// It verifies that root configuration is correctly mapped.
 //
 // Params:
 //   - t: testing context
 func TestConfigDTO_ToDomain(t *testing.T) {
 	t.Parallel()
 
-	// Define test cases for table-driven testing.
 	tests := []struct {
-		name                string
-		dto                 *yaml.ConfigDTO
-		configPath          string
-		expectedVersion     string
-		expectedBaseDir     string
-		expectedServiceLen  int
-		expectedServiceName string
+		name            string
+		dto             *yaml.ConfigDTO
+		configPath      string
+		expectedVersion string
+		expectedPath    string
 	}{
 		{
-			name: "full configuration converts correctly",
+			name: "full config converts correctly",
 			dto: &yaml.ConfigDTO{
 				Version: "1.0",
 				Logging: yaml.LoggingConfigDTO{
 					BaseDir: "/var/log",
-					Defaults: yaml.LogDefaultsDTO{
-						TimestampFormat: "2006-01-02",
-						Rotation: yaml.RotationConfigDTO{
-							MaxSize:  "100MB",
-							MaxAge:   "7d",
-							MaxFiles: 5,
-							Compress: true,
-						},
-					},
 				},
 				Services: []yaml.ServiceConfigDTO{
 					{
 						Name:    "test-service",
-						Command: "/bin/test",
+						Command: "/usr/bin/test",
 					},
 				},
 			},
-			configPath:          "/path/to/config.yaml",
-			expectedVersion:     "1.0",
-			expectedBaseDir:     "/var/log",
-			expectedServiceLen:  1,
-			expectedServiceName: "test-service",
+			configPath:      "/etc/config.yaml",
+			expectedVersion: "1.0",
+			expectedPath:    "/etc/config.yaml",
 		},
 		{
-			name: "different version and path",
+			name: "empty config with defaults",
 			dto: &yaml.ConfigDTO{
 				Version: "2.0",
-				Logging: yaml.LoggingConfigDTO{
-					BaseDir: "/opt/logs",
-				},
-				Services: []yaml.ServiceConfigDTO{
-					{
-						Name:    "another-service",
-						Command: "/usr/bin/app",
-					},
-				},
 			},
-			configPath:          "/etc/daemon/config.yaml",
-			expectedVersion:     "2.0",
-			expectedBaseDir:     "/opt/logs",
-			expectedServiceLen:  1,
-			expectedServiceName: "another-service",
+			configPath:      "/config/daemon.yaml",
+			expectedVersion: "2.0",
+			expectedPath:    "/config/daemon.yaml",
 		},
 	}
 
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := testCase.dto.ToDomain(testCase.configPath)
+			result := tt.dto.ToDomain(tt.configPath)
 
-			// Verify version is correctly set.
-			assert.Equal(t, testCase.expectedVersion, result.Version)
-			assert.Equal(t, testCase.configPath, result.ConfigPath)
-			assert.Equal(t, testCase.expectedBaseDir, result.Logging.BaseDir)
-			assert.Len(t, result.Services, testCase.expectedServiceLen)
-			if testCase.expectedServiceLen > 0 {
-				assert.Equal(t, testCase.expectedServiceName, result.Services[0].Name)
-			}
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedVersion, result.Version)
+			assert.Equal(t, tt.expectedPath, result.ConfigPath)
 		})
 	}
 }
 
 // TestServiceConfigDTO_ToDomain tests yaml.ServiceConfigDTO to domain conversion.
-// It verifies that service configuration fields are correctly mapped.
+// It verifies that service configuration is correctly mapped.
 //
 // Params:
 //   - t: testing context
 func TestServiceConfigDTO_ToDomain(t *testing.T) {
 	t.Parallel()
 
-	// Define test cases for table-driven testing.
 	tests := []struct {
-		name                     string
-		dto                      *yaml.ServiceConfigDTO
-		expectedName             string
-		expectedCommand          string
-		expectedArgs             []string
-		expectedUser             string
-		expectedGroup            string
-		expectedWorkingDirectory string
-		expectedEnvironment      map[string]string
-		expectedDependsOn        []string
-		expectedOneshot          bool
-		expectedHealthCheckLen   int
-		expectedListenerLen      int
+		name            string
+		dto             *yaml.ServiceConfigDTO
+		expectedName    string
+		expectedCommand string
+		expectedOneshot bool
 	}{
 		{
-			name: "full service configuration converts correctly",
+			name: "full service config",
 			dto: &yaml.ServiceConfigDTO{
-				Name:             "my-service",
-				Command:          "/usr/bin/app",
-				Args:             []string{"--config", "/etc/app.conf"},
-				User:             "appuser",
-				Group:            "appgroup",
-				WorkingDirectory: "/var/app",
-				Environment:      map[string]string{"ENV": "production"},
-				DependsOn:        []string{"database"},
-				Oneshot:          true,
-				Restart: yaml.RestartConfigDTO{
-					Policy:     "always",
-					MaxRetries: 3,
-				},
-				HealthChecks: []yaml.HealthCheckDTO{
-					{
-						Name: "http-check",
-						Type: "http",
-					},
-				},
+				Name:             "nginx",
+				Command:          "/usr/sbin/nginx",
+				Args:             []string{"-g", "daemon off;"},
+				User:             "www-data",
+				Group:            "www-data",
+				WorkingDirectory: "/var/www",
+				Environment:      map[string]string{"PORT": "8080"},
+				Oneshot:          false,
 			},
-			expectedName:             "my-service",
-			expectedCommand:          "/usr/bin/app",
-			expectedArgs:             []string{"--config", "/etc/app.conf"},
-			expectedUser:             "appuser",
-			expectedGroup:            "appgroup",
-			expectedWorkingDirectory: "/var/app",
-			expectedEnvironment:      map[string]string{"ENV": "production"},
-			expectedDependsOn:        []string{"database"},
-			expectedOneshot:          true,
-			expectedHealthCheckLen:   1,
-			expectedListenerLen:      0,
+			expectedName:    "nginx",
+			expectedCommand: "/usr/sbin/nginx",
+			expectedOneshot: false,
 		},
 		{
-			name: "minimal service configuration",
+			name: "oneshot service",
 			dto: &yaml.ServiceConfigDTO{
-				Name:    "simple-service",
-				Command: "/bin/simple",
+				Name:    "init-script",
+				Command: "/bin/init.sh",
+				Oneshot: true,
 			},
-			expectedName:             "simple-service",
-			expectedCommand:          "/bin/simple",
-			expectedArgs:             nil,
-			expectedUser:             "",
-			expectedGroup:            "",
-			expectedWorkingDirectory: "",
-			expectedEnvironment:      nil,
-			expectedDependsOn:        nil,
-			expectedOneshot:          false,
-			expectedHealthCheckLen:   0,
-			expectedListenerLen:      0,
-		},
-		{
-			name: "service with listeners configuration",
-			dto: &yaml.ServiceConfigDTO{
-				Name:    "listener-service",
-				Command: "/usr/bin/server",
-				Listeners: []yaml.ListenerDTO{
-					{
-						Name:     "http-listener",
-						Port:     8080,
-						Protocol: "tcp",
-						Address:  "0.0.0.0",
-						Probe: yaml.ProbeDTO{
-							Type:             "http",
-							Interval:         yaml.Duration(30 * time.Second),
-							Timeout:          yaml.Duration(5 * time.Second),
-							SuccessThreshold: 1,
-							FailureThreshold: 3,
-							Path:             "/health",
-							Method:           "GET",
-							StatusCode:       200,
-						},
-					},
-					{
-						Name:     "grpc-listener",
-						Port:     9090,
-						Protocol: "tcp",
-						Probe: yaml.ProbeDTO{
-							Type:    "grpc",
-							Service: "my.Service",
-						},
-					},
-				},
-			},
-			expectedName:             "listener-service",
-			expectedCommand:          "/usr/bin/server",
-			expectedArgs:             nil,
-			expectedUser:             "",
-			expectedGroup:            "",
-			expectedWorkingDirectory: "",
-			expectedEnvironment:      nil,
-			expectedDependsOn:        nil,
-			expectedOneshot:          false,
-			expectedHealthCheckLen:   0,
-			expectedListenerLen:      2,
+			expectedName:    "init-script",
+			expectedCommand: "/bin/init.sh",
+			expectedOneshot: true,
 		},
 	}
 
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := testCase.dto.ToDomain()
+			result := tt.dto.ToDomain()
 
-			// Verify all service fields are correctly mapped.
-			assert.Equal(t, testCase.expectedName, result.Name)
-			assert.Equal(t, testCase.expectedCommand, result.Command)
-			assert.Equal(t, testCase.expectedArgs, result.Args)
-			assert.Equal(t, testCase.expectedUser, result.User)
-			assert.Equal(t, testCase.expectedGroup, result.Group)
-			assert.Equal(t, testCase.expectedWorkingDirectory, result.WorkingDirectory)
-			assert.Equal(t, testCase.expectedEnvironment, result.Environment)
-			assert.Equal(t, testCase.expectedDependsOn, result.DependsOn)
-			assert.Equal(t, testCase.expectedOneshot, result.Oneshot)
-			assert.Len(t, result.HealthChecks, testCase.expectedHealthCheckLen)
-			assert.Len(t, result.Listeners, testCase.expectedListenerLen)
+			assert.Equal(t, tt.expectedName, result.Name)
+			assert.Equal(t, tt.expectedCommand, result.Command)
+			assert.Equal(t, tt.expectedOneshot, result.Oneshot)
+		})
+	}
+}
 
-			// Verify listener details for the listeners test case.
-			if testCase.expectedListenerLen > 0 {
-				// Check first listener.
-				assert.Equal(t, "http-listener", result.Listeners[0].Name)
-				assert.Equal(t, 8080, result.Listeners[0].Port)
-				assert.Equal(t, "tcp", result.Listeners[0].Protocol)
-				assert.NotNil(t, result.Listeners[0].Probe)
-				assert.Equal(t, "http", result.Listeners[0].Probe.Type)
+// TestListenerDTO_ToDomain tests yaml.ListenerDTO to domain conversion.
+// It verifies that listener configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestListenerDTO_ToDomain(t *testing.T) {
+	t.Parallel()
 
-				// Check second listener.
-				assert.Equal(t, "grpc-listener", result.Listeners[1].Name)
-				assert.Equal(t, 9090, result.Listeners[1].Port)
-				assert.NotNil(t, result.Listeners[1].Probe)
-				assert.Equal(t, "grpc", result.Listeners[1].Probe.Type)
-				assert.Equal(t, "my.Service", result.Listeners[1].Probe.Service)
-			}
+	tests := []struct {
+		name             string
+		dto              *yaml.ListenerDTO
+		expectedName     string
+		expectedPort     int
+		expectedProtocol string
+		expectedExposed  bool
+	}{
+		{
+			name: "tcp listener with default protocol",
+			dto: &yaml.ListenerDTO{
+				Name:    "http",
+				Port:    8080,
+				Address: "0.0.0.0",
+				Exposed: true,
+			},
+			expectedName:     "http",
+			expectedPort:     8080,
+			expectedProtocol: "tcp",
+			expectedExposed:  true,
+		},
+		{
+			name: "udp listener",
+			dto: &yaml.ListenerDTO{
+				Name:     "dns",
+				Port:     53,
+				Protocol: "udp",
+				Address:  "127.0.0.1",
+				Exposed:  false,
+			},
+			expectedName:     "dns",
+			expectedPort:     53,
+			expectedProtocol: "udp",
+			expectedExposed:  false,
+		},
+		{
+			name: "listener with probe",
+			dto: &yaml.ListenerDTO{
+				Name:     "api",
+				Port:     3000,
+				Protocol: "tcp",
+				Probe: yaml.ProbeDTO{
+					Type: "http",
+					Path: "/health",
+				},
+			},
+			expectedName:     "api",
+			expectedPort:     3000,
+			expectedProtocol: "tcp",
+			expectedExposed:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			assert.Equal(t, tt.expectedName, result.Name)
+			assert.Equal(t, tt.expectedPort, result.Port)
+			assert.Equal(t, tt.expectedProtocol, result.Protocol)
+			assert.Equal(t, tt.expectedExposed, result.Exposed)
+		})
+	}
+}
+
+// TestProbeDTO_ToDomain tests yaml.ProbeDTO to domain conversion.
+// It verifies that probe configuration is correctly mapped with defaults applied.
+//
+// Params:
+//   - t: testing context
+func TestProbeDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		dto                *yaml.ProbeDTO
+		expectedType       string
+		expectedMethod     string
+		expectedStatusCode int
+	}{
+		{
+			name: "http probe with defaults",
+			dto: &yaml.ProbeDTO{
+				Type: "http",
+				Path: "/health",
+			},
+			expectedType:       "http",
+			expectedMethod:     "GET",
+			expectedStatusCode: 200,
+		},
+		{
+			name: "http probe with custom values",
+			dto: &yaml.ProbeDTO{
+				Type:       "http",
+				Path:       "/status",
+				Method:     "POST",
+				StatusCode: 201,
+			},
+			expectedType:       "http",
+			expectedMethod:     "POST",
+			expectedStatusCode: 201,
+		},
+		{
+			name: "tcp probe",
+			dto: &yaml.ProbeDTO{
+				Type: "tcp",
+			},
+			expectedType:       "tcp",
+			expectedMethod:     "GET",
+			expectedStatusCode: 200,
+		},
+		{
+			name: "exec probe",
+			dto: &yaml.ProbeDTO{
+				Type:    "exec",
+				Command: "/bin/healthcheck",
+				Args:    []string{"--fast"},
+			},
+			expectedType:       "exec",
+			expectedMethod:     "GET",
+			expectedStatusCode: 200,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			assert.Equal(t, tt.expectedType, result.Type)
+			assert.Equal(t, tt.expectedMethod, result.Method)
+			assert.Equal(t, tt.expectedStatusCode, result.StatusCode)
 		})
 	}
 }
 
 // TestRestartConfigDTO_ToDomain tests yaml.RestartConfigDTO to domain conversion.
-// It verifies that restart policy settings are correctly mapped.
+// It verifies that restart configuration is correctly mapped.
 //
 // Params:
 //   - t: testing context
 func TestRestartConfigDTO_ToDomain(t *testing.T) {
 	t.Parallel()
 
-	// Define test cases for table-driven testing.
 	tests := []struct {
-		name               string
-		dto                *yaml.RestartConfigDTO
-		expectedPolicy     string
-		expectedMaxRetries int
-		expectedDelay      time.Duration
-		expectedDelayMax   time.Duration
+		name             string
+		dto              *yaml.RestartConfigDTO
+		expectedPolicy   string
+		expectedMaxRetry int
+		expectedHasDelay bool
 	}{
 		{
-			name: "on-failure policy with delays",
-			dto: &yaml.RestartConfigDTO{
-				Policy:     "on-failure",
-				MaxRetries: 5,
-				Delay:      yaml.Duration(10 * time.Second),
-				DelayMax:   yaml.Duration(60 * time.Second),
-			},
-			expectedPolicy:     "on-failure",
-			expectedMaxRetries: 5,
-			expectedDelay:      10 * time.Second,
-			expectedDelayMax:   60 * time.Second,
-		},
-		{
-			name: "always policy with different values",
+			name: "always restart policy",
 			dto: &yaml.RestartConfigDTO{
 				Policy:     "always",
 				MaxRetries: 0,
 				Delay:      yaml.Duration(5 * time.Second),
+			},
+			expectedPolicy:   "always",
+			expectedMaxRetry: 0,
+			expectedHasDelay: true,
+		},
+		{
+			name: "on-failure with max retries",
+			dto: &yaml.RestartConfigDTO{
+				Policy:     "on-failure",
+				MaxRetries: 3,
+				Delay:      yaml.Duration(1 * time.Second),
 				DelayMax:   yaml.Duration(30 * time.Second),
 			},
-			expectedPolicy:     "always",
-			expectedMaxRetries: 0,
-			expectedDelay:      5 * time.Second,
-			expectedDelayMax:   30 * time.Second,
+			expectedPolicy:   "on-failure",
+			expectedMaxRetry: 3,
+			expectedHasDelay: true,
+		},
+		{
+			name: "never restart policy",
+			dto: &yaml.RestartConfigDTO{
+				Policy: "never",
+			},
+			expectedPolicy:   "never",
+			expectedMaxRetry: 0,
+			expectedHasDelay: false,
 		},
 	}
 
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := testCase.dto.ToDomain()
+			result := tt.dto.ToDomain()
 
-			// Use String() method instead of type conversion.
-			policyStr := result.Policy.String()
-
-			// Verify restart configuration fields are correctly mapped.
-			assert.Equal(t, testCase.expectedPolicy, policyStr)
-			assert.Equal(t, testCase.expectedMaxRetries, result.MaxRetries)
-			assert.Equal(t, testCase.expectedDelay, result.Delay.Duration())
-			assert.Equal(t, testCase.expectedDelayMax, result.DelayMax.Duration())
+			assert.Equal(t, tt.expectedPolicy, string(result.Policy))
+			assert.Equal(t, tt.expectedMaxRetry, result.MaxRetries)
+			if tt.expectedHasDelay {
+				assert.True(t, result.Delay.Duration() > 0)
+			}
 		})
 	}
 }
 
 // TestHealthCheckDTO_ToDomain tests yaml.HealthCheckDTO to domain conversion.
-// It verifies that health check parameters are correctly mapped.
+// It verifies that health check configuration is correctly mapped.
 //
 // Params:
 //   - t: testing context
 func TestHealthCheckDTO_ToDomain(t *testing.T) {
 	t.Parallel()
 
-	// Define test cases for table-driven testing.
 	tests := []struct {
-		name               string
-		dto                *yaml.HealthCheckDTO
-		expectedName       string
-		expectedType       string
-		expectedInterval   time.Duration
-		expectedTimeout    time.Duration
-		expectedRetries    int
-		expectedEndpoint   string
-		expectedMethod     string
-		expectedStatusCode int
+		name            string
+		dto             *yaml.HealthCheckDTO
+		expectedName    string
+		expectedType    string
+		expectedRetries int
 	}{
 		{
-			name: "http health check converts correctly",
+			name: "http health check",
 			dto: &yaml.HealthCheckDTO{
 				Name:       "api-health",
 				Type:       "http",
@@ -549,719 +1244,151 @@ func TestHealthCheckDTO_ToDomain(t *testing.T) {
 				Endpoint:   "http://localhost:8080/health",
 				Method:     "GET",
 				StatusCode: 200,
-				Host:       "localhost",
-				Port:       8080,
-				Command:    "",
 			},
-			expectedName:       "api-health",
-			expectedType:       "http",
-			expectedInterval:   30 * time.Second,
-			expectedTimeout:    5 * time.Second,
-			expectedRetries:    3,
-			expectedEndpoint:   "http://localhost:8080/health",
-			expectedMethod:     "GET",
-			expectedStatusCode: 200,
+			expectedName:    "api-health",
+			expectedType:    "http",
+			expectedRetries: 3,
 		},
 		{
-			name: "tcp health check converts correctly",
+			name: "tcp health check",
 			dto: &yaml.HealthCheckDTO{
-				Name:     "tcp-health",
+				Name:     "db-health",
 				Type:     "tcp",
-				Interval: yaml.Duration(15 * time.Second),
-				Timeout:  yaml.Duration(3 * time.Second),
-				Host:     "127.0.0.1",
-				Port:     3306,
+				Interval: yaml.Duration(10 * time.Second),
+				Timeout:  yaml.Duration(2 * time.Second),
+				Retries:  5,
+				Host:     "localhost",
+				Port:     5432,
 			},
-			expectedName:       "tcp-health",
-			expectedType:       "tcp",
-			expectedInterval:   15 * time.Second,
-			expectedTimeout:    3 * time.Second,
-			expectedRetries:    0,
-			expectedEndpoint:   "",
-			expectedMethod:     "",
-			expectedStatusCode: 0,
+			expectedName:    "db-health",
+			expectedType:    "tcp",
+			expectedRetries: 5,
+		},
+		{
+			name: "command health check",
+			dto: &yaml.HealthCheckDTO{
+				Type:     "command",
+				Interval: yaml.Duration(60 * time.Second),
+				Timeout:  yaml.Duration(10 * time.Second),
+				Retries:  1,
+				Command:  "/bin/check-health.sh",
+			},
+			expectedName:    "",
+			expectedType:    "command",
+			expectedRetries: 1,
 		},
 	}
 
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := testCase.dto.ToDomain()
+			result := tt.dto.ToDomain()
 
-			// Use String() method instead of type conversion.
-			typeStr := result.Type.String()
-
-			// Verify health check fields are correctly mapped.
-			assert.Equal(t, testCase.expectedName, result.Name)
-			assert.Equal(t, testCase.expectedType, typeStr)
-			assert.Equal(t, testCase.expectedInterval, result.Interval.Duration())
-			assert.Equal(t, testCase.expectedTimeout, result.Timeout.Duration())
-			assert.Equal(t, testCase.expectedRetries, result.Retries)
-			assert.Equal(t, testCase.expectedEndpoint, result.Endpoint)
-			assert.Equal(t, testCase.expectedMethod, result.Method)
-			assert.Equal(t, testCase.expectedStatusCode, result.StatusCode)
+			assert.Equal(t, tt.expectedName, result.Name)
+			assert.Equal(t, tt.expectedType, string(result.Type))
+			assert.Equal(t, tt.expectedRetries, result.Retries)
 		})
 	}
 }
 
 // TestLoggingConfigDTO_ToDomain tests yaml.LoggingConfigDTO to domain conversion.
-// It verifies that logging configuration fields are correctly mapped.
+// It verifies that logging configuration is correctly mapped.
 //
 // Params:
 //   - t: testing context
 func TestLoggingConfigDTO_ToDomain(t *testing.T) {
 	t.Parallel()
 
-	// Define test cases for table-driven testing.
 	tests := []struct {
-		name                    string
-		dto                     *yaml.LoggingConfigDTO
-		expectedBaseDir         string
-		expectedTimestampFormat string
-		expectedMaxSize         string
-		expectedMaxFiles        int
-		expectedCompress        bool
+		name            string
+		dto             *yaml.LoggingConfigDTO
+		expectedBaseDir string
 	}{
 		{
-			name: "full logging configuration converts correctly",
+			name: "full logging config",
 			dto: &yaml.LoggingConfigDTO{
-				BaseDir: "/var/log/app",
+				BaseDir: "/var/log/daemon",
 				Defaults: yaml.LogDefaultsDTO{
-					TimestampFormat: "2006-01-02T15:04:05",
-					Rotation: yaml.RotationConfigDTO{
-						MaxSize:  "50MB",
-						MaxAge:   "30d",
-						MaxFiles: 10,
-						Compress: true,
-					},
-				},
-			},
-			expectedBaseDir:         "/var/log/app",
-			expectedTimestampFormat: "2006-01-02T15:04:05",
-			expectedMaxSize:         "50MB",
-			expectedMaxFiles:        10,
-			expectedCompress:        true,
-		},
-		{
-			name: "different logging configuration",
-			dto: &yaml.LoggingConfigDTO{
-				BaseDir: "/opt/logs",
-				Defaults: yaml.LogDefaultsDTO{
-					TimestampFormat: "RFC3339",
+					TimestampFormat: "2006-01-02T15:04:05Z07:00",
 					Rotation: yaml.RotationConfigDTO{
 						MaxSize:  "100MB",
 						MaxAge:   "7d",
 						MaxFiles: 5,
-						Compress: false,
+						Compress: true,
 					},
 				},
 			},
-			expectedBaseDir:         "/opt/logs",
-			expectedTimestampFormat: "RFC3339",
-			expectedMaxSize:         "100MB",
-			expectedMaxFiles:        5,
-			expectedCompress:        false,
+			expectedBaseDir: "/var/log/daemon",
+		},
+		{
+			name: "minimal logging config",
+			dto: &yaml.LoggingConfigDTO{
+				BaseDir: "/tmp/logs",
+			},
+			expectedBaseDir: "/tmp/logs",
 		},
 	}
 
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := testCase.dto.ToDomain()
+			result := tt.dto.ToDomain()
 
-			// Verify logging configuration fields are correctly mapped.
-			assert.Equal(t, testCase.expectedBaseDir, result.BaseDir)
-			assert.Equal(t, testCase.expectedTimestampFormat, result.Defaults.TimestampFormat)
-			assert.Equal(t, testCase.expectedMaxSize, result.Defaults.Rotation.MaxSize)
-			assert.Equal(t, testCase.expectedMaxFiles, result.Defaults.Rotation.MaxFiles)
-			assert.Equal(t, testCase.expectedCompress, result.Defaults.Rotation.Compress)
-		})
-	}
-}
-
-// TestRotationConfigDTO_ToDomain tests yaml.RotationConfigDTO to domain conversion.
-// It verifies that rotation parameters are correctly mapped.
-//
-// Params:
-//   - t: testing context
-func TestRotationConfigDTO_ToDomain(t *testing.T) {
-	t.Parallel()
-
-	// Define test cases for table-driven testing.
-	tests := []struct {
-		name             string
-		dto              *yaml.RotationConfigDTO
-		expectedMaxSize  string
-		expectedMaxAge   string
-		expectedMaxFiles int
-		expectedCompress bool
-	}{
-		{
-			name: "rotation with compression enabled",
-			dto: &yaml.RotationConfigDTO{
-				MaxSize:  "100MB",
-				MaxAge:   "7d",
-				MaxFiles: 5,
-				Compress: true,
-			},
-			expectedMaxSize:  "100MB",
-			expectedMaxAge:   "7d",
-			expectedMaxFiles: 5,
-			expectedCompress: true,
-		},
-		{
-			name: "rotation with compression disabled",
-			dto: &yaml.RotationConfigDTO{
-				MaxSize:  "50MB",
-				MaxAge:   "30d",
-				MaxFiles: 10,
-				Compress: false,
-			},
-			expectedMaxSize:  "50MB",
-			expectedMaxAge:   "30d",
-			expectedMaxFiles: 10,
-			expectedCompress: false,
-		},
-	}
-
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := testCase.dto.ToDomain()
-
-			// Verify rotation configuration fields are correctly mapped.
-			assert.Equal(t, testCase.expectedMaxSize, result.MaxSize)
-			assert.Equal(t, testCase.expectedMaxAge, result.MaxAge)
-			assert.Equal(t, testCase.expectedMaxFiles, result.MaxFiles)
-			assert.Equal(t, testCase.expectedCompress, result.Compress)
-		})
-	}
-}
-
-// TestServiceLoggingDTO_ToDomain tests yaml.ServiceLoggingDTO to domain conversion.
-// It verifies that service logging streams are correctly mapped.
-//
-// Params:
-//   - t: testing context
-func TestServiceLoggingDTO_ToDomain(t *testing.T) {
-	t.Parallel()
-
-	// Define test cases for table-driven testing.
-	tests := []struct {
-		name               string
-		dto                *yaml.ServiceLoggingDTO
-		expectedStdoutFile string
-		expectedStderrFile string
-	}{
-		{
-			name: "both streams configured",
-			dto: &yaml.ServiceLoggingDTO{
-				Stdout: yaml.LogStreamConfigDTO{
-					File:            "stdout.log",
-					TimestampFormat: "2006-01-02",
-				},
-				Stderr: yaml.LogStreamConfigDTO{
-					File:            "stderr.log",
-					TimestampFormat: "2006-01-02",
-				},
-			},
-			expectedStdoutFile: "stdout.log",
-			expectedStderrFile: "stderr.log",
-		},
-		{
-			name: "different file names",
-			dto: &yaml.ServiceLoggingDTO{
-				Stdout: yaml.LogStreamConfigDTO{
-					File:            "app-out.log",
-					TimestampFormat: "RFC3339",
-				},
-				Stderr: yaml.LogStreamConfigDTO{
-					File:            "app-err.log",
-					TimestampFormat: "RFC3339",
-				},
-			},
-			expectedStdoutFile: "app-out.log",
-			expectedStderrFile: "app-err.log",
-		},
-	}
-
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := testCase.dto.ToDomain()
-
-			// Verify service logging streams are correctly mapped.
-			assert.Equal(t, testCase.expectedStdoutFile, result.Stdout.FilePath)
-			assert.Equal(t, testCase.expectedStderrFile, result.Stderr.FilePath)
-		})
-	}
-}
-
-// TestLogStreamConfigDTO_ToDomain tests yaml.LogStreamConfigDTO to domain conversion.
-// It verifies that log stream configuration fields are correctly mapped.
-//
-// Params:
-//   - t: testing context
-func TestLogStreamConfigDTO_ToDomain(t *testing.T) {
-	t.Parallel()
-
-	// Define test cases for table-driven testing.
-	tests := []struct {
-		name                     string
-		dto                      *yaml.LogStreamConfigDTO
-		expectedFilePath         string
-		expectedFormat           string
-		expectedRotationMaxSize  string
-		expectedRotationMaxFiles int
-		expectedRotationCompress bool
-	}{
-		{
-			name: "full stream configuration without compression",
-			dto: &yaml.LogStreamConfigDTO{
-				File:            "app.log",
-				TimestampFormat: "2006-01-02T15:04:05",
-				Rotation: yaml.RotationConfigDTO{
-					MaxSize:  "25MB",
-					MaxAge:   "14d",
-					MaxFiles: 7,
-					Compress: false,
-				},
-			},
-			expectedFilePath:         "app.log",
-			expectedFormat:           "2006-01-02T15:04:05",
-			expectedRotationMaxSize:  "25MB",
-			expectedRotationMaxFiles: 7,
-			expectedRotationCompress: false,
-		},
-		{
-			name: "stream configuration with compression",
-			dto: &yaml.LogStreamConfigDTO{
-				File:            "service.log",
-				TimestampFormat: "RFC3339",
-				Rotation: yaml.RotationConfigDTO{
-					MaxSize:  "50MB",
-					MaxAge:   "7d",
-					MaxFiles: 10,
-					Compress: true,
-				},
-			},
-			expectedFilePath:         "service.log",
-			expectedFormat:           "RFC3339",
-			expectedRotationMaxSize:  "50MB",
-			expectedRotationMaxFiles: 10,
-			expectedRotationCompress: true,
-		},
-	}
-
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := testCase.dto.ToDomain()
-
-			// Verify log stream configuration fields are correctly mapped.
-			assert.Equal(t, testCase.expectedFilePath, result.FilePath)
-			assert.Equal(t, testCase.expectedFormat, result.Format)
-			assert.Equal(t, testCase.expectedRotationMaxSize, result.RotationConfig.MaxSize)
-			assert.Equal(t, testCase.expectedRotationMaxFiles, result.RotationConfig.MaxFiles)
-			assert.Equal(t, testCase.expectedRotationCompress, result.RotationConfig.Compress)
-		})
-	}
-}
-
-// TestLogDefaultsDTO_ToDomain tests yaml.LogDefaultsDTO to domain conversion.
-// It verifies that log defaults are correctly mapped.
-//
-// Params:
-//   - t: testing context
-func TestLogDefaultsDTO_ToDomain(t *testing.T) {
-	t.Parallel()
-
-	// Define test cases for table-driven testing.
-	tests := []struct {
-		name                     string
-		dto                      *yaml.LogDefaultsDTO
-		expectedTimestampFormat  string
-		expectedRotationMaxSize  string
-		expectedRotationMaxAge   string
-		expectedRotationFiles    int
-		expectedRotationCompress bool
-	}{
-		{
-			name: "defaults with compression enabled",
-			dto: &yaml.LogDefaultsDTO{
-				TimestampFormat: "RFC3339",
-				Rotation: yaml.RotationConfigDTO{
-					MaxSize:  "10MB",
-					MaxAge:   "3d",
-					MaxFiles: 3,
-					Compress: true,
-				},
-			},
-			expectedTimestampFormat:  "RFC3339",
-			expectedRotationMaxSize:  "10MB",
-			expectedRotationMaxAge:   "3d",
-			expectedRotationFiles:    3,
-			expectedRotationCompress: true,
-		},
-		{
-			name: "defaults with different format",
-			dto: &yaml.LogDefaultsDTO{
-				TimestampFormat: "2006-01-02",
-				Rotation: yaml.RotationConfigDTO{
-					MaxSize:  "50MB",
-					MaxAge:   "7d",
-					MaxFiles: 5,
-					Compress: false,
-				},
-			},
-			expectedTimestampFormat:  "2006-01-02",
-			expectedRotationMaxSize:  "50MB",
-			expectedRotationMaxAge:   "7d",
-			expectedRotationFiles:    5,
-			expectedRotationCompress: false,
-		},
-	}
-
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := testCase.dto.ToDomain()
-
-			// Verify log defaults are correctly mapped.
-			assert.Equal(t, testCase.expectedTimestampFormat, result.TimestampFormat)
-			assert.Equal(t, testCase.expectedRotationMaxSize, result.Rotation.MaxSize)
-			assert.Equal(t, testCase.expectedRotationMaxAge, result.Rotation.MaxAge)
-			assert.Equal(t, testCase.expectedRotationFiles, result.Rotation.MaxFiles)
-			assert.Equal(t, testCase.expectedRotationCompress, result.Rotation.Compress)
-		})
-	}
-}
-
-// TestListenerDTO_ToDomain tests yaml.ListenerDTO to domain conversion.
-// It verifies that listener configuration fields are correctly mapped.
-//
-// Params:
-//   - t: testing context
-func TestListenerDTO_ToDomain(t *testing.T) {
-	t.Parallel()
-
-	// Define test cases for table-driven testing.
-	tests := []struct {
-		name              string
-		dto               *yaml.ListenerDTO
-		expectedName      string
-		expectedPort      int
-		expectedProtocol  string
-		expectedAddress   string
-		hasProbe          bool
-		expectedProbeType string
-	}{
-		{
-			name: "listener with tcp protocol and probe",
-			dto: &yaml.ListenerDTO{
-				Name:     "http-listener",
-				Port:     8080,
-				Protocol: "tcp",
-				Address:  "0.0.0.0",
-				Probe: yaml.ProbeDTO{
-					Type:             "http",
-					Interval:         yaml.Duration(30 * time.Second),
-					Timeout:          yaml.Duration(5 * time.Second),
-					SuccessThreshold: 1,
-					FailureThreshold: 3,
-					Path:             "/health",
-					Method:           "GET",
-					StatusCode:       200,
-				},
-			},
-			expectedName:      "http-listener",
-			expectedPort:      8080,
-			expectedProtocol:  "tcp",
-			expectedAddress:   "0.0.0.0",
-			hasProbe:          true,
-			expectedProbeType: "http",
-		},
-		{
-			name: "listener with default protocol",
-			dto: &yaml.ListenerDTO{
-				Name:    "grpc-listener",
-				Port:    9090,
-				Address: "127.0.0.1",
-			},
-			expectedName:     "grpc-listener",
-			expectedPort:     9090,
-			expectedProtocol: "tcp",
-			expectedAddress:  "127.0.0.1",
-			hasProbe:         false,
-		},
-		{
-			name: "listener with udp protocol",
-			dto: &yaml.ListenerDTO{
-				Name:     "dns-listener",
-				Port:     53,
-				Protocol: "udp",
-				Address:  "0.0.0.0",
-			},
-			expectedName:     "dns-listener",
-			expectedPort:     53,
-			expectedProtocol: "udp",
-			expectedAddress:  "0.0.0.0",
-			hasProbe:         false,
-		},
-		{
-			name: "listener without probe",
-			dto: &yaml.ListenerDTO{
-				Name:     "admin-listener",
-				Port:     9000,
-				Protocol: "tcp",
-			},
-			expectedName:     "admin-listener",
-			expectedPort:     9000,
-			expectedProtocol: "tcp",
-			expectedAddress:  "",
-			hasProbe:         false,
-		},
-	}
-
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := testCase.dto.ToDomain()
-
-			// Verify listener fields are correctly mapped.
-			assert.Equal(t, testCase.expectedName, result.Name)
-			assert.Equal(t, testCase.expectedPort, result.Port)
-			assert.Equal(t, testCase.expectedProtocol, result.Protocol)
-			assert.Equal(t, testCase.expectedAddress, result.Address)
-
-			// Check probe presence.
-			if testCase.hasProbe {
-				assert.NotNil(t, result.Probe)
-				assert.Equal(t, testCase.expectedProbeType, result.Probe.Type)
-			} else {
-				assert.Nil(t, result.Probe)
-			}
-		})
-	}
-}
-
-// TestProbeDTO_ToDomain tests yaml.ProbeDTO to domain conversion.
-// It verifies that probe configuration fields are correctly mapped with defaults.
-//
-// Params:
-//   - t: testing context
-func TestProbeDTO_ToDomain(t *testing.T) {
-	t.Parallel()
-
-	// Define test cases for table-driven testing.
-	tests := []struct {
-		name                     string
-		dto                      *yaml.ProbeDTO
-		expectedType             string
-		expectedInterval         time.Duration
-		expectedTimeout          time.Duration
-		expectedSuccessThreshold int
-		expectedFailureThreshold int
-		expectedPath             string
-		expectedMethod           string
-		expectedStatusCode       int
-		expectedService          string
-		expectedCommand          string
-	}{
-		{
-			name: "http probe with all fields",
-			dto: &yaml.ProbeDTO{
-				Type:             "http",
-				Interval:         yaml.Duration(30 * time.Second),
-				Timeout:          yaml.Duration(5 * time.Second),
-				SuccessThreshold: 2,
-				FailureThreshold: 5,
-				Path:             "/healthz",
-				Method:           "POST",
-				StatusCode:       201,
-			},
-			expectedType:             "http",
-			expectedInterval:         30 * time.Second,
-			expectedTimeout:          5 * time.Second,
-			expectedSuccessThreshold: 2,
-			expectedFailureThreshold: 5,
-			expectedPath:             "/healthz",
-			expectedMethod:           "POST",
-			expectedStatusCode:       201,
-		},
-		{
-			name: "http probe with defaults",
-			dto: &yaml.ProbeDTO{
-				Type:     "http",
-				Interval: yaml.Duration(10 * time.Second),
-				Timeout:  yaml.Duration(2 * time.Second),
-				Path:     "/health",
-			},
-			expectedType:             "http",
-			expectedInterval:         10 * time.Second,
-			expectedTimeout:          2 * time.Second,
-			expectedSuccessThreshold: 1,
-			expectedFailureThreshold: 3,
-			expectedPath:             "/health",
-			expectedMethod:           "GET",
-			expectedStatusCode:       200,
-		},
-		{
-			name: "tcp probe",
-			dto: &yaml.ProbeDTO{
-				Type:     "tcp",
-				Interval: yaml.Duration(15 * time.Second),
-				Timeout:  yaml.Duration(3 * time.Second),
-			},
-			expectedType:             "tcp",
-			expectedInterval:         15 * time.Second,
-			expectedTimeout:          3 * time.Second,
-			expectedSuccessThreshold: 1,
-			expectedFailureThreshold: 3,
-			expectedMethod:           "GET",
-			expectedStatusCode:       200,
-		},
-		{
-			name: "grpc probe with service",
-			dto: &yaml.ProbeDTO{
-				Type:     "grpc",
-				Interval: yaml.Duration(20 * time.Second),
-				Timeout:  yaml.Duration(4 * time.Second),
-				Service:  "my.grpc.Service",
-			},
-			expectedType:             "grpc",
-			expectedInterval:         20 * time.Second,
-			expectedTimeout:          4 * time.Second,
-			expectedSuccessThreshold: 1,
-			expectedFailureThreshold: 3,
-			expectedService:          "my.grpc.Service",
-			expectedMethod:           "GET",
-			expectedStatusCode:       200,
-		},
-		{
-			name: "exec probe with command",
-			dto: &yaml.ProbeDTO{
-				Type:    "exec",
-				Command: "/bin/check-health",
-				Args:    []string{"--verbose"},
-			},
-			expectedType:             "exec",
-			expectedInterval:         10 * time.Second,
-			expectedTimeout:          5 * time.Second,
-			expectedSuccessThreshold: 1,
-			expectedFailureThreshold: 3,
-			expectedCommand:          "/bin/check-health",
-			expectedMethod:           "GET",
-			expectedStatusCode:       200,
-		},
-	}
-
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := testCase.dto.ToDomain()
-
-			// Verify probe configuration fields are correctly mapped.
-			assert.Equal(t, testCase.expectedType, result.Type)
-			assert.Equal(t, testCase.expectedInterval, result.Interval.Duration())
-			assert.Equal(t, testCase.expectedTimeout, result.Timeout.Duration())
-			assert.Equal(t, testCase.expectedSuccessThreshold, result.SuccessThreshold)
-			assert.Equal(t, testCase.expectedFailureThreshold, result.FailureThreshold)
-			assert.Equal(t, testCase.expectedPath, result.Path)
-			assert.Equal(t, testCase.expectedMethod, result.Method)
-			assert.Equal(t, testCase.expectedStatusCode, result.StatusCode)
-			assert.Equal(t, testCase.expectedService, result.Service)
-			assert.Equal(t, testCase.expectedCommand, result.Command)
+			assert.Equal(t, tt.expectedBaseDir, result.BaseDir)
 		})
 	}
 }
 
 // TestDaemonLoggingDTO_ToDomain tests yaml.DaemonLoggingDTO to domain conversion.
-// It verifies that daemon logging writers are correctly mapped.
+// It verifies that daemon logging configuration is correctly mapped.
 //
 // Params:
 //   - t: testing context
 func TestDaemonLoggingDTO_ToDomain(t *testing.T) {
 	t.Parallel()
 
-	// Define test cases for table-driven testing.
 	tests := []struct {
-		name                string
-		dto                 *yaml.DaemonLoggingDTO
-		expectedWriterCount int
-		expectedWriterType  string
-		expectedWriterLevel string
+		name          string
+		dto           *yaml.DaemonLoggingDTO
+		expectedCount int
 	}{
 		{
-			name: "daemon logging with console writer",
+			name: "multiple writers",
 			dto: &yaml.DaemonLoggingDTO{
 				Writers: []yaml.WriterConfigDTO{
-					{
-						Type:  "console",
-						Level: "info",
-					},
+					{Type: "file", Level: "info"},
+					{Type: "json", Level: "debug"},
 				},
 			},
-			expectedWriterCount: 1,
-			expectedWriterType:  "console",
-			expectedWriterLevel: "info",
+			expectedCount: 2,
 		},
 		{
-			name: "daemon logging with multiple writers",
+			name: "single writer",
 			dto: &yaml.DaemonLoggingDTO{
 				Writers: []yaml.WriterConfigDTO{
-					{
-						Type:  "console",
-						Level: "debug",
-					},
-					{
-						Type:  "file",
-						Level: "warn",
-					},
+					{Type: "file", Level: "error"},
 				},
 			},
-			expectedWriterCount: 2,
-			expectedWriterType:  "console",
-			expectedWriterLevel: "debug",
+			expectedCount: 1,
 		},
 		{
-			name:                "daemon logging with empty writers",
-			dto:                 &yaml.DaemonLoggingDTO{Writers: []yaml.WriterConfigDTO{}},
-			expectedWriterCount: 0,
+			name: "no writers",
+			dto: &yaml.DaemonLoggingDTO{
+				Writers: nil,
+			},
+			expectedCount: 0,
 		},
 	}
 
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := testCase.dto.ToDomain()
+			result := tt.dto.ToDomain()
 
-			// Verify writer count.
-			assert.Len(t, result.Writers, testCase.expectedWriterCount)
-
-			// Verify first writer if present.
-			if testCase.expectedWriterCount > 0 {
-				assert.Equal(t, testCase.expectedWriterType, result.Writers[0].Type)
-				assert.Equal(t, testCase.expectedWriterLevel, result.Writers[0].Level)
-			}
+			assert.Len(t, result.Writers, tt.expectedCount)
 		})
 	}
 }
@@ -1274,70 +1401,46 @@ func TestDaemonLoggingDTO_ToDomain(t *testing.T) {
 func TestWriterConfigDTO_ToDomain(t *testing.T) {
 	t.Parallel()
 
-	// Define test cases for table-driven testing.
 	tests := []struct {
 		name          string
 		dto           *yaml.WriterConfigDTO
 		expectedType  string
 		expectedLevel string
-		expectedPath  string
 	}{
 		{
-			name: "console writer configuration",
-			dto: &yaml.WriterConfigDTO{
-				Type:  "console",
-				Level: "info",
-			},
-			expectedType:  "console",
-			expectedLevel: "info",
-		},
-		{
-			name: "file writer configuration",
+			name: "file writer",
 			dto: &yaml.WriterConfigDTO{
 				Type:  "file",
-				Level: "debug",
+				Level: "info",
 				File: yaml.FileWriterConfigDTO{
 					Path: "/var/log/daemon.log",
 				},
 			},
 			expectedType:  "file",
-			expectedLevel: "debug",
-			expectedPath:  "/var/log/daemon.log",
+			expectedLevel: "info",
 		},
 		{
-			name: "json writer configuration",
+			name: "json writer",
 			dto: &yaml.WriterConfigDTO{
 				Type:  "json",
-				Level: "warn",
+				Level: "debug",
 				JSON: yaml.JSONWriterConfigDTO{
 					Path: "/var/log/daemon.json",
 				},
 			},
 			expectedType:  "json",
-			expectedLevel: "warn",
-			expectedPath:  "/var/log/daemon.json",
+			expectedLevel: "debug",
 		},
 	}
 
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := testCase.dto.ToDomain()
+			result := tt.dto.ToDomain()
 
-			// Verify writer type and level.
-			assert.Equal(t, testCase.expectedType, result.Type)
-			assert.Equal(t, testCase.expectedLevel, result.Level)
-
-			// Verify file or JSON path if configured.
-			if testCase.expectedPath != "" {
-				if testCase.dto.Type == "file" {
-					assert.Equal(t, testCase.expectedPath, result.File.Path)
-				} else if testCase.dto.Type == "json" {
-					assert.Equal(t, testCase.expectedPath, result.JSON.Path)
-				}
-			}
+			assert.Equal(t, tt.expectedType, result.Type)
+			assert.Equal(t, tt.expectedLevel, result.Level)
 		})
 	}
 }
@@ -1350,41 +1453,40 @@ func TestWriterConfigDTO_ToDomain(t *testing.T) {
 func TestFileWriterConfigDTO_ToDomain(t *testing.T) {
 	t.Parallel()
 
-	// Define test cases for table-driven testing.
 	tests := []struct {
 		name         string
 		dto          *yaml.FileWriterConfigDTO
 		expectedPath string
 	}{
 		{
-			name: "file writer with path",
-			dto: &yaml.FileWriterConfigDTO{
-				Path: "/var/log/daemon.log",
-			},
-			expectedPath: "/var/log/daemon.log",
-		},
-		{
-			name: "file writer with rotation",
+			name: "with path and rotation",
 			dto: &yaml.FileWriterConfigDTO{
 				Path: "/var/log/app.log",
 				Rotation: yaml.RotationConfigDTO{
-					MaxSize:  "100MB",
-					MaxFiles: 5,
+					MaxSize:  "50MB",
+					MaxAge:   "30d",
+					MaxFiles: 10,
+					Compress: true,
 				},
 			},
 			expectedPath: "/var/log/app.log",
 		},
+		{
+			name: "with path only",
+			dto: &yaml.FileWriterConfigDTO{
+				Path: "/tmp/debug.log",
+			},
+			expectedPath: "/tmp/debug.log",
+		},
 	}
 
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := testCase.dto.ToDomain()
+			result := tt.dto.ToDomain()
 
-			// Verify file path is correctly mapped.
-			assert.Equal(t, testCase.expectedPath, result.Path)
+			assert.Equal(t, tt.expectedPath, result.Path)
 		})
 	}
 }
@@ -1397,41 +1499,244 @@ func TestFileWriterConfigDTO_ToDomain(t *testing.T) {
 func TestJSONWriterConfigDTO_ToDomain(t *testing.T) {
 	t.Parallel()
 
-	// Define test cases for table-driven testing.
 	tests := []struct {
 		name         string
 		dto          *yaml.JSONWriterConfigDTO
 		expectedPath string
 	}{
 		{
-			name: "json writer with path",
-			dto: &yaml.JSONWriterConfigDTO{
-				Path: "/var/log/daemon.json",
-			},
-			expectedPath: "/var/log/daemon.json",
-		},
-		{
-			name: "json writer with rotation",
+			name: "with path and rotation",
 			dto: &yaml.JSONWriterConfigDTO{
 				Path: "/var/log/app.json",
 				Rotation: yaml.RotationConfigDTO{
-					MaxSize:  "50MB",
-					MaxFiles: 10,
+					MaxSize:  "100MB",
+					MaxAge:   "14d",
+					MaxFiles: 7,
+					Compress: false,
 				},
 			},
 			expectedPath: "/var/log/app.json",
 		},
+		{
+			name: "with path only",
+			dto: &yaml.JSONWriterConfigDTO{
+				Path: "/tmp/events.json",
+			},
+			expectedPath: "/tmp/events.json",
+		},
 	}
 
-	// Run all test cases.
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := testCase.dto.ToDomain()
+			result := tt.dto.ToDomain()
 
-			// Verify JSON path is correctly mapped.
-			assert.Equal(t, testCase.expectedPath, result.Path)
+			assert.Equal(t, tt.expectedPath, result.Path)
+		})
+	}
+}
+
+// TestLogDefaultsDTO_ToDomain tests yaml.LogDefaultsDTO to domain conversion.
+// It verifies that log defaults are correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestLogDefaultsDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                    string
+		dto                     *yaml.LogDefaultsDTO
+		expectedTimestampFormat string
+	}{
+		{
+			name: "with timestamp format and rotation",
+			dto: &yaml.LogDefaultsDTO{
+				TimestampFormat: "2006-01-02T15:04:05Z07:00",
+				Rotation: yaml.RotationConfigDTO{
+					MaxSize:  "100MB",
+					MaxAge:   "7d",
+					MaxFiles: 5,
+					Compress: true,
+				},
+			},
+			expectedTimestampFormat: "2006-01-02T15:04:05Z07:00",
+		},
+		{
+			name: "with simple timestamp",
+			dto: &yaml.LogDefaultsDTO{
+				TimestampFormat: "15:04:05",
+			},
+			expectedTimestampFormat: "15:04:05",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			assert.Equal(t, tt.expectedTimestampFormat, result.TimestampFormat)
+		})
+	}
+}
+
+// TestRotationConfigDTO_ToDomain tests yaml.RotationConfigDTO to domain conversion.
+// It verifies that rotation configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestRotationConfigDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		dto              *yaml.RotationConfigDTO
+		expectedMaxSize  string
+		expectedMaxAge   string
+		expectedMaxFiles int
+		expectedCompress bool
+	}{
+		{
+			name: "full rotation config",
+			dto: &yaml.RotationConfigDTO{
+				MaxSize:  "100MB",
+				MaxAge:   "30d",
+				MaxFiles: 10,
+				Compress: true,
+			},
+			expectedMaxSize:  "100MB",
+			expectedMaxAge:   "30d",
+			expectedMaxFiles: 10,
+			expectedCompress: true,
+		},
+		{
+			name: "minimal rotation config",
+			dto: &yaml.RotationConfigDTO{
+				MaxSize:  "10MB",
+				MaxFiles: 3,
+			},
+			expectedMaxSize:  "10MB",
+			expectedMaxAge:   "",
+			expectedMaxFiles: 3,
+			expectedCompress: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			assert.Equal(t, tt.expectedMaxSize, result.MaxSize)
+			assert.Equal(t, tt.expectedMaxAge, result.MaxAge)
+			assert.Equal(t, tt.expectedMaxFiles, result.MaxFiles)
+			assert.Equal(t, tt.expectedCompress, result.Compress)
+		})
+	}
+}
+
+// TestServiceLoggingDTO_ToDomain tests yaml.ServiceLoggingDTO to domain conversion.
+// It verifies that service logging configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestServiceLoggingDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		dto                *yaml.ServiceLoggingDTO
+		expectedStdoutFile string
+		expectedStderrFile string
+	}{
+		{
+			name: "both stdout and stderr configured",
+			dto: &yaml.ServiceLoggingDTO{
+				Stdout: yaml.LogStreamConfigDTO{
+					File:            "/var/log/app/stdout.log",
+					TimestampFormat: "2006-01-02T15:04:05",
+				},
+				Stderr: yaml.LogStreamConfigDTO{
+					File:            "/var/log/app/stderr.log",
+					TimestampFormat: "2006-01-02T15:04:05",
+				},
+			},
+			expectedStdoutFile: "/var/log/app/stdout.log",
+			expectedStderrFile: "/var/log/app/stderr.log",
+		},
+		{
+			name: "only stdout configured",
+			dto: &yaml.ServiceLoggingDTO{
+				Stdout: yaml.LogStreamConfigDTO{
+					File: "/var/log/app/out.log",
+				},
+			},
+			expectedStdoutFile: "/var/log/app/out.log",
+			expectedStderrFile: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			assert.Equal(t, tt.expectedStdoutFile, result.Stdout.FilePath)
+			assert.Equal(t, tt.expectedStderrFile, result.Stderr.FilePath)
+		})
+	}
+}
+
+// TestLogStreamConfigDTO_ToDomain tests yaml.LogStreamConfigDTO to domain conversion.
+// It verifies that log stream configuration is correctly mapped.
+//
+// Params:
+//   - t: testing context
+func TestLogStreamConfigDTO_ToDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		dto            *yaml.LogStreamConfigDTO
+		expectedFile   string
+		expectedFormat string
+	}{
+		{
+			name: "full log stream config",
+			dto: &yaml.LogStreamConfigDTO{
+				File:            "/var/log/service/output.log",
+				TimestampFormat: "2006-01-02T15:04:05Z07:00",
+				Rotation: yaml.RotationConfigDTO{
+					MaxSize:  "50MB",
+					MaxFiles: 5,
+				},
+			},
+			expectedFile:   "/var/log/service/output.log",
+			expectedFormat: "2006-01-02T15:04:05Z07:00",
+		},
+		{
+			name: "minimal log stream config",
+			dto: &yaml.LogStreamConfigDTO{
+				File: "/tmp/output.log",
+			},
+			expectedFile:   "/tmp/output.log",
+			expectedFormat: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := tt.dto.ToDomain()
+
+			assert.Equal(t, tt.expectedFile, result.FilePath)
+			assert.Equal(t, tt.expectedFormat, result.Format)
 		})
 	}
 }

@@ -1,0 +1,11 @@
+# probe-metrics - Abstract metrics collection traits
+# Defines the collector interfaces that platform-specific code implements
+
+[package]
+name = "probe-metrics"
+version.workspace = true
+edition.workspace = true
+description = "Abstract traits for system metrics collection"
+
+[dependencies]
+thiserror.workspace = true

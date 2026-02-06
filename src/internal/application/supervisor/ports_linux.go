@@ -40,6 +40,9 @@ const (
 	// defaultInodeMapCapacity is the initial capacity for inode maps.
 	defaultInodeMapCapacity int = 16
 
+	// procfsPath is the path to the procfs mount point.
+	procfsPath string = "/proc"
+
 	// minNetFields is minimum fields in /proc/net/* line.
 	minNetFields int = 10
 
@@ -111,6 +114,7 @@ func getListeningPorts(pid int) []int {
 	netFiles := []string{"/proc/net/tcp", "/proc/net/tcp6", "/proc/net/udp", "/proc/net/udp6"}
 	// Check each protocol file for listening ports.
 	for _, netFile := range netFiles {
+		// find ports in this network file
 		findListeningPorts(netFile, inodes, ports)
 	}
 
@@ -128,6 +132,7 @@ func getListeningPorts(pid int) []int {
 func mapToSortedSlice(ports map[int]struct{}) []int {
 	// Convert map keys to slice.
 	result := slices.Collect(maps.Keys(ports))
+	// sort ports for stable output
 	slices.Sort(result)
 
 	// Return sorted slice.
@@ -143,7 +148,7 @@ func mapToSortedSlice(ports map[int]struct{}) []int {
 //   - []int: slice of mapped host ports, nil if not a Docker container
 func getDockerPorts(pid int) []int {
 	// Read process command line from procfs.
-	cmdline, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
+	cmdline, err := os.ReadFile(filepath.Join(procfsPath, strconv.Itoa(pid), "cmdline"))
 	// Failed to read cmdline.
 	if err != nil {
 		// Unable to read cmdline.
@@ -177,6 +182,7 @@ func getDockerPorts(pid int) []int {
 	containerName := findContainerName(args)
 	// No container name in args, try PID lookup.
 	if containerName == "" {
+		// attempt to find container by PID
 		containerName = findDockerContainerByPID(pid)
 	}
 
@@ -257,7 +263,9 @@ func findDockerContainerByPID(pid int) string {
 	// Iterate over running containers.
 	// Check each container for PID match.
 	for containerID := range strings.FieldsSeq(string(out)) {
+		// check if container matches PID
 		if matchesContainerPID(ctx, containerID, pid) {
+			// return matching container ID
 			return containerID
 		}
 	}
@@ -347,7 +355,7 @@ func isAncestor(ancestorPID, childPID int) bool {
 //   - bool: true if successfully read
 func getParentPID(pid int) (int, bool) {
 	// Read /proc/pid/stat file.
-	statFile := filepath.Join("/proc", strconv.Itoa(pid), "stat")
+	statFile := filepath.Join(procfsPath, strconv.Itoa(pid), "stat")
 	data, err := os.ReadFile(statFile)
 	// Failed to read stat file.
 	if err != nil {
@@ -445,6 +453,7 @@ func parseDockerPortOutput(output string) []int {
 
 		// Only add valid ports.
 		if port > 0 {
+			// append valid port
 			ports = append(ports, port)
 		}
 	}
@@ -463,7 +472,7 @@ func parseDockerPortOutput(output string) []int {
 func getSocketInodes(pid int) map[uint64]struct{} {
 	inodes := make(map[uint64]struct{}, defaultInodeMapCapacity)
 
-	fdDir := filepath.Join("/proc", strconv.Itoa(pid), "fd")
+	fdDir := filepath.Join(procfsPath, strconv.Itoa(pid), "fd")
 	// Read file descriptor directory.
 	entries, err := os.ReadDir(fdDir)
 	// Failed to read fd directory.
@@ -488,6 +497,7 @@ func getSocketInodes(pid int) map[uint64]struct{} {
 			if inodeStr, ok := strings.CutSuffix(after, "]"); ok {
 				// Parse inode as uint64.
 				if inode, err := strconv.ParseUint(inodeStr, decimalBase, bitSize64); err == nil {
+					// add inode to map
 					inodes[inode] = struct{}{}
 				}
 			}
@@ -530,6 +540,7 @@ func findListeningPorts(netFile string, inodes map[uint64]struct{}, ports map[in
 		port, ok := parseNetLine(scanner.Text(), inodes, isUDP)
 		// Add matching port.
 		if ok && port > 0 {
+			// add port to results
 			ports[port] = struct{}{}
 		}
 	}

@@ -67,4 +67,4 @@ var (
 | `domain/config` | Duration for timeouts, delays |
 | `domain/health` | Duration for check intervals |
 | `infrastructure/persistence/config/yaml` | Parses Duration and Size |
-| `infrastructure/resources/cgroup` | Uses FileSystem |
+| `infrastructure/probe` | Uses FileSystem (quota.go) |

@@ -88,24 +88,30 @@ func NewWriterFromConfig(path string, cfg writerConfig) (*Writer, error) {
 	// - Other: no access for confidentiality of service logs
 	// This is more restrictive than typical 0o755 used by syslog/logrotate.
 	// nosemgrep: go.lang.correctness.permissions.file_permission.incorrect-default-permission
+	// create parent directories if needed
 	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
+		// propagate mkdir error to caller
 		return nil, fmt.Errorf("creating log directory: %w", err)
 	}
 
 	file, size, err := openLogFile(path)
+	// handle file open failure
 	if err != nil {
+		// propagate open error to caller
 		return nil, err
 	}
 
 	rotation := cfg.Rotation()
 	maxSize := parseMaxSize(rotation.MaxSize)
 	maxFiles := rotation.MaxFiles
+	// use default max files if not set
 	if maxFiles == 0 {
 		maxFiles = defaultMaxFilesBackup
 	}
 
 	timestampFormat := cfg.TimestampFormat()
 
+	// return configured writer with rotation
 	return &Writer{
 		file:            file,
 		writer:          bufio.NewWriter(file),
@@ -135,12 +141,16 @@ func NewWriter(path string, cfg writerConfig) (*Writer, error) {
 	// - Other: no access for confidentiality of service logs
 	// This is more restrictive than typical 0o755 used by syslog/logrotate.
 	// nosemgrep: go.lang.correctness.permissions.file_permission.incorrect-default-permission
+	// create parent directories if needed
 	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
+		// propagate mkdir error to caller
 		return nil, fmt.Errorf("creating log directory: %w", err)
 	}
 
 	file, size, err := openLogFile(path)
+	// handle file open failure
 	if err != nil {
+		// propagate open error to caller
 		return nil, err
 	}
 
@@ -148,6 +158,7 @@ func NewWriter(path string, cfg writerConfig) (*Writer, error) {
 	maxSize := parseMaxSize(rotation.MaxSize)
 	timestampFormat := cfg.TimestampFormat()
 
+	// return configured writer with rotation
 	return &Writer{
 		file:            file,
 		writer:          bufio.NewWriter(file),
@@ -173,17 +184,21 @@ func NewWriter(path string, cfg writerConfig) (*Writer, error) {
 func openLogFile(path string) (*os.File, int64, error) {
 	opener := newFileOpener(path)
 	f, err := opener.open()
+	// handle file open failure
 	if err != nil {
+		// propagate open error to caller
 		return nil, 0, fmt.Errorf("opening log file: %w", err)
 	}
 
 	info, err := f.Stat()
+	// handle stat failure
 	if err != nil {
 		_ = f.Close()
-
+		// propagate stat error after cleanup
 		return nil, 0, fmt.Errorf("getting file info: %w", err)
 	}
 
+	// return opened file with current size
 	return f, info.Size(), nil
 }
 
@@ -196,10 +211,13 @@ func openLogFile(path string) (*os.File, int64, error) {
 //   - int64: parsed size in bytes or default on failure
 func parseMaxSize(sizeStr string) int64 {
 	maxSize, err := shared.ParseSize(sizeStr)
+	// use default size if parsing fails
 	if err != nil {
+		// fallback to default max size
 		return defaultMaxSize
 	}
 
+	// return parsed size in bytes
 	return maxSize
 }
 
@@ -215,30 +233,41 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// rotate if size limit exceeded
 	if w.maxSize > 0 && w.size+int64(len(p)) > w.maxSize {
+		// perform log rotation
 		if err := w.rotate(); err != nil {
+			// propagate rotation error to caller
 			return 0, fmt.Errorf("rotating log: %w", err)
 		}
 	}
 
+	// add timestamp prefix if configured
 	if w.addTimestamp {
 		ts := FormatTimestamp(time.Now(), w.timestampFormat)
+		// write timestamp prefix
 		if _, err := w.writer.WriteString(ts + " "); err != nil {
+			// propagate timestamp write error
 			return 0, err
 		}
 		w.size += int64(len(ts) + timestampSeparatorLen)
 	}
 
 	n, err = w.writer.Write(p)
+	// handle write failure
 	if err != nil {
+		// propagate write error to caller
 		return n, err
 	}
 	w.size += int64(n)
 
+	// flush buffer to ensure data is written
 	if err := w.writer.Flush(); err != nil {
+		// propagate flush error to caller
 		return n, err
 	}
 
+	// return bytes written successfully
 	return n, nil
 }
 
@@ -248,20 +277,28 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 // Returns:
 //   - error: nil on success, error on failure
 func (w *Writer) rotate() error {
+	// flush buffer before closing
 	if err := w.writer.Flush(); err != nil {
+		// propagate flush error to caller
 		return err
 	}
 
+	// close current file
 	if err := w.file.Close(); err != nil {
+		// propagate close error to caller
 		return err
 	}
 
+	// shift backup files
 	if err := w.rotateFiles(); err != nil {
+		// propagate rotate error to caller
 		return err
 	}
 
 	file, err := w.openNewFile()
+	// handle new file creation failure
 	if err != nil {
+		// propagate open error to caller
 		return err
 	}
 
@@ -269,6 +306,7 @@ func (w *Writer) rotate() error {
 	w.writer = bufio.NewWriter(file)
 	w.size = 0
 
+	// return success after rotation
 	return nil
 }
 
@@ -280,10 +318,13 @@ func (w *Writer) rotate() error {
 func (w *Writer) openNewFile() (*os.File, error) {
 	opener := newFileOpener(w.path)
 	f, err := opener.open()
+	// handle file open failure
 	if err != nil {
+		// propagate open error to caller
 		return nil, err
 	}
 
+	// return opened file handle
 	return f, nil
 }
 
@@ -297,16 +338,20 @@ func (w *Writer) rotateFiles() error {
 	_ = os.Remove(oldest)
 
 	// Shift backup files from oldest to newest.
+	// shift numbered backups
 	for i := w.maxFiles - firstBackupIndex; i >= firstBackupIndex; i-- {
 		oldPath := fmt.Sprintf("%s.%d", w.path, i)
 		newPath := fmt.Sprintf("%s.%d", w.path, i+firstBackupIndex)
 		_ = os.Rename(oldPath, newPath)
 	}
 
+	// rename current log to .1
 	if err := os.Rename(w.path, w.path+firstBackupSuffix); err != nil && !os.IsNotExist(err) {
+		// propagate rename error to caller
 		return err
 	}
 
+	// return success after rotation
 	return nil
 }
 
@@ -319,10 +364,13 @@ func (w *Writer) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// flush buffer before closing
 	if err := w.writer.Flush(); err != nil {
+		// propagate flush error to caller
 		return err
 	}
 
+	// close file and return result
 	return w.file.Close()
 }
 
@@ -335,10 +383,13 @@ func (w *Writer) Sync() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// flush buffer to file
 	if err := w.writer.Flush(); err != nil {
+		// propagate flush error to caller
 		return err
 	}
 
+	// sync file to disk and return result
 	return w.file.Sync()
 }
 
@@ -347,6 +398,7 @@ func (w *Writer) Sync() error {
 // Returns:
 //   - string: the file path
 func (w *Writer) Path() string {
+	// return log file path
 	return w.path
 }
 
@@ -358,5 +410,6 @@ func (w *Writer) Size() int64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// return current file size
 	return w.size
 }

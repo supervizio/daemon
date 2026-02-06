@@ -32,7 +32,6 @@ detect_os() {
         FreeBSD) echo "freebsd" ;;
         OpenBSD) echo "openbsd" ;;
         NetBSD)  echo "netbsd" ;;
-        DragonFly) echo "dragonfly" ;;
         *)       echo "unknown" ;;
     esac
 }
@@ -92,7 +91,7 @@ remove_service() {
                     ;;
             esac
             ;;
-        freebsd|dragonfly)
+        freebsd)
             log_info "Stopping and removing rc.d service"
             service supervizio stop 2>/dev/null || true
             sysrc -x supervizio_enable 2>/dev/null || true
@@ -152,7 +151,7 @@ main() {
 
     # Ask about config
     CONFIG_DIR="/etc/supervizio"
-    if [ "$OS" = "freebsd" ] || [ "$OS" = "dragonfly" ]; then
+    if [ "$OS" = "freebsd" ]; then
         CONFIG_DIR="/usr/local/etc/supervizio"
     fi
 

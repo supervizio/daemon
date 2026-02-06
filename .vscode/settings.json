@@ -2,5 +2,8 @@
   "files.exclude": {
     ".grepai": true,
     ".claude": true
-  }
+  },
+  "rust-analyzer.linkedProjects": [
+    "src/lib/probe/Cargo.toml"
+  ]
 }

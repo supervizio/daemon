@@ -10,6 +10,7 @@ FROM alpine:3.21
 # Install minimal dependencies for testing
 RUN apk add --no-cache \
     curl \
+    jq \
     procps \
     && mkdir -p /var/log/supervizio /etc/supervizio
 

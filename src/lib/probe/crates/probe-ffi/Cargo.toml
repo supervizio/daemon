@@ -1,0 +1,27 @@
+# probe-ffi - C ABI interface for the probe library
+# This crate exposes the FFI functions that Go calls via CGO
+
+[package]
+name = "probe-ffi"
+version.workspace = true
+edition.workspace = true
+description = "FFI interface for probe metrics library"
+
+[lib]
+name = "probe"
+# Only staticlib for Go CGO linking; cdylib not needed for our use case
+crate-type = ["staticlib"]
+
+[dependencies]
+probe-metrics = { path = "../probe-metrics" }
+probe-platform = { path = "../probe-platform" }
+probe-quota = { path = "../probe-quota" }
+probe-runtime = { path = "../probe-runtime" }
+probe-cache = { path = "../probe-cache" }
+thiserror.workspace = true
+log.workspace = true
+libc.workspace = true
+parking_lot.workspace = true
+
+# Note: cbindgen is used manually to generate include/probe.h when API changes
+# It's not a build dependency since we don't auto-generate headers

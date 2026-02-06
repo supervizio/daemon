@@ -51,6 +51,7 @@ type ProbeMonitorConfig struct {
 // Returns:
 //   - ProbeMonitorConfig: a new configuration instance.
 func NewProbeMonitorConfig(factory Creator) ProbeMonitorConfig {
+	// construct config with factory
 	return ProbeMonitorConfig{
 		Factory: factory,
 	}

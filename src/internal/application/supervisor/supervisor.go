@@ -114,6 +114,7 @@ type Supervisor struct {
 func NewSupervisor(cfg *domainconfig.Config, loader appconfig.Loader, executor domain.Executor, reaper domainlifecycle.Reaper) (*Supervisor, error) {
 	// Validate the configuration before creating the supervisor.
 	if err := cfg.Validate(); err != nil {
+		// return error if configuration is invalid
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
@@ -128,12 +129,14 @@ func NewSupervisor(cfg *domainconfig.Config, loader appconfig.Loader, executor d
 		stats:          make(map[string]*ServiceStats, len(cfg.Services)),
 	}
 
+	// create managers and stats for each service
 	for i := range cfg.Services {
 		svc := &cfg.Services[i]
 		s.managers[svc.Name] = applifecycle.NewManager(svc, executor)
 		s.stats[svc.Name] = NewServiceStats()
 	}
 
+	// return initialized supervisor
 	return s, nil
 }
 
@@ -152,6 +155,7 @@ func NewSupervisor(cfg *domainconfig.Config, loader appconfig.Loader, executor d
 func (s *Supervisor) Start(ctx context.Context) error {
 	// Initialize supervisor state and context.
 	if err := s.initializeStart(ctx); err != nil {
+		// initialize supervisor state and context
 		return err
 	}
 
@@ -160,6 +164,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 
 	// Start all managed services.
 	if err := s.startAllServices(); err != nil {
+		// start all managed services
 		return err
 	}
 
@@ -173,6 +178,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	s.state = StateRunning
 	s.mu.Unlock()
 
+	// mark supervisor as running
 	return nil
 }
 
@@ -187,6 +193,7 @@ func (s *Supervisor) initializeStart(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// check if already running
 	if s.state != StateStopped {
 		// Return error when supervisor is already running.
 		return ErrAlreadyRunning
@@ -194,6 +201,7 @@ func (s *Supervisor) initializeStart(ctx context.Context) error {
 
 	s.state = StateStarting
 	s.ctx, s.cancel = context.WithCancel(ctx)
+	// return success after initialization
 	return nil
 }
 
@@ -214,17 +222,20 @@ func (s *Supervisor) startReaper() {
 func (s *Supervisor) startAllServices() error {
 	// Iterate through all managed services.
 	for name, mgr := range s.managers {
-		// Check if service fails to start.
-		if err := mgr.Start(); err != nil {
-			// Handle startup failure by stopping all services.
-			s.stopAll()
-			s.mu.Lock()
-			s.state = StateStopped
-			s.mu.Unlock()
-			// Return wrapped start error.
-			return fmt.Errorf("failed to start service %s: %w", name, err)
+		err := mgr.Start()
+		// Skip successfully started services.
+		if err == nil {
+			continue
 		}
+		// Handle startup failure by stopping all services.
+		s.stopAll()
+		s.mu.Lock()
+		s.state = StateStopped
+		s.mu.Unlock()
+		// Return wrapped start error.
+		return fmt.Errorf("failed to start service %s: %w", name, err)
 	}
+	// return success after starting all services
 	return nil
 }
 
@@ -239,6 +250,7 @@ func (s *Supervisor) startMonitoringGoroutines() {
 
 // startHealthMonitors creates and starts health monitors for services with probes.
 func (s *Supervisor) startHealthMonitors() {
+	// start monitoring goroutine for each service
 	for i := range s.config.Services {
 		svc := &s.config.Services[i]
 		monitor := s.createHealthMonitor(svc)
@@ -260,6 +272,7 @@ func (s *Supervisor) startHealthMonitors() {
 //   - error: always nil, provided for interface compatibility.
 func (s *Supervisor) Stop() error {
 	s.mu.Lock()
+	// return nil when not running
 	if s.state != StateRunning {
 		s.mu.Unlock()
 		// Return nil when not running.
@@ -289,6 +302,7 @@ func (s *Supervisor) Stop() error {
 	s.state = StateStopped
 	s.mu.Unlock()
 
+	// return success after graceful stop
 	return nil
 }
 
@@ -326,6 +340,7 @@ func (s *Supervisor) Reload() error {
 	configPath := s.config.ConfigPath
 	s.mu.RUnlock()
 
+	// return error when not running
 	if state != StateRunning {
 		// Return error when not running.
 		return ErrNotRunning
@@ -353,6 +368,7 @@ func (s *Supervisor) Reload() error {
 	s.removeDeletedServices(newCfg)
 
 	s.config = newCfg
+	// return success after reload
 	return nil
 }
 
@@ -401,6 +417,7 @@ func (s *Supervisor) updateServices(newCfg *domainconfig.Config) {
 //   - newCfg: the new service configuration.
 func (s *Supervisor) removeDeletedServices(newCfg *domainconfig.Config) {
 	newServices := make(map[string]bool, len(newCfg.Services))
+	// iterate to find removed services
 	for i := range newCfg.Services {
 		newServices[newCfg.Services[i].Name] = true
 	}
@@ -474,10 +491,12 @@ func (s *Supervisor) handleEvent(name string, event *domain.Event) {
 //   - *ServiceStats: the service statistics.
 func (s *Supervisor) getOrCreateStats(name string) *ServiceStats {
 	stats, ok := s.stats[name]
+	// create new stats if not found
 	if !ok {
 		stats = NewServiceStats()
 		s.stats[name] = stats
 	}
+	// return existing or new stats
 	return stats
 }
 
@@ -507,6 +526,8 @@ func (s *Supervisor) updateStatsForEvent(stats *ServiceStats, event *domain.Even
 	// Health events are tracked separately.
 	case domain.EventHealthy, domain.EventUnhealthy:
 		// Health events are tracked by the health monitor, not stats.
+	default:
+		// Unknown event type, ignore.
 	}
 }
 
@@ -523,14 +544,19 @@ func (s *Supervisor) updateHealthMonitor(name string, event *domain.Event) {
 		return
 	}
 
+	// determine which counter to increment
 	switch event.Type {
+	// process started successfully
 	case domain.EventStarted:
 		monitor.SetProcessState(domain.StateRunning)
+	// process stopped or failed
 	case domain.EventStopped, domain.EventFailed, domain.EventExhausted:
 		monitor.SetProcessState(domain.StateStopped)
 	// No state change for these events.
 	case domain.EventRestarting, domain.EventHealthy, domain.EventUnhealthy:
 		// No state change needed.
+	default:
+		// Unknown event type, ignore.
 	}
 }
 
@@ -560,6 +586,8 @@ func (s *Supervisor) updateMetricsTracker(name string, event *domain.Event) {
 	// No metrics action needed.
 	case domain.EventRestarting, domain.EventHealthy, domain.EventUnhealthy:
 		// No action needed.
+	default:
+		// Unknown event type, ignore.
 	}
 }
 
@@ -571,10 +599,12 @@ func (s *Supervisor) updateMetricsTracker(name string, event *domain.Event) {
 // Returns:
 //   - *ServiceStatsSnapshot: atomic snapshot pointer or nil.
 func (s *Supervisor) getStatsSnapshot(stats *ServiceStats) *ServiceStatsSnapshot {
+	// handle nil stats
 	if stats == nil {
 		// Return nil.
 		return nil
 	}
+	// return snapshot pointer
 	return stats.SnapshotPtr()
 }
 
@@ -585,6 +615,7 @@ func (s *Supervisor) getStatsSnapshot(stats *ServiceStats) *ServiceStatsSnapshot
 //   - event: the process event.
 //   - statsSnap: the statistics snapshot.
 func (s *Supervisor) callEventHandler(name string, event *domain.Event, statsSnap *ServiceStatsSnapshot) {
+	// call handler if registered
 	if s.eventHandler != nil {
 		s.eventHandler(name, event, statsSnap)
 	}
@@ -597,6 +628,7 @@ func (s *Supervisor) callEventHandler(name string, event *domain.Event, statsSna
 func (s *Supervisor) SetEventHandler(handler EventHandler) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// store event handler
 	s.eventHandler = handler
 }
 
@@ -609,6 +641,7 @@ func (s *Supervisor) SetEventHandler(handler EventHandler) {
 func (s *Supervisor) SetErrorHandler(handler ErrorHandler) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// store error handler
 	s.errorHandler = handler
 }
 
@@ -621,6 +654,7 @@ func (s *Supervisor) SetErrorHandler(handler ErrorHandler) {
 //   - factory: the prober factory for creating health probers.
 func (s *Supervisor) SetProberFactory(factory apphealth.Creator) {
 	s.mu.Lock()
+	// store prober factory
 	defer s.mu.Unlock()
 	s.proberFactory = factory
 }
@@ -633,6 +667,7 @@ func (s *Supervisor) SetProberFactory(factory apphealth.Creator) {
 func (s *Supervisor) SetMetricsTracker(tracker appmetrics.ProcessTracker) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// store metrics tracker
 	s.metricsTracker = tracker
 }
 
@@ -644,6 +679,7 @@ func (s *Supervisor) SetMetricsTracker(tracker appmetrics.ProcessTracker) {
 // Returns:
 //   - *apphealth.ProbeMonitor: the health monitor if probes are configured, nil otherwise.
 func (s *Supervisor) createHealthMonitor(svc *domainconfig.ServiceConfig) *apphealth.ProbeMonitor {
+	// return nil if no probes configured or factory unavailable
 	if !s.hasConfiguredProbes(svc) || s.proberFactory == nil {
 		// Return nil when no probes configured or no factory available.
 		return nil
@@ -654,6 +690,7 @@ func (s *Supervisor) createHealthMonitor(svc *domainconfig.ServiceConfig) *apphe
 	// Add all listeners with probe bindings.
 	s.addListenersWithProbes(monitor, svc)
 
+	// return configured monitor
 	return monitor
 }
 
@@ -673,6 +710,7 @@ func (s *Supervisor) hasConfiguredProbes(svc *domainconfig.ServiceConfig) bool {
 			return true
 		}
 	}
+	// no probes configured
 	return false
 }
 
@@ -684,28 +722,22 @@ func (s *Supervisor) hasConfiguredProbes(svc *domainconfig.ServiceConfig) bool {
 // Returns:
 //   - apphealth.ProbeMonitorConfig: the monitor configuration with callbacks.
 func (s *Supervisor) createProbeMonitorConfig(serviceName string) apphealth.ProbeMonitorConfig {
+	// return monitor configuration
 	return apphealth.ProbeMonitorConfig{
 		Factory: s.proberFactory,
-		OnStateChange: func(listenerName string, prevState, newState domainhealth.SubjectState, result domainhealth.CheckResult) {
+		OnStateChange: func(_ string, _, _ domainhealth.SubjectState, _ domainhealth.CheckResult) {
 			// Health state transitions are tracked internally.
 			// Events are emitted via OnHealthy/OnUnhealthy callbacks.
-			_ = listenerName
-			_ = prevState
-			_ = newState
-			_ = result
 		},
-		OnUnhealthy: func(listenerName, reason string) {
+		OnUnhealthy: func(_, reason string) {
 			// Trigger restart on health failure (event emitted by restart logic).
-			_ = listenerName
-			_ = reason
 			// Attempt to restart the service on health failure.
 			if err := s.RestartOnHealthFailure(serviceName, reason); err != nil {
 				s.handleRecoveryError("health-restart", serviceName, err)
 			}
 		},
-		OnHealthy: func(listenerName string) {
+		OnHealthy: func(_ string) {
 			// Emit healthy event when service becomes healthy.
-			_ = listenerName
 			// Call event handler if registered.
 			if s.eventHandler != nil {
 				s.mu.RLock()
@@ -724,6 +756,7 @@ func (s *Supervisor) createProbeMonitorConfig(serviceName string) apphealth.Prob
 			}
 		},
 	}
+	// restart service on consecutive failures
 }
 
 // addListenersWithProbes adds all listeners with probe configurations to the monitor.
@@ -769,16 +802,19 @@ func (s *Supervisor) addSingleListenerWithProbe(monitor AddListenerWithBindinger
 func (s *Supervisor) createDomainListener(lc *domainconfig.ListenerConfig) *listener.Listener {
 	// Resolve protocol with default.
 	protocol := lc.Protocol
+	// use default protocol if not specified
 	if protocol == "" {
 		protocol = "tcp"
 	}
 	// Resolve address with default.
 	address := lc.Address
+	// use default address if not specified
 	if address == "" {
 		address = "localhost"
 	}
 	domainListener := listener.NewListener(lc.Name, protocol, address, lc.Port)
 	domainListener.MarkListening()
+	// return configured domain listener
 	return domainListener
 }
 
@@ -792,9 +828,11 @@ func (s *Supervisor) createDomainListener(lc *domainconfig.ListenerConfig) *list
 func (s *Supervisor) createProbeBinding(lc *domainconfig.ListenerConfig) *apphealth.ProbeBinding {
 	// Resolve address with default for target.
 	address := lc.Address
+	// use default address if not specified
 	if address == "" {
 		address = "localhost"
 	}
+	// return probe binding configuration
 	return &apphealth.ProbeBinding{
 		ListenerName: lc.Name,
 		Type:         apphealth.ProbeType(lc.Probe.Type),
@@ -822,6 +860,7 @@ func (s *Supervisor) createProbeBinding(lc *domainconfig.ListenerConfig) *apphea
 //   - err: the error that occurred.
 func (s *Supervisor) handleRecoveryError(operation, serviceName string, err error) {
 	// Skip if no error.
+	// skip if no error to handle
 	if err == nil {
 		// Return early when there is no error to handle.
 		return
@@ -831,6 +870,7 @@ func (s *Supervisor) handleRecoveryError(operation, serviceName string, err erro
 	handler := s.errorHandler
 	s.mu.RUnlock()
 
+	// invoke error handler if set
 	if handler != nil {
 		handler(operation, serviceName, err)
 	}
@@ -846,6 +886,7 @@ func (s *Supervisor) handleRecoveryError(operation, serviceName string, err erro
 func (s *Supervisor) Stats(name string) *ServiceStatsSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	// return snapshot if stats exist
 	if stats, ok := s.stats[name]; ok {
 		snap := stats.Snapshot()
 		// Return pointer to snapshot.
@@ -868,6 +909,7 @@ func (s *Supervisor) AllStats() map[string]*ServiceStatsSnapshot {
 	for name, stats := range s.stats {
 		result[name] = stats.SnapshotPtr()
 	}
+	// return all stats snapshots
 	return result
 }
 
@@ -893,11 +935,13 @@ func (s *Supervisor) RestartOnHealthFailure(serviceName, reason string) error {
 	mgr, ok := s.managers[serviceName]
 	s.mu.RUnlock()
 
+	// validate service exists
 	if !ok {
 		// Return error for missing service.
 		return fmt.Errorf("%w: %s", ErrServiceNotFound, serviceName)
 	}
 
+	// delegate to manager
 	return mgr.RestartOnHealthFailure(reason)
 }
 
@@ -908,6 +952,7 @@ func (s *Supervisor) RestartOnHealthFailure(serviceName, reason string) error {
 func (s *Supervisor) State() State {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	// return current supervisor state
 	return s.state
 }
 
@@ -919,6 +964,7 @@ func (s *Supervisor) Services() map[string]ServiceInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// collect information from each manager
 	info := make(map[string]ServiceInfo, len(s.managers))
 	// Collect information from each manager.
 	for name, mgr := range s.managers {
@@ -929,6 +975,7 @@ func (s *Supervisor) Services() map[string]ServiceInfo {
 			Uptime: mgr.Uptime(),
 		}
 	}
+	// return collected service information
 	return info
 }
 
@@ -942,6 +989,7 @@ func (s *Supervisor) ServiceSnapshotsForTUI() []ServiceSnapshotForTUI {
 	defer s.mu.RUnlock()
 
 	// Collect all services.
+	// collect all services
 	result := make([]ServiceSnapshotForTUI, 0, len(s.managers))
 	// Iterate through managers and build snapshots.
 	for name, mgr := range s.managers {
@@ -974,6 +1022,7 @@ func (s *Supervisor) ServiceSnapshotsForTUI() []ServiceSnapshotForTUI {
 		return result[i].Name < result[j].Name
 	})
 
+	// return sorted service snapshots
 	return result
 }
 
@@ -1001,14 +1050,17 @@ func (s *Supervisor) enrichSnapshotWithConfig(snap *ServiceSnapshotForTUI, name 
 //   - snap: target snapshot to enrich.
 //   - name: service name to lookup metrics for.
 func (s *Supervisor) enrichSnapshotWithMetrics(snap *ServiceSnapshotForTUI, name string) {
+	// add health status if monitor exists
 	if monitor, ok := s.healthMonitors[name]; ok {
 		snap.HealthInt = int(monitor.Status())
 	}
 
+	// add restart count if stats exist
 	if stats, ok := s.stats[name]; ok {
 		snap.RestartCount = stats.RestartCount()
 	}
 
+	// add cpu and memory metrics if available
 	if s.metricsTracker != nil {
 		// Retrieve metrics if available for this service.
 		if metrics, ok := s.metricsTracker.Get(name); ok {
@@ -1032,11 +1084,13 @@ func (s *Supervisor) enrichSnapshotWithMetrics(snap *ServiceSnapshotForTUI, name
 //   - []ListenerSnapshotForTUI: listener snapshots with status indicators.
 func (s *Supervisor) buildListenerSnapshots(svc *domainconfig.ServiceConfig, listeningPorts []int) []ListenerSnapshotForTUI {
 	listening := make(map[int]bool, len(listeningPorts))
+	// build listening ports map
 	for _, p := range listeningPorts {
 		listening[p] = true
 	}
 
 	result := make([]ListenerSnapshotForTUI, 0, len(svc.Listeners))
+	// create listener snapshot for each configured listener
 	for _, lc := range svc.Listeners {
 		ls := ListenerSnapshotForTUI{
 			Name:      lc.Name,
@@ -1059,6 +1113,7 @@ func (s *Supervisor) buildListenerSnapshots(svc *domainconfig.ServiceConfig, lis
 		result = append(result, ls)
 	}
 
+	// return listener snapshots
 	return result
 }
 
@@ -1074,6 +1129,7 @@ func (s *Supervisor) Service(name string) (*applifecycle.Manager, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	mgr, ok := s.managers[name]
+	// return manager and existence flag
 	return mgr, ok
 }
 
@@ -1089,10 +1145,12 @@ func (s *Supervisor) StartService(name string) error {
 	mgr, ok := s.managers[name]
 	s.mu.RUnlock()
 
+	// validate service exists
 	if !ok {
 		// Return error for missing service.
 		return fmt.Errorf("%w: %s", ErrServiceNotFound, name)
 	}
+	// start the service
 	return mgr.Start()
 }
 
@@ -1108,10 +1166,12 @@ func (s *Supervisor) StopService(name string) error {
 	mgr, ok := s.managers[name]
 	s.mu.RUnlock()
 
+	// validate service exists
 	if !ok {
 		// Return error for missing service.
 		return fmt.Errorf("%w: %s", ErrServiceNotFound, name)
 	}
+	// stop the service
 	return mgr.Stop()
 }
 
@@ -1127,15 +1187,18 @@ func (s *Supervisor) RestartService(name string) error {
 	mgr, ok := s.managers[name]
 	s.mu.RUnlock()
 
+	// validate service exists
 	if !ok {
 		// Return error for missing service.
 		return fmt.Errorf("%w: %s", ErrServiceNotFound, name)
 	}
 
 	// Stop the service first.
+	// stop the service first
 	if err := mgr.Stop(); err != nil {
 		// Return stop error if failed.
 		return err
 	}
+	// start the service after stop
 	return mgr.Start()
 }

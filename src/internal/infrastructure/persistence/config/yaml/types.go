@@ -43,37 +43,154 @@ type Duration time.Duration
 func (d *Duration) UnmarshalYAML(unmarshal func(any) error) error {
 	var s string
 
+	// unmarshal string from YAML.
 	if err := unmarshal(&s); err != nil {
+		// return unmarshal error.
 		return err
 	}
 
+	// parse duration string.
 	parsed, err := time.ParseDuration(s)
+	// parsing failed.
 	if err != nil {
+		// return parse error.
 		return err
 	}
 
 	*d = Duration(parsed)
 
+	// duration successfully parsed.
 	return nil
 }
 
 // MarshalText implements encoding.TextMarshaler for Duration.
 // It converts a Duration back to a byte slice for serialization.
-// This approach is used instead of yaml.Marshaler to avoid returning interface{}.
+// This approach is used instead of yaml.Marshaler to avoid returning any.
 //
 // Returns:
 //   - []byte: the duration as a formatted string in bytes
 //   - error: always nil for this implementation
 func (d *Duration) MarshalText() ([]byte, error) {
+	// convert duration to string and return as bytes.
 	return []byte(time.Duration(*d).String()), nil
 }
 
 // ConfigDTO is the YAML representation of the root configuration.
 // It serves as the data transfer object for parsing the main configuration file.
 type ConfigDTO struct {
-	Version  string             `yaml:"version"`
-	Logging  LoggingConfigDTO   `yaml:"logging"`
-	Services []ServiceConfigDTO `yaml:"services"`
+	Version    string              `yaml:"version"`
+	Logging    LoggingConfigDTO    `yaml:"logging"`
+	Monitoring MonitoringConfigDTO `yaml:"monitoring,omitempty"`
+	Services   []ServiceConfigDTO  `yaml:"services"`
+}
+
+// MonitoringConfigDTO is the YAML representation of monitoring configuration.
+// It configures external target monitoring including discovery and static targets.
+type MonitoringConfigDTO struct {
+	Defaults  MonitoringDefaultsDTO `yaml:"defaults,omitempty"`
+	Discovery DiscoveryConfigDTO    `yaml:"discovery,omitempty"`
+	PortScan  PortScanConfigDTO     `yaml:"port_scan,omitempty"`
+	Targets   []TargetConfigDTO     `yaml:"targets,omitempty"`
+}
+
+// MonitoringDefaultsDTO is the YAML representation of monitoring defaults.
+// It defines default probe settings for all targets.
+type MonitoringDefaultsDTO struct {
+	Interval         Duration `yaml:"interval,omitempty"`
+	Timeout          Duration `yaml:"timeout,omitempty"`
+	SuccessThreshold int      `yaml:"success_threshold,omitempty"`
+	FailureThreshold int      `yaml:"failure_threshold,omitempty"`
+}
+
+// DiscoveryConfigDTO is the YAML representation of discovery configuration.
+// It configures auto-discovery for different platforms and runtimes.
+type DiscoveryConfigDTO struct {
+	Systemd    *SystemdDiscoveryDTO    `yaml:"systemd,omitempty"`
+	OpenRC     *OpenRCDiscoveryDTO     `yaml:"openrc,omitempty"`
+	BSDRC      *BSDRCDiscoveryDTO      `yaml:"bsdrc,omitempty"`
+	Docker     *DockerDiscoveryDTO     `yaml:"docker,omitempty"`
+	Podman     *PodmanDiscoveryDTO     `yaml:"podman,omitempty"`
+	Kubernetes *KubernetesDiscoveryDTO `yaml:"kubernetes,omitempty"`
+	Nomad      *NomadDiscoveryDTO      `yaml:"nomad,omitempty"`
+}
+
+// SystemdDiscoveryDTO is the YAML representation of systemd discovery.
+// It configures systemd service discovery on Linux systems.
+type SystemdDiscoveryDTO struct {
+	Enabled  bool     `yaml:"enabled"`
+	Patterns []string `yaml:"patterns,omitempty"`
+}
+
+// OpenRCDiscoveryDTO is the YAML representation of OpenRC discovery.
+// It configures OpenRC service discovery on Alpine/Gentoo systems.
+type OpenRCDiscoveryDTO struct {
+	Enabled  bool     `yaml:"enabled"`
+	Patterns []string `yaml:"patterns,omitempty"`
+}
+
+// BSDRCDiscoveryDTO is the YAML representation of BSD rc.d discovery.
+// It configures BSD rc.d service discovery on BSD systems.
+type BSDRCDiscoveryDTO struct {
+	Enabled  bool     `yaml:"enabled"`
+	Patterns []string `yaml:"patterns,omitempty"`
+}
+
+// DockerDiscoveryDTO is the YAML representation of Docker discovery.
+// It configures Docker container discovery.
+type DockerDiscoveryDTO struct {
+	Enabled    bool              `yaml:"enabled"`
+	SocketPath string            `yaml:"socket_path,omitempty"`
+	Labels     map[string]string `yaml:"labels,omitempty"`
+}
+
+// PodmanDiscoveryDTO is the YAML representation of Podman discovery.
+// It configures Podman container discovery.
+type PodmanDiscoveryDTO struct {
+	Enabled    bool              `yaml:"enabled"`
+	SocketPath string            `yaml:"socket_path,omitempty"`
+	Labels     map[string]string `yaml:"labels,omitempty"`
+}
+
+// KubernetesDiscoveryDTO is the YAML representation of Kubernetes discovery.
+// It configures Kubernetes pod and service discovery.
+type KubernetesDiscoveryDTO struct {
+	Enabled        bool     `yaml:"enabled"`
+	KubeconfigPath string   `yaml:"kubeconfig_path,omitempty"`
+	Namespaces     []string `yaml:"namespaces,omitempty"`
+	LabelSelector  string   `yaml:"label_selector,omitempty"`
+}
+
+// NomadDiscoveryDTO is the YAML representation of Nomad discovery.
+// It configures Nomad allocation discovery.
+type NomadDiscoveryDTO struct {
+	Enabled   bool   `yaml:"enabled"`
+	Address   string `yaml:"address,omitempty"`
+	Namespace string `yaml:"namespace,omitempty"`
+	JobFilter string `yaml:"job_filter,omitempty"`
+}
+
+// PortScanConfigDTO is the YAML representation of port scan configuration.
+// It configures port scan discovery on network interfaces.
+type PortScanConfigDTO struct {
+	Enabled      bool     `yaml:"enabled"`
+	Interfaces   []string `yaml:"interfaces,omitempty"`
+	ExcludePorts []int    `yaml:"exclude_ports,omitempty"`
+	IncludePorts []int    `yaml:"include_ports,omitempty"`
+}
+
+// TargetConfigDTO is the YAML representation of a static target.
+// It defines a manually configured external target for monitoring.
+type TargetConfigDTO struct {
+	Name      string            `yaml:"name"`
+	Type      string            `yaml:"type,omitempty"`
+	Address   string            `yaml:"address,omitempty"`
+	Container string            `yaml:"container,omitempty"`
+	Namespace string            `yaml:"namespace,omitempty"`
+	Service   string            `yaml:"service,omitempty"`
+	Probe     ProbeDTO          `yaml:"probe"`
+	Interval  Duration          `yaml:"interval,omitempty"`
+	Timeout   Duration          `yaml:"timeout,omitempty"`
+	Labels    map[string]string `yaml:"labels,omitempty"`
 }
 
 // ServiceConfigDTO is the YAML representation of a service configuration.
@@ -119,6 +236,7 @@ type ProbeDTO struct {
 	Service          string   `yaml:"service,omitempty"`
 	Command          string   `yaml:"command,omitempty"`
 	Args             []string `yaml:"args,omitempty"`
+	ICMPMode         string   `yaml:"icmp_mode,omitempty"`
 }
 
 // RestartConfigDTO is the YAML representation of restart configuration.
@@ -226,16 +344,269 @@ type LogStreamConfigDTO struct {
 func (c *ConfigDTO) ToDomain(configPath string) *config.Config {
 	services := make([]config.ServiceConfig, 0, len(c.Services))
 
+	// convert each service to domain model.
 	for i := range c.Services {
 		services = append(services, c.Services[i].ToDomain())
 	}
 
+	// return assembled domain configuration.
 	return &config.Config{
 		Version:    c.Version,
 		ConfigPath: configPath,
 		Logging:    c.Logging.ToDomain(),
+		Monitoring: c.Monitoring.ToDomain(),
 		Services:   services,
 	}
+}
+
+// ToDomain converts MonitoringConfigDTO to domain MonitoringConfig.
+// It transforms the YAML monitoring configuration into the domain model.
+//
+// Returns:
+//   - config.MonitoringConfig: the converted domain monitoring configuration
+func (m *MonitoringConfigDTO) ToDomain() config.MonitoringConfig {
+	monitoring := config.NewMonitoringConfig()
+
+	// convert defaults if present
+	if m.Defaults.Interval > 0 || m.Defaults.Timeout > 0 {
+		monitoring.Defaults = m.Defaults.ToDomain()
+	}
+
+	// convert discovery configuration
+	monitoring.Discovery = m.Discovery.ToDomain()
+
+	// convert static targets
+	targets := make([]config.TargetConfig, 0, len(m.Targets))
+	// Iterate through each target configuration.
+	for i := range m.Targets {
+		targets = append(targets, m.Targets[i].ToDomain())
+	}
+	monitoring.Targets = targets
+
+	// return assembled monitoring config
+	return monitoring
+}
+
+// ToDomain converts MonitoringDefaultsDTO to domain MonitoringDefaults.
+// It maps default probe settings from YAML format to the domain model.
+//
+// Returns:
+//   - config.MonitoringDefaults: the converted domain monitoring defaults
+func (m *MonitoringDefaultsDTO) ToDomain() config.MonitoringDefaults {
+	defaults := config.DefaultMonitoringDefaults()
+
+	// override interval if specified
+	if m.Interval > 0 {
+		defaults.Interval = shared.FromTimeDuration(time.Duration(m.Interval))
+	}
+
+	// override timeout if specified
+	if m.Timeout > 0 {
+		defaults.Timeout = shared.FromTimeDuration(time.Duration(m.Timeout))
+	}
+
+	// override success threshold if specified
+	if m.SuccessThreshold > 0 {
+		defaults.SuccessThreshold = m.SuccessThreshold
+	}
+
+	// override failure threshold if specified
+	if m.FailureThreshold > 0 {
+		defaults.FailureThreshold = m.FailureThreshold
+	}
+
+	// return defaults with overrides applied
+	return defaults
+}
+
+// ToDomain converts DiscoveryConfigDTO to domain DiscoveryConfig.
+// It transforms discovery settings from YAML format to the domain model.
+//
+// Returns:
+//   - config.DiscoveryConfig: the converted domain discovery configuration
+func (d *DiscoveryConfigDTO) ToDomain() config.DiscoveryConfig {
+	discovery := config.DiscoveryConfig{}
+
+	// convert systemd discovery if present
+	if d.Systemd != nil {
+		discovery.Systemd = d.Systemd.ToDomain()
+	}
+
+	// convert openrc discovery if present
+	if d.OpenRC != nil {
+		discovery.OpenRC = d.OpenRC.ToDomain()
+	}
+
+	// convert bsdrc discovery if present
+	if d.BSDRC != nil {
+		discovery.BSDRC = d.BSDRC.ToDomain()
+	}
+
+	// convert docker discovery if present
+	if d.Docker != nil {
+		discovery.Docker = d.Docker.ToDomain()
+	}
+
+	// convert podman discovery if present
+	if d.Podman != nil {
+		discovery.Podman = d.Podman.ToDomain()
+	}
+
+	// convert kubernetes discovery if present
+	if d.Kubernetes != nil {
+		discovery.Kubernetes = d.Kubernetes.ToDomain()
+	}
+
+	// convert nomad discovery if present
+	if d.Nomad != nil {
+		discovery.Nomad = d.Nomad.ToDomain()
+	}
+
+	// return assembled discovery config
+	return discovery
+}
+
+// ToDomain converts SystemdDiscoveryDTO to domain SystemdDiscoveryConfig.
+// It maps systemd discovery settings from YAML format to the domain model.
+//
+// Returns:
+//   - *config.SystemdDiscoveryConfig: the converted domain systemd discovery configuration
+func (s *SystemdDiscoveryDTO) ToDomain() *config.SystemdDiscoveryConfig {
+	// return assembled systemd discovery config
+	return &config.SystemdDiscoveryConfig{
+		Enabled:  s.Enabled,
+		Patterns: s.Patterns,
+	}
+}
+
+// ToDomain converts OpenRCDiscoveryDTO to domain OpenRCDiscoveryConfig.
+// It maps OpenRC discovery settings from YAML format to the domain model.
+//
+// Returns:
+//   - *config.OpenRCDiscoveryConfig: the converted domain OpenRC discovery configuration
+func (o *OpenRCDiscoveryDTO) ToDomain() *config.OpenRCDiscoveryConfig {
+	// return assembled openrc discovery config
+	return &config.OpenRCDiscoveryConfig{
+		Enabled:  o.Enabled,
+		Patterns: o.Patterns,
+	}
+}
+
+// ToDomain converts BSDRCDiscoveryDTO to domain BSDRCDiscoveryConfig.
+// It maps BSD rc.d discovery settings from YAML format to the domain model.
+//
+// Returns:
+//   - *config.BSDRCDiscoveryConfig: the converted domain BSD rc.d discovery configuration
+func (b *BSDRCDiscoveryDTO) ToDomain() *config.BSDRCDiscoveryConfig {
+	// return assembled bsdrc discovery config
+	return &config.BSDRCDiscoveryConfig{
+		Enabled:  b.Enabled,
+		Patterns: b.Patterns,
+	}
+}
+
+// ToDomain converts DockerDiscoveryDTO to domain DockerDiscoveryConfig.
+// It maps Docker discovery settings from YAML format to the domain model.
+//
+// Returns:
+//   - *config.DockerDiscoveryConfig: the converted domain Docker discovery configuration
+func (d *DockerDiscoveryDTO) ToDomain() *config.DockerDiscoveryConfig {
+	// return assembled docker discovery config
+	return &config.DockerDiscoveryConfig{
+		Enabled:    d.Enabled,
+		SocketPath: d.SocketPath,
+		Labels:     d.Labels,
+	}
+}
+
+// ToDomain converts PodmanDiscoveryDTO to domain PodmanDiscoveryConfig.
+// It maps Podman discovery settings from YAML format to the domain model.
+//
+// Returns:
+//   - *config.PodmanDiscoveryConfig: the converted domain Podman discovery configuration
+func (p *PodmanDiscoveryDTO) ToDomain() *config.PodmanDiscoveryConfig {
+	// return assembled podman discovery config
+	return &config.PodmanDiscoveryConfig{
+		Enabled:    p.Enabled,
+		SocketPath: p.SocketPath,
+		Labels:     p.Labels,
+	}
+}
+
+// ToDomain converts KubernetesDiscoveryDTO to domain KubernetesDiscoveryConfig.
+// It maps Kubernetes discovery settings from YAML format to the domain model.
+//
+// Returns:
+//   - *config.KubernetesDiscoveryConfig: the converted domain Kubernetes discovery configuration
+func (k *KubernetesDiscoveryDTO) ToDomain() *config.KubernetesDiscoveryConfig {
+	// return assembled kubernetes discovery config
+	return &config.KubernetesDiscoveryConfig{
+		Enabled:        k.Enabled,
+		KubeconfigPath: k.KubeconfigPath,
+		Namespaces:     k.Namespaces,
+		LabelSelector:  k.LabelSelector,
+	}
+}
+
+// ToDomain converts NomadDiscoveryDTO to domain NomadDiscoveryConfig.
+// It maps Nomad discovery settings from YAML format to the domain model.
+//
+// Returns:
+//   - *config.NomadDiscoveryConfig: the converted domain Nomad discovery configuration
+func (n *NomadDiscoveryDTO) ToDomain() *config.NomadDiscoveryConfig {
+	// return assembled nomad discovery config
+	return &config.NomadDiscoveryConfig{
+		Enabled:   n.Enabled,
+		Address:   n.Address,
+		Namespace: n.Namespace,
+		JobFilter: n.JobFilter,
+	}
+}
+
+// ToDomain converts PortScanConfigDTO to domain PortScanDiscoveryConfig.
+// It maps port scan settings from YAML format to the domain model.
+//
+// Returns:
+//   - *config.PortScanDiscoveryConfig: the converted domain port scan configuration
+func (p *PortScanConfigDTO) ToDomain() *config.PortScanDiscoveryConfig {
+	// return assembled port scan config
+	return &config.PortScanDiscoveryConfig{
+		Enabled:      p.Enabled,
+		Interfaces:   p.Interfaces,
+		ExcludePorts: p.ExcludePorts,
+		IncludePorts: p.IncludePorts,
+	}
+}
+
+// ToDomain converts TargetConfigDTO to domain TargetConfig.
+// It maps static target settings from YAML format to the domain model.
+//
+// Returns:
+//   - config.TargetConfig: the converted domain target configuration
+func (t *TargetConfigDTO) ToDomain() config.TargetConfig {
+	target := config.TargetConfig{
+		Name:      t.Name,
+		Type:      t.Type,
+		Address:   t.Address,
+		Container: t.Container,
+		Namespace: t.Namespace,
+		Service:   t.Service,
+		Probe:     t.Probe.ToDomain(),
+		Labels:    t.Labels,
+	}
+
+	// override interval if specified
+	if t.Interval > 0 {
+		target.Interval = shared.FromTimeDuration(time.Duration(t.Interval))
+	}
+
+	// override timeout if specified
+	if t.Timeout > 0 {
+		target.Timeout = shared.FromTimeDuration(time.Duration(t.Timeout))
+	}
+
+	// return assembled target config
+	return target
 }
 
 // ToDomain converts ServiceConfigDTO to domain ServiceConfig.
@@ -246,16 +617,19 @@ func (c *ConfigDTO) ToDomain(configPath string) *config.Config {
 func (s *ServiceConfigDTO) ToDomain() config.ServiceConfig {
 	healthChecks := make([]config.HealthCheckConfig, 0, len(s.HealthChecks))
 
+	// convert each health check to domain model.
 	for i := range s.HealthChecks {
 		healthChecks = append(healthChecks, s.HealthChecks[i].ToDomain())
 	}
 
 	listeners := make([]config.ListenerConfig, 0, len(s.Listeners))
 
+	// convert each listener to domain model.
 	for i := range s.Listeners {
 		listeners = append(listeners, s.Listeners[i].ToDomain())
 	}
 
+	// return assembled domain service config.
 	return config.ServiceConfig{
 		Name:             s.Name,
 		Command:          s.Command,
@@ -281,6 +655,7 @@ func (s *ServiceConfigDTO) ToDomain() config.ServiceConfig {
 func (l *ListenerDTO) ToDomain() config.ListenerConfig {
 	// Default to TCP when no protocol is specified.
 	protocol := l.Protocol
+	// apply default TCP protocol.
 	if protocol == "" {
 		protocol = "tcp"
 	}
@@ -293,11 +668,13 @@ func (l *ListenerDTO) ToDomain() config.ListenerConfig {
 		Exposed:  l.Exposed,
 	}
 
+	// add probe configuration if present.
 	if l.Probe.Type != "" {
 		probe := l.Probe.ToDomain()
 		listener.Probe = &probe
 	}
 
+	// return assembled listener config.
 	return listener
 }
 
@@ -311,6 +688,7 @@ func (p *ProbeDTO) ToDomain() config.ProbeConfig {
 	interval, timeout := p.getTimingDefaults()
 	method, statusCode := p.getHTTPDefaults()
 
+	// return assembled probe config with defaults applied.
 	return config.ProbeConfig{
 		Type:             p.Type,
 		Interval:         shared.FromTimeDuration(interval),
@@ -334,16 +712,19 @@ func (p *ProbeDTO) ToDomain() config.ProbeConfig {
 func (p *ProbeDTO) getThresholdDefaults() (successThreshold, failureThreshold int) {
 	// Require at least one success to mark healthy.
 	successThreshold = p.SuccessThreshold
+	// apply default success threshold.
 	if successThreshold <= 0 {
 		successThreshold = 1
 	}
 
 	// Allow three failures before marking unhealthy.
 	failureThreshold = p.FailureThreshold
+	// apply default failure threshold.
 	if failureThreshold <= 0 {
 		failureThreshold = defaultFailureThreshold
 	}
 
+	// return threshold values with defaults applied.
 	return successThreshold, failureThreshold
 }
 
@@ -354,15 +735,18 @@ func (p *ProbeDTO) getThresholdDefaults() (successThreshold, failureThreshold in
 //   - time.Duration: timeout (default 5s).
 func (p *ProbeDTO) getTimingDefaults() (interval, timeout time.Duration) {
 	interval = time.Duration(p.Interval)
+	// apply default probe interval.
 	if interval <= 0 {
 		interval = defaultProbeInterval
 	}
 
 	timeout = time.Duration(p.Timeout)
+	// apply default probe timeout.
 	if timeout <= 0 {
 		timeout = defaultProbeTimeout
 	}
 
+	// return timing values with defaults applied.
 	return interval, timeout
 }
 
@@ -374,16 +758,19 @@ func (p *ProbeDTO) getTimingDefaults() (interval, timeout time.Duration) {
 func (p *ProbeDTO) getHTTPDefaults() (method string, statusCode int) {
 	// GET is the standard HTTP method for health probes.
 	method = p.Method
+	// apply default HTTP method.
 	if method == "" {
 		method = "GET"
 	}
 
 	// HTTP 200 OK indicates a healthy response.
 	statusCode = p.StatusCode
+	// apply default status code.
 	if statusCode == 0 {
 		statusCode = defaultHTTPStatusCode
 	}
 
+	// return HTTP values with defaults applied.
 	return method, statusCode
 }
 
@@ -393,6 +780,7 @@ func (p *ProbeDTO) getHTTPDefaults() (method string, statusCode int) {
 // Returns:
 //   - config.RestartConfig: the converted domain restart configuration
 func (r *RestartConfigDTO) ToDomain() config.RestartConfig {
+	// return assembled restart config.
 	return config.RestartConfig{
 		Policy:          config.RestartPolicy(r.Policy),
 		MaxRetries:      r.MaxRetries,
@@ -408,6 +796,7 @@ func (r *RestartConfigDTO) ToDomain() config.RestartConfig {
 // Returns:
 //   - config.HealthCheckConfig: the converted domain health check configuration
 func (h *HealthCheckDTO) ToDomain() config.HealthCheckConfig {
+	// return assembled health check config.
 	return config.HealthCheckConfig{
 		Name:       h.Name,
 		Type:       config.HealthCheckType(h.Type),
@@ -429,6 +818,7 @@ func (h *HealthCheckDTO) ToDomain() config.HealthCheckConfig {
 // Returns:
 //   - config.LoggingConfig: the converted domain logging configuration
 func (l *LoggingConfigDTO) ToDomain() config.LoggingConfig {
+	// return assembled logging config.
 	return config.LoggingConfig{
 		BaseDir:  l.BaseDir,
 		Defaults: l.Defaults.ToDomain(),
@@ -444,10 +834,12 @@ func (l *LoggingConfigDTO) ToDomain() config.LoggingConfig {
 func (d *DaemonLoggingDTO) ToDomain() config.DaemonLogging {
 	writers := make([]config.WriterConfig, 0, len(d.Writers))
 
+	// convert each writer to domain model.
 	for i := range d.Writers {
 		writers = append(writers, d.Writers[i].ToDomain())
 	}
 
+	// return assembled daemon logging config.
 	return config.DaemonLogging{
 		Writers: writers,
 	}
@@ -459,6 +851,7 @@ func (d *DaemonLoggingDTO) ToDomain() config.DaemonLogging {
 // Returns:
 //   - config.WriterConfig: the converted domain writer configuration
 func (w *WriterConfigDTO) ToDomain() config.WriterConfig {
+	// return assembled writer config.
 	return config.WriterConfig{
 		Type:  w.Type,
 		Level: w.Level,
@@ -473,6 +866,7 @@ func (w *WriterConfigDTO) ToDomain() config.WriterConfig {
 // Returns:
 //   - config.FileWriterConfig: the converted domain file writer configuration
 func (f *FileWriterConfigDTO) ToDomain() config.FileWriterConfig {
+	// return assembled file writer config.
 	return config.FileWriterConfig{
 		Path:     f.Path,
 		Rotation: f.Rotation.ToDomain(),
@@ -485,6 +879,7 @@ func (f *FileWriterConfigDTO) ToDomain() config.FileWriterConfig {
 // Returns:
 //   - config.JSONWriterConfig: the converted domain JSON writer configuration
 func (j *JSONWriterConfigDTO) ToDomain() config.JSONWriterConfig {
+	// return assembled JSON writer config.
 	return config.JSONWriterConfig{
 		Path:     j.Path,
 		Rotation: j.Rotation.ToDomain(),
@@ -497,6 +892,7 @@ func (j *JSONWriterConfigDTO) ToDomain() config.JSONWriterConfig {
 // Returns:
 //   - config.LogDefaults: the converted domain log defaults
 func (l *LogDefaultsDTO) ToDomain() config.LogDefaults {
+	// return assembled log defaults.
 	return config.LogDefaults{
 		TimestampFormat: l.TimestampFormat,
 		Rotation:        l.Rotation.ToDomain(),
@@ -509,6 +905,7 @@ func (l *LogDefaultsDTO) ToDomain() config.LogDefaults {
 // Returns:
 //   - config.RotationConfig: the converted domain rotation configuration
 func (r *RotationConfigDTO) ToDomain() config.RotationConfig {
+	// return assembled rotation config.
 	return config.RotationConfig{
 		MaxSize:  r.MaxSize,
 		MaxAge:   r.MaxAge,
@@ -523,6 +920,7 @@ func (r *RotationConfigDTO) ToDomain() config.RotationConfig {
 // Returns:
 //   - config.ServiceLogging: the converted domain service logging configuration
 func (s *ServiceLoggingDTO) ToDomain() config.ServiceLogging {
+	// return assembled service logging config.
 	return config.ServiceLogging{
 		Stdout: s.Stdout.ToDomain(),
 		Stderr: s.Stderr.ToDomain(),
@@ -535,6 +933,7 @@ func (s *ServiceLoggingDTO) ToDomain() config.ServiceLogging {
 // Returns:
 //   - config.LogStreamConfig: the converted domain log stream configuration
 func (l *LogStreamConfigDTO) ToDomain() config.LogStreamConfig {
+	// return assembled log stream config.
 	return config.LogStreamConfig{
 		FilePath:       l.File,
 		Format:         l.TimestampFormat,

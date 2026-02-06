@@ -32,6 +32,9 @@ const (
 
 	// mbpsMultiplier converts Mbps to bps.
 	mbpsMultiplier uint64 = 1000 * 1000
+
+	// sysfsNetBasePath is the sysfs path to network interfaces.
+	sysfsNetBasePath string = "/sys/class/net"
 )
 
 // Standard speed tiers in bps.
@@ -75,7 +78,7 @@ var (
 //   - txBytes: transmitted bytes counter
 //   - speed: interface speed in bits per second
 func getInterfaceStats(name string) (rxBytes, txBytes, speed uint64) {
-	basePath := filepath.Join("/sys/class/net", name, "statistics")
+	basePath := filepath.Join(sysfsNetBasePath, name, "statistics")
 
 	// Read RX and TX bytes.
 	rxBytes = readSysfsCounter(filepath.Join(basePath, "rx_bytes"))
@@ -135,7 +138,7 @@ func getInterfaceSpeed(name string) uint64 {
 // Returns:
 //   - uint64: speed in bps or 0 if not available
 func readHardwareSpeed(name string) uint64 {
-	speedPath := filepath.Join("/sys/class/net", name, "speed")
+	speedPath := filepath.Join(sysfsNetBasePath, name, "speed")
 	content, err := os.ReadFile(speedPath)
 	// Handle read error.
 	if err != nil {

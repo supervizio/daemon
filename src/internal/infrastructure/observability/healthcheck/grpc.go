@@ -48,6 +48,7 @@ type GRPCProber struct {
 // Returns:
 //   - *GRPCProber: a configured gRPC prober ready to perform probes.
 func NewGRPCProber(timeout time.Duration) *GRPCProber {
+	// insecure mode is default for testing and internal services
 	return &GRPCProber{timeout: timeout, insecureMode: true}
 }
 
@@ -59,6 +60,7 @@ func NewGRPCProber(timeout time.Duration) *GRPCProber {
 // Returns:
 //   - *GRPCProber: a configured gRPC prober with TLS enabled.
 func NewGRPCProberSecure(timeout time.Duration) *GRPCProber {
+	// secure mode for production services with TLS
 	return &GRPCProber{timeout: timeout, insecureMode: false}
 }
 
@@ -79,16 +81,22 @@ func (p *GRPCProber) Type() string { return proberTypeGRPC }
 func (p *GRPCProber) Probe(ctx context.Context, target health.Target) health.CheckResult {
 	start := time.Now()
 	conn, err := p.connect(ctx, target.Address)
+	// handle connection failure
 	if err != nil {
+		// connection errors indicate service is unreachable
 		return health.NewFailureCheckResult(time.Since(start), fmt.Sprintf("gRPC connection failed: %v", err), err)
 	}
+	// ensure connection is closed after use
 	defer func() { _ = conn.Close() }()
 
 	resp, err := p.checkHealth(ctx, conn, target.Service)
 	latency := time.Since(start)
+	// handle RPC call failure
 	if err != nil {
+		// convert grpc errors to health check results
 		return p.handleRPCError(err, latency, target.Service)
 	}
+	// process health status response
 	return p.handleHealthStatus(resp, latency, target)
 }
 
@@ -106,13 +114,18 @@ func (p *GRPCProber) connect(ctx context.Context, address string) (*grpc.ClientC
 	defer cancel()
 
 	// WithBlock provides blocking behavior required for health check probing.
+	// TODO: Migrate to grpc.NewClient when ready (requires API changes).
+	//nolint:staticcheck // SA1019: grpc.WithBlock is deprecated but required for blocking health checks.
 	opts := []grpc.DialOption{
-		grpc.WithBlock(), //nolint:staticcheck // supported throughout 1.x, needed for blocking
+		grpc.WithBlock(),
 	}
+	// add insecure credentials if needed
 	if p.insecureMode {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
-	return grpc.DialContext(ctx, address, opts...) //nolint:staticcheck // supported throughout 1.x
+	// establish blocking connection with timeout
+	//nolint:staticcheck // SA1019: grpc.DialContext is deprecated but required for blocking health checks.
+	return grpc.DialContext(ctx, address, opts...)
 }
 
 // checkHealth performs the health check RPC call.
@@ -132,6 +145,7 @@ func (p *GRPCProber) checkHealth(
 ) (*grpc_health_v1.HealthCheckResponse, error) {
 	client := grpc_health_v1.NewHealthClient(conn)
 	req := &grpc_health_v1.HealthCheckRequest{Service: service}
+	// execute health check rpc call
 	return client.Check(ctx, req)
 }
 
@@ -146,17 +160,26 @@ func (p *GRPCProber) checkHealth(
 //   - health.CheckResult: the failure result.
 func (p *GRPCProber) handleRPCError(err error, latency time.Duration, service string) health.CheckResult {
 	st, ok := status.FromError(err)
+	// handle non-grpc errors
 	if !ok {
+		// non-grpc errors should still be reported as failures
 		return health.NewFailureCheckResult(latency, fmt.Sprintf("gRPC health check failed: %v", err), err)
 	}
 
-	//nolint:exhaustive // codes.Code has 17+ values, default handles all others
+	// handle specific error codes
+	// We only handle specific codes; all others fall through to default.
 	switch st.Code() {
+	// service not found means misconfiguration or service not registered
 	case codes.NotFound:
+		// service name not registered with health service
 		return health.NewFailureCheckResult(latency, fmt.Sprintf("gRPC service %q unknown", service), ErrGRPCServiceUnknown)
+	// timeout means service exists but is too slow
 	case codes.DeadlineExceeded:
+		// service took too long to respond
 		return health.NewFailureCheckResult(latency, "gRPC health check timeout", err)
+	// all other codes indicate service failure
 	default:
+		// unexpected grpc error code
 		return health.NewFailureCheckResult(latency, fmt.Sprintf("gRPC health check failed: %s", st.Message()), err)
 	}
 }
@@ -175,19 +198,32 @@ func (p *GRPCProber) handleHealthStatus(
 	latency time.Duration,
 	target health.Target,
 ) health.CheckResult {
-	//nolint:exhaustive // UNKNOWN handled by default case
+	// map health status to check result
 	switch resp.Status {
+	// service is healthy and accepting requests
 	case grpc_health_v1.HealthCheckResponse_SERVING:
 		service := target.Service
+		// use default name for server check
 		if service == "" {
 			service = "(server)"
 		}
+		// service is confirmed healthy
 		return health.NewSuccessCheckResult(latency, fmt.Sprintf("gRPC %s serving at %s", service, target.Address))
+	// service exists but is not accepting requests
 	case grpc_health_v1.HealthCheckResponse_NOT_SERVING:
+		// service is down or degraded
 		return health.NewFailureCheckResult(latency, fmt.Sprintf("gRPC service %q not serving", target.Service), ErrGRPCNotServing)
+	// service name is not recognized by the server
 	case grpc_health_v1.HealthCheckResponse_SERVICE_UNKNOWN:
+		// service name unknown to health endpoint
 		return health.NewFailureCheckResult(latency, fmt.Sprintf("gRPC service %q unknown", target.Service), ErrGRPCServiceUnknown)
+	// unknown status - explicit case for exhaustive switch
+	case grpc_health_v1.HealthCheckResponse_UNKNOWN:
+		// status not yet known, treat as failure
+		return health.NewFailureCheckResult(latency, fmt.Sprintf("gRPC service %q status unknown: %v", target.Service, resp.Status), ErrGRPCUnknownStatus)
+	// default handles any future status values
 	default:
+		// unexpected health status value - treat as failure
 		return health.NewFailureCheckResult(latency, fmt.Sprintf("gRPC service %q status unknown: %v", target.Service, resp.Status), ErrGRPCUnknownStatus)
 	}
 }

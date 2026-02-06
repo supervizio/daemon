@@ -27,6 +27,7 @@ const (
 // Returns:
 //   - bool: true if state is ready or running, false otherwise.
 func (s SubjectState) IsReady() bool {
+	// check for ready or running state
 	return s == SubjectReady || s == SubjectRunning
 }
 
@@ -36,6 +37,7 @@ func (s SubjectState) IsReady() bool {
 // Returns:
 //   - bool: true if state is listening or ready, false otherwise.
 func (s SubjectState) IsListening() bool {
+	// check for listening or ready state
 	return s == SubjectListening || s == SubjectReady
 }
 
@@ -44,6 +46,7 @@ func (s SubjectState) IsListening() bool {
 // Returns:
 //   - bool: true if state is closed, stopped, or failed, false otherwise.
 func (s SubjectState) IsClosed() bool {
+	// check for closed, stopped, or failed state
 	return s == SubjectClosed || s == SubjectStopped || s == SubjectFailed
 }
 
@@ -68,6 +71,7 @@ type SubjectSnapshot struct {
 // Returns:
 //   - SubjectSnapshot: a new subject snapshot with the specified values.
 func NewSubjectSnapshot(name, kind string, state SubjectState) SubjectSnapshot {
+	// create snapshot with all fields
 	return SubjectSnapshot{
 		Name:  name,
 		Kind:  kind,
@@ -80,6 +84,7 @@ func NewSubjectSnapshot(name, kind string, state SubjectState) SubjectSnapshot {
 // Returns:
 //   - bool: true if subject is ready or running, false otherwise.
 func (s SubjectSnapshot) IsReady() bool {
+	// check for ready or running state
 	return s.State == SubjectReady || s.State == SubjectRunning
 }
 
@@ -88,6 +93,7 @@ func (s SubjectSnapshot) IsReady() bool {
 // Returns:
 //   - bool: true if subject is listening or ready, false otherwise.
 func (s SubjectSnapshot) IsListening() bool {
+	// check for listening or ready state
 	return s.State == SubjectListening || s.State == SubjectReady
 }
 
@@ -96,5 +102,6 @@ func (s SubjectSnapshot) IsListening() bool {
 // Returns:
 //   - bool: true if subject is closed, stopped, or failed, false otherwise.
 func (s SubjectSnapshot) IsClosed() bool {
+	// check for closed, stopped, or failed state
 	return s.State == SubjectClosed || s.State == SubjectStopped || s.State == SubjectFailed
 }

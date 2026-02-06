@@ -43,6 +43,9 @@ const (
 
 	// defaultCgroupV1Capacity is the initial capacity for cgroup v1 controller map.
 	defaultCgroupV1Capacity int = 8
+
+	// cgroupBasePath is the sysfs path to the cgroup root.
+	cgroupBasePath string = "/sys/fs/cgroup"
 )
 
 // Cached cgroup paths - computed once per process lifetime.
@@ -164,9 +167,11 @@ func parseCgroupV2CPUMax(cgroupPath string, limits *model.ResourceLimits) {
 func parseCgroupV2CPUSet(cgroupPath string, limits *model.ResourceLimits) {
 	// Try effective file first, fall back to regular file.
 	content, err := os.ReadFile(filepath.Join(cgroupPath, "cpuset.cpus.effective"))
+	// handle non-nil condition.
 	if err != nil {
 		// Fall back to regular cpuset file.
 		content, err = os.ReadFile(filepath.Join(cgroupPath, "cpuset.cpus"))
+		// handle non-nil condition.
 		if err != nil {
 			// Neither file readable.
 			return
@@ -269,15 +274,15 @@ func getCgroupV2Path() string {
 			// Handle root cgroup.
 			if path == "" || path == "/" {
 				// Use base cgroup path.
-				return "/sys/fs/cgroup"
+				return cgroupBasePath
 			}
 			// Return full cgroup path.
-			return filepath.Join("/sys/fs/cgroup", path)
+			return filepath.Join(cgroupBasePath, path)
 		}
 	}
 
 	// Default to base cgroup path.
-	return "/sys/fs/cgroup"
+	return cgroupBasePath
 }
 
 // collectCgroupV1 reads cgroup v1 limits.
@@ -503,7 +508,7 @@ func getCgroupV1Paths() map[string]string {
 			}
 
 			// Build full path.
-			fullPath := filepath.Join("/sys/fs/cgroup", controller, cgroupPath)
+			fullPath := filepath.Join(cgroupBasePath, controller, cgroupPath)
 			// Verify path exists.
 			if _, err := os.Stat(fullPath); err == nil {
 				paths[controller] = fullPath

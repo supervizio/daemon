@@ -1,6 +1,15 @@
-//go:build freebsd || openbsd || netbsd || dragonfly
+//go:build freebsd || openbsd || netbsd
 
 package signals
+
+// platformInit is a no-op on BSD systems.
+// BSD uses the same signals as the base Unix implementation.
+//
+// Params:
+//   - m: manager (unused on BSD)
+func platformInit(m *Manager) {
+	// no platform-specific signals on BSD.
+}
 
 // SetSubreaper is a no-op on BSD systems.
 // BSD does not have the PR_SET_CHILD_SUBREAPER functionality.

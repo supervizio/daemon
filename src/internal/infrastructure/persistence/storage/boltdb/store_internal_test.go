@@ -5,6 +5,7 @@ package boltdb
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -877,6 +878,90 @@ func Test_decodeProcessMetrics(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// GETLATESTFROMBUCKET TESTS (PRIVATE FUNCTION)
+// =============================================================================
+
+// TestStore_getLatestFromBucket tests the getLatestFromBucket method.
+func TestStore_getLatestFromBucket(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		setupStore func(t *testing.T, store *Store)
+		wantErr    bool
+		wantFound  bool
+	}{
+		{
+			name: "returns latest entry",
+			setupStore: func(t *testing.T, store *Store) {
+				ctx := t.Context()
+				require.NoError(t, store.WriteSystemCPU(ctx, &metrics.SystemCPU{
+					User:      100,
+					Timestamp: time.Now().Add(-time.Hour),
+				}))
+				require.NoError(t, store.WriteSystemCPU(ctx, &metrics.SystemCPU{
+					User:      200,
+					Timestamp: time.Now(),
+				}))
+			},
+			wantErr:   false,
+			wantFound: true,
+		},
+		{
+			name: "returns error for empty bucket",
+			setupStore: func(_ *testing.T, _ *Store) {
+				// No data written
+			},
+			wantErr:   true,
+			wantFound: false,
+		},
+		{
+			name: "returns context error when cancelled",
+			setupStore: func(t *testing.T, store *Store) {
+				ctx := t.Context()
+				require.NoError(t, store.WriteSystemCPU(ctx, &metrics.SystemCPU{
+					User:      100,
+					Timestamp: time.Now(),
+				}))
+			},
+			wantErr:   true,
+			wantFound: false,
+		},
+	}
+
+	// Execute test cases.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			store := newInternalTestStore(t)
+			tt.setupStore(t, store)
+
+			var cpu metrics.SystemCPU
+			decodeFn := func(data []byte) error {
+				return decodeSystemCPU(data, &cpu)
+			}
+
+			var ctx context.Context
+			if tt.name == "returns context error when cancelled" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(context.Background())
+				cancel()
+			} else {
+				ctx = context.Background()
+			}
+
+			err := store.getLatestFromBucket(ctx, bucketSystemCPU, decodeFn, "cpu")
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}

@@ -37,6 +37,7 @@ type AggregatedHealth struct {
 //
 // Deprecated: Use Subjects field directly instead.
 func (h *AggregatedHealth) Listeners() []SubjectStatus {
+	// return subjects for backward compatibility
 	return h.Subjects
 }
 
@@ -48,6 +49,7 @@ func (h *AggregatedHealth) Listeners() []SubjectStatus {
 // Returns:
 //   - *AggregatedHealth: a new aggregated health status.
 func NewAggregatedHealth(processState process.State) *AggregatedHealth {
+	// initialize with current timestamp
 	return &AggregatedHealth{
 		ProcessState: processState,
 		LastCheck:    time.Now(),
@@ -59,6 +61,7 @@ func NewAggregatedHealth(processState process.State) *AggregatedHealth {
 // Params:
 //   - snapshot: the subject snapshot.
 func (h *AggregatedHealth) AddSubject(snapshot SubjectSnapshot) {
+	// append new subject status
 	h.Subjects = append(h.Subjects, NewSubjectStatus(snapshot))
 }
 
@@ -70,6 +73,7 @@ func (h *AggregatedHealth) AddSubject(snapshot SubjectSnapshot) {
 //
 // Deprecated: Use AddSubject instead.
 func (h *AggregatedHealth) AddListener(name string, state SubjectState) {
+	// append listener for backward compatibility
 	h.Subjects = append(h.Subjects, NewSubjectStatusFromState(name, state))
 }
 
@@ -78,6 +82,7 @@ func (h *AggregatedHealth) AddListener(name string, state SubjectState) {
 // Params:
 //   - status: the custom status string.
 func (h *AggregatedHealth) SetCustomStatus(status string) {
+	// update custom status and timestamp
 	h.CustomStatus = status
 	h.LastCheck = time.Now()
 }
@@ -87,6 +92,7 @@ func (h *AggregatedHealth) SetCustomStatus(status string) {
 // Params:
 //   - latency: the latency duration.
 func (h *AggregatedHealth) SetLatency(latency time.Duration) {
+	// update latency measurement
 	h.Latency = latency
 }
 
@@ -98,20 +104,27 @@ func (h *AggregatedHealth) SetLatency(latency time.Duration) {
 // Returns:
 //   - Status: the computed listener status.
 func (h *AggregatedHealth) computeListenerStatus() Status {
+	// no listeners means healthy
 	if len(h.Subjects) == 0 {
+		// no subjects to check
 		return StatusHealthy
 	}
 
 	allReady := h.AllListenersReady()
+	// all listeners ready means healthy
 	if allReady {
+		// all subjects ready
 		return StatusHealthy
 	}
 
 	anyListening := h.hasAnyListenerListening()
+	// some listening but not all ready means degraded
 	if anyListening {
+		// partial availability
 		return StatusDegraded
 	}
 
+	// none listening means unhealthy
 	return StatusUnhealthy
 }
 
@@ -120,11 +133,15 @@ func (h *AggregatedHealth) computeListenerStatus() Status {
 // Returns:
 //   - bool: true if any listener is listening, false otherwise.
 func (h *AggregatedHealth) hasAnyListenerListening() bool {
+	// check each subject for listening state
 	for _, ls := range h.Subjects {
+		// found a listening subject
 		if ls.State.IsListening() {
+			// found listening subject
 			return true
 		}
 	}
+	// no listening subjects found
 	return false
 }
 
@@ -133,6 +150,7 @@ func (h *AggregatedHealth) hasAnyListenerListening() bool {
 // Returns:
 //   - bool: true if custom status is set and not "HEALTHY", false otherwise.
 func (h *AggregatedHealth) hasNonHealthyCustomStatus() bool {
+	// check for non-healthy custom status
 	return h.CustomStatus != "" && h.CustomStatus != "HEALTHY"
 }
 
@@ -145,19 +163,26 @@ func (h *AggregatedHealth) hasNonHealthyCustomStatus() bool {
 // Returns:
 //   - Status: the computed overall status.
 func (h *AggregatedHealth) Status() Status {
+	// process not running means unhealthy
 	if !h.ProcessState.IsRunning() {
+		// process down
 		return StatusUnhealthy
 	}
 
 	listenerStatus := h.computeListenerStatus()
+	// check listener health
 	if listenerStatus != StatusHealthy {
+		// propagate listener status
 		return listenerStatus
 	}
 
+	// check custom status degradation
 	if h.hasNonHealthyCustomStatus() {
+		// custom degradation
 		return StatusDegraded
 	}
 
+	// all checks passed
 	return StatusHealthy
 }
 
@@ -166,6 +191,7 @@ func (h *AggregatedHealth) Status() Status {
 // Returns:
 //   - bool: true if healthy, false otherwise.
 func (h *AggregatedHealth) IsHealthy() bool {
+	// check for healthy status
 	return h.Status() == StatusHealthy
 }
 
@@ -174,6 +200,7 @@ func (h *AggregatedHealth) IsHealthy() bool {
 // Returns:
 //   - bool: true if degraded, false otherwise.
 func (h *AggregatedHealth) IsDegraded() bool {
+	// check for degraded status
 	return h.Status() == StatusDegraded
 }
 
@@ -182,6 +209,7 @@ func (h *AggregatedHealth) IsDegraded() bool {
 // Returns:
 //   - bool: true if unhealthy, false otherwise.
 func (h *AggregatedHealth) IsUnhealthy() bool {
+	// check for unhealthy status
 	return h.Status() == StatusUnhealthy
 }
 
@@ -190,11 +218,15 @@ func (h *AggregatedHealth) IsUnhealthy() bool {
 // Returns:
 //   - bool: true if all listeners are in Ready state.
 func (h *AggregatedHealth) AllListenersReady() bool {
+	// check each subject for ready state
 	for _, ls := range h.Subjects {
+		// found a non-ready subject
 		if !ls.State.IsReady() {
+			// subject not ready
 			return false
 		}
 	}
+	// all subjects are ready
 	return true
 }
 
@@ -204,11 +236,14 @@ func (h *AggregatedHealth) AllListenersReady() bool {
 //   - int: the number of listeners in Ready state.
 func (h *AggregatedHealth) ReadyListenerCount() int {
 	count := 0
+	// count ready subjects
 	for _, ls := range h.Subjects {
+		// increment count for ready subjects
 		if ls.State.IsReady() {
 			count++
 		}
 	}
+	// return total ready count
 	return count
 }
 
@@ -217,5 +252,6 @@ func (h *AggregatedHealth) ReadyListenerCount() int {
 // Returns:
 //   - int: the total number of listeners.
 func (h *AggregatedHealth) TotalListenerCount() int {
+	// return total subject count
 	return len(h.Subjects)
 }

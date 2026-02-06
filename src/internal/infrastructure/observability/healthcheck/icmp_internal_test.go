@@ -7,45 +7,47 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kodflow/daemon/internal/domain/config"
+	"github.com/kodflow/daemon/internal/domain/health"
 )
 
 // TestICMPProber_internalFields tests internal struct fields.
 func TestICMPProber_internalFields(t *testing.T) {
 	tests := []struct {
-		name                   string
-		timeout                time.Duration
-		tcpPort                int
-		expectedTimeout        time.Duration
-		expectedUseTCPFallback bool
-		expectedTCPPort        int
-		useWithTCPFallback     bool
+		name               string
+		timeout            time.Duration
+		tcpPort            int
+		expectedTimeout    time.Duration
+		expectedMode       config.ICMPMode
+		expectedTCPPort    int
+		useWithTCPFallback bool
 	}{
 		{
-			name:                   "default_prober",
-			timeout:                5 * time.Second,
-			expectedTimeout:        5 * time.Second,
-			expectedUseTCPFallback: true,
-			expectedTCPPort:        defaultTCPFallbackPort,
-			useWithTCPFallback:     false,
+			name:               "default_prober",
+			timeout:            5 * time.Second,
+			expectedTimeout:    5 * time.Second,
+			expectedMode:       config.ICMPModeAuto,
+			expectedTCPPort:    defaultTCPFallbackPort,
+			useWithTCPFallback: false,
 		},
 		{
-			name:                   "prober_with_custom_port",
-			timeout:                5 * time.Second,
-			tcpPort:                443,
-			expectedTimeout:        5 * time.Second,
-			expectedUseTCPFallback: true,
-			expectedTCPPort:        443,
-			useWithTCPFallback:     true,
+			name:               "prober_with_custom_port",
+			timeout:            5 * time.Second,
+			tcpPort:            443,
+			expectedTimeout:    5 * time.Second,
+			expectedMode:       config.ICMPModeFallback,
+			expectedTCPPort:    443,
+			useWithTCPFallback: true,
 		},
 		{
-			name:                   "zero_timeout",
-			timeout:                0,
-			expectedTimeout:        0,
-			expectedUseTCPFallback: true,
-			expectedTCPPort:        defaultTCPFallbackPort,
-			useWithTCPFallback:     false,
+			name:               "zero_timeout",
+			timeout:            0,
+			expectedTimeout:    0,
+			expectedMode:       config.ICMPModeAuto,
+			expectedTCPPort:    defaultTCPFallbackPort,
+			useWithTCPFallback: false,
 		},
 	}
 
@@ -62,7 +64,7 @@ func TestICMPProber_internalFields(t *testing.T) {
 
 			// Verify internal fields.
 			assert.Equal(t, tt.expectedTimeout, prober.timeout)
-			assert.Equal(t, tt.expectedUseTCPFallback, prober.useTCPFallback)
+			assert.Equal(t, tt.expectedMode, prober.mode)
 			assert.Equal(t, tt.expectedTCPPort, prober.tcpPort)
 		})
 	}
@@ -266,33 +268,34 @@ func TestICMPProber_Probe_addressWithoutPort(t *testing.T) {
 	}
 }
 
-// TestICMPProber_Probe_withoutTCPFallback tests the non-fallback code path.
-func TestICMPProber_Probe_withoutTCPFallback(t *testing.T) {
+// TestICMPProber_Probe_withNativeMode tests the native mode code path.
+func TestICMPProber_Probe_withNativeMode(t *testing.T) {
 	tests := []struct {
 		name string
 	}{
 		{
-			name: "useTCPFallback_false_path",
+			name: "native_mode_path",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create prober with useTCPFallback explicitly set to false.
+			// Create prober with native mode.
 			prober := &ICMPProber{
-				timeout:        100 * time.Millisecond,
-				useTCPFallback: false,
-				tcpPort:        80,
+				timeout:             100 * time.Millisecond,
+				mode:                config.ICMPModeNative,
+				hasNativeCapability: false, // Will fall back to TCP
+				tcpPort:             80,
 			}
 
 			target := health.Target{
 				Address: "192.0.2.1",
 			}
 
-			// This will execute the non-fallback path (line 107).
+			// This will execute the native path but fall back to TCP.
 			result := prober.Probe(context.Background(), target)
 
-			// Will fail since real ICMP is not implemented (TODO in code).
+			// Will fail since host is unreachable.
 			assert.False(t, result.Success)
 		})
 	}

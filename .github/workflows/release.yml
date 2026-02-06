@@ -156,8 +156,6 @@ jobs:
           - { goos: netbsd, goarch: arm64 }
           - { goos: netbsd, goarch: arm }
           - { goos: netbsd, goarch: 386 }
-          # DragonFlyBSD
-          - { goos: dragonfly, goarch: amd64 }
 
     steps:
       - name: Checkout code
@@ -623,9 +621,6 @@ jobs:
           - name: NetBSD
             vm: netbsd
             goos: netbsd
-          - name: DragonFlyBSD
-            vm: dragonfly
-            goos: dragonfly
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -783,7 +778,6 @@ jobs:
           | FreeBSD | ✅ | ✅ | ✅ | ✅ | ✅ |
           | OpenBSD | ✅ | ✅ | ✅ | ✅ | - |
           | NetBSD | ✅ | ✅ | ✅ | ✅ | - |
-          | DragonFlyBSD | ✅ | - | - | - | - |
 
           ### E2E Tested
 
@@ -793,7 +787,7 @@ jobs:
           | OpenRC | Alpine | ✅ |
           | SysVinit | Devuan | ✅ |
           | runit | Alpine | ✅ |
-          | BSD rc.d | FreeBSD, OpenBSD, NetBSD, DragonFlyBSD | ✅ |
+          | BSD rc.d | FreeBSD, OpenBSD, NetBSD | ✅ |
 
           ### Linux Packages
 

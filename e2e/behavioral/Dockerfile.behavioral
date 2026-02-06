@@ -3,8 +3,8 @@
 
 FROM alpine:3.21
 
-# Install basic tools for debugging and process inspection
-RUN apk add --no-cache procps curl
+# Install basic tools for debugging, process inspection, and internal testing
+RUN apk add --no-cache procps curl netcat-openbsd
 
 # Create required directories
 RUN mkdir -p /var/log/supervizio /etc/daemon /run/supervizio

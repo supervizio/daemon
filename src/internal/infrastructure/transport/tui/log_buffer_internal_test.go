@@ -132,4 +132,3 @@ func Test_LogBuffer_entriesLocked(t *testing.T) {
 		})
 	}
 }
-

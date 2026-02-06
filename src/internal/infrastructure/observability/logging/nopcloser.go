@@ -19,5 +19,6 @@ type nopCloser struct {
 // Returns:
 //   - error: always returns nil.
 func (n *nopCloser) Close() error {
+	// no-op close for standard streams
 	return nil
 }

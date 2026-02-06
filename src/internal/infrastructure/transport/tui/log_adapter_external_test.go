@@ -13,6 +13,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// testMaxLinesLimitLogContent represents log content for testing maxLines limit.
+const testMaxLinesLimitLogContent string = `2026-01-28T10:00:00Z [INFO] line1
+2026-01-28T10:00:01Z [INFO] line2
+2026-01-28T10:00:02Z [INFO] line3
+2026-01-28T10:00:03Z [INFO] line4
+2026-01-28T10:00:04Z [INFO] line5`
+
 // TestNewLogAdapter tests the default constructor.
 func TestNewLogAdapter(t *testing.T) {
 	t.Parallel()
@@ -353,12 +360,8 @@ func TestLogAdapter_LoadLogHistory(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			name: "maxLines limit",
-			logContent: `2026-01-28T10:00:00Z [INFO] line1
-2026-01-28T10:00:01Z [INFO] line2
-2026-01-28T10:00:02Z [INFO] line3
-2026-01-28T10:00:03Z [INFO] line4
-2026-01-28T10:00:04Z [INFO] line5`,
+			name:          "maxLines limit",
+			logContent:    testMaxLinesLimitLogContent,
 			maxLines:      3,
 			expectedCount: 3,
 			expectError:   false,
@@ -374,8 +377,8 @@ invalid line without timestamp`,
 			expectError:   false,
 		},
 		{
-			name: "empty file",
-			logContent: ``,
+			name:          "empty file",
+			logContent:    ``,
 			maxLines:      100,
 			expectedCount: 0,
 			expectError:   false,

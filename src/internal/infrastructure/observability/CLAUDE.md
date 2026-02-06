@@ -45,4 +45,4 @@ observability/
 | Terme | Signification |
 |-------|---------------|
 | **healthcheck** | Vérification qu'un service répond (TCP, HTTP...) |
-| **probe/metrics** | Collecte de métriques système (CPU, RAM) - voir `resources/` |
+| **probe/metrics** | Collecte de métriques système (CPU, RAM) - voir `../probe/` |

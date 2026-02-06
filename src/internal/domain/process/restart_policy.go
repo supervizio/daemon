@@ -48,9 +48,11 @@ type RestartTracker struct {
 //   - *RestartTracker: a new restart tracker instance
 func NewRestartTracker(cfg *config.RestartConfig) *RestartTracker {
 	window := DefaultStabilityWindow
+	// override window if configured
 	if cfg.StabilityWindow.Duration() > 0 {
 		window = cfg.StabilityWindow.Duration()
 	}
+	// construct tracker with configuration
 	return &RestartTracker{
 		config: cfg,
 		window: window,
@@ -66,19 +68,32 @@ func NewRestartTracker(cfg *config.RestartConfig) *RestartTracker {
 // Returns:
 //   - bool: true if a restart should be attempted
 func (rt *RestartTracker) ShouldRestart(exitCode int) bool {
+	// evaluate restart policy against exit code
 	switch rt.config.Policy {
+	// always restart policy
 	case config.RestartAlways:
+		// check if under max retries
 		return rt.attempts < rt.config.MaxRetries
+	// restart only on failure policy
 	case config.RestartOnFailure:
+		// skip restart on successful exit
 		if exitCode == 0 {
+			// do not restart successful exits
 			return false
 		}
+		// check if under max retries
 		return rt.attempts < rt.config.MaxRetries
+	// never restart policy
 	case config.RestartNever:
+		// never restart
 		return false
+	// unless stopped policy
 	case config.RestartUnless:
+		// always restart unless explicitly stopped
 		return true
+	// unknown policy
 	default:
+		// do not restart by default
 		return false
 	}
 }
@@ -110,6 +125,7 @@ func (rt *RestartTracker) Reset() {
 // Returns:
 //   - void: this method may modify the tracker state
 func (rt *RestartTracker) MaybeReset(uptime time.Duration) {
+	// reset counter if process is stable
 	if uptime >= rt.window {
 		rt.Reset()
 	}
@@ -120,6 +136,7 @@ func (rt *RestartTracker) MaybeReset(uptime time.Duration) {
 // Returns:
 //   - int: the current restart attempt count
 func (rt *RestartTracker) Attempts() int {
+	// return current attempt count
 	return rt.attempts
 }
 
@@ -133,6 +150,7 @@ func (rt *RestartTracker) NextDelay() time.Duration {
 	baseDelay := rt.config.Delay.Duration()
 	maxDelay := rt.config.DelayMax.Duration()
 
+	// use default max delay if not configured
 	if maxDelay == 0 {
 		maxDelay = baseDelay * time.Duration(DefaultMaxDelayMultiplier)
 	}
@@ -143,6 +161,7 @@ func (rt *RestartTracker) NextDelay() time.Duration {
 	// #nosec G115 - attempts is capped to MaxBackoffAttempts (30), safe for uint conversion
 	delay := baseDelay * time.Duration(1<<uint(attempts))
 
+	// cap delay at maximum
 	return min(delay, maxDelay)
 }
 
@@ -151,6 +170,7 @@ func (rt *RestartTracker) NextDelay() time.Duration {
 // Returns:
 //   - bool: true if the restart attempt limit has been reached
 func (rt *RestartTracker) IsExhausted() bool {
+	// check if attempts reached max retries
 	return rt.attempts >= rt.config.MaxRetries
 }
 

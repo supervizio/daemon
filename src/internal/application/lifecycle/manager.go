@@ -76,6 +76,7 @@ func (m *Manager) Events() <-chan domain.Event {
 // Returns:
 //   - string: the service name from configuration.
 func (m *Manager) Name() string {
+	// return service name from config
 	return m.config.Name
 }
 
@@ -84,6 +85,7 @@ func (m *Manager) Name() string {
 // Returns:
 //   - domain.State: the current state of the managed process.
 func (m *Manager) State() domain.State {
+	// lock for thread-safe read
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	// Return the current state under read lock.
@@ -95,6 +97,7 @@ func (m *Manager) State() domain.State {
 // Returns:
 //   - int: the process ID or 0 if not running.
 func (m *Manager) PID() int {
+	// lock for thread-safe read
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	// Return the current PID under read lock.
@@ -106,6 +109,7 @@ func (m *Manager) PID() int {
 // Returns:
 //   - int64: the uptime in seconds or 0 if not running.
 func (m *Manager) Uptime() int64 {
+	// lock for thread-safe read
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	// Check if process is not running.
@@ -127,6 +131,7 @@ func (m *Manager) Uptime() int64 {
 //   - The goroutine handles process lifecycle including restarts based on policy.
 //   - Use Stop() to terminate the goroutine and cleanup resources.
 func (m *Manager) Start() error {
+	// lock for state check and update
 	m.mu.Lock()
 	// Check if manager is already running.
 	if m.running {
@@ -134,10 +139,12 @@ func (m *Manager) Start() error {
 		// Return error wrapped with already running context.
 		return fmt.Errorf("manager already running: %w", domain.ErrAlreadyRunning)
 	}
+	// set running state
 	m.running = true
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 	m.mu.Unlock()
 
+	// start main lifecycle goroutine
 	go m.run()
 	// Return nil on successful start.
 	return nil
@@ -145,6 +152,7 @@ func (m *Manager) Start() error {
 
 // run is the main loop that manages the process lifecycle.
 func (m *Manager) run() {
+	// ensure running flag is cleared on exit
 	defer func() {
 		m.mu.Lock()
 		m.running = false
@@ -153,11 +161,13 @@ func (m *Manager) run() {
 
 	// Check if service is configured as oneshot.
 	if m.config.Oneshot {
+		// execute oneshot service
 		m.runOnce()
 		// Return after oneshot execution completes.
 		return
 	}
 
+	// run with restart handling
 	m.runWithRestart()
 }
 
@@ -165,21 +175,45 @@ func (m *Manager) run() {
 func (m *Manager) runOnce() {
 	// Attempt to start the process.
 	if err := m.startProcess(); err != nil {
+		// send failed event
 		m.sendEvent(domain.EventFailed, err)
 		// Return early on start failure.
 		return
 	}
 
+	// send started event
 	m.sendEvent(domain.EventStarted, nil)
-	result := <-m.waitCh
+
+	// Wait for process exit or context cancellation.
+	var result domain.ExitResult
+	select {
+	// Handle context cancellation (shutdown).
+	case <-m.ctx.Done():
+		// Get current PID under lock.
+		m.mu.Lock()
+		pid := m.pid
+		m.mu.Unlock()
+		// Stop process if running (best-effort, errors discarded during shutdown).
+		if pid > 0 {
+			_ = m.executor.Stop(pid, defaultStopTimeout)
+		}
+		// send stopped event for clean shutdown
+		m.sendEvent(domain.EventStopped, nil)
+		// Return after handling shutdown.
+		return
+	// Wait for process exit.
+	case result = <-m.waitCh:
+	}
 
 	// Check if process exited with non-zero code.
 	if result.Code != 0 {
+		// send failed event with exit code
 		m.sendEvent(domain.EventFailed, fmt.Errorf("exit code %d: %w", result.Code, domain.ErrProcessFailed))
 		// Return after reporting failure.
 		return
 	}
 
+	// send stopped event
 	m.sendEvent(domain.EventStopped, nil)
 }
 
@@ -212,6 +246,7 @@ func (m *Manager) runWithRestart() {
 // Returns:
 //   - bool: true if context is cancelled, false otherwise.
 func (m *Manager) isContextCancelled() bool {
+	// check context state non-blocking
 	select {
 	// Check if context done channel is closed.
 	case <-m.ctx.Done():
@@ -231,11 +266,13 @@ func (m *Manager) isContextCancelled() bool {
 func (m *Manager) tryStartProcess() bool {
 	// Attempt to start the underlying process.
 	if err := m.startProcess(); err != nil {
+		// send failed event
 		m.sendEvent(domain.EventFailed, err)
 		// Check if restart policy allows retry.
 		if !m.tracker.ShouldRestart(-1) {
 			// Check if restarts were exhausted.
 			if m.tracker.IsExhausted() {
+				// send exhausted event
 				m.sendEvent(domain.EventExhausted, fmt.Errorf("max restarts (%d) exceeded: %w", m.tracker.Attempts(), domain.ErrMaxRetriesExceeded))
 			}
 			// Return false when no more restarts allowed.
@@ -245,6 +282,7 @@ func (m *Manager) tryStartProcess() bool {
 		return m.waitAndRestart()
 	}
 
+	// send started event
 	m.sendEvent(domain.EventStarted, nil)
 	// Return true on successful start.
 	return true
@@ -255,6 +293,7 @@ func (m *Manager) tryStartProcess() bool {
 // Returns:
 //   - error: nil on success, error on failure.
 func (m *Manager) startProcess() error {
+	// set state to starting
 	m.mu.Lock()
 	m.state = domain.StateStarting
 	m.mu.Unlock()
@@ -271,12 +310,15 @@ func (m *Manager) startProcess() error {
 	pid, wait, err := m.executor.Start(m.ctx, spec)
 	// Check if start failed.
 	if err != nil {
+		// update state to failed
 		m.mu.Lock()
 		m.state = domain.StateFailed
 		m.mu.Unlock()
+		// return start error
 		return err
 	}
 
+	// update process state to running
 	m.mu.Lock()
 	m.pid = pid
 	m.waitCh = wait
@@ -296,9 +338,11 @@ func (m *Manager) startProcess() error {
 // Returns:
 //   - bool: true if shutdown requested, false if process exited.
 func (m *Manager) waitForProcessOrShutdown() bool {
+	// wait for either context or process exit
 	select {
 	// Handle context cancellation (shutdown).
 	case <-m.ctx.Done():
+		// get current PID under lock
 		m.mu.Lock()
 		pid := m.pid
 		m.mu.Unlock()
@@ -323,7 +367,9 @@ func (m *Manager) waitForProcessOrShutdown() bool {
 // Returns:
 //   - bool: true if no restart should occur, false to continue restart loop.
 func (m *Manager) handleProcessExit(result domain.ExitResult) bool {
+	// update manager state after exit
 	m.updateStateAfterExit(result)
+	// send appropriate exit event
 	m.sendExitEvent(result)
 
 	// Reset backoff counter if process ran stably for the configured window.
@@ -332,6 +378,7 @@ func (m *Manager) handleProcessExit(result domain.ExitResult) bool {
 
 	// Check if restart policy allows restart.
 	if !m.tracker.ShouldRestart(result.Code) {
+		// handle exhausted restarts if needed
 		m.handleExhaustedRestarts(result)
 		// Return true to stop restart loop.
 		return true
@@ -351,14 +398,17 @@ func (m *Manager) handleProcessExit(result domain.ExitResult) bool {
 // Params:
 //   - result: the exit result containing exit code.
 func (m *Manager) updateStateAfterExit(result domain.ExitResult) {
+	// lock for state update
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// update exit code and clear PID
 	m.exitCode = result.Code
 	m.pid = 0
 
 	// Check if process exited successfully.
 	if result.Code == 0 {
+		// set stopped state for clean exit
 		m.state = domain.StateStopped
 	} else {
 		// Set failed state for non-zero exit.
@@ -373,6 +423,7 @@ func (m *Manager) updateStateAfterExit(result domain.ExitResult) {
 func (m *Manager) sendExitEvent(result domain.ExitResult) {
 	// Check exit code for event type.
 	if result.Code == 0 {
+		// send stopped event for clean exit
 		m.sendEvent(domain.EventStopped, nil)
 	} else {
 		// Send failed event with exit code error.
@@ -385,6 +436,7 @@ func (m *Manager) sendExitEvent(result domain.ExitResult) {
 // Returns:
 //   - time.Duration: the process uptime.
 func (m *Manager) calculateUptime() time.Duration {
+	// lock for reading start time
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	// Calculate uptime based on start time.
@@ -406,6 +458,7 @@ func (m *Manager) handleExhaustedRestarts(result domain.ExitResult) {
 
 	// Determine if exhausted event should be emitted based on restart policy.
 	if m.shouldEmitExhaustedEvent(result.Code) {
+		// send exhausted event
 		m.sendEvent(domain.EventExhausted, fmt.Errorf("max restarts (%d) exceeded: %w", m.tracker.Attempts(), domain.ErrMaxRetriesExceeded))
 	}
 }
@@ -438,10 +491,11 @@ func (m *Manager) shouldEmitExhaustedEvent(exitCode int) bool {
 	case config.RestartUnless:
 		// Always restarts (no max), so exhausted doesn't apply.
 		return false
+	// Handle unknown restart policies by not emitting exhausted event.
+	default:
+		// Return false for unknown policies.
+		return false
 	}
-
-	// Return false for unknown policies.
-	return false
 }
 
 // waitAndRestart waits the configured delay and prepares for restart.
@@ -449,11 +503,14 @@ func (m *Manager) shouldEmitExhaustedEvent(exitCode int) bool {
 // Returns:
 //   - bool: true if restart should proceed, false if cancelled.
 func (m *Manager) waitAndRestart() bool {
+	// record restart attempt
 	m.tracker.RecordAttempt()
+	// increment restart count
 	m.mu.Lock()
 	m.restarts++
 	m.mu.Unlock()
 
+	// send restarting event
 	m.sendEvent(domain.EventRestarting, nil)
 
 	delay := m.tracker.NextDelay()
@@ -463,6 +520,7 @@ func (m *Manager) waitAndRestart() bool {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 
+	// wait for either context cancellation or delay
 	select {
 	// Handle context cancellation during delay.
 	case <-m.ctx.Done():
@@ -480,6 +538,7 @@ func (m *Manager) waitAndRestart() bool {
 // Returns:
 //   - error: nil on success, error from executor on failure.
 func (m *Manager) Stop() error {
+	// lock to check running state
 	m.mu.Lock()
 	// Check if manager is not running.
 	if !m.running {
@@ -492,13 +551,16 @@ func (m *Manager) Stop() error {
 
 	// Cancel the context if set.
 	if m.cancel != nil {
+		// cancel the context to signal stop
 		m.cancel()
 	}
 
 	// Stop the process if PID is valid.
 	if pid > 0 {
+		// stop the process with timeout
 		return m.executor.Stop(pid, defaultStopTimeout)
 	}
+	// return success when no process to stop
 	return nil
 }
 
@@ -507,6 +569,7 @@ func (m *Manager) Stop() error {
 // Returns:
 //   - error: ErrNotRunning if no process, error from signal otherwise.
 func (m *Manager) Reload() error {
+	// lock for reading PID
 	m.mu.RLock()
 	pid := m.pid
 	m.mu.RUnlock()
@@ -527,10 +590,12 @@ func (m *Manager) Reload() error {
 //   - eventType: the type of lifecycle event.
 //   - err: optional error associated with the event.
 func (m *Manager) sendEvent(eventType domain.EventType, err error) {
+	// lock for reading state fields
 	m.mu.RLock()
 	event := domain.NewEvent(eventType, m.config.Name, m.pid, m.exitCode, err)
 	m.mu.RUnlock()
 
+	// attempt non-blocking send to events channel
 	select {
 	// Attempt to send event to channel.
 	case m.events <- event:
@@ -544,9 +609,11 @@ func (m *Manager) sendEvent(eventType domain.EventType, err error) {
 // Returns:
 //   - domain.Status: the complete status information.
 func (m *Manager) Status() domain.Status {
+	// lock for thread-safe read
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	// construct and return status
 	return domain.Status{
 		Name:     m.config.Name,
 		State:    m.state,
@@ -568,6 +635,7 @@ func (m *Manager) Status() domain.Status {
 // Returns:
 //   - error: ErrNotRunning if no process, error from executor on stop failure.
 func (m *Manager) RestartOnHealthFailure(reason string) error {
+	// lock for reading state
 	m.mu.Lock()
 	pid := m.pid
 	running := m.running

@@ -50,6 +50,7 @@ type UDPProber struct {
 func NewUDPProber(timeout time.Duration) *UDPProber {
 	payloadCopy := slices.Clone(defaultUDPPayload)
 
+	// use default payload with timeout configuration
 	return &UDPProber{
 		timeout: timeout,
 		payload: payloadCopy,
@@ -65,12 +66,15 @@ func NewUDPProber(timeout time.Duration) *UDPProber {
 // Returns:
 //   - *UDPProber: a configured UDP prober ready to perform probes.
 func NewUDPProberWithPayload(timeout time.Duration, payload []byte) *UDPProber {
+	// handle nil payload
 	if payload == nil {
+		// fallback to default when no payload provided
 		return NewUDPProber(timeout)
 	}
 
 	payloadCopy := slices.Clone(payload)
 
+	// use custom payload with timeout configuration
 	return &UDPProber{
 		timeout: timeout,
 		payload: payloadCopy,
@@ -82,6 +86,7 @@ func NewUDPProberWithPayload(timeout time.Duration, payload []byte) *UDPProber {
 // Returns:
 //   - string: the constant "udp" identifying the prober type.
 func (p *UDPProber) Type() string {
+	// identify this prober as udp type
 	return proberTypeUDP
 }
 
@@ -99,8 +104,10 @@ func (p *UDPProber) Type() string {
 func (p *UDPProber) Probe(ctx context.Context, target health.Target) health.CheckResult {
 	start := time.Now()
 
+	// check for context cancellation
 	select {
 	case <-ctx.Done():
+		// return early if context already cancelled
 		return health.NewFailureCheckResult(
 			time.Since(start),
 			fmt.Sprintf("context cancelled: %v", ctx.Err()),
@@ -110,11 +117,15 @@ func (p *UDPProber) Probe(ctx context.Context, target health.Target) health.Chec
 	}
 
 	conn, result := p.dialUDP(ctx, target, start)
+	// handle dial failure
 	if conn == nil {
+		// dial failure means address resolution or connection failed
 		return result
 	}
+	// ensure connection is closed
 	defer func() { _ = conn.Close() }()
 
+	// send probe and process response
 	return p.sendAndReceive(conn, target.Address, start)
 }
 
@@ -130,12 +141,15 @@ func (p *UDPProber) Probe(ctx context.Context, target health.Target) health.Chec
 //   - health.CheckResult: failure result if connection failed.
 func (p *UDPProber) dialUDP(ctx context.Context, target health.Target, start time.Time) (*net.UDPConn, health.CheckResult) {
 	network := target.Network
+	// use default network if not specified
 	if network == "" {
 		network = "udp"
 	}
 
 	addr, err := net.ResolveUDPAddr(network, target.Address)
+	// handle address resolution failure
 	if err != nil {
+		// address resolution failure indicates invalid target
 		return nil, health.NewFailureCheckResult(
 			time.Since(start),
 			fmt.Sprintf("failed to resolve address: %v", err),
@@ -144,7 +158,9 @@ func (p *UDPProber) dialUDP(ctx context.Context, target health.Target, start tim
 	}
 
 	conn, err := net.DialUDP(network, nil, addr)
+	// handle connection failure
 	if err != nil {
+		// udp dial errors are rare but indicate network issues
 		return nil, health.NewFailureCheckResult(
 			time.Since(start),
 			fmt.Sprintf("failed to dial: %v", err),
@@ -154,9 +170,11 @@ func (p *UDPProber) dialUDP(ctx context.Context, target health.Target, start tim
 
 	deadline := p.calculateDeadline(ctx)
 
+	// set deadline for UDP operations
 	if err := conn.SetDeadline(deadline); err != nil {
 		_ = conn.Close()
 
+		// deadline errors indicate system issues
 		return nil, health.NewFailureCheckResult(
 			time.Since(start),
 			fmt.Sprintf("failed to set deadline: %v", err),
@@ -164,6 +182,7 @@ func (p *UDPProber) dialUDP(ctx context.Context, target health.Target, start tim
 		)
 	}
 
+	// return connection with empty result on success
 	return conn, health.CheckResult{}
 }
 
@@ -178,23 +197,31 @@ func (p *UDPProber) calculateDeadline(ctx context.Context) time.Time {
 	now := time.Now()
 
 	var proberDeadline time.Time
+	// calculate prober timeout deadline
 	if p.timeout > 0 {
 		proberDeadline = now.Add(p.timeout)
 	}
 
 	// Use the earliest deadline between prober timeout and context deadline.
+	// check for context deadline
 	if ctxDeadline, ok := ctx.Deadline(); ok {
+		// use prober deadline if earlier
 		if !proberDeadline.IsZero() && proberDeadline.Before(ctxDeadline) {
+			// prober timeout takes precedence when earlier
 			return proberDeadline
 		}
 
+		// context deadline takes precedence when earlier
 		return ctxDeadline
 	}
 
+	// use prober deadline if set
 	if !proberDeadline.IsZero() {
+		// prober timeout is the only deadline available
 		return proberDeadline
 	}
 
+	// fallback to default timeout
 	return now.Add(health.DefaultTimeout)
 }
 
@@ -209,7 +236,9 @@ func (p *UDPProber) calculateDeadline(ctx context.Context) time.Time {
 //   - health.CheckResult: the probe result.
 func (p *UDPProber) sendAndReceive(conn udpConn, address string, start time.Time) health.CheckResult {
 	_, err := conn.Write(p.payload)
+	// handle write failure
 	if err != nil {
+		// write errors indicate network issues or invalid connection
 		return health.NewFailureCheckResult(
 			time.Since(start),
 			fmt.Sprintf("failed to write: %v", err),
@@ -221,6 +250,7 @@ func (p *UDPProber) sendAndReceive(conn udpConn, address string, start time.Time
 	n, err := conn.Read(buffer)
 	latency := time.Since(start)
 
+	// process read result
 	return p.handleReadResult(err, n, address, latency)
 }
 
@@ -235,16 +265,20 @@ func (p *UDPProber) sendAndReceive(conn udpConn, address string, start time.Time
 // Returns:
 //   - health.CheckResult: the probe result.
 func (p *UDPProber) handleReadResult(err error, n int, address string, latency time.Duration) health.CheckResult {
+	// handle read error
 	if err != nil {
 		// For UDP, no response doesn't necessarily mean failure.
 		var netErr net.Error
+		// treat timeout as success for UDP
 		if errors.As(err, &netErr) && netErr.Timeout() {
+			// udp timeout is acceptable as packet was sent successfully
 			return health.NewSuccessCheckResult(
 				latency,
 				fmt.Sprintf("sent to %s (no response within timeout)", address),
 			)
 		}
 
+		// other errors indicate actual failure
 		return health.NewFailureCheckResult(
 			latency,
 			fmt.Sprintf("failed to read response: %v", err),
@@ -252,6 +286,7 @@ func (p *UDPProber) handleReadResult(err error, n int, address string, latency t
 		)
 	}
 
+	// return success with bytes received
 	return health.NewSuccessCheckResult(
 		latency,
 		fmt.Sprintf("received %d bytes from %s", n, address),

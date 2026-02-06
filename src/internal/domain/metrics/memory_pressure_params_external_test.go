@@ -18,7 +18,7 @@ func TestMemoryPressureParams_Fields(t *testing.T) {
 	}{
 		{
 			name: "all_fields_set",
-			params: metrics.MemoryPressureParams{
+			params: metrics.MemoryPressureParams{PressureParams: metrics.PressureParams{
 				SomeAvg10:  10.5,
 				SomeAvg60:  8.0,
 				SomeAvg300: 5.0,
@@ -28,11 +28,11 @@ func TestMemoryPressureParams_Fields(t *testing.T) {
 				FullAvg300: 2.0,
 				FullTotal:  6789,
 				Timestamp:  time.Now(),
-			},
+			}},
 		},
 		{
 			name: "zero_values",
-			params: metrics.MemoryPressureParams{
+			params: metrics.MemoryPressureParams{PressureParams: metrics.PressureParams{
 				SomeAvg10:  0,
 				SomeAvg60:  0,
 				SomeAvg300: 0,
@@ -42,7 +42,7 @@ func TestMemoryPressureParams_Fields(t *testing.T) {
 				FullAvg300: 0,
 				FullTotal:  0,
 				Timestamp:  time.Time{},
-			},
+			}},
 		},
 	}
 

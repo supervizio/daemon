@@ -2,6 +2,15 @@
 
 package signals
 
+// platformInit is a no-op on Darwin.
+// Darwin uses the same signals as the base Unix implementation.
+//
+// Params:
+//   - m: manager (unused on Darwin)
+func platformInit(m *Manager) {
+	// no platform-specific signals on Darwin.
+}
+
 // SetSubreaper is a no-op on Darwin.
 // macOS does not support the PR_SET_CHILD_SUBREAPER functionality.
 func (m *Manager) SetSubreaper() error {

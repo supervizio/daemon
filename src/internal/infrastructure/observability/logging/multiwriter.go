@@ -21,6 +21,7 @@ type MultiWriter struct {
 // Returns:
 //   - *MultiWriter: new multi-writer instance
 func NewMultiWriter(writers ...io.WriteCloser) *MultiWriter {
+	// return configured multi-writer with all writers
 	return &MultiWriter{writers: writers}
 }
 
@@ -33,13 +34,17 @@ func NewMultiWriter(writers ...io.WriteCloser) *MultiWriter {
 //   - int: number of bytes written
 //   - error: nil on success, error on failure
 func (mw *MultiWriter) Write(p []byte) (n int, err error) {
+	// write to each writer sequentially
 	for _, w := range mw.writers {
 		n, err = w.Write(p)
+		// return on first error
 		if err != nil {
+			// propagate first error to caller
 			return n, err
 		}
 	}
 
+	// return total bytes written
 	return len(p), nil
 }
 
@@ -50,11 +55,14 @@ func (mw *MultiWriter) Write(p []byte) (n int, err error) {
 func (mw *MultiWriter) Close() error {
 	var firstErr error
 
+	// close all writers and track first error
 	for _, w := range mw.writers {
+		// track first error encountered
 		if err := w.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
 
+	// return first error or nil
 	return firstErr
 }

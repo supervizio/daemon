@@ -85,6 +85,10 @@ reviews:
     - "**/Vagrantfile"
     - "**/Makefile"
     - "**/nfpm.yaml"
+    # Rust files
+    - "**/*.rs"
+    - "**/Cargo.toml"
+    - "**/Cargo.lock"
     # Exclude generated
     - "!**/*.pb.go"
     - "!**/*_grpc.pb.go"
@@ -97,6 +101,7 @@ reviews:
     - "!**/dist/**"
     - "!**/bin/**"
     - "!**/coverage/**"
+    - "!**/target/**"
     # Exclude devcontainer internals (managed separately)
     - "!.devcontainer/images/**"
     - "!.devcontainer/features/**"
@@ -188,7 +193,7 @@ reviews:
 
     - path: "src/**/*_bsd.go"
       instructions: |
-        **BSD-specific code (FreeBSD/OpenBSD/NetBSD/DragonFly):**
+        **BSD-specific code (FreeBSD/OpenBSD/NetBSD):**
         - procfs may not be mounted by default
         - kqueue for event notification
         - Different init system integration (rc.d)
@@ -256,6 +261,33 @@ reviews:
         - Resource limits (memory, CPU)
 
     # -------------------------------------------------------------------------
+    # Rust Source Code
+    # -------------------------------------------------------------------------
+    - path: "src/lib/**/*.rs"
+      instructions: |
+        **Rust Library Code (FFI bindings for Go):**
+        - Memory safety: Proper lifetime annotations, no memory leaks
+        - FFI safety: Use #[no_mangle], extern "C", repr(C) correctly
+        - Error handling: Use Result<T, E>, no unwrap() in library code
+        - Cross-platform: #[cfg] for platform-specific code
+        - C interop: Proper null checks, buffer validation
+        - No panics: Panics across FFI boundary cause UB
+
+        **Clippy Compliance:**
+        - Must pass clippy::pedantic
+        - Avoid #[allow(clippy::*)] without justification
+        - Use rustfmt for formatting
+
+    - path: "**/Cargo.toml"
+      instructions: |
+        **Cargo Configuration:**
+        - Pin dependency versions (=x.y.z) for reproducible builds
+        - Use workspace inheritance where applicable
+        - Document crate features
+        - Set appropriate edition (2024)
+        - Configure proper LTO/opt-level for release builds
+
+    # -------------------------------------------------------------------------
     # Protocol Buffers
     # -------------------------------------------------------------------------
     - path: "**/*.proto"
@@ -321,7 +353,7 @@ reviews:
         - Proper dependencies declaration
         - Pre/post install scripts tested
 
-    - path: "src/.golangci.yml"
+    - path: ".golangci.yml"
       instructions: |
         **golangci-lint Configuration:**
         - Justify any disabled linters
@@ -436,7 +468,11 @@ reviews:
     # Go
     golangci-lint:
       enabled: true
-      config_file: "src/.golangci.yml"
+      config_file: ".golangci.yml"
+
+    # Rust
+    clippy:
+      enabled: true
 
     # Protobuf
     buf:

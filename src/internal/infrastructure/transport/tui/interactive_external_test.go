@@ -117,16 +117,19 @@ func Test_NewModel(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			theme := ansi.DefaultTheme()
+			logsPanel := component.NewLogsPanel(tt.width, 10)
+			servicesPanel := component.NewServicesPanel(tt.width, 6)
 			cfg := tui.ModelConfig{
 				TUI:           createTestTUI(1 * time.Second),
 				Width:         tt.width,
 				Height:        tt.height,
-				Theme:         ansi.DefaultTheme(),
-				LogsPanel:     component.NewLogsPanel(tt.width, 10),
-				ServicesPanel: component.NewServicesPanel(tt.width, 6),
+				Theme:         &theme,
+				LogsPanel:     &logsPanel,
+				ServicesPanel: &servicesPanel,
 			}
 
-			m := tui.NewModel(cfg)
+			m := tui.NewModel(&cfg)
 
 			assert.NotNil(t, m, "NewModel should return a model")
 		})
@@ -168,13 +171,15 @@ func createTestTUI(interval time.Duration) *tui.TUI {
 
 // createTestModel creates a minimal test model without snapshot.
 func createTestModel(interval time.Duration) tui.Model {
-	return tui.NewModel(tui.ModelConfig{
+	theme := ansi.DefaultTheme()
+	logsPanel := component.NewLogsPanel(80, 10)
+	servicesPanel := component.NewServicesPanel(80, 6)
+	return tui.NewModel(&tui.ModelConfig{
 		TUI:           createTestTUI(interval),
 		Width:         80,
 		Height:        24,
-		Theme:         ansi.DefaultTheme(),
-		LogsPanel:     component.NewLogsPanel(80, 10),
-		ServicesPanel: component.NewServicesPanel(80, 6),
+		Theme:         &theme,
+		LogsPanel:     &logsPanel,
+		ServicesPanel: &servicesPanel,
 	})
 }
-

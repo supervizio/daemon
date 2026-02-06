@@ -1,76 +1,71 @@
 # E2E Testing - Platform Matrix
 
-End-to-end testing across all supported platforms and init systems (AMD64 only).
+End-to-end testing across all supported platforms and init systems.
 
-## Coverage (9 jobs)
+## Coverage
 
-| Init System | Distribution | Pkg | VM | Docker |
-|-------------|--------------|-----|:--:|:------:|
-| systemd | Debian 13 | .deb | ✅ | ✅ |
-| systemd | Fedora 38 | .rpm | ✅ | ✅ |
-| OpenRC | Alpine 3.21 | .apk | ✅ | ✅ |
-| SysVinit | Devuan 6 | .deb | ✅ | ✅ |
-| runit | Alpine 3.21 | .apk | ✅ | ✅ |
-| BSD rc.d | FreeBSD 14 | pkg | ✅ | - |
-| BSD rc.d | OpenBSD 7 | pkg | ✅ | - |
-| BSD rc.d | NetBSD 9 | pkgin | ✅ | - |
-| BSD rc.d | DragonFlyBSD 6 | pkg | ✅ | - |
+| Init System | Distribution | Pkg | VM | Docker | Probe |
+|-------------|--------------|-----|:--:|:------:|:-----:|
+| systemd | Debian 13 | .deb | ✅ | ✅ | 100% |
+| systemd | Fedora 38 | .rpm | ✅ | ✅ | 100% |
+| OpenRC | Alpine 3.21 | .apk | ✅ | ✅ | 100% |
+| SysVinit | Devuan 6 | .deb | ✅ | ✅ | 100% |
+| runit | Alpine 3.21 | .apk | ✅ | ✅ | 100% |
+| BSD rc.d | FreeBSD 14 | pkg | ✅ | - | 98% |
+| BSD rc.d | OpenBSD 7 | pkg | ✅ | - | 92% |
+| BSD rc.d | NetBSD 9 | pkgin | ✅ | - | 90% |
+| launchd | macOS | - | - | - | 95% |
 
 ## Structure
 
 ```
 e2e/
-├── Vagrantfile           # VM config (libvirt)
-├── test-install.sh       # Universal test script
-├── Dockerfile.debian     # systemd, .deb
-├── Dockerfile.fedora     # systemd, .rpm
-├── Dockerfile.alpine     # OpenRC, .apk
-├── Dockerfile.devuan     # SysVinit, .deb
-├── Dockerfile.alpine-runit # runit, .apk
-└── behavioral/           # Behavioral tests (testcontainers-go)
-    ├── crasher/          # Test binary
-    ├── testdata/         # YAML configs
-    └── *_test.go         # Go tests
+├── Vagrantfile              # VM config (libvirt/qemu)
+├── config-scratch.yaml      # Scratch container config
+├── test-install.sh          # Universal install/uninstall test
+├── test-container.sh        # Container-based test runner
+├── test-macos.sh            # macOS-specific E2E test
+├── validate-probe.sh        # Probe JSON validation (15 sections)
+├── Dockerfile.debian        # systemd, .deb
+├── Dockerfile.debian-script # Debian script-based install
+├── Dockerfile.fedora        # systemd, .rpm
+├── Dockerfile.alpine        # OpenRC, .apk
+├── Dockerfile.alpine-runit  # runit, .apk
+├── Dockerfile.alpine-script # Alpine script-based install
+├── Dockerfile.devuan        # SysVinit, .deb
+├── Dockerfile.scratch       # Scratch container (PID1 mode)
+└── behavioral/              # Go behavioral tests (testcontainers-go)
 ```
 
-## Init System Paths
+## Test Scripts
 
-| Init | Service Path | Enable Command |
-|------|--------------|----------------|
-| systemd | `/etc/systemd/system/` | `systemctl enable` |
-| OpenRC | `/etc/init.d/` | `rc-update add` |
-| SysVinit | `/etc/init.d/` | `update-rc.d` |
-| runit | `/etc/sv/` | `ln -s /etc/sv/X /var/service/` |
-| BSD rc.d | `/usr/local/etc/rc.d/` | `sysrc enable` |
+| Script | Purpose |
+|--------|---------|
+| `test-install.sh` | Install, verify binary/config/service, validate probe, uninstall |
+| `test-container.sh` | Container-based testing (Docker) |
+| `test-macos.sh` | macOS-specific E2E test |
+| `validate-probe.sh` | Validates 15 probe JSON sections per platform |
 
-## Test Script (test-install.sh)
+## Probe Validation Coverage
 
-1. Install script completes
-2. Binary at `/usr/local/bin/supervizio`
-3. Config directory and file exist
-4. Service file installed
-5. `--version` works
-6. Uninstall removes binary
+| Platform | Coverage | Exclusions |
+|----------|----------|------------|
+| Linux | 100% | None |
+| FreeBSD | 98% | PSI, iowait, steal, buffers |
+| macOS | 95% | PSI, iowait, steal, buffers |
+| OpenBSD | 92% | + temp_max/crit |
+| NetBSD | 90% | + temp_max/crit |
 
 ## Local Testing
 
 ```bash
-# Vagrant VM
-cd e2e && vagrant up debian13 --provider=libvirt
-vagrant ssh debian13 -c "sudo /vagrant/test-install.sh"
-
-# Docker
-cd src && CGO_ENABLED=0 go build -o ../bin/supervizio ./cmd/daemon
-docker build -f e2e/Dockerfile.debian -t supervizio-debian .
-docker run --rm supervizio-debian
+vagrant up debian13 --provider=libvirt                        # VM
+docker build -f e2e/Dockerfile.debian -t supervizio-debian .  # Docker
+./e2e/test-macos.sh                                           # macOS
 ```
 
 ## Notes
 
 - BSD: VM tests only (no Docker support)
-- Alpine-runit: Same box as OpenRC, provisioned with runit
-- All binaries: `CGO_ENABLED=0` (static)
-
-## Behavioral Tests
-
-See `behavioral/CLAUDE.md` for runtime behavior tests (restart policies, health probes, PID1 capabilities).
+- macOS: GitHub Actions runners only (no Vagrant)
+- See `behavioral/CLAUDE.md` for runtime behavior tests

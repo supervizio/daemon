@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/domain/health"
 	"github.com/kodflow/daemon/internal/domain/shared"
 )
@@ -20,20 +21,22 @@ const proberTypeICMP string = "icmp"
 const defaultTCPFallbackPort int = 80
 
 // ICMPProber performs ICMP ping probes for latency measurement.
-// It falls back to TCP probe when ICMP is not available (no CAP_NET_RAW).
+// It supports native ICMP (requires CAP_NET_RAW) or TCP fallback mode.
 //
-// Note: ICMP requires elevated privileges (root or CAP_NET_RAW capability).
+// Note: Native ICMP requires elevated privileges (root or CAP_NET_RAW capability).
 // In container environments, TCP fallback is commonly used.
 type ICMPProber struct {
 	// timeout is the maximum duration for the healthcheck.
 	timeout time.Duration
-	// useTCPFallback forces TCP fallback mode.
-	useTCPFallback bool
+	// mode specifies how ICMP probes should operate.
+	mode config.ICMPMode
+	// hasNativeCapability indicates if native ICMP is available.
+	hasNativeCapability bool
 	// tcpPort is the port for TCP fallback probes.
 	tcpPort int
 }
 
-// NewICMPProber creates a new ICMP prober.
+// NewICMPProber creates a new ICMP prober with auto mode.
 //
 // Params:
 //   - timeout: the maximum duration for ping.
@@ -41,11 +44,12 @@ type ICMPProber struct {
 // Returns:
 //   - *ICMPProber: a configured ICMP prober ready to perform probes.
 func NewICMPProber(timeout time.Duration) *ICMPProber {
-	// TCP fallback enabled by default since ICMP requires CAP_NET_RAW.
+	// auto mode with capability detection
 	return &ICMPProber{
-		timeout:        timeout,
-		useTCPFallback: true,
-		tcpPort:        defaultTCPFallbackPort,
+		timeout:             timeout,
+		mode:                config.ICMPModeAuto,
+		hasNativeCapability: detectICMPCapability(),
+		tcpPort:             defaultTCPFallbackPort,
 	}
 }
 
@@ -58,10 +62,30 @@ func NewICMPProber(timeout time.Duration) *ICMPProber {
 // Returns:
 //   - *ICMPProber: a configured ICMP prober with TCP fallback.
 func NewICMPProberWithTCPFallback(timeout time.Duration, tcpPort int) *ICMPProber {
+	// force TCP fallback mode
 	return &ICMPProber{
-		timeout:        timeout,
-		useTCPFallback: true,
-		tcpPort:        tcpPort,
+		timeout:             timeout,
+		mode:                config.ICMPModeFallback,
+		hasNativeCapability: false,
+		tcpPort:             tcpPort,
+	}
+}
+
+// NewICMPProberWithMode creates an ICMP prober with specified mode.
+//
+// Params:
+//   - timeout: the maximum duration for ping.
+//   - mode: the ICMP mode (native, fallback, auto).
+//
+// Returns:
+//   - *ICMPProber: a configured ICMP prober with specified mode.
+func NewICMPProberWithMode(timeout time.Duration, mode config.ICMPMode) *ICMPProber {
+	// create prober with specified mode
+	return &ICMPProber{
+		timeout:             timeout,
+		mode:                mode,
+		hasNativeCapability: detectICMPCapability(),
+		tcpPort:             defaultTCPFallbackPort,
 	}
 }
 
@@ -70,6 +94,7 @@ func NewICMPProberWithTCPFallback(timeout time.Duration, tcpPort int) *ICMPProbe
 // Returns:
 //   - string: the constant "icmp" identifying the prober type.
 func (p *ICMPProber) Type() string {
+	// identify this prober as icmp type
 	return proberTypeICMP
 }
 
@@ -85,17 +110,37 @@ func (p *ICMPProber) Type() string {
 func (p *ICMPProber) Probe(ctx context.Context, target health.Target) health.CheckResult {
 	start := time.Now()
 
+	// extract host from address (remove port if present)
 	host := target.Address
+	// Check if host includes port and extract hostname.
 	if hostPart, _, err := net.SplitHostPort(host); err == nil {
 		host = hostPart
 	}
 
-	if p.useTCPFallback {
+	// Select probe method based on mode.
+	switch p.mode {
+	// Handle explicit native ICMP mode.
+	case config.ICMPModeNative:
+		// Return native ping result.
+		return p.nativePing(ctx, host, start)
+	// Handle explicit TCP fallback mode.
+	case config.ICMPModeFallback:
+		// Return TCP fallback result.
+		return p.tcpPing(ctx, host, start)
+	// Handle auto-detect capability mode.
+	case config.ICMPModeAuto:
+		// Check if native ICMP is available.
+		if p.hasNativeCapability {
+			// Return native ping result.
+			return p.nativePing(ctx, host, start)
+		}
+		// Return TCP fallback result.
+		return p.tcpPing(ctx, host, start)
+	// Handle unknown mode with TCP fallback.
+	default:
+		// Return TCP fallback result.
 		return p.tcpPing(ctx, host, start)
 	}
-
-	// TODO: Implement real ICMP ping using golang.org/x/net/icmp
-	return p.tcpPing(ctx, host, start)
 }
 
 // tcpPing performs a TCP-based ping for latency measurement.
@@ -109,7 +154,9 @@ func (p *ICMPProber) Probe(ctx context.Context, target health.Target) health.Che
 // Returns:
 //   - health.CheckResult: the probe result with latency.
 func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) health.CheckResult {
+	// validate and normalize port number
 	tcpPort := p.tcpPort
+	// Check if port is valid.
 	if tcpPort <= 0 || tcpPort > shared.MaxValidPort {
 		tcpPort = defaultTCPFallbackPort
 	}
@@ -117,9 +164,12 @@ func (p *ICMPProber) tcpPing(ctx context.Context, host string, start time.Time) 
 	dialer := &net.Dialer{Timeout: p.timeout}
 	conn, err := dialer.DialContext(ctx, "tcp", address)
 	latency := time.Since(start)
+	// Check for connection failure.
 	if err != nil {
+		// Return failure result for unreachable host.
 		return health.NewFailureCheckResult(latency, fmt.Sprintf("ping failed: %v", err), err)
 	}
 	_ = conn.Close()
+	// Return success result for reachable host.
 	return health.NewSuccessCheckResult(latency, fmt.Sprintf("ping %s: latency=%s (tcp fallback)", host, latency))
 }
