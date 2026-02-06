@@ -7,9 +7,10 @@ Use case implementations coordinating domain and infrastructure.
 ```
 application/
 ├── config/       # Configuration port interface
-├── health/       # Service health monitoring (renamed from healthcheck/)
-├── lifecycle/    # Process lifecycle management (renamed from process/)
+├── health/       # Service health monitoring
+├── lifecycle/    # Process lifecycle management
 ├── metrics/      # Process metrics tracking
+├── monitoring/   # External target monitoring
 └── supervisor/   # Service orchestration
 ```
 
@@ -21,6 +22,7 @@ application/
 | `health` | ProbeMonitor coordinates service health checks | `health/CLAUDE.md` |
 | `lifecycle` | Manager handles process lifecycle with restart | `lifecycle/CLAUDE.md` |
 | `metrics` | Tracker monitors process CPU/memory metrics | `metrics/CLAUDE.md` |
+| `monitoring` | ExternalMonitor for unmanaged targets | `monitoring/CLAUDE.md` |
 | `supervisor` | Supervisor orchestrates multiple services | `supervisor/CLAUDE.md` |
 
 ## Terminology
@@ -30,6 +32,7 @@ application/
 | **health** | Service reachability monitoring via probes (TCP, HTTP, etc.) |
 | **metrics** | Process metrics collection (CPU, RAM per process) |
 | **lifecycle** | Process lifecycle management (start, stop, restart) |
+| **monitoring** | External target observation (systemd, Docker, K8s, etc.) |
 
 ## Dependencies
 
@@ -49,6 +52,7 @@ application/
 | `config` | `Reloader` | Configuration reloading interface |
 | `health` | `Creator` | Prober factory interface |
 | `metrics` | `Collector` | Metrics collection interface |
+| `monitoring` | `ExternalMonitor` | External target monitoring |
 
 ## Data Flow
 
@@ -56,15 +60,15 @@ application/
 Supervisor
     │
     ├── Manager (per service)
-    │       │
     │       └── Executor.Start()    [domain port]
     │
     ├── ProbeMonitor
-    │       │
     │       └── Prober.Probe()      [domain port]
     │
+    ├── ExternalMonitor
+    │       └── Discoverer.Discover() [domain port]
+    │
     └── Tracker
-            │
             └── Collector.Collect() [application port]
 ```
 

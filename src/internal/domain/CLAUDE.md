@@ -14,7 +14,8 @@ domain/
 ├── metrics/      # System and process metrics types
 ├── process/      # Process entities, Executor port
 ├── shared/       # Common value objects (Duration, Size, Clock)
-└── storage/      # MetricsStore port interface
+├── storage/      # MetricsStore port interface
+└── target/       # External target entities, Discoverer/Watcher ports
 ```
 
 ## Packages
@@ -30,6 +31,7 @@ domain/
 | `process` | Spec, State, Executor port, ExitResult, RestartTracker |
 | `shared` | Duration, Size, Clock (Nower), RealClock |
 | `storage` | MetricsStore port, StoreConfig |
+| `target` | ExternalTarget, Status, Discoverer/Watcher ports, Type enum |
 
 ## Port Interfaces
 
@@ -42,6 +44,8 @@ domain/
 | `Logger` | logging | Daemon event logging |
 | `Writer` | logging | Log output destinations |
 | `MetricsStore` | storage | Metrics persistence |
+| `Discoverer` | target | External target discovery |
+| `Watcher` | target | External target watching |
 | Collectors | metrics | System metrics collection |
 
 ## Dependencies
@@ -68,3 +72,4 @@ config ←── process (RestartTracker)
 | process | `process/CLAUDE.md` |
 | shared | `shared/CLAUDE.md` |
 | storage | `storage/CLAUDE.md` |
+| target | `target/CLAUDE.md` |

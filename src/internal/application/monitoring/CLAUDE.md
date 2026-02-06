@@ -1,97 +1,33 @@
 # Monitoring - External Target Monitoring
 
-Application service for monitoring external targets (services, containers, hosts).
+Monitors external resources supervizio does not manage (unlike `health/ProbeMonitor` for managed services).
 
 ## Purpose
 
-Unlike `health/ProbeMonitor` which monitors managed service listeners, `ExternalMonitor` observes external resources that supervizio does not manage. External targets include:
-
-- **systemd/OpenRC/BSD rc.d services** - OS-level services
-- **Docker/Podman containers** - Container runtimes
-- **Kubernetes pods/services** - Orchestrated workloads
-- **Nomad allocations** - HashiCorp Nomad jobs
-- **Remote hosts** - ICMP ping, TCP/UDP port checks
+Observe external targets: systemd/OpenRC/BSD services, Docker/Podman containers, Kubernetes pods, Nomad allocations, remote hosts (ICMP/TCP/UDP).
 
 ## Structure
 
 ```
 monitoring/
-├── monitor.go            # ExternalMonitor - main orchestrator
-├── monitor_config.go     # Config, DefaultsConfig, DiscoveryModeConfig
-├── registry.go           # Registry - thread-safe target storage
-├── ports.go              # ProberCreator interface, callbacks
-└── errors.go             # Sentinel errors
+├── monitor.go                     # ExternalMonitor orchestrator
+├── monitor_config.go              # Config value object
+├── defaults_config.go             # DefaultsConfig (intervals, thresholds)
+├── discovery_config.go            # DiscoveryModeConfig
+├── registry.go                    # Thread-safe target storage
+├── health_summary.go              # Aggregated counts by state/type
+├── ports.go                       # ProberCreator interface, callbacks
+└── errors.go                      # Sentinel errors
 ```
 
 ## Key Types
 
 | Type | Description |
 |------|-------------|
-| `ExternalMonitor` | Main orchestrator managing target probing |
-| `Config` | Monitor configuration with defaults and callbacks |
-| `Registry` | Thread-safe storage for targets and their status |
-| `HealthSummary` | Aggregated counts by state and type |
-
-## ExternalMonitor Methods
-
-| Method | Description |
-|--------|-------------|
-| `NewExternalMonitor(config)` | Create a new monitor |
-| `AddTarget(target)` | Add a target to monitor |
-| `RemoveTarget(id)` | Remove a target |
-| `Start(ctx)` | Start probing goroutines |
-| `Stop()` | Stop all probing |
-| `Health()` | Return health summary |
-| `Registry()` | Access the target registry |
-| `GetStatus(id)` | Get status for a target |
-| `AllStatuses()` | Get all target statuses |
-
-## Usage
-
-```go
-// Create monitor with factory
-config := monitoring.NewConfig().
-    WithFactory(proberFactory).
-    WithDiscoverers(systemdDiscoverer, dockerDiscoverer)
-
-monitor := monitoring.NewExternalMonitor(config)
-
-// Add static targets
-monitor.AddTarget(target.NewRemoteTarget("db", "db.internal:5432", "tcp"))
-monitor.AddTarget(target.NewRemoteTarget("cache", "redis.internal:6379", "tcp"))
-
-// Start monitoring
-monitor.Start(ctx)
-defer monitor.Stop()
-
-// Check health
-summary := monitor.Health()
-fmt.Printf("Healthy: %d, Unhealthy: %d\n", summary.HealthyCount(), summary.UnhealthyCount())
-```
-
-## Configuration
-
-```go
-config := monitoring.Config{
-    Defaults: monitoring.DefaultsConfig{
-        Interval:         30 * time.Second,
-        Timeout:          5 * time.Second,
-        SuccessThreshold: 1,
-        FailureThreshold: 3,
-    },
-    Discovery: monitoring.DiscoveryModeConfig{
-        Enabled:     true,
-        Interval:    60 * time.Second,
-        Discoverers: []target.Discoverer{...},
-        Watchers:    []target.Watcher{...},
-    },
-    Factory:        proberFactory,
-    Events:         eventsChan,
-    OnHealthChange: onHealthChange,
-    OnUnhealthy:    onUnhealthy,
-    OnHealthy:      onHealthy,
-}
-```
+| `ExternalMonitor` | Main orchestrator: AddTarget, RemoveTarget, Start, Stop, Health |
+| `Config` | Monitor configuration with defaults, discovery, and callbacks |
+| `Registry` | Thread-safe target storage with status tracking |
+| `HealthSummary` | Aggregated counts (HealthyCount, UnhealthyCount) |
 
 ## Dependencies
 
@@ -104,7 +40,7 @@ config := monitoring.Config{
 |---------|----------|
 | `domain/target` | ExternalTarget, Status, Discoverer, Watcher |
 | `domain/health` | Prober interface, CheckResult, Target |
-| `infrastructure/discovery/*` | Discoverer implementations |
+| `infrastructure/discovery` | Discoverer implementations |
 | `infrastructure/observability/healthcheck` | Prober implementations |
 
 ## Errors
