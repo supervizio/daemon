@@ -1,0 +1,377 @@
+# ================================================================
+# Metrics Configuration Examples - superviz.io
+# ================================================================
+# This file demonstrates all metrics configuration options
+# for granular control over system metrics collection.
+
+# ----------------------------------------------------------------
+# Example 1: Minimal Template (Lowest Resource Consumption)
+# ----------------------------------------------------------------
+# Use case: Constrained environments, edge devices, minimal overhead
+# Impact: 70-80% allocation reduction compared to standard
+# ----------------------------------------------------------------
+version: "1.0"
+monitoring:
+  performance_template: "minimal"  # CPU, memory, load only
+
+logging:
+  defaults:
+    timestamp_format: "2006-01-02 15:04:05"
+    rotation:
+      max_size: "100MB"
+      max_age: "7d"
+      max_files: 5
+      compress: true
+  base_dir: "/var/log/daemon"
+
+services: []
+
+---
+
+# ----------------------------------------------------------------
+# Example 2: Standard Template (Default Behavior)
+# ----------------------------------------------------------------
+# Use case: Normal operation, full visibility
+# Impact: Current behavior, all metrics collected
+# ----------------------------------------------------------------
+version: "1.0"
+monitoring:
+  performance_template: "standard"  # All metrics enabled
+
+logging:
+  defaults:
+    timestamp_format: "2006-01-02 15:04:05"
+    rotation:
+      max_size: "100MB"
+      max_age: "7d"
+      max_files: 5
+      compress: true
+  base_dir: "/var/log/daemon"
+
+services: []
+
+---
+
+# ----------------------------------------------------------------
+# Example 3: Disable Expensive Connection Enumeration
+# ----------------------------------------------------------------
+# Use case: Busy servers with thousands of connections
+# Impact: 40-50% allocation reduction
+# ----------------------------------------------------------------
+version: "1.0"
+monitoring:
+  performance_template: "standard"
+  metrics:
+    connections:
+      enabled: false  # Disable all connection metrics
+
+logging:
+  defaults:
+    timestamp_format: "2006-01-02 15:04:05"
+    rotation:
+      max_size: "100MB"
+      max_age: "7d"
+      max_files: 5
+      compress: true
+  base_dir: "/var/log/daemon"
+
+services: []
+
+---
+
+# ----------------------------------------------------------------
+# Example 4: Granular Connection Control
+# ----------------------------------------------------------------
+# Use case: Need TCP stats but not full connection enumeration
+# Impact: Moderate reduction while retaining visibility
+# ----------------------------------------------------------------
+version: "1.0"
+monitoring:
+  performance_template: "standard"
+  metrics:
+    connections:
+      enabled: true
+      tcp_stats: true           # Keep aggregated TCP stats
+      tcp_connections: false    # Disable individual connections (expensive)
+      udp_sockets: false        # Disable UDP enumeration
+      unix_sockets: false       # Disable Unix socket enumeration
+      listening_ports: true     # Keep listening ports
+
+logging:
+  defaults:
+    timestamp_format: "2006-01-02 15:04:05"
+    rotation:
+      max_size: "100MB"
+      max_age: "7d"
+      max_files: 5
+      compress: true
+  base_dir: "/var/log/daemon"
+
+services: []
+
+---
+
+# ----------------------------------------------------------------
+# Example 5: Minimal + Selective Additions
+# ----------------------------------------------------------------
+# Use case: Start minimal, add specific categories as needed
+# Impact: ~70% reduction with targeted additions
+# ----------------------------------------------------------------
+version: "1.0"
+monitoring:
+  performance_template: "minimal"
+  metrics:
+    # Enable disk metrics only
+    disk:
+      enabled: true
+      partitions: true
+      usage: true
+      io: false  # Skip I/O stats (less critical)
+
+    # Enable basic network stats
+    network:
+      enabled: true
+      interfaces: true
+      stats: true
+
+logging:
+  defaults:
+    timestamp_format: "2006-01-02 15:04:05"
+    rotation:
+      max_size: "100MB"
+      max_age: "7d"
+      max_files: 5
+      compress: true
+  base_dir: "/var/log/daemon"
+
+services: []
+
+---
+
+# ----------------------------------------------------------------
+# Example 6: Disable Pressure Stall Information (PSI)
+# ----------------------------------------------------------------
+# Use case: Older kernels without PSI support
+# Impact: Small reduction, avoid kernel feature detection overhead
+# ----------------------------------------------------------------
+version: "1.0"
+monitoring:
+  performance_template: "standard"
+  metrics:
+    cpu:
+      enabled: true
+      pressure: false  # Disable CPU PSI
+    memory:
+      enabled: true
+      pressure: false  # Disable memory PSI
+    io:
+      enabled: true
+      pressure: false  # Disable I/O PSI
+
+logging:
+  defaults:
+    timestamp_format: "2006-01-02 15:04:05"
+    rotation:
+      max_size: "100MB"
+      max_age: "7d"
+      max_files: 5
+      compress: true
+  base_dir: "/var/log/daemon"
+
+services: []
+
+---
+
+# ----------------------------------------------------------------
+# Example 7: Container-Only Monitoring
+# ----------------------------------------------------------------
+# Use case: Container orchestration, no host metrics needed
+# Impact: Minimal overhead, container detection only
+# ----------------------------------------------------------------
+version: "1.0"
+monitoring:
+  performance_template: "minimal"
+  metrics:
+    # Enable container and runtime detection
+    container:
+      enabled: true
+    runtime:
+      enabled: true
+
+    # Disable all other metrics
+    cpu:
+      enabled: false
+    memory:
+      enabled: false
+    load:
+      enabled: false
+
+logging:
+  defaults:
+    timestamp_format: "2006-01-02 15:04:05"
+    rotation:
+      max_size: "100MB"
+      max_age: "7d"
+      max_files: 5
+      compress: true
+  base_dir: "/var/log/daemon"
+
+services: []
+
+---
+
+# ----------------------------------------------------------------
+# Example 8: Global Disable (No Metrics)
+# ----------------------------------------------------------------
+# Use case: Testing, metrics not needed
+# Impact: Maximum reduction, zero collection overhead
+# ----------------------------------------------------------------
+version: "1.0"
+monitoring:
+  metrics:
+    enabled: false  # Disable all metrics globally
+
+logging:
+  defaults:
+    timestamp_format: "2006-01-02 15:04:05"
+    rotation:
+      max_size: "100MB"
+      max_age: "7d"
+      max_files: 5
+      compress: true
+  base_dir: "/var/log/daemon"
+
+services: []
+
+---
+
+# ----------------------------------------------------------------
+# Example 9: Full Granular Configuration
+# ----------------------------------------------------------------
+# Use case: Fine-tuned production setup
+# Impact: Custom balance between visibility and performance
+# ----------------------------------------------------------------
+version: "1.0"
+monitoring:
+  # Start with standard, then customize
+  performance_template: "standard"
+
+  metrics:
+    enabled: true
+
+    # CPU: full metrics with pressure
+    cpu:
+      enabled: true
+      pressure: true
+
+    # Memory: full metrics with pressure
+    memory:
+      enabled: true
+      pressure: true
+
+    # Load: always enabled (minimal overhead)
+    load:
+      enabled: true
+
+    # Disk: partitions and usage only (skip I/O)
+    disk:
+      enabled: true
+      partitions: true
+      usage: true
+      io: false
+
+    # Network: interfaces only (skip stats)
+    network:
+      enabled: true
+      interfaces: true
+      stats: false
+
+    # Connections: TCP stats and listening ports only
+    connections:
+      enabled: true
+      tcp_stats: true
+      tcp_connections: false  # Expensive on busy systems
+      udp_sockets: false
+      unix_sockets: false
+      listening_ports: true
+
+    # Thermal: Linux only, enable if available
+    thermal:
+      enabled: true
+
+    # Process: current daemon process only
+    process:
+      enabled: true
+
+    # I/O: stats only, no pressure
+    io:
+      enabled: true
+      pressure: false
+
+    # Quota: cgroup limits detection
+    quota:
+      enabled: true
+
+    # Container: detect container environment
+    container:
+      enabled: true
+
+    # Runtime: detect orchestrator
+    runtime:
+      enabled: true
+
+logging:
+  defaults:
+    timestamp_format: "2006-01-02 15:04:05"
+    rotation:
+      max_size: "100MB"
+      max_age: "7d"
+      max_files: 5
+      compress: true
+  base_dir: "/var/log/daemon"
+
+services: []
+
+---
+
+# ----------------------------------------------------------------
+# Example 10: Backward Compatibility (No Changes)
+# ----------------------------------------------------------------
+# Use case: Existing configurations without metrics section
+# Behavior: Defaults to "standard" template (all metrics enabled)
+# ----------------------------------------------------------------
+version: "1.0"
+monitoring:
+  defaults:
+    interval: "30s"
+    timeout: "5s"
+
+  discovery:
+    systemd:
+      enabled: true
+    docker:
+      enabled: true
+
+  targets:
+    - name: "webapp"
+      type: "http"
+      address: "http://localhost:8080"
+      probe:
+        type: "http"
+        path: "/health"
+
+logging:
+  defaults:
+    timestamp_format: "2006-01-02 15:04:05"
+    rotation:
+      max_size: "100MB"
+      max_age: "7d"
+      max_files: 5
+      compress: true
+  base_dir: "/var/log/daemon"
+
+services:
+  - name: "webapp"
+    command: "/usr/bin/webapp"
+    restart:
+      policy: "always"

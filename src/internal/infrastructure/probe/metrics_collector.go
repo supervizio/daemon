@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/kodflow/daemon/internal/domain/config"
 )
 
 // CollectAllMetrics collects all available metrics for the current platform.
@@ -20,19 +22,31 @@ import (
 //
 // Params:
 //   - ctx: context for cancellation
+//   - cfg: metrics configuration controlling which metrics to collect
 //
 // Returns:
 //   - *AllSystemMetrics: collected system metrics
 //   - error: nil on success, error if probe not initialized
-func CollectAllMetrics(ctx context.Context) (*AllSystemMetrics, error) {
+func CollectAllMetrics(ctx context.Context, cfg *config.MetricsConfig) (*AllSystemMetrics, error) {
 	// Check if probe library is initialized.
 	if err := checkInitialized(); err != nil {
 		// Return error if not initialized.
 		return nil, err
 	}
 
+	// Check global enabled flag.
+	if cfg == nil || !cfg.Enabled {
+		// Return minimal result with only metadata.
+		return &AllSystemMetrics{
+			Timestamp:   time.Now(),
+			Platform:    runtime.GOOS,
+			Hostname:    getHostname(),
+			CollectedAt: time.Now().UnixNano(),
+		}, nil
+	}
+
 	now := time.Now()
-	hostname, _ := os.Hostname()
+	hostname := getHostname()
 	result := &AllSystemMetrics{
 		Timestamp:   now,
 		Platform:    runtime.GOOS,
@@ -41,12 +55,21 @@ func CollectAllMetrics(ctx context.Context) (*AllSystemMetrics, error) {
 	}
 
 	collector := NewCollector()
-	collectBasicMetrics(ctx, collector, result)
-	collectResourceMetrics(ctx, collector, result)
-	collectSystemMetrics(ctx, result)
+	collectBasicMetrics(ctx, collector, result, cfg)
+	collectResourceMetrics(ctx, collector, result, cfg)
+	collectSystemMetrics(ctx, result, cfg)
 
 	// Return collected metrics.
 	return result, nil
+}
+
+// getHostname returns the system hostname, empty string on error.
+//
+// Returns:
+//   - string: system hostname
+func getHostname() string {
+	hostname, _ := os.Hostname()
+	return hostname
 }
 
 // collectBasicMetrics collects CPU, memory, and load metrics.
@@ -55,10 +78,20 @@ func CollectAllMetrics(ctx context.Context) (*AllSystemMetrics, error) {
 //   - ctx: context for cancellation
 //   - collector: collector instance
 //   - result: result structure to populate
-func collectBasicMetrics(ctx context.Context, collector *Collector, result *AllSystemMetrics) {
-	result.CPU = collectCPUMetricsWithPressure(ctx, collector)
-	result.Memory = collectMemoryMetricsWithPressure(ctx, collector)
-	result.Load = collectLoadMetricsJSON(ctx, collector)
+//   - cfg: metrics configuration
+func collectBasicMetrics(ctx context.Context, collector *Collector, result *AllSystemMetrics, cfg *config.MetricsConfig) {
+	// Collect CPU metrics if enabled.
+	if cfg.CPU.Enabled {
+		result.CPU = collectCPUMetricsWithPressure(ctx, collector, cfg.CPU.Pressure)
+	}
+	// Collect memory metrics if enabled.
+	if cfg.Memory.Enabled {
+		result.Memory = collectMemoryMetricsWithPressure(ctx, collector, cfg.Memory.Pressure)
+	}
+	// Collect load metrics if enabled.
+	if cfg.Load.Enabled {
+		result.Load = collectLoadMetricsJSON(ctx, collector)
+	}
 }
 
 // collectCPUMetricsWithPressure collects CPU metrics including pressure.
@@ -66,10 +99,11 @@ func collectBasicMetrics(ctx context.Context, collector *Collector, result *AllS
 // Params:
 //   - ctx: context for cancellation.
 //   - collector: collector instance.
+//   - collectPressure: whether to collect pressure stall information.
 //
 // Returns:
 //   - *CPUMetricsJSON: collected CPU metrics, nil on error.
-func collectCPUMetricsWithPressure(ctx context.Context, collector *Collector) *CPUMetricsJSON {
+func collectCPUMetricsWithPressure(ctx context.Context, collector *Collector, collectPressure bool) *CPUMetricsJSON {
 	cpu, err := collector.Cpu().CollectSystem(ctx)
 	// Check for CPU collection error.
 	if err != nil {
@@ -82,13 +116,15 @@ func collectCPUMetricsWithPressure(ctx context.Context, collector *Collector) *C
 		Cores:        uint32(runtime.NumCPU()),
 	}
 
-	// Add CPU pressure if available.
-	if pressure, err := collector.Cpu().CollectPressure(ctx); err == nil {
-		cpuMetrics.Pressure = &CPUPressureJSON{
-			SomeAvg10:   pressure.SomeAvg10,
-			SomeAvg60:   pressure.SomeAvg60,
-			SomeAvg300:  pressure.SomeAvg300,
-			SomeTotalUs: pressure.SomeTotal,
+	// Add CPU pressure if enabled and available.
+	if collectPressure {
+		if pressure, err := collector.Cpu().CollectPressure(ctx); err == nil {
+			cpuMetrics.Pressure = &CPUPressureJSON{
+				SomeAvg10:   pressure.SomeAvg10,
+				SomeAvg60:   pressure.SomeAvg60,
+				SomeAvg300:  pressure.SomeAvg300,
+				SomeTotalUs: pressure.SomeTotal,
+			}
 		}
 	}
 
@@ -101,10 +137,11 @@ func collectCPUMetricsWithPressure(ctx context.Context, collector *Collector) *C
 // Params:
 //   - ctx: context for cancellation.
 //   - collector: collector instance.
+//   - collectPressure: whether to collect pressure stall information.
 //
 // Returns:
 //   - *MemoryMetricsJSON: collected memory metrics, nil on error.
-func collectMemoryMetricsWithPressure(ctx context.Context, collector *Collector) *MemoryMetricsJSON {
+func collectMemoryMetricsWithPressure(ctx context.Context, collector *Collector, collectPressure bool) *MemoryMetricsJSON {
 	mem, err := collector.Memory().CollectSystem(ctx)
 	// Check for memory collection error.
 	if err != nil {
@@ -123,17 +160,19 @@ func collectMemoryMetricsWithPressure(ctx context.Context, collector *Collector)
 		UsedPercent:    mem.UsagePercent,
 	}
 
-	// Add memory pressure if available.
-	if pressure, err := collector.Memory().CollectPressure(ctx); err == nil {
-		memMetrics.Pressure = &MemoryPressureJSON{
-			SomeAvg10:   pressure.SomeAvg10,
-			SomeAvg60:   pressure.SomeAvg60,
-			SomeAvg300:  pressure.SomeAvg300,
-			SomeTotalUs: pressure.SomeTotal,
-			FullAvg10:   pressure.FullAvg10,
-			FullAvg60:   pressure.FullAvg60,
-			FullAvg300:  pressure.FullAvg300,
-			FullTotalUs: pressure.FullTotal,
+	// Add memory pressure if enabled and available.
+	if collectPressure {
+		if pressure, err := collector.Memory().CollectPressure(ctx); err == nil {
+			memMetrics.Pressure = &MemoryPressureJSON{
+				SomeAvg10:   pressure.SomeAvg10,
+				SomeAvg60:   pressure.SomeAvg60,
+				SomeAvg300:  pressure.SomeAvg300,
+				SomeTotalUs: pressure.SomeTotal,
+				FullAvg10:   pressure.FullAvg10,
+				FullAvg60:   pressure.FullAvg60,
+				FullAvg300:  pressure.FullAvg300,
+				FullTotalUs: pressure.FullTotal,
+			}
 		}
 	}
 
@@ -170,10 +209,20 @@ func collectLoadMetricsJSON(ctx context.Context, collector *Collector) *LoadMetr
 //   - ctx: context for cancellation
 //   - collector: collector instance
 //   - result: result structure to populate
-func collectResourceMetrics(ctx context.Context, collector *Collector, result *AllSystemMetrics) {
-	result.Disk = collectDiskMetricsJSON(ctx, collector)
-	result.Network = collectNetworkMetricsJSON(ctx, collector)
-	result.IO = collectIOMetricsJSON(ctx, collector)
+//   - cfg: metrics configuration
+func collectResourceMetrics(ctx context.Context, collector *Collector, result *AllSystemMetrics, cfg *config.MetricsConfig) {
+	// Collect disk metrics if enabled.
+	if cfg.Disk.Enabled {
+		result.Disk = collectDiskMetricsJSON(ctx, collector, &cfg.Disk)
+	}
+	// Collect network metrics if enabled.
+	if cfg.Network.Enabled {
+		result.Network = collectNetworkMetricsJSON(ctx, collector, &cfg.Network)
+	}
+	// Collect I/O metrics if enabled.
+	if cfg.IO.Enabled {
+		result.IO = collectIOMetricsJSON(ctx, collector, cfg.IO.Pressure)
+	}
 }
 
 // collectSystemMetrics collects process, thermal, and connection metrics.
@@ -181,14 +230,34 @@ func collectResourceMetrics(ctx context.Context, collector *Collector, result *A
 // Params:
 //   - ctx: context for cancellation
 //   - result: result structure to populate
-func collectSystemMetrics(ctx context.Context, result *AllSystemMetrics) {
-	result.Process = collectProcessMetricsJSON(ctx)
-	result.Thermal = collectThermalMetricsJSON()
+//   - cfg: metrics configuration
+func collectSystemMetrics(ctx context.Context, result *AllSystemMetrics, cfg *config.MetricsConfig) {
+	// Collect process metrics if enabled.
+	if cfg.Process.Enabled {
+		result.Process = collectProcessMetricsJSON(ctx)
+	}
+	// Collect thermal metrics if enabled.
+	if cfg.Thermal.Enabled {
+		result.Thermal = collectThermalMetricsJSON()
+	}
+	// Collect context switch metrics (always enabled, minimal overhead).
 	result.ContextSwitches = collectContextSwitchMetricsJSON()
-	result.Connections = collectConnectionMetricsJSON(ctx)
-	result.Quota = collectQuotaMetricsJSON()
-	result.Container = collectContainerMetricsJSON()
-	result.Runtime = collectRuntimeMetricsJSON()
+	// Collect connection metrics if enabled.
+	if cfg.Connections.Enabled {
+		result.Connections = collectConnectionMetricsJSON(ctx, &cfg.Connections)
+	}
+	// Collect quota metrics if enabled.
+	if cfg.Quota.Enabled {
+		result.Quota = collectQuotaMetricsJSON()
+	}
+	// Collect container metrics if enabled.
+	if cfg.Container.Enabled {
+		result.Container = collectContainerMetricsJSON()
+	}
+	// Collect runtime metrics if enabled.
+	if cfg.Runtime.Enabled {
+		result.Runtime = collectRuntimeMetricsJSON()
+	}
 }
 
 // collectDiskMetricsJSON collects all disk-related metrics.
@@ -196,14 +265,24 @@ func collectSystemMetrics(ctx context.Context, result *AllSystemMetrics) {
 // Params:
 //   - ctx: context for cancellation
 //   - coll: collector instance to use
+//   - cfg: disk metrics configuration
 //
 // Returns:
 //   - *DiskMetricsJSON: collected disk metrics
-func collectDiskMetricsJSON(ctx context.Context, coll *Collector) *DiskMetricsJSON {
+func collectDiskMetricsJSON(ctx context.Context, coll *Collector, cfg *config.DiskMetricsConfig) *DiskMetricsJSON {
 	disk := &DiskMetricsJSON{}
-	disk.Partitions = extractPartitionInfo(ctx, coll)
-	disk.Usage = extractDiskUsageInfo(ctx, coll)
-	disk.IO = extractDiskIOInfo(ctx, coll)
+	// Collect partitions if enabled.
+	if cfg.Partitions {
+		disk.Partitions = extractPartitionInfo(ctx, coll)
+	}
+	// Collect usage if enabled.
+	if cfg.Usage {
+		disk.Usage = extractDiskUsageInfo(ctx, coll)
+	}
+	// Collect I/O if enabled.
+	if cfg.IO {
+		disk.IO = extractDiskIOInfo(ctx, coll)
+	}
 	// Return collected disk metrics.
 	return disk
 }
@@ -224,15 +303,15 @@ func extractPartitionInfo(ctx context.Context, coll *Collector) []PartitionInfo 
 		return nil
 	}
 
-	result := make([]PartitionInfo, 0, len(partitions))
+	result := make([]PartitionInfo, len(partitions))
 	// Iterate through each partition.
-	for _, pt := range partitions {
-		result = append(result, PartitionInfo{
+	for i, pt := range partitions {
+		result[i] = PartitionInfo{
 			Device:     pt.Device,
 			MountPoint: pt.Mountpoint,
 			FSType:     pt.FSType,
 			Options:    joinOptions(pt.Options),
-		})
+		}
 	}
 	// Return extracted partition info.
 	return result
@@ -254,10 +333,10 @@ func extractDiskUsageInfo(ctx context.Context, coll *Collector) []DiskUsageInfo 
 		return nil
 	}
 
-	result := make([]DiskUsageInfo, 0, len(usage))
+	result := make([]DiskUsageInfo, len(usage))
 	// Iterate through each usage entry.
-	for _, us := range usage {
-		result = append(result, DiskUsageInfo{
+	for i, us := range usage {
+		result[i] = DiskUsageInfo{
 			Path:        us.Path,
 			TotalBytes:  us.Total,
 			UsedBytes:   us.Used,
@@ -266,7 +345,7 @@ func extractDiskUsageInfo(ctx context.Context, coll *Collector) []DiskUsageInfo 
 			InodesTotal: us.InodesTotal,
 			InodesUsed:  us.InodesUsed,
 			InodesFree:  us.InodesFree,
-		})
+		}
 	}
 	// Return extracted disk usage info.
 	return result
@@ -288,10 +367,10 @@ func extractDiskIOInfo(ctx context.Context, coll *Collector) []DiskIOInfo {
 		return nil
 	}
 
-	result := make([]DiskIOInfo, 0, len(ioStats))
+	result := make([]DiskIOInfo, len(ioStats))
 	// Iterate through each I/O stats entry.
-	for _, io := range ioStats {
-		result = append(result, DiskIOInfo{
+	for i, io := range ioStats {
+		result[i] = DiskIOInfo{
 			Device:           io.Device,
 			ReadsCompleted:   io.ReadCount,
 			SectorsRead:      io.ReadBytes / sectorSize,
@@ -302,7 +381,7 @@ func extractDiskIOInfo(ctx context.Context, coll *Collector) []DiskIOInfo {
 			IOInProgress:     io.IOInProgress,
 			IOTimeMs:         uint64(io.IOTime.Milliseconds()),
 			WeightedIOTimeMs: uint64(io.WeightedIOTime.Milliseconds()),
-		})
+		}
 	}
 	// Return extracted disk I/O info.
 	return result
@@ -343,48 +422,53 @@ func containsFlag(flags []string, flag string) bool {
 // Params:
 //   - ctx: context for cancellation
 //   - coll: collector instance to use
+//   - cfg: network metrics configuration
 //
 // Returns:
 //   - *NetworkMetricsJSON: collected network metrics
-func collectNetworkMetricsJSON(ctx context.Context, coll *Collector) *NetworkMetricsJSON {
+func collectNetworkMetricsJSON(ctx context.Context, coll *Collector, cfg *config.NetworkMetricsConfig) *NetworkMetricsJSON {
 	// Initialize network metrics struct
 	network := &NetworkMetricsJSON{}
 
-	// Collect interface information if collection succeeds.
-	if ifaces, err := coll.Network().ListInterfaces(ctx); err == nil {
-		network.Interfaces = make([]NetInterfaceJSON, 0, len(ifaces))
-		// Iterate over each interface
-		for _, iface := range ifaces {
-			// Derive IsUp and IsLoopback from flags
-			isUp := containsFlag(iface.Flags, "up")
-			isLoopback := containsFlag(iface.Flags, "loopback")
-			network.Interfaces = append(network.Interfaces, NetInterfaceJSON{
-				Name:       iface.Name,
-				MACAddress: iface.HardwareAddr,
-				MTU:        uint32(iface.MTU),
-				IsUp:       isUp,
-				IsLoopback: isLoopback,
-				Flags:      iface.Flags,
-			})
+	// Collect interface information if enabled and collection succeeds.
+	if cfg.Interfaces {
+		if ifaces, err := coll.Network().ListInterfaces(ctx); err == nil {
+			network.Interfaces = make([]NetInterfaceJSON, len(ifaces))
+			// Iterate over each interface
+			for i, iface := range ifaces {
+				// Derive IsUp and IsLoopback from flags
+				isUp := containsFlag(iface.Flags, "up")
+				isLoopback := containsFlag(iface.Flags, "loopback")
+				network.Interfaces[i] = NetInterfaceJSON{
+					Name:       iface.Name,
+					MACAddress: iface.HardwareAddr,
+					MTU:        uint32(iface.MTU),
+					IsUp:       isUp,
+					IsLoopback: isLoopback,
+					Flags:      iface.Flags,
+				}
+			}
 		}
 	}
 
-	// Collect network statistics if collection succeeds.
-	if stats, err := coll.Network().CollectAllStats(ctx); err == nil {
-		network.Stats = make([]NetStatsJSON, 0, len(stats))
-		// Iterate over each stats entry
-		for _, st := range stats {
-			network.Stats = append(network.Stats, NetStatsJSON{
-				Interface:   st.Interface,
-				BytesRecv:   st.BytesRecv,
-				BytesSent:   st.BytesSent,
-				PacketsRecv: st.PacketsRecv,
-				PacketsSent: st.PacketsSent,
-				ErrorsIn:    st.ErrorsIn,
-				ErrorsOut:   st.ErrorsOut,
-				DropsIn:     st.DropsIn,
-				DropsOut:    st.DropsOut,
-			})
+	// Collect network statistics if enabled and collection succeeds.
+	if cfg.Stats {
+		if stats, err := coll.Network().CollectAllStats(ctx); err == nil {
+			network.Stats = make([]NetStatsJSON, len(stats))
+			// Iterate over each stats entry
+			for i, st := range stats {
+				network.Stats[i] = NetStatsJSON{
+					Interface:   st.Interface,
+					BytesRecv:   st.BytesRecv,
+					BytesSent:   st.BytesSent,
+					PacketsRecv: st.PacketsRecv,
+					PacketsSent: st.PacketsSent,
+					ErrorsIn:    st.ErrorsIn,
+					ErrorsOut:   st.ErrorsOut,
+					DropsIn:     st.DropsIn,
+					DropsOut:    st.DropsOut,
+				}
+			}
 		}
 	}
 
@@ -397,10 +481,11 @@ func collectNetworkMetricsJSON(ctx context.Context, coll *Collector) *NetworkMet
 // Params:
 //   - ctx: context for cancellation
 //   - coll: collector instance to use
+//   - collectPressure: whether to collect pressure stall information
 //
 // Returns:
 //   - *IOMetricsJSON: collected I/O metrics
-func collectIOMetricsJSON(ctx context.Context, coll *Collector) *IOMetricsJSON {
+func collectIOMetricsJSON(ctx context.Context, coll *Collector, collectPressure bool) *IOMetricsJSON {
 	// Initialize I/O metrics struct
 	ioMetrics := &IOMetricsJSON{}
 
@@ -412,17 +497,19 @@ func collectIOMetricsJSON(ctx context.Context, coll *Collector) *IOMetricsJSON {
 		ioMetrics.WriteBytes = stats.WriteBytesTotal
 	}
 
-	// Collect I/O pressure if available (Linux only).
-	if pressure, err := coll.Io().CollectPressure(ctx); err == nil {
-		ioMetrics.Pressure = &IOPressureJSON{
-			SomeAvg10:   pressure.SomeAvg10,
-			SomeAvg60:   pressure.SomeAvg60,
-			SomeAvg300:  pressure.SomeAvg300,
-			SomeTotalUs: pressure.SomeTotal,
-			FullAvg10:   pressure.FullAvg10,
-			FullAvg60:   pressure.FullAvg60,
-			FullAvg300:  pressure.FullAvg300,
-			FullTotalUs: pressure.FullTotal,
+	// Collect I/O pressure if enabled and available (Linux only).
+	if collectPressure {
+		if pressure, err := coll.Io().CollectPressure(ctx); err == nil {
+			ioMetrics.Pressure = &IOPressureJSON{
+				SomeAvg10:   pressure.SomeAvg10,
+				SomeAvg60:   pressure.SomeAvg60,
+				SomeAvg300:  pressure.SomeAvg300,
+				SomeTotalUs: pressure.SomeTotal,
+				FullAvg10:   pressure.FullAvg10,
+				FullAvg60:   pressure.FullAvg60,
+				FullAvg300:  pressure.FullAvg300,
+				FullTotalUs: pressure.FullTotal,
+			}
 		}
 	}
 
@@ -497,11 +584,11 @@ func collectThermalMetricsJSON() *ThermalMetricsJSON {
 
 	// Collect thermal zones
 	if zones, err := CollectThermalZones(); err == nil {
-		thermal.Zones = make([]ThermalZoneJSON, 0, len(zones))
+		thermal.Zones = make([]ThermalZoneJSON, len(zones))
 		// Iterate over each zone
-		for _, zn := range zones {
+		for i, zn := range zones {
 			// ThermalZone and ThermalZoneJSON have identical underlying types.
-			thermal.Zones = append(thermal.Zones, ThermalZoneJSON(zn))
+			thermal.Zones[i] = ThermalZoneJSON(zn)
 		}
 	}
 
@@ -538,19 +625,34 @@ func collectContextSwitchMetricsJSON() *ContextSwitchMetricsJSON {
 //
 // Params:
 //   - ctx: context for cancellation
+//   - cfg: connection metrics configuration
 //
 // Returns:
 //   - *ConnectionMetricsJSON: collected connection metrics
-func collectConnectionMetricsJSON(ctx context.Context) *ConnectionMetricsJSON {
+func collectConnectionMetricsJSON(ctx context.Context, cfg *config.ConnectionMetricsConfig) *ConnectionMetricsJSON {
 	conn := &ConnectionMetricsJSON{}
 	collector := NewConnectionCollector()
 
-	// Collect all connection types.
-	conn.TCPStats = collectTCPStatsJSON(ctx, collector)
-	conn.TCPConnections = collectTCPConnectionsJSON(ctx, collector)
-	conn.UDPSockets = collectUDPSocketsJSON(ctx, collector)
-	conn.UnixSockets = collectUnixSocketsJSON(ctx, collector)
-	conn.ListeningPorts = collectListeningPortsJSON(ctx, collector)
+	// Collect TCP stats if enabled.
+	if cfg.TCPStats {
+		conn.TCPStats = collectTCPStatsJSON(ctx, collector)
+	}
+	// Collect TCP connections if enabled.
+	if cfg.TCPConnections {
+		conn.TCPConnections = collectTCPConnectionsJSON(ctx, collector)
+	}
+	// Collect UDP sockets if enabled.
+	if cfg.UDPSockets {
+		conn.UDPSockets = collectUDPSocketsJSON(ctx, collector)
+	}
+	// Collect Unix sockets if enabled.
+	if cfg.UnixSockets {
+		conn.UnixSockets = collectUnixSocketsJSON(ctx, collector)
+	}
+	// Collect listening ports if enabled.
+	if cfg.ListeningPorts {
+		conn.ListeningPorts = collectListeningPortsJSON(ctx, collector)
+	}
 
 	// Return populated connection metrics.
 	return conn
@@ -588,7 +690,7 @@ func collectTCPStatsJSON(ctx context.Context, collector *ConnectionCollector) *T
 	}
 }
 
-// collectTCPConnectionsJSON collects TCP connections.
+// collectTCPConnectionsJSON collects TCP connections using pooled slices.
 //
 // Params:
 //   - ctx: context for cancellation
@@ -603,7 +705,11 @@ func collectTCPConnectionsJSON(ctx context.Context, collector *ConnectionCollect
 		// Skip on error.
 		return nil
 	}
-	result := make([]TcpConnJSON, 0, len(tcpConns))
+
+	// Get pooled slice
+	resultPtr := getTCPConnSlice()
+	result := *resultPtr
+
 	// Convert each TCP connection to JSON format.
 	for _, tc := range tcpConns {
 		result = append(result, TcpConnJSON{
@@ -617,11 +723,19 @@ func collectTCPConnectionsJSON(ctx context.Context, collector *ConnectionCollect
 			ProcessName: tc.ProcessName,
 		})
 	}
+
+	// Make a copy for return (caller owns this)
+	resultCopy := make([]TcpConnJSON, len(result))
+	copy(resultCopy, result)
+
+	// Return pooled slice
+	putTCPConnSlice(resultPtr)
+
 	// Return collected TCP connections.
-	return result
+	return resultCopy
 }
 
-// collectUDPSocketsJSON collects UDP sockets.
+// collectUDPSocketsJSON collects UDP sockets using pooled slices.
 //
 // Params:
 //   - ctx: context for cancellation
@@ -636,7 +750,11 @@ func collectUDPSocketsJSON(ctx context.Context, collector *ConnectionCollector) 
 		// Skip on error.
 		return nil
 	}
-	result := make([]UdpConnJSON, 0, len(udpConns))
+
+	// Get pooled slice
+	resultPtr := getUDPConnSlice()
+	result := *resultPtr
+
 	// Convert each UDP socket to JSON format.
 	for _, uc := range udpConns {
 		result = append(result, UdpConnJSON{
@@ -649,11 +767,19 @@ func collectUDPSocketsJSON(ctx context.Context, collector *ConnectionCollector) 
 			ProcessName: uc.ProcessName,
 		})
 	}
+
+	// Make a copy for return (caller owns this)
+	resultCopy := make([]UdpConnJSON, len(result))
+	copy(resultCopy, result)
+
+	// Return pooled slice
+	putUDPConnSlice(resultPtr)
+
 	// Return collected UDP sockets.
-	return result
+	return resultCopy
 }
 
-// collectUnixSocketsJSON collects Unix sockets.
+// collectUnixSocketsJSON collects Unix sockets using pooled slices.
 //
 // Params:
 //   - ctx: context for cancellation
@@ -668,7 +794,11 @@ func collectUnixSocketsJSON(ctx context.Context, collector *ConnectionCollector)
 		// Skip on error.
 		return nil
 	}
-	result := make([]UnixSockJSON, 0, len(unixSocks))
+
+	// Get pooled slice
+	resultPtr := getUnixSockSlice()
+	result := *resultPtr
+
 	// Convert each Unix socket to JSON format.
 	for _, us := range unixSocks {
 		result = append(result, UnixSockJSON{
@@ -679,11 +809,19 @@ func collectUnixSocketsJSON(ctx context.Context, collector *ConnectionCollector)
 			ProcessName: us.ProcessName,
 		})
 	}
+
+	// Make a copy for return (caller owns this)
+	resultCopy := make([]UnixSockJSON, len(result))
+	copy(resultCopy, result)
+
+	// Return pooled slice
+	putUnixSockSlice(resultPtr)
+
 	// Return collected Unix sockets.
-	return result
+	return resultCopy
 }
 
-// collectListeningPortsJSON collects listening ports.
+// collectListeningPortsJSON collects listening ports using pooled slices.
 //
 // Params:
 //   - ctx: context for cancellation
@@ -698,7 +836,11 @@ func collectListeningPortsJSON(ctx context.Context, collector *ConnectionCollect
 		// Skip on error.
 		return nil
 	}
-	result := make([]ListenInfoJSON, 0, len(listening))
+
+	// Get pooled slice
+	resultPtr := getListenInfoSlice()
+	result := *resultPtr
+
 	// Convert each listening port to JSON format.
 	for _, lp := range listening {
 		result = append(result, ListenInfoJSON{
@@ -709,8 +851,16 @@ func collectListeningPortsJSON(ctx context.Context, collector *ConnectionCollect
 			ProcessName: lp.ProcessName,
 		})
 	}
+
+	// Make a copy for return (caller owns this)
+	resultCopy := make([]ListenInfoJSON, len(result))
+	copy(resultCopy, result)
+
+	// Return pooled slice
+	putListenInfoSlice(resultPtr)
+
 	// Return collected listening ports.
-	return result
+	return resultCopy
 }
 
 // collectQuotaMetricsJSON collects resource quota metrics.
@@ -803,15 +953,15 @@ func collectRuntimeMetricsJSON() *RuntimeMetricsJSON {
 
 	// Check if available runtimes exist
 	if len(info.AvailableRuntimes) > 0 {
-		rm.AvailableRuntimes = make([]AvailableRuntimeInfoJSON, 0, len(info.AvailableRuntimes))
+		rm.AvailableRuntimes = make([]AvailableRuntimeInfoJSON, len(info.AvailableRuntimes))
 		// Iterate over each available runtime
-		for _, ar := range info.AvailableRuntimes {
-			rm.AvailableRuntimes = append(rm.AvailableRuntimes, AvailableRuntimeInfoJSON{
+		for i, ar := range info.AvailableRuntimes {
+			rm.AvailableRuntimes[i] = AvailableRuntimeInfoJSON{
 				Runtime:    ar.Runtime.String(),
 				SocketPath: ar.SocketPath,
 				Version:    ar.Version,
 				IsRunning:  ar.IsRunning,
-			})
+			}
 		}
 	}
 
@@ -820,30 +970,35 @@ func collectRuntimeMetricsJSON() *RuntimeMetricsJSON {
 }
 
 // CollectAllMetricsJSON collects all metrics and returns them as a JSON string.
+// Uses pooled buffers to reduce allocations.
 //
 // Params:
 //   - ctx: context for cancellation
+//   - cfg: metrics configuration controlling which metrics to collect
 //
 // Returns:
 //   - string: JSON-encoded metrics
 //   - error: nil on success, error if collection or encoding fails
-func CollectAllMetricsJSON(ctx context.Context) (string, error) {
-	// Collect all metrics
-	metrics, err := CollectAllMetrics(ctx)
+func CollectAllMetricsJSON(ctx context.Context, cfg *config.MetricsConfig) (string, error) {
+	// Collect all metrics with configuration
+	metrics, err := CollectAllMetrics(ctx, cfg)
 	// Check if collection failed
 	if err != nil {
 		// Return empty string with error
 		return "", err
 	}
 
-	// Encode metrics to JSON
-	jsonBytes, err := json.Marshal(metrics)
-	// Check if encoding failed
-	if err != nil {
+	// Get pooled buffer
+	buf := getJSONBuffer()
+	defer putJSONBuffer(buf)
+
+	// Encode metrics to JSON using pooled buffer
+	enc := json.NewEncoder(buf)
+	if err := enc.Encode(metrics); err != nil {
 		// Return empty string with error
 		return "", err
 	}
 
-	// Return the JSON string
-	return string(jsonBytes), nil
+	// Return the JSON string (buf.String() makes a copy)
+	return buf.String(), nil
 }

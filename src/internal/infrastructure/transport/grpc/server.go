@@ -171,13 +171,15 @@ func NewServer(metricsProvider MetricsProvider, stateProvider GetStator) *Server
 }
 
 // Serve starts the gRPC server on the specified address.
+// The provided context controls cancellation during listener setup.
 //
 // Params:
+//   - ctx: context for cancellation and timeout control during listener setup.
 //   - address: network address to listen on (e.g., ":50051").
 //
 // Returns:
 //   - error: if the server fails to start.
-func (s *Server) Serve(address string) error {
+func (s *Server) Serve(ctx context.Context, address string) error {
 	s.mu.Lock()
 	// Check if server is already running.
 	if s.running {
@@ -187,7 +189,7 @@ func (s *Server) Serve(address string) error {
 	}
 
 	lc := net.ListenConfig{}
-	listener, err := lc.Listen(context.Background(), "tcp", address)
+	listener, err := lc.Listen(ctx, "tcp", address)
 	// Check if listen failed.
 	if err != nil {
 		s.mu.Unlock()
@@ -322,11 +324,11 @@ func (s *Server) ListProcesses(ctx context.Context, req *emptypb.Empty) (*daemon
 		return nil, ctx.Err()
 	}
 	allMetrics := s.metricsProvider.GetAllProcessMetrics()
-	processes := make([]*daemonpb.ProcessMetrics, 0, len(allMetrics))
+	processes := make([]*daemonpb.ProcessMetrics, len(allMetrics))
 
 	// Convert all process metrics.
 	for i := range allMetrics {
-		processes = append(processes, s.convertProcessMetrics(&allMetrics[i]))
+		processes[i] = s.convertProcessMetrics(&allMetrics[i])
 	}
 
 	// Return process list.
@@ -497,10 +499,10 @@ func (s *Server) StreamAllProcessMetrics(req *daemonpb.StreamMetricsRequest, str
 // Returns:
 //   - *daemonpb.DaemonState: protobuf daemon state.
 func (s *Server) convertDaemonState(ds *lifecycle.DaemonState) *daemonpb.DaemonState {
-	processes := make([]*daemonpb.ProcessMetrics, 0, len(ds.Processes))
+	processes := make([]*daemonpb.ProcessMetrics, len(ds.Processes))
 	// Convert all process metrics.
 	for i := range ds.Processes {
-		processes = append(processes, s.convertProcessMetrics(&ds.Processes[i]))
+		processes[i] = s.convertProcessMetrics(&ds.Processes[i])
 	}
 
 	// Compute overall healthy status.

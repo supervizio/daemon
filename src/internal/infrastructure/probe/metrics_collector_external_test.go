@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/infrastructure/probe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +27,8 @@ func TestCollectAllMetrics(t *testing.T) {
 			defer probe.Shutdown()
 
 			ctx := context.Background()
-			metrics, err := probe.CollectAllMetrics(ctx)
+			cfg := config.DefaultMetricsConfig()
+			metrics, err := probe.CollectAllMetrics(ctx, &cfg)
 
 			require.NoError(t, err)
 			require.NotNil(t, metrics)
@@ -54,7 +56,8 @@ func TestCollectAllMetricsJSON(t *testing.T) {
 			defer probe.Shutdown()
 
 			ctx := context.Background()
-			jsonStr, err := probe.CollectAllMetricsJSON(ctx)
+			cfg := config.DefaultMetricsConfig()
+			jsonStr, err := probe.CollectAllMetricsJSON(ctx, &cfg)
 
 			require.NoError(t, err)
 			assert.NotEmpty(t, jsonStr)
@@ -76,7 +79,8 @@ func TestCollectAllMetrics_NotInitialized(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Do not call probe.Init()
 			ctx := context.Background()
-			_, err := probe.CollectAllMetrics(ctx)
+			cfg := config.DefaultMetricsConfig()
+			_, err := probe.CollectAllMetrics(ctx, &cfg)
 
 			// Should return error because probe is not initialized
 			if err != nil {
@@ -101,7 +105,8 @@ func TestAllSystemMetrics_Structure(t *testing.T) {
 			defer probe.Shutdown()
 
 			ctx := context.Background()
-			metrics, err := probe.CollectAllMetrics(ctx)
+			cfg := config.DefaultMetricsConfig()
+			metrics, err := probe.CollectAllMetrics(ctx, &cfg)
 			require.NoError(t, err)
 
 			// CPU metrics should be present

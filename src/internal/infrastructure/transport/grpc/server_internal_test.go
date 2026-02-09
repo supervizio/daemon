@@ -885,7 +885,7 @@ func Test_Server_ErrorHandling(t *testing.T) {
 				metricsProvider := &mockMetricsProvider{}
 				stateProvider := &mockGetStator{}
 				server := NewServer(metricsProvider, stateProvider)
-				err = server.Serve("invalid-address-no-port")
+				err = server.Serve(context.Background(), "invalid-address-no-port")
 
 			case "streamLoop":
 				var callCount int

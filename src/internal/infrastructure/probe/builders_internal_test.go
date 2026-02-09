@@ -3,6 +3,7 @@ package probe
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -36,7 +37,7 @@ func TestBuildCPUMetricsFromRaw(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			// Build CPU metrics from raw data.
-			result := buildCPUMetricsFromRaw(tt.raw)
+			result := buildCPUMetricsFromRaw(tt.raw, time.Now())
 			// Verify usage percent.
 			assert.Equal(t, tt.wantUsage, result.UsagePercent)
 			// Verify timestamp is set.
@@ -80,7 +81,7 @@ func TestBuildMemoryMetricsFromRaw(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			// Build memory metrics from raw data.
-			result := buildMemoryMetricsFromRaw(tt.raw)
+			result := buildMemoryMetricsFromRaw(tt.raw, time.Now())
 			// Verify memory values.
 			assert.Equal(t, tt.raw.TotalBytes, result.Total)
 			assert.Equal(t, tt.raw.AvailableBytes, result.Available)
@@ -120,7 +121,7 @@ func TestBuildLoadMetricsFromRaw(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			// Build load metrics from raw data.
-			result := buildLoadMetricsFromRaw(tt.raw)
+			result := buildLoadMetricsFromRaw(tt.raw, time.Now())
 			// Verify load values.
 			assert.Equal(t, tt.raw.Load1Min, result.Load1)
 			assert.Equal(t, tt.raw.Load5Min, result.Load5)
@@ -160,7 +161,7 @@ func TestBuildIOStatsMetricsFromRaw(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			// Build I/O stats from raw data.
-			result := buildIOStatsMetricsFromRaw(tt.raw)
+			result := buildIOStatsMetricsFromRaw(tt.raw, time.Now())
 			// Verify I/O values.
 			assert.Equal(t, tt.raw.ReadOps, result.ReadOps)
 			assert.Equal(t, tt.raw.ReadBytes, result.ReadBytes)
@@ -207,7 +208,7 @@ func TestBuildPressureMetricsFromRaw(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			// Build pressure metrics from raw data.
-			result := buildPressureMetricsFromRaw(tt.raw)
+			result := buildPressureMetricsFromRaw(tt.raw, time.Now())
 			// Verify CPU pressure.
 			assert.Equal(t, tt.raw.CPU.SomeAvg10, result.CPU.SomeAvg10)
 			assert.Equal(t, tt.raw.CPU.SomeTotalUs, result.CPU.SomeTotal)

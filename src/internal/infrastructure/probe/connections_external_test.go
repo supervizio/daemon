@@ -249,8 +249,8 @@ func TestAddressFamily_String(t *testing.T) {
 		family   probe.AddressFamily
 		expected string
 	}{
-		{probe.AddressFamilyIPv4, "IPv4"},
-		{probe.AddressFamilyIPv6, "IPv6"},
+		{probe.AddressFamilyIPv4, "ipv4"},
+		{probe.AddressFamilyIPv6, "ipv6"},
 	}
 
 	for _, tt := range tests {

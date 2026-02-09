@@ -23,6 +23,9 @@ type MonitoringConfig struct {
 	// Discovery configures auto-discovery for different platforms.
 	Discovery DiscoveryConfig
 
+	// Metrics configures granular metrics collection.
+	Metrics MetricsConfig
+
 	// Targets is the list of statically defined targets.
 	Targets []TargetConfig
 }
@@ -35,6 +38,7 @@ func NewMonitoringConfig() MonitoringConfig {
 	// create monitoring config with defaults and no targets
 	return MonitoringConfig{
 		Defaults: DefaultMonitoringDefaults(),
+		Metrics:  DefaultMetricsConfig(),
 	}
 }
 

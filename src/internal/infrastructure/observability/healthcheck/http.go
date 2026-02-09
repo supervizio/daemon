@@ -25,6 +25,15 @@ const defaultHTTPStatusCode int = http.StatusOK
 // ErrHTTPStatusMismatch indicates the status code didn't match.
 var ErrHTTPStatusMismatch error = errors.New("status code mismatch")
 
+// defaultHTTPTransport is a shared HTTP transport for connection pooling.
+// Reusing a single transport across all HTTP probers enables connection reuse
+// and reduces TCP handshake overhead for repeated health checks.
+var defaultHTTPTransport *http.Transport = &http.Transport{
+	MaxIdleConns:        100,
+	MaxIdleConnsPerHost: 10,
+	IdleConnTimeout:     90 * time.Second,
+}
+
 // HTTPProber performs HTTP endpoint probes.
 // It verifies service health by making HTTP requests.
 type HTTPProber struct {
@@ -35,6 +44,7 @@ type HTTPProber struct {
 }
 
 // NewHTTPProber creates a new HTTP prober.
+// Uses a shared HTTP transport for connection pooling across all instances.
 //
 // Params:
 //   - timeout: the maximum duration for HTTP requests.
@@ -47,16 +57,12 @@ func NewHTTPProber(timeout time.Duration) *HTTPProber {
 		timeout = health.DefaultTimeout
 	}
 
-	transport := &http.Transport{
-		ResponseHeaderTimeout: timeout,
-	}
-
-	// configure client with timeout and transport
+	// use shared transport for connection pooling
+	// timeout is handled via context in Probe() method
 	return &HTTPProber{
 		timeout: timeout,
 		client: &http.Client{
-			Transport: transport,
-			Timeout:   timeout,
+			Transport: defaultHTTPTransport,
 		},
 	}
 }
@@ -82,6 +88,10 @@ func (p *HTTPProber) Type() string {
 func (p *HTTPProber) Probe(ctx context.Context, target health.Target) health.CheckResult {
 	start := time.Now()
 
+	// apply timeout via context to enable connection pooling with shared client
+	timeoutCtx, cancel := context.WithTimeout(ctx, p.timeout)
+	defer cancel()
+
 	method := target.Method
 	// use default HTTP method if not specified
 	if method == "" {
@@ -94,7 +104,7 @@ func (p *HTTPProber) Probe(ctx context.Context, target health.Target) health.Che
 		expectedStatus = defaultHTTPStatusCode
 	}
 
-	statusCode, err := p.getStatusCode(ctx, method, target.Address, target.Path)
+	statusCode, err := p.getStatusCode(timeoutCtx, method, target.Address, target.Path)
 	latency := time.Since(start)
 
 	// handle request failure

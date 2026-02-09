@@ -122,6 +122,10 @@ func (m *Manager) Uptime() int64 {
 }
 
 // Start starts the managed process with automatic restart handling.
+// The provided context enables proper cancellation propagation from parent.
+//
+// Params:
+//   - ctx: parent context for cancellation propagation.
 //
 // Returns:
 //   - error: ErrAlreadyRunning if manager is already running, nil otherwise.
@@ -130,7 +134,7 @@ func (m *Manager) Uptime() int64 {
 //   - Spawns a goroutine that runs until Stop is called or context is cancelled.
 //   - The goroutine handles process lifecycle including restarts based on policy.
 //   - Use Stop() to terminate the goroutine and cleanup resources.
-func (m *Manager) Start() error {
+func (m *Manager) Start(ctx context.Context) error {
 	// lock for state check and update
 	m.mu.Lock()
 	// Check if manager is already running.
@@ -141,7 +145,7 @@ func (m *Manager) Start() error {
 	}
 	// set running state
 	m.running = true
-	m.ctx, m.cancel = context.WithCancel(context.Background())
+	m.ctx, m.cancel = context.WithCancel(ctx)
 	m.mu.Unlock()
 
 	// start main lifecycle goroutine

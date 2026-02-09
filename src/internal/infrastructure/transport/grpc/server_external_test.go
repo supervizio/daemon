@@ -114,7 +114,7 @@ func TestServer_Serve(t *testing.T) {
 				server := grpc.NewServer(&mockMetricsProvider{}, &mockGetStator{})
 				// Goroutine lifecycle: Starts server, terminated by server.Stop() in cleanup.
 				go func() {
-					_ = server.Serve("127.0.0.1:0")
+					_ = server.Serve(context.Background(), "127.0.0.1:0")
 				}()
 				time.Sleep(100 * time.Millisecond)
 				return server
@@ -133,7 +133,7 @@ func TestServer_Serve(t *testing.T) {
 			defer server.Stop()
 
 			if tt.expectError {
-				err := server.Serve(tt.address)
+				err := server.Serve(context.Background(), tt.address)
 				assert.Error(t, err)
 				if tt.errorIs != nil {
 					assert.ErrorIs(t, err, tt.errorIs)
@@ -142,7 +142,7 @@ func TestServer_Serve(t *testing.T) {
 				errCh := make(chan error, 1)
 				// Goroutine lifecycle: Starts server, terminated by server.Stop().
 				go func() {
-					errCh <- server.Serve(tt.address)
+					errCh <- server.Serve(context.Background(), tt.address)
 				}()
 
 				time.Sleep(100 * time.Millisecond)
@@ -195,7 +195,7 @@ func TestServer_Stop(t *testing.T) {
 			if tt.startServer {
 				// Goroutine lifecycle: Starts server, terminated by server.Stop().
 				go func() {
-					_ = server.Serve("127.0.0.1:0")
+					_ = server.Serve(context.Background(), "127.0.0.1:0")
 				}()
 				time.Sleep(100 * time.Millisecond)
 			}
@@ -242,7 +242,7 @@ func TestServer_Address(t *testing.T) {
 			if tt.startServer {
 				// Goroutine lifecycle: Starts server, terminated by server.Stop().
 				go func() {
-					_ = server.Serve("127.0.0.1:0")
+					_ = server.Serve(context.Background(), "127.0.0.1:0")
 				}()
 				time.Sleep(100 * time.Millisecond)
 				defer server.Stop()

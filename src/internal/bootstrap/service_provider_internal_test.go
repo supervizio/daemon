@@ -57,38 +57,42 @@ func TestCountTotalListeners(t *testing.T) {
 	}
 }
 
-// TestAppendConvertedListeners tests the appendConvertedListeners helper function.
-func TestAppendConvertedListeners(t *testing.T) {
+// TestConvertListenersAt tests the convertListenersAt helper function.
+func TestConvertListenersAt(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		initialDest int
-		listeners   []appsupervisor.ListenerSnapshotForTUI
-		expectedLen int
+		name         string
+		destSize     int
+		startIdx     int
+		listeners    []appsupervisor.ListenerSnapshotForTUI
+		expectedNext int
 	}{
 		{
-			name:        "append to empty slice",
-			initialDest: 0,
+			name:     "convert to empty slice at index 0",
+			destSize: 1,
+			startIdx: 0,
 			listeners: []appsupervisor.ListenerSnapshotForTUI{
 				{Name: "http", Port: 8080},
 			},
-			expectedLen: 1,
+			expectedNext: 1,
 		},
 		{
-			name:        "append to existing slice",
-			initialDest: 2,
+			name:     "convert to slice at middle index",
+			destSize: 5,
+			startIdx: 2,
 			listeners: []appsupervisor.ListenerSnapshotForTUI{
 				{Name: "http", Port: 8080},
 				{Name: "grpc", Port: 9090},
 			},
-			expectedLen: 4,
+			expectedNext: 4,
 		},
 		{
-			name:        "append empty listeners",
-			initialDest: 1,
-			listeners:   []appsupervisor.ListenerSnapshotForTUI{},
-			expectedLen: 1,
+			name:         "convert empty listeners",
+			destSize:     3,
+			startIdx:     1,
+			listeners:    []appsupervisor.ListenerSnapshotForTUI{},
+			expectedNext: 1,
 		},
 	}
 
@@ -96,9 +100,9 @@ func TestAppendConvertedListeners(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			dest := make([]model.ListenerSnapshot, tc.initialDest)
-			result := appendConvertedListeners(dest, tc.listeners)
-			assert.Equal(t, tc.expectedLen, len(result))
+			dest := make([]model.ListenerSnapshot, tc.destSize)
+			nextIdx := convertListenersAt(dest, tc.startIdx, tc.listeners)
+			assert.Equal(t, tc.expectedNext, nextIdx)
 		})
 	}
 }
