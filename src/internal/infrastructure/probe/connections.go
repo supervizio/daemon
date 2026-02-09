@@ -17,6 +17,29 @@ import (
 // notFoundPID represents the PID value returned when no process is found.
 const notFoundPID int32 = -1
 
+// String constants for address families (interned to avoid allocations).
+const (
+	strIPv4    = "ipv4"
+	strIPv6    = "ipv6"
+	strUnknown = "unknown"
+)
+
+// String constants for socket states (interned to avoid allocations).
+const (
+	strStateUnknown     = "UNKNOWN"
+	strStateEstablished = "ESTABLISHED"
+	strStateSynSent     = "SYN_SENT"
+	strStateSynRecv     = "SYN_RECV"
+	strStateFinWait1    = "FIN_WAIT1"
+	strStateFinWait2    = "FIN_WAIT2"
+	strStateTimeWait    = "TIME_WAIT"
+	strStateClose       = "CLOSE"
+	strStateCloseWait   = "CLOSE_WAIT"
+	strStateLastAck     = "LAST_ACK"
+	strStateListen      = "LISTEN"
+	strStateClosing     = "CLOSING"
+)
+
 // SocketState represents the state of a network socket.
 type SocketState uint8
 
@@ -61,18 +84,18 @@ const (
 
 // socketStateNames maps socket states to their string representations.
 var socketStateNames map[SocketState]string = map[SocketState]string{
-	SocketStateUnknown:     "UNKNOWN",
-	SocketStateEstablished: "ESTABLISHED",
-	SocketStateSynSent:     "SYN_SENT",
-	SocketStateSynRecv:     "SYN_RECV",
-	SocketStateFinWait1:    "FIN_WAIT1",
-	SocketStateFinWait2:    "FIN_WAIT2",
-	SocketStateTimeWait:    "TIME_WAIT",
-	SocketStateClose:       "CLOSE",
-	SocketStateCloseWait:   "CLOSE_WAIT",
-	SocketStateLastAck:     "LAST_ACK",
-	SocketStateListen:      "LISTEN",
-	SocketStateClosing:     "CLOSING",
+	SocketStateUnknown:     strStateUnknown,
+	SocketStateEstablished: strStateEstablished,
+	SocketStateSynSent:     strStateSynSent,
+	SocketStateSynRecv:     strStateSynRecv,
+	SocketStateFinWait1:    strStateFinWait1,
+	SocketStateFinWait2:    strStateFinWait2,
+	SocketStateTimeWait:    strStateTimeWait,
+	SocketStateClose:       strStateClose,
+	SocketStateCloseWait:   strStateCloseWait,
+	SocketStateLastAck:     strStateLastAck,
+	SocketStateListen:      strStateListen,
+	SocketStateClosing:     strStateClosing,
 }
 
 // String returns the string representation of the socket state.
@@ -86,7 +109,7 @@ func (s SocketState) String() string {
 		return name
 	}
 	// Return UNKNOWN for any unrecognized value
-	return "UNKNOWN"
+	return strStateUnknown
 }
 
 // String returns the string representation of the address family.
@@ -97,15 +120,15 @@ func (f AddressFamily) String() string {
 	// Check for IPv4 family
 	if f == AddressFamilyIPv4 {
 		// Return IPv4 string
-		return "IPv4"
+		return strIPv4
 	}
 	// Check for IPv6 family
 	if f == AddressFamilyIPv6 {
 		// Return IPv6 string
-		return "IPv6"
+		return strIPv6
 	}
 	// Return Unknown for any unrecognized value
-	return "Unknown"
+	return strUnknown
 }
 
 // ConnectionCollector provides network connection metrics via the Rust probe library.
@@ -157,11 +180,11 @@ func (c *ConnectionCollector) CollectTCP(ctx context.Context) ([]TcpConnection, 
 //   - []TcpConnection: the converted Go slice
 func convertTCPConnections(list *C.TcpConnectionList) []TcpConnection {
 	// Allocate slice with capacity matching list count.
-	connections := make([]TcpConnection, 0, list.count)
+	connections := make([]TcpConnection, list.count)
 	items := unsafe.Slice(list.items, list.count)
 	// Iterate over each connection item.
-	for _, item := range items {
-		connections = append(connections, TcpConnection{
+	for i, item := range items {
+		connections[i] = TcpConnection{
 			Family:      AddressFamily(item.family),
 			LocalAddr:   cCharArrayToString(item.local_addr[:]),
 			LocalPort:   uint16(item.local_port),
@@ -173,7 +196,7 @@ func convertTCPConnections(list *C.TcpConnectionList) []TcpConnection {
 			Inode:       uint64(item.inode),
 			RxQueue:     uint32(item.rx_queue),
 			TxQueue:     uint32(item.tx_queue),
-		})
+		}
 	}
 	// Return the converted connections.
 	return connections
@@ -215,11 +238,11 @@ func (c *ConnectionCollector) CollectUDP(ctx context.Context) ([]UdpConnection, 
 //   - []UdpConnection: the converted Go slice
 func convertUDPConnections(list *C.UdpConnectionList) []UdpConnection {
 	// Allocate slice with capacity matching list count.
-	connections := make([]UdpConnection, 0, list.count)
+	connections := make([]UdpConnection, list.count)
 	items := unsafe.Slice(list.items, list.count)
 	// Iterate over each connection item.
-	for _, item := range items {
-		connections = append(connections, UdpConnection{
+	for i, item := range items {
+		connections[i] = UdpConnection{
 			Family:      AddressFamily(item.family),
 			LocalAddr:   cCharArrayToString(item.local_addr[:]),
 			LocalPort:   uint16(item.local_port),
@@ -231,7 +254,7 @@ func convertUDPConnections(list *C.UdpConnectionList) []UdpConnection {
 			Inode:       uint64(item.inode),
 			RxQueue:     uint32(item.rx_queue),
 			TxQueue:     uint32(item.tx_queue),
-		})
+		}
 	}
 	// Return the converted connections.
 	return connections
@@ -267,18 +290,18 @@ func (c *ConnectionCollector) CollectUnix(ctx context.Context) ([]UnixSocket, er
 	defer C.probe_free_unix_socket_list(&list)
 
 	// Convert C list to Go slice with capacity
-	sockets := make([]UnixSocket, 0, list.count)
+	sockets := make([]UnixSocket, list.count)
 	items := unsafe.Slice(list.items, list.count)
 	// Iterate over each socket item
-	for _, item := range items {
-		sockets = append(sockets, UnixSocket{
+	for i, item := range items {
+		sockets[i] = UnixSocket{
 			Path:        cCharArrayToString(item.path[:]),
 			SocketType:  cCharArrayToString(item.socket_type[:]),
 			State:       SocketState(item.state),
 			PID:         int32(item.pid),
 			ProcessName: cCharArrayToString(item.process_name[:]),
 			Inode:       uint64(item.inode),
-		})
+		}
 	}
 
 	// Return the collected sockets
@@ -382,7 +405,12 @@ func (c *ConnectionCollector) CollectListeningPorts(ctx context.Context) ([]TcpC
 	}
 
 	// Filter connections in LISTEN state
-	listening := make([]TcpConnection, 0, len(connections))
+	// Capacity heuristic: listening ports are typically 1-5% of total connections
+	estimatedCap := len(connections) / 20
+	if estimatedCap < 8 {
+		estimatedCap = 8
+	}
+	listening := make([]TcpConnection, 0, estimatedCap)
 	// Iterate over each connection
 	for _, conn := range connections {
 		// Check if connection is in LISTEN state
@@ -413,7 +441,12 @@ func (c *ConnectionCollector) CollectEstablishedConnections(ctx context.Context)
 	}
 
 	// Filter connections in ESTABLISHED state
-	established := make([]TcpConnection, 0, len(connections))
+	// Capacity heuristic: established connections are typically 70% of total
+	estimatedCap := (len(connections) * 7) / 10
+	if estimatedCap < 16 {
+		estimatedCap = 16
+	}
+	established := make([]TcpConnection, 0, estimatedCap)
 	// Iterate over each connection
 	for _, conn := range connections {
 		// Check if connection is in ESTABLISHED state
@@ -454,7 +487,12 @@ func (c *ConnectionCollector) CollectProcessConnections(ctx context.Context, pid
 	}
 
 	// Filter TCP connections by PID
-	tcpFiltered := make([]TcpConnection, 0, len(tcpConns))
+	// Capacity heuristic: a process typically owns 5-10% of total connections
+	tcpEstimatedCap := len(tcpConns) / 10
+	if tcpEstimatedCap < 4 {
+		tcpEstimatedCap = 4
+	}
+	tcpFiltered := make([]TcpConnection, 0, tcpEstimatedCap)
 	// Iterate over each TCP connection
 	for _, conn := range tcpConns {
 		// Check if connection belongs to the process
@@ -464,7 +502,12 @@ func (c *ConnectionCollector) CollectProcessConnections(ctx context.Context, pid
 	}
 
 	// Filter UDP connections by PID
-	udpFiltered := make([]UdpConnection, 0, len(udpConns))
+	// Capacity heuristic: a process typically owns 5-10% of total connections
+	udpEstimatedCap := len(udpConns) / 10
+	if udpEstimatedCap < 4 {
+		udpEstimatedCap = 4
+	}
+	udpFiltered := make([]UdpConnection, 0, udpEstimatedCap)
 	// Iterate over each UDP connection
 	for _, conn := range udpConns {
 		// Check if connection belongs to the process

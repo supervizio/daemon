@@ -303,15 +303,15 @@ func extractPartitionInfo(ctx context.Context, coll *Collector) []PartitionInfo 
 		return nil
 	}
 
-	result := make([]PartitionInfo, 0, len(partitions))
+	result := make([]PartitionInfo, len(partitions))
 	// Iterate through each partition.
-	for _, pt := range partitions {
-		result = append(result, PartitionInfo{
+	for i, pt := range partitions {
+		result[i] = PartitionInfo{
 			Device:     pt.Device,
 			MountPoint: pt.Mountpoint,
 			FSType:     pt.FSType,
 			Options:    joinOptions(pt.Options),
-		})
+		}
 	}
 	// Return extracted partition info.
 	return result
@@ -333,10 +333,10 @@ func extractDiskUsageInfo(ctx context.Context, coll *Collector) []DiskUsageInfo 
 		return nil
 	}
 
-	result := make([]DiskUsageInfo, 0, len(usage))
+	result := make([]DiskUsageInfo, len(usage))
 	// Iterate through each usage entry.
-	for _, us := range usage {
-		result = append(result, DiskUsageInfo{
+	for i, us := range usage {
+		result[i] = DiskUsageInfo{
 			Path:        us.Path,
 			TotalBytes:  us.Total,
 			UsedBytes:   us.Used,
@@ -345,7 +345,7 @@ func extractDiskUsageInfo(ctx context.Context, coll *Collector) []DiskUsageInfo 
 			InodesTotal: us.InodesTotal,
 			InodesUsed:  us.InodesUsed,
 			InodesFree:  us.InodesFree,
-		})
+		}
 	}
 	// Return extracted disk usage info.
 	return result
@@ -367,10 +367,10 @@ func extractDiskIOInfo(ctx context.Context, coll *Collector) []DiskIOInfo {
 		return nil
 	}
 
-	result := make([]DiskIOInfo, 0, len(ioStats))
+	result := make([]DiskIOInfo, len(ioStats))
 	// Iterate through each I/O stats entry.
-	for _, io := range ioStats {
-		result = append(result, DiskIOInfo{
+	for i, io := range ioStats {
+		result[i] = DiskIOInfo{
 			Device:           io.Device,
 			ReadsCompleted:   io.ReadCount,
 			SectorsRead:      io.ReadBytes / sectorSize,
@@ -381,7 +381,7 @@ func extractDiskIOInfo(ctx context.Context, coll *Collector) []DiskIOInfo {
 			IOInProgress:     io.IOInProgress,
 			IOTimeMs:         uint64(io.IOTime.Milliseconds()),
 			WeightedIOTimeMs: uint64(io.WeightedIOTime.Milliseconds()),
-		})
+		}
 	}
 	// Return extracted disk I/O info.
 	return result
@@ -433,20 +433,20 @@ func collectNetworkMetricsJSON(ctx context.Context, coll *Collector, cfg *config
 	// Collect interface information if enabled and collection succeeds.
 	if cfg.Interfaces {
 		if ifaces, err := coll.Network().ListInterfaces(ctx); err == nil {
-			network.Interfaces = make([]NetInterfaceJSON, 0, len(ifaces))
+			network.Interfaces = make([]NetInterfaceJSON, len(ifaces))
 			// Iterate over each interface
-			for _, iface := range ifaces {
+			for i, iface := range ifaces {
 				// Derive IsUp and IsLoopback from flags
 				isUp := containsFlag(iface.Flags, "up")
 				isLoopback := containsFlag(iface.Flags, "loopback")
-				network.Interfaces = append(network.Interfaces, NetInterfaceJSON{
+				network.Interfaces[i] = NetInterfaceJSON{
 					Name:       iface.Name,
 					MACAddress: iface.HardwareAddr,
 					MTU:        uint32(iface.MTU),
 					IsUp:       isUp,
 					IsLoopback: isLoopback,
 					Flags:      iface.Flags,
-				})
+				}
 			}
 		}
 	}
@@ -454,10 +454,10 @@ func collectNetworkMetricsJSON(ctx context.Context, coll *Collector, cfg *config
 	// Collect network statistics if enabled and collection succeeds.
 	if cfg.Stats {
 		if stats, err := coll.Network().CollectAllStats(ctx); err == nil {
-			network.Stats = make([]NetStatsJSON, 0, len(stats))
+			network.Stats = make([]NetStatsJSON, len(stats))
 			// Iterate over each stats entry
-			for _, st := range stats {
-				network.Stats = append(network.Stats, NetStatsJSON{
+			for i, st := range stats {
+				network.Stats[i] = NetStatsJSON{
 					Interface:   st.Interface,
 					BytesRecv:   st.BytesRecv,
 					BytesSent:   st.BytesSent,
@@ -467,7 +467,7 @@ func collectNetworkMetricsJSON(ctx context.Context, coll *Collector, cfg *config
 					ErrorsOut:   st.ErrorsOut,
 					DropsIn:     st.DropsIn,
 					DropsOut:    st.DropsOut,
-				})
+				}
 			}
 		}
 	}
@@ -584,11 +584,11 @@ func collectThermalMetricsJSON() *ThermalMetricsJSON {
 
 	// Collect thermal zones
 	if zones, err := CollectThermalZones(); err == nil {
-		thermal.Zones = make([]ThermalZoneJSON, 0, len(zones))
+		thermal.Zones = make([]ThermalZoneJSON, len(zones))
 		// Iterate over each zone
-		for _, zn := range zones {
+		for i, zn := range zones {
 			// ThermalZone and ThermalZoneJSON have identical underlying types.
-			thermal.Zones = append(thermal.Zones, ThermalZoneJSON(zn))
+			thermal.Zones[i] = ThermalZoneJSON(zn)
 		}
 	}
 
@@ -953,15 +953,15 @@ func collectRuntimeMetricsJSON() *RuntimeMetricsJSON {
 
 	// Check if available runtimes exist
 	if len(info.AvailableRuntimes) > 0 {
-		rm.AvailableRuntimes = make([]AvailableRuntimeInfoJSON, 0, len(info.AvailableRuntimes))
+		rm.AvailableRuntimes = make([]AvailableRuntimeInfoJSON, len(info.AvailableRuntimes))
 		// Iterate over each available runtime
-		for _, ar := range info.AvailableRuntimes {
-			rm.AvailableRuntimes = append(rm.AvailableRuntimes, AvailableRuntimeInfoJSON{
+		for i, ar := range info.AvailableRuntimes {
+			rm.AvailableRuntimes[i] = AvailableRuntimeInfoJSON{
 				Runtime:    ar.Runtime.String(),
 				SocketPath: ar.SocketPath,
 				Version:    ar.Version,
 				IsRunning:  ar.IsRunning,
-			})
+			}
 		}
 	}
 

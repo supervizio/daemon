@@ -3,7 +3,6 @@ package yaml_test
 import (
 	"testing"
 
-	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/kodflow/daemon/internal/infrastructure/persistence/config/yaml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

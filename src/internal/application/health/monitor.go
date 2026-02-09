@@ -804,7 +804,7 @@ func (m *ProbeMonitor) Health() *domain.AggregatedHealth {
 
 	// Return a deep copy to avoid data races.
 	health := *m.health
-	health.Subjects = make([]domain.SubjectStatus, 0, len(m.health.Subjects))
+	health.Subjects = make([]domain.SubjectStatus, len(m.health.Subjects))
 	// Deep copy each subject status including nested pointers.
 	for i := range m.health.Subjects {
 		// Copy subject status struct.
@@ -814,7 +814,7 @@ func (m *ProbeMonitor) Health() *domain.AggregatedHealth {
 			resultCopy := *ssCopy.LastProbeResult
 			ssCopy.LastProbeResult = &resultCopy
 		}
-		health.Subjects = append(health.Subjects, ssCopy)
+		health.Subjects[i] = ssCopy
 	}
 	// Return pointer to health copy.
 	return &health

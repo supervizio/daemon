@@ -87,8 +87,8 @@ type ConfigDTO struct {
 // MonitoringConfigDTO is the YAML representation of monitoring configuration.
 // It configures external target monitoring including discovery and static targets.
 type MonitoringConfigDTO struct {
-	PerformanceTemplate string            `yaml:"performance_template,omitempty"`
-	Metrics             *MetricsConfigDTO `yaml:"metrics,omitempty"`
+	PerformanceTemplate string                `yaml:"performance_template,omitempty"`
+	Metrics             *MetricsConfigDTO     `yaml:"metrics,omitempty"`
 	Defaults            MonitoringDefaultsDTO `yaml:"defaults,omitempty"`
 	Discovery           DiscoveryConfigDTO    `yaml:"discovery,omitempty"`
 	PortScan            PortScanConfigDTO     `yaml:"port_scan,omitempty"`
@@ -344,11 +344,11 @@ type LogStreamConfigDTO struct {
 // Returns:
 //   - *config.Config: the converted domain configuration object
 func (c *ConfigDTO) ToDomain(configPath string) *config.Config {
-	services := make([]config.ServiceConfig, 0, len(c.Services))
+	services := make([]config.ServiceConfig, len(c.Services))
 
 	// convert each service to domain model.
 	for i := range c.Services {
-		services = append(services, c.Services[i].ToDomain())
+		services[i] = c.Services[i].ToDomain()
 	}
 
 	// return assembled domain configuration.
@@ -388,10 +388,10 @@ func (m *MonitoringConfigDTO) ToDomain() config.MonitoringConfig {
 	}
 
 	// convert static targets
-	targets := make([]config.TargetConfig, 0, len(m.Targets))
+	targets := make([]config.TargetConfig, len(m.Targets))
 	// Iterate through each target configuration.
 	for i := range m.Targets {
-		targets = append(targets, m.Targets[i].ToDomain())
+		targets[i] = m.Targets[i].ToDomain()
 	}
 	monitoring.Targets = targets
 
@@ -671,18 +671,18 @@ func (t *TargetConfigDTO) ToDomain() config.TargetConfig {
 // Returns:
 //   - config.ServiceConfig: the converted domain service configuration
 func (s *ServiceConfigDTO) ToDomain() config.ServiceConfig {
-	healthChecks := make([]config.HealthCheckConfig, 0, len(s.HealthChecks))
+	healthChecks := make([]config.HealthCheckConfig, len(s.HealthChecks))
 
 	// convert each health check to domain model.
 	for i := range s.HealthChecks {
-		healthChecks = append(healthChecks, s.HealthChecks[i].ToDomain())
+		healthChecks[i] = s.HealthChecks[i].ToDomain()
 	}
 
-	listeners := make([]config.ListenerConfig, 0, len(s.Listeners))
+	listeners := make([]config.ListenerConfig, len(s.Listeners))
 
 	// convert each listener to domain model.
 	for i := range s.Listeners {
-		listeners = append(listeners, s.Listeners[i].ToDomain())
+		listeners[i] = s.Listeners[i].ToDomain()
 	}
 
 	// return assembled domain service config.
@@ -888,11 +888,11 @@ func (l *LoggingConfigDTO) ToDomain() config.LoggingConfig {
 // Returns:
 //   - config.DaemonLogging: the converted domain daemon logging configuration
 func (d *DaemonLoggingDTO) ToDomain() config.DaemonLogging {
-	writers := make([]config.WriterConfig, 0, len(d.Writers))
+	writers := make([]config.WriterConfig, len(d.Writers))
 
 	// convert each writer to domain model.
 	for i := range d.Writers {
-		writers = append(writers, d.Writers[i].ToDomain())
+		writers[i] = d.Writers[i].ToDomain()
 	}
 
 	// return assembled daemon logging config.
