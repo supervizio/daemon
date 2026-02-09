@@ -87,10 +87,12 @@ type ConfigDTO struct {
 // MonitoringConfigDTO is the YAML representation of monitoring configuration.
 // It configures external target monitoring including discovery and static targets.
 type MonitoringConfigDTO struct {
-	Defaults  MonitoringDefaultsDTO `yaml:"defaults,omitempty"`
-	Discovery DiscoveryConfigDTO    `yaml:"discovery,omitempty"`
-	PortScan  PortScanConfigDTO     `yaml:"port_scan,omitempty"`
-	Targets   []TargetConfigDTO     `yaml:"targets,omitempty"`
+	PerformanceTemplate string            `yaml:"performance_template,omitempty"`
+	Metrics             *MetricsConfigDTO `yaml:"metrics,omitempty"`
+	Defaults            MonitoringDefaultsDTO `yaml:"defaults,omitempty"`
+	Discovery           DiscoveryConfigDTO    `yaml:"discovery,omitempty"`
+	PortScan            PortScanConfigDTO     `yaml:"port_scan,omitempty"`
+	Targets             []TargetConfigDTO     `yaml:"targets,omitempty"`
 }
 
 // MonitoringDefaultsDTO is the YAML representation of monitoring defaults.
@@ -375,6 +377,16 @@ func (m *MonitoringConfigDTO) ToDomain() config.MonitoringConfig {
 	// convert discovery configuration
 	monitoring.Discovery = m.Discovery.ToDomain()
 
+	// resolve metrics template and apply configuration
+	template := m.resolveMetricsTemplate()
+	if m.Metrics != nil {
+		// apply metrics config with template as base
+		monitoring.Metrics = m.Metrics.ToDomain(template)
+	} else {
+		// no explicit config, use template directly
+		monitoring.Metrics = resolveMetricsTemplate(template)
+	}
+
 	// convert static targets
 	targets := make([]config.TargetConfig, 0, len(m.Targets))
 	// Iterate through each target configuration.
@@ -385,6 +397,50 @@ func (m *MonitoringConfigDTO) ToDomain() config.MonitoringConfig {
 
 	// return assembled monitoring config
 	return monitoring
+}
+
+// resolveMetricsTemplate resolves the performance template string to a template enum.
+// Defaults to standard if empty or invalid.
+//
+// Returns:
+//   - config.MetricsTemplate: the resolved template
+func (m *MonitoringConfigDTO) resolveMetricsTemplate() config.MetricsTemplate {
+	// normalize template string to lowercase
+	switch m.PerformanceTemplate {
+	case "minimal":
+		return config.MetricsTemplateMinimal
+	case "full":
+		return config.MetricsTemplateFull
+	case "standard":
+		return config.MetricsTemplateStandard
+	case "custom":
+		return config.MetricsTemplateCustom
+	default:
+		// empty or invalid defaults to standard
+		return config.MetricsTemplateStandard
+	}
+}
+
+// resolveMetricsTemplate resolves a template to its configuration.
+// This is a helper function used by MonitoringConfigDTO.
+//
+// Params:
+//   - template: the template to resolve
+//
+// Returns:
+//   - config.MetricsConfig: the resolved configuration
+func resolveMetricsTemplate(template config.MetricsTemplate) config.MetricsConfig {
+	// delegate to metrics_dto resolveTemplate function
+	switch template {
+	case config.MetricsTemplateMinimal:
+		return config.MinimalMetricsConfig()
+	case config.MetricsTemplateFull:
+		return config.FullMetricsConfig()
+	case config.MetricsTemplateStandard, config.MetricsTemplateCustom:
+		return config.StandardMetricsConfig()
+	default:
+		return config.StandardMetricsConfig()
+	}
 }
 
 // ToDomain converts MonitoringDefaultsDTO to domain MonitoringDefaults.

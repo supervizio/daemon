@@ -71,9 +71,9 @@ func (d *DiskCollector) ListPartitions(ctx context.Context) ([]metrics.Partition
 			opts = strings.Split(optStr, ",")
 		}
 		partitions = append(partitions, metrics.Partition{
-			Device:     cCharArrayToString(item.device[:]),
-			Mountpoint: cCharArrayToString(item.mount_point[:]),
-			FSType:     cCharArrayToString(item.fs_type[:]),
+			Device:     cCharArrayToStringCached(item.device[:], true),     // stable: device names don't change
+			Mountpoint: cCharArrayToStringCached(item.mount_point[:], true), // stable: mount points don't change
+			FSType:     cCharArrayToStringCached(item.fs_type[:], true),     // stable: filesystem types don't change
 			Options:    opts,
 		})
 	}
@@ -180,7 +180,7 @@ func (d *DiskCollector) CollectIO(ctx context.Context) ([]metrics.DiskIOStats, e
 	// Iterate over each block device.
 	for _, item := range items {
 		stats = append(stats, metrics.DiskIOStats{
-			Device:         cCharArrayToString(item.device[:]),
+			Device:         cCharArrayToStringCached(item.device[:], true), // stable: device names don't change
 			ReadBytes:      uint64(item.sectors_read) * sectorSize,
 			WriteBytes:     uint64(item.sectors_written) * sectorSize,
 			ReadCount:      uint64(item.reads_completed),

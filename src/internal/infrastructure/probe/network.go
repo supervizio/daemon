@@ -69,8 +69,8 @@ func (n *NetworkCollector) ListInterfaces(ctx context.Context) ([]metrics.NetInt
 			flags = append(flags, "loopback")
 		}
 		ifaces = append(ifaces, metrics.NetInterface{
-			Name:         cCharArrayToString(item.name[:]),
-			HardwareAddr: cCharArrayToString(item.mac_address[:]),
+			Name:         cCharArrayToStringCached(item.name[:], true),         // stable: interface names don't change
+			HardwareAddr: cCharArrayToStringCached(item.mac_address[:], true),  // stable: MAC addresses don't change
 			MTU:          int(item.mtu),
 			Flags:        flags,
 		})
@@ -139,7 +139,7 @@ func (n *NetworkCollector) CollectAllStats(ctx context.Context) ([]metrics.NetSt
 	// Iterate over each interface's statistics.
 	for _, item := range items {
 		stats = append(stats, metrics.NetStats{
-			Interface:   cCharArrayToString(item._interface[:]),
+			Interface:   cCharArrayToStringCached(item._interface[:], true), // stable: interface names don't change
 			BytesRecv:   uint64(item.rx_bytes),
 			BytesSent:   uint64(item.tx_bytes),
 			PacketsRecv: uint64(item.rx_packets),
