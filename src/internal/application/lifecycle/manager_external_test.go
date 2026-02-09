@@ -303,13 +303,13 @@ func TestManager_Start(t *testing.T) {
 
 			mgr := lifecycle.NewManager(cfg, executor)
 
-			err := mgr.Start()
+			err := mgr.Start(context.Background())
 			require.NoError(t, err)
 			defer func() { _ = mgr.Stop() }()
 
 			// Attempt second start if requested.
 			if tt.startTwice {
-				err = mgr.Start()
+				err = mgr.Start(context.Background())
 				// Check if error is expected.
 				if tt.expectError {
 					assert.Error(t, err)
@@ -354,7 +354,7 @@ func TestManager_Stop(t *testing.T) {
 
 			// Start if requested.
 			if tt.startFirst {
-				err := mgr.Start()
+				err := mgr.Start(context.Background())
 				require.NoError(t, err)
 			}
 
@@ -523,7 +523,7 @@ func TestManager_RestartOnHealthFailure(t *testing.T) {
 
 			mgr := lifecycle.NewManager(cfg, executor)
 			// Start the manager first to set running state.
-			_ = mgr.Start()
+			_ = mgr.Start(context.Background())
 			// Wait briefly for manager to initialize.
 			time.Sleep(10 * time.Millisecond)
 

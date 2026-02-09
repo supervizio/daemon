@@ -222,7 +222,7 @@ func (s *Supervisor) startReaper() {
 func (s *Supervisor) startAllServices() error {
 	// Iterate through all managed services.
 	for name, mgr := range s.managers {
-		err := mgr.Start()
+		err := mgr.Start(s.ctx)
 		// Skip successfully started services.
 		if err == nil {
 			continue
@@ -394,14 +394,14 @@ func (s *Supervisor) updateServices(newCfg *domainconfig.Config) {
 			}
 			s.managers[svc.Name] = applifecycle.NewManager(svc, s.executor)
 			// Start new manager (best-effort).
-			if err := s.managers[svc.Name].Start(); err != nil {
+			if err := s.managers[svc.Name].Start(s.ctx); err != nil {
 				s.handleRecoveryError("start-for-reload", svc.Name, err)
 			}
 		} else {
 			// Create and start a new manager for the new service.
 			s.managers[svc.Name] = applifecycle.NewManager(svc, s.executor)
 			// Start new manager (best-effort).
-			if err := s.managers[svc.Name].Start(); err != nil {
+			if err := s.managers[svc.Name].Start(s.ctx); err != nil {
 				s.handleRecoveryError("start-new-service", svc.Name, err)
 			}
 			s.wg.Add(1)
@@ -1150,8 +1150,13 @@ func (s *Supervisor) StartService(name string) error {
 		// Return error for missing service.
 		return fmt.Errorf("%w: %s", ErrServiceNotFound, name)
 	}
+	// get context for manager start (fallback to Background if supervisor not started)
+	ctx := s.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	// start the service
-	return mgr.Start()
+	return mgr.Start(ctx)
 }
 
 // StopService stops a specific service.
@@ -1199,6 +1204,11 @@ func (s *Supervisor) RestartService(name string) error {
 		// Return stop error if failed.
 		return err
 	}
+	// get context for manager start (fallback to Background if supervisor not started)
+	ctx := s.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	// start the service after stop
-	return mgr.Start()
+	return mgr.Start(ctx)
 }
