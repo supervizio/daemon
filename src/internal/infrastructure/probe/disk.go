@@ -60,22 +60,22 @@ func (d *DiskCollector) ListPartitions(ctx context.Context) ([]metrics.Partition
 	defer C.probe_free_partition_list(&list)
 	// Convert C list to Go slice.
 	count := int(list.count)
-	partitions := make([]metrics.Partition, count)
+	partitions := make([]metrics.Partition, 0, count)
 	items := unsafe.Slice(list.items, count)
 	// Iterate over each partition item.
-	for i, item := range items {
+	for _, item := range items {
 		optStr := cCharArrayToString(item.options[:])
 		var opts []string
 		// Parse mount options if present.
 		if optStr != "" {
 			opts = strings.Split(optStr, ",")
 		}
-		partitions[i] = metrics.Partition{
+		partitions = append(partitions, metrics.Partition{
 			Device:     cCharArrayToStringCached(item.device[:], true),     // stable: device names don't change
 			Mountpoint: cCharArrayToStringCached(item.mount_point[:], true), // stable: mount points don't change
 			FSType:     cCharArrayToStringCached(item.fs_type[:], true),     // stable: filesystem types don't change
 			Options:    opts,
-		}
+		})
 	}
 	// Return the collected partitions.
 	return partitions, nil
@@ -175,11 +175,11 @@ func (d *DiskCollector) CollectIO(ctx context.Context) ([]metrics.DiskIOStats, e
 	defer C.probe_free_disk_io_list(&list)
 	// Convert C list to Go slice.
 	count := int(list.count)
-	stats := make([]metrics.DiskIOStats, count)
+	stats := make([]metrics.DiskIOStats, 0, count)
 	items := unsafe.Slice(list.items, count)
 	// Iterate over each block device.
-	for i, item := range items {
-		stats[i] = metrics.DiskIOStats{
+	for _, item := range items {
+		stats = append(stats, metrics.DiskIOStats{
 			Device:         cCharArrayToStringCached(item.device[:], true), // stable: device names don't change
 			ReadBytes:      uint64(item.sectors_read) * sectorSize,
 			WriteBytes:     uint64(item.sectors_written) * sectorSize,
@@ -191,7 +191,7 @@ func (d *DiskCollector) CollectIO(ctx context.Context) ([]metrics.DiskIOStats, e
 			IOTime:         time.Duration(item.io_time_ms) * time.Millisecond,
 			WeightedIOTime: time.Duration(item.weighted_io_time_ms) * time.Millisecond,
 			Timestamp:      time.Now(),
-		}
+		})
 	}
 	// Return collected I/O statistics.
 	return stats, nil

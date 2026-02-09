@@ -1152,6 +1152,7 @@ func (s *Supervisor) StartService(name string) error {
 	}
 	// get context for manager start (fallback to Background if supervisor not started)
 	ctx := s.ctx
+	// Use context from supervisor or fallback to Background
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1205,7 +1206,9 @@ func (s *Supervisor) RestartService(name string) error {
 		return err
 	}
 	// get context for manager start (fallback to Background if supervisor not started)
+	// Use context from supervisor or fallback to Background
 	ctx := s.ctx
+	// use background context if supervisor context is not set.
 	if ctx == nil {
 		ctx = context.Background()
 	}

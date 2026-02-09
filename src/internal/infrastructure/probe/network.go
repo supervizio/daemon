@@ -55,10 +55,10 @@ func (n *NetworkCollector) ListInterfaces(ctx context.Context) ([]metrics.NetInt
 	defer C.probe_free_net_interface_list(&list)
 	// Convert C list to Go slice.
 	count := int(list.count)
-	ifaces := make([]metrics.NetInterface, count)
+	ifaces := make([]metrics.NetInterface, 0, count)
 	items := unsafe.Slice(list.items, count)
 	// Iterate over each interface item.
-	for i, item := range items {
+	for _, item := range items {
 		var flags []string
 		// Check if interface is up.
 		if item.is_up {
@@ -68,12 +68,12 @@ func (n *NetworkCollector) ListInterfaces(ctx context.Context) ([]metrics.NetInt
 		if item.is_loopback {
 			flags = append(flags, "loopback")
 		}
-		ifaces[i] = metrics.NetInterface{
+		ifaces = append(ifaces, metrics.NetInterface{
 			Name:         cCharArrayToStringCached(item.name[:], true),         // stable: interface names don't change
 			HardwareAddr: cCharArrayToStringCached(item.mac_address[:], true),  // stable: MAC addresses don't change
 			MTU:          int(item.mtu),
 			Flags:        flags,
-		}
+		})
 	}
 	// Return the collected interfaces.
 	return ifaces, nil
@@ -134,11 +134,11 @@ func (n *NetworkCollector) CollectAllStats(ctx context.Context) ([]metrics.NetSt
 	defer C.probe_free_net_stats_list(&list)
 	// Convert C list to Go slice.
 	count := int(list.count)
-	stats := make([]metrics.NetStats, count)
+	stats := make([]metrics.NetStats, 0, count)
 	items := unsafe.Slice(list.items, count)
 	// Iterate over each interface's statistics.
-	for i, item := range items {
-		stats[i] = metrics.NetStats{
+	for _, item := range items {
+		stats = append(stats, metrics.NetStats{
 			Interface:   cCharArrayToStringCached(item._interface[:], true), // stable: interface names don't change
 			BytesRecv:   uint64(item.rx_bytes),
 			BytesSent:   uint64(item.tx_bytes),
@@ -149,7 +149,7 @@ func (n *NetworkCollector) CollectAllStats(ctx context.Context) ([]metrics.NetSt
 			DropsIn:     uint64(item.rx_drops),
 			DropsOut:    uint64(item.tx_drops),
 			Timestamp:   time.Now(),
-		}
+		})
 	}
 	// Return the collected statistics.
 	return stats, nil

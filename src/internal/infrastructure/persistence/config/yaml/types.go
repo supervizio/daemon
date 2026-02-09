@@ -78,261 +78,261 @@ func (d *Duration) MarshalText() ([]byte, error) {
 // ConfigDTO is the YAML representation of the root configuration.
 // It serves as the data transfer object for parsing the main configuration file.
 type ConfigDTO struct {
-	Version    string              `yaml:"version"`
-	Logging    LoggingConfigDTO    `yaml:"logging"`
-	Monitoring MonitoringConfigDTO `yaml:"monitoring,omitempty"`
-	Services   []ServiceConfigDTO  `yaml:"services"`
+	Version    string              `yaml:"version"`              // configuration schema version
+	Logging    LoggingConfigDTO    `yaml:"logging"`              // logging configuration
+	Monitoring MonitoringConfigDTO `yaml:"monitoring,omitempty"` // monitoring configuration
+	Services   []ServiceConfigDTO  `yaml:"services"`             // service definitions
 }
 
 // MonitoringConfigDTO is the YAML representation of monitoring configuration.
 // It configures external target monitoring including discovery and static targets.
 type MonitoringConfigDTO struct {
-	PerformanceTemplate string                `yaml:"performance_template,omitempty"`
-	Metrics             *MetricsConfigDTO     `yaml:"metrics,omitempty"`
-	Defaults            MonitoringDefaultsDTO `yaml:"defaults,omitempty"`
-	Discovery           DiscoveryConfigDTO    `yaml:"discovery,omitempty"`
-	PortScan            PortScanConfigDTO     `yaml:"port_scan,omitempty"`
-	Targets             []TargetConfigDTO     `yaml:"targets,omitempty"`
+	PerformanceTemplate string                `yaml:"performance_template,omitempty"` // metrics template (minimal/standard/full)
+	Metrics             *MetricsConfigDTO     `yaml:"metrics,omitempty"`              // granular metrics configuration
+	Defaults            MonitoringDefaultsDTO `yaml:"defaults,omitempty"`             // default probe settings
+	Discovery           DiscoveryConfigDTO    `yaml:"discovery,omitempty"`            // service discovery configuration
+	PortScan            PortScanConfigDTO     `yaml:"port_scan,omitempty"`            // port scan discovery configuration
+	Targets             []TargetConfigDTO     `yaml:"targets,omitempty"`              // static target definitions
 }
 
 // MonitoringDefaultsDTO is the YAML representation of monitoring defaults.
 // It defines default probe settings for all targets.
 type MonitoringDefaultsDTO struct {
-	Interval         Duration `yaml:"interval,omitempty"`
-	Timeout          Duration `yaml:"timeout,omitempty"`
-	SuccessThreshold int      `yaml:"success_threshold,omitempty"`
-	FailureThreshold int      `yaml:"failure_threshold,omitempty"`
+	Interval         Duration `yaml:"interval,omitempty"`          // default probe interval
+	Timeout          Duration `yaml:"timeout,omitempty"`           // default probe timeout
+	SuccessThreshold int      `yaml:"success_threshold,omitempty"` // required successes to mark healthy
+	FailureThreshold int      `yaml:"failure_threshold,omitempty"` // required failures to mark unhealthy
 }
 
 // DiscoveryConfigDTO is the YAML representation of discovery configuration.
 // It configures auto-discovery for different platforms and runtimes.
 type DiscoveryConfigDTO struct {
-	Systemd    *SystemdDiscoveryDTO    `yaml:"systemd,omitempty"`
-	OpenRC     *OpenRCDiscoveryDTO     `yaml:"openrc,omitempty"`
-	BSDRC      *BSDRCDiscoveryDTO      `yaml:"bsdrc,omitempty"`
-	Docker     *DockerDiscoveryDTO     `yaml:"docker,omitempty"`
-	Podman     *PodmanDiscoveryDTO     `yaml:"podman,omitempty"`
-	Kubernetes *KubernetesDiscoveryDTO `yaml:"kubernetes,omitempty"`
-	Nomad      *NomadDiscoveryDTO      `yaml:"nomad,omitempty"`
+	Systemd    *SystemdDiscoveryDTO    `yaml:"systemd,omitempty"`    // systemd service discovery
+	OpenRC     *OpenRCDiscoveryDTO     `yaml:"openrc,omitempty"`     // OpenRC service discovery
+	BSDRC      *BSDRCDiscoveryDTO      `yaml:"bsdrc,omitempty"`      // BSD rc.d discovery
+	Docker     *DockerDiscoveryDTO     `yaml:"docker,omitempty"`     // Docker container discovery
+	Podman     *PodmanDiscoveryDTO     `yaml:"podman,omitempty"`     // Podman container discovery
+	Kubernetes *KubernetesDiscoveryDTO `yaml:"kubernetes,omitempty"` // Kubernetes pod discovery
+	Nomad      *NomadDiscoveryDTO      `yaml:"nomad,omitempty"`      // Nomad allocation discovery
 }
 
 // SystemdDiscoveryDTO is the YAML representation of systemd discovery.
 // It configures systemd service discovery on Linux systems.
 type SystemdDiscoveryDTO struct {
-	Enabled  bool     `yaml:"enabled"`
-	Patterns []string `yaml:"patterns,omitempty"`
+	Enabled  bool     `yaml:"enabled"`            // enable systemd discovery
+	Patterns []string `yaml:"patterns,omitempty"` // service name patterns to match
 }
 
 // OpenRCDiscoveryDTO is the YAML representation of OpenRC discovery.
 // It configures OpenRC service discovery on Alpine/Gentoo systems.
 type OpenRCDiscoveryDTO struct {
-	Enabled  bool     `yaml:"enabled"`
-	Patterns []string `yaml:"patterns,omitempty"`
+	Enabled  bool     `yaml:"enabled"`            // enable OpenRC discovery
+	Patterns []string `yaml:"patterns,omitempty"` // service name patterns to match
 }
 
 // BSDRCDiscoveryDTO is the YAML representation of BSD rc.d discovery.
 // It configures BSD rc.d service discovery on BSD systems.
 type BSDRCDiscoveryDTO struct {
-	Enabled  bool     `yaml:"enabled"`
-	Patterns []string `yaml:"patterns,omitempty"`
+	Enabled  bool     `yaml:"enabled"`            // enable BSD rc.d discovery
+	Patterns []string `yaml:"patterns,omitempty"` // service name patterns to match
 }
 
 // DockerDiscoveryDTO is the YAML representation of Docker discovery.
 // It configures Docker container discovery.
 type DockerDiscoveryDTO struct {
-	Enabled    bool              `yaml:"enabled"`
-	SocketPath string            `yaml:"socket_path,omitempty"`
-	Labels     map[string]string `yaml:"labels,omitempty"`
+	Enabled    bool              `yaml:"enabled"`               // enable Docker discovery
+	SocketPath string            `yaml:"socket_path,omitempty"` // Docker socket path
+	Labels     map[string]string `yaml:"labels,omitempty"`      // label filter for containers
 }
 
 // PodmanDiscoveryDTO is the YAML representation of Podman discovery.
 // It configures Podman container discovery.
 type PodmanDiscoveryDTO struct {
-	Enabled    bool              `yaml:"enabled"`
-	SocketPath string            `yaml:"socket_path,omitempty"`
-	Labels     map[string]string `yaml:"labels,omitempty"`
+	Enabled    bool              `yaml:"enabled"`               // enable Podman discovery
+	SocketPath string            `yaml:"socket_path,omitempty"` // Podman socket path
+	Labels     map[string]string `yaml:"labels,omitempty"`      // label filter for containers
 }
 
 // KubernetesDiscoveryDTO is the YAML representation of Kubernetes discovery.
 // It configures Kubernetes pod and service discovery.
 type KubernetesDiscoveryDTO struct {
-	Enabled        bool     `yaml:"enabled"`
-	KubeconfigPath string   `yaml:"kubeconfig_path,omitempty"`
-	Namespaces     []string `yaml:"namespaces,omitempty"`
-	LabelSelector  string   `yaml:"label_selector,omitempty"`
+	Enabled        bool     `yaml:"enabled"`                   // enable Kubernetes discovery
+	KubeconfigPath string   `yaml:"kubeconfig_path,omitempty"` // kubeconfig file path
+	Namespaces     []string `yaml:"namespaces,omitempty"`      // namespaces to watch
+	LabelSelector  string   `yaml:"label_selector,omitempty"`  // label selector query
 }
 
 // NomadDiscoveryDTO is the YAML representation of Nomad discovery.
 // It configures Nomad allocation discovery.
 type NomadDiscoveryDTO struct {
-	Enabled   bool   `yaml:"enabled"`
-	Address   string `yaml:"address,omitempty"`
-	Namespace string `yaml:"namespace,omitempty"`
-	JobFilter string `yaml:"job_filter,omitempty"`
+	Enabled   bool   `yaml:"enabled"`              // enable Nomad discovery
+	Address   string `yaml:"address,omitempty"`    // Nomad API address
+	Namespace string `yaml:"namespace,omitempty"`  // Nomad namespace
+	JobFilter string `yaml:"job_filter,omitempty"` // job name filter pattern
 }
 
 // PortScanConfigDTO is the YAML representation of port scan configuration.
 // It configures port scan discovery on network interfaces.
 type PortScanConfigDTO struct {
-	Enabled      bool     `yaml:"enabled"`
-	Interfaces   []string `yaml:"interfaces,omitempty"`
-	ExcludePorts []int    `yaml:"exclude_ports,omitempty"`
-	IncludePorts []int    `yaml:"include_ports,omitempty"`
+	Enabled      bool     `yaml:"enabled"`                 // enable port scan discovery
+	Interfaces   []string `yaml:"interfaces,omitempty"`    // network interfaces to scan
+	ExcludePorts []int    `yaml:"exclude_ports,omitempty"` // ports to exclude from scan
+	IncludePorts []int    `yaml:"include_ports,omitempty"` // ports to explicitly include
 }
 
 // TargetConfigDTO is the YAML representation of a static target.
 // It defines a manually configured external target for monitoring.
 type TargetConfigDTO struct {
-	Name      string            `yaml:"name"`
-	Type      string            `yaml:"type,omitempty"`
-	Address   string            `yaml:"address,omitempty"`
-	Container string            `yaml:"container,omitempty"`
-	Namespace string            `yaml:"namespace,omitempty"`
-	Service   string            `yaml:"service,omitempty"`
-	Probe     ProbeDTO          `yaml:"probe"`
-	Interval  Duration          `yaml:"interval,omitempty"`
-	Timeout   Duration          `yaml:"timeout,omitempty"`
-	Labels    map[string]string `yaml:"labels,omitempty"`
+	Name      string            `yaml:"name"`                // target name
+	Type      string            `yaml:"type,omitempty"`      // target type (http, tcp, etc.)
+	Address   string            `yaml:"address,omitempty"`   // target address
+	Container string            `yaml:"container,omitempty"` // container name (if applicable)
+	Namespace string            `yaml:"namespace,omitempty"` // namespace (if applicable)
+	Service   string            `yaml:"service,omitempty"`   // service name (if applicable)
+	Probe     ProbeDTO          `yaml:"probe"`               // probe configuration
+	Interval  Duration          `yaml:"interval,omitempty"`  // override probe interval
+	Timeout   Duration          `yaml:"timeout,omitempty"`   // override probe timeout
+	Labels    map[string]string `yaml:"labels,omitempty"`    // custom labels
 }
 
 // ServiceConfigDTO is the YAML representation of a service configuration.
 // It contains all settings needed to define and manage a supervised config.
 type ServiceConfigDTO struct {
-	Name             string            `yaml:"name"`
-	Command          string            `yaml:"command"`
-	Args             []string          `yaml:"args,omitempty"`
-	User             string            `yaml:"user,omitempty"`
-	Group            string            `yaml:"group,omitempty"`
-	WorkingDirectory string            `yaml:"working_dir,omitempty"`
-	Environment      map[string]string `yaml:"environment,omitempty"`
-	Restart          RestartConfigDTO  `yaml:"restart"`
-	HealthChecks     []HealthCheckDTO  `yaml:"health_checks,omitempty"`
-	Listeners        []ListenerDTO     `yaml:"listeners,omitempty"`
-	Logging          ServiceLoggingDTO `yaml:"logging,omitempty"`
-	DependsOn        []string          `yaml:"depends_on,omitempty"`
-	Oneshot          bool              `yaml:"oneshot,omitempty"`
+	Name             string            `yaml:"name"`                    // service name
+	Command          string            `yaml:"command"`                 // command to execute
+	Args             []string          `yaml:"args,omitempty"`          // command arguments
+	User             string            `yaml:"user,omitempty"`          // user to run as
+	Group            string            `yaml:"group,omitempty"`         // group to run as
+	WorkingDirectory string            `yaml:"working_dir,omitempty"`   // working directory
+	Environment      map[string]string `yaml:"environment,omitempty"`   // environment variables
+	Restart          RestartConfigDTO  `yaml:"restart"`                 // restart policy
+	HealthChecks     []HealthCheckDTO  `yaml:"health_checks,omitempty"` // health check definitions
+	Listeners        []ListenerDTO     `yaml:"listeners,omitempty"`     // network listeners
+	Logging          ServiceLoggingDTO `yaml:"logging,omitempty"`       // logging configuration
+	DependsOn        []string          `yaml:"depends_on,omitempty"`    // service dependencies
+	Oneshot          bool              `yaml:"oneshot,omitempty"`       // one-shot execution mode
 }
 
 // ListenerDTO is the YAML representation of a network listener.
 // It defines a port with optional health probe configuration.
 type ListenerDTO struct {
-	Name     string   `yaml:"name"`
-	Port     int      `yaml:"port"`
-	Protocol string   `yaml:"protocol,omitempty"`
-	Address  string   `yaml:"address,omitempty"`
-	Exposed  bool     `yaml:"exposed,omitempty"`
-	Probe    ProbeDTO `yaml:"probe,omitempty"`
+	Name     string   `yaml:"name"`               // listener name
+	Port     int      `yaml:"port"`               // port number
+	Protocol string   `yaml:"protocol,omitempty"` // protocol (tcp/udp)
+	Address  string   `yaml:"address,omitempty"`  // bind address
+	Exposed  bool     `yaml:"exposed,omitempty"`  // exposed to external networks
+	Probe    ProbeDTO `yaml:"probe,omitempty"`    // probe configuration
 }
 
 // ProbeDTO is the YAML representation of a probe configuration.
 // It defines how to probe a listener for health checking.
 type ProbeDTO struct {
-	Type             string   `yaml:"type"`
-	Interval         Duration `yaml:"interval,omitempty"`
-	Timeout          Duration `yaml:"timeout,omitempty"`
-	SuccessThreshold int      `yaml:"success_threshold,omitempty"`
-	FailureThreshold int      `yaml:"failure_threshold,omitempty"`
-	Path             string   `yaml:"path,omitempty"`
-	Method           string   `yaml:"method,omitempty"`
-	StatusCode       int      `yaml:"status_code,omitempty"`
-	Service          string   `yaml:"service,omitempty"`
-	Command          string   `yaml:"command,omitempty"`
-	Args             []string `yaml:"args,omitempty"`
-	ICMPMode         string   `yaml:"icmp_mode,omitempty"`
+	Type             string   `yaml:"type"`                        // probe type (http, tcp, grpc, icmp, exec)
+	Interval         Duration `yaml:"interval,omitempty"`          // probe interval
+	Timeout          Duration `yaml:"timeout,omitempty"`           // probe timeout
+	SuccessThreshold int      `yaml:"success_threshold,omitempty"` // required successes to mark healthy
+	FailureThreshold int      `yaml:"failure_threshold,omitempty"` // required failures to mark unhealthy
+	Path             string   `yaml:"path,omitempty"`              // HTTP path
+	Method           string   `yaml:"method,omitempty"`            // HTTP method
+	StatusCode       int      `yaml:"status_code,omitempty"`       // expected HTTP status code
+	Service          string   `yaml:"service,omitempty"`           // gRPC service name
+	Command          string   `yaml:"command,omitempty"`           // exec command
+	Args             []string `yaml:"args,omitempty"`              // exec command arguments
+	ICMPMode         string   `yaml:"icmp_mode,omitempty"`         // ICMP mode (ping/echo)
 }
 
 // RestartConfigDTO is the YAML representation of restart configuration.
 // It defines the restart policy and timing parameters for service recovery.
 type RestartConfigDTO struct {
-	Policy          string   `yaml:"policy"`
-	MaxRetries      int      `yaml:"max_retries,omitempty"`
-	Delay           Duration `yaml:"delay,omitempty"`
-	DelayMax        Duration `yaml:"delay_max,omitempty"`
-	StabilityWindow Duration `yaml:"stability_window,omitempty"`
+	Policy          string   `yaml:"policy"`                     // restart policy (always, on-failure, never)
+	MaxRetries      int      `yaml:"max_retries,omitempty"`      // maximum restart attempts
+	Delay           Duration `yaml:"delay,omitempty"`            // initial restart delay
+	DelayMax        Duration `yaml:"delay_max,omitempty"`        // maximum restart delay
+	StabilityWindow Duration `yaml:"stability_window,omitempty"` // time service must run to be considered stable
 }
 
 // HealthCheckDTO is the YAML representation of a health check.
 // It defines how to verify that a service is running correctly.
 type HealthCheckDTO struct {
-	Name       string   `yaml:"name,omitempty"`
-	Type       string   `yaml:"type"`
-	Interval   Duration `yaml:"interval"`
-	Timeout    Duration `yaml:"timeout"`
-	Retries    int      `yaml:"retries"`
-	Endpoint   string   `yaml:"endpoint,omitempty"`
-	Method     string   `yaml:"method,omitempty"`
-	StatusCode int      `yaml:"status_code,omitempty"`
-	Host       string   `yaml:"host,omitempty"`
-	Port       int      `yaml:"port,omitempty"`
-	Command    string   `yaml:"command,omitempty"`
+	Name       string   `yaml:"name,omitempty"`        // health check name
+	Type       string   `yaml:"type"`                  // check type (http, tcp, exec)
+	Interval   Duration `yaml:"interval"`              // check interval
+	Timeout    Duration `yaml:"timeout"`               // check timeout
+	Retries    int      `yaml:"retries"`               // retry attempts before marking unhealthy
+	Endpoint   string   `yaml:"endpoint,omitempty"`    // HTTP endpoint URL
+	Method     string   `yaml:"method,omitempty"`      // HTTP method
+	StatusCode int      `yaml:"status_code,omitempty"` // expected HTTP status code
+	Host       string   `yaml:"host,omitempty"`        // TCP host
+	Port       int      `yaml:"port,omitempty"`        // TCP port
+	Command    string   `yaml:"command,omitempty"`     // exec command
 }
 
 // LoggingConfigDTO is the YAML representation of logging configuration.
 // It contains global logging settings including defaults and base directory.
 type LoggingConfigDTO struct {
-	Defaults LogDefaultsDTO   `yaml:"defaults"`
-	BaseDir  string           `yaml:"base_dir"`
-	Daemon   DaemonLoggingDTO `yaml:"daemon,omitempty"`
+	Defaults LogDefaultsDTO   `yaml:"defaults"`         // default logging settings
+	BaseDir  string           `yaml:"base_dir"`         // base directory for log files
+	Daemon   DaemonLoggingDTO `yaml:"daemon,omitempty"` // daemon-level logging
 }
 
 // DaemonLoggingDTO is the YAML representation of daemon-level logging.
 // It defines writers for daemon event logging.
 type DaemonLoggingDTO struct {
-	Writers []WriterConfigDTO `yaml:"writers,omitempty"`
+	Writers []WriterConfigDTO `yaml:"writers,omitempty"` // log writer configurations
 }
 
 // WriterConfigDTO is the YAML representation of a log writer configuration.
 // It defines the type, level, and specific writer settings for file or JSON output.
 type WriterConfigDTO struct {
-	Type  string              `yaml:"type"`
-	Level string              `yaml:"level,omitempty"`
-	File  FileWriterConfigDTO `yaml:"file,omitempty"`
-	JSON  JSONWriterConfigDTO `yaml:"json,omitempty"`
+	Type  string              `yaml:"type"`            // writer type (file, json)
+	Level string              `yaml:"level,omitempty"` // log level (debug, info, warn, error)
+	File  FileWriterConfigDTO `yaml:"file,omitempty"`  // file writer configuration
+	JSON  JSONWriterConfigDTO `yaml:"json,omitempty"`  // JSON writer configuration
 }
 
 // FileWriterConfigDTO is the YAML representation of file writer configuration.
 // It specifies the output file path and rotation policy for file-based logging.
 type FileWriterConfigDTO struct {
-	Path     string            `yaml:"path,omitempty"`
-	Rotation RotationConfigDTO `yaml:"rotation,omitempty"`
+	Path     string            `yaml:"path,omitempty"`     // log file path
+	Rotation RotationConfigDTO `yaml:"rotation,omitempty"` // rotation policy
 }
 
 // JSONWriterConfigDTO is the YAML representation of JSON writer configuration.
 // It specifies the output file path and rotation policy for JSON-formatted logging.
 type JSONWriterConfigDTO struct {
-	Path     string            `yaml:"path,omitempty"`
-	Rotation RotationConfigDTO `yaml:"rotation,omitempty"`
+	Path     string            `yaml:"path,omitempty"`     // JSON log file path
+	Rotation RotationConfigDTO `yaml:"rotation,omitempty"` // rotation policy
 }
 
 // LogDefaultsDTO is the YAML representation of logging defaults.
 // It defines default timestamp format and rotation settings for all log streams.
 type LogDefaultsDTO struct {
-	TimestampFormat string            `yaml:"timestamp_format"`
-	Rotation        RotationConfigDTO `yaml:"rotation"`
+	TimestampFormat string            `yaml:"timestamp_format"` // timestamp format string
+	Rotation        RotationConfigDTO `yaml:"rotation"`         // default rotation policy
 }
 
 // RotationConfigDTO is the YAML representation of rotation configuration.
 // It specifies log file rotation parameters like size limits and retention.
 type RotationConfigDTO struct {
-	MaxSize  string `yaml:"max_size"`
-	MaxAge   string `yaml:"max_age"`
-	MaxFiles int    `yaml:"max_files"`
-	Compress bool   `yaml:"compress"`
+	MaxSize  string `yaml:"max_size"`  // maximum file size before rotation
+	MaxAge   string `yaml:"max_age"`   // maximum age before rotation
+	MaxFiles int    `yaml:"max_files"` // maximum number of rotated files to keep
+	Compress bool   `yaml:"compress"`  // compress rotated files
 }
 
 // ServiceLoggingDTO is the YAML representation of service logging.
 // It defines separate configurations for stdout and stderr log streams.
 type ServiceLoggingDTO struct {
-	Stdout LogStreamConfigDTO `yaml:"stdout,omitempty"`
-	Stderr LogStreamConfigDTO `yaml:"stderr,omitempty"`
+	Stdout LogStreamConfigDTO `yaml:"stdout,omitempty"` // stdout logging configuration
+	Stderr LogStreamConfigDTO `yaml:"stderr,omitempty"` // stderr logging configuration
 }
 
 // LogStreamConfigDTO is the YAML representation of a log stream.
 // It configures file path, format, and rotation for a single log stream.
 type LogStreamConfigDTO struct {
-	File            string            `yaml:"file,omitempty"`
-	TimestampFormat string            `yaml:"timestamp_format,omitempty"`
-	Rotation        RotationConfigDTO `yaml:"rotation,omitempty"`
+	File            string            `yaml:"file,omitempty"`             // log file path
+	TimestampFormat string            `yaml:"timestamp_format,omitempty"` // timestamp format override
+	Rotation        RotationConfigDTO `yaml:"rotation,omitempty"`         // rotation policy override
 }
 
 // ToDomain converts ConfigDTO to domain Config.
@@ -344,11 +344,11 @@ type LogStreamConfigDTO struct {
 // Returns:
 //   - *config.Config: the converted domain configuration object
 func (c *ConfigDTO) ToDomain(configPath string) *config.Config {
-	services := make([]config.ServiceConfig, len(c.Services))
+	services := make([]config.ServiceConfig, 0, len(c.Services))
 
 	// convert each service to domain model.
 	for i := range c.Services {
-		services[i] = c.Services[i].ToDomain()
+		services = append(services, c.Services[i].ToDomain())
 	}
 
 	// return assembled domain configuration.
@@ -379,6 +379,7 @@ func (m *MonitoringConfigDTO) ToDomain() config.MonitoringConfig {
 
 	// resolve metrics template and apply configuration
 	template := m.resolveMetricsTemplate()
+	// apply explicit metrics configuration with template as base.
 	if m.Metrics != nil {
 		// apply metrics config with template as base
 		monitoring.Metrics = m.Metrics.ToDomain(template)
@@ -388,10 +389,10 @@ func (m *MonitoringConfigDTO) ToDomain() config.MonitoringConfig {
 	}
 
 	// convert static targets
-	targets := make([]config.TargetConfig, len(m.Targets))
-	// Iterate through each target configuration.
+	targets := make([]config.TargetConfig, 0, len(m.Targets))
+	// iterate through each target configuration.
 	for i := range m.Targets {
-		targets[i] = m.Targets[i].ToDomain()
+		targets = append(targets, m.Targets[i].ToDomain())
 	}
 	monitoring.Targets = targets
 
@@ -405,18 +406,27 @@ func (m *MonitoringConfigDTO) ToDomain() config.MonitoringConfig {
 // Returns:
 //   - config.MetricsTemplate: the resolved template
 func (m *MonitoringConfigDTO) resolveMetricsTemplate() config.MetricsTemplate {
-	// normalize template string to lowercase
+	// resolve template string to domain template enum
 	switch m.PerformanceTemplate {
+	// return minimal template for minimal configuration.
 	case "minimal":
+		// use minimal template enum.
 		return config.MetricsTemplateMinimal
+	// return full template for full configuration.
 	case "full":
+		// use full template enum.
 		return config.MetricsTemplateFull
+	// return standard template for standard configuration.
 	case "standard":
+		// use standard template enum.
 		return config.MetricsTemplateStandard
+	// return custom template for custom configuration.
 	case "custom":
+		// use custom template enum.
 		return config.MetricsTemplateCustom
+	// default to standard template for unknown values.
 	default:
-		// empty or invalid defaults to standard
+		// use standard as safe default.
 		return config.MetricsTemplateStandard
 	}
 }
@@ -430,15 +440,23 @@ func (m *MonitoringConfigDTO) resolveMetricsTemplate() config.MetricsTemplate {
 // Returns:
 //   - config.MetricsConfig: the resolved configuration
 func resolveMetricsTemplate(template config.MetricsTemplate) config.MetricsConfig {
-	// delegate to metrics_dto resolveTemplate function
+	// map template enum to configuration factory
 	switch template {
+	// use minimal configuration factory.
 	case config.MetricsTemplateMinimal:
+		// create minimal configuration.
 		return config.MinimalMetricsConfig()
+	// use full configuration factory.
 	case config.MetricsTemplateFull:
+		// create full configuration.
 		return config.FullMetricsConfig()
+	// use standard configuration for standard and custom templates.
 	case config.MetricsTemplateStandard, config.MetricsTemplateCustom:
+		// create standard configuration.
 		return config.StandardMetricsConfig()
+	// default to standard configuration for unknown templates.
 	default:
+		// create standard as safe default.
 		return config.StandardMetricsConfig()
 	}
 }
@@ -671,18 +689,18 @@ func (t *TargetConfigDTO) ToDomain() config.TargetConfig {
 // Returns:
 //   - config.ServiceConfig: the converted domain service configuration
 func (s *ServiceConfigDTO) ToDomain() config.ServiceConfig {
-	healthChecks := make([]config.HealthCheckConfig, len(s.HealthChecks))
+	healthChecks := make([]config.HealthCheckConfig, 0, len(s.HealthChecks))
 
 	// convert each health check to domain model.
 	for i := range s.HealthChecks {
-		healthChecks[i] = s.HealthChecks[i].ToDomain()
+		healthChecks = append(healthChecks, s.HealthChecks[i].ToDomain())
 	}
 
-	listeners := make([]config.ListenerConfig, len(s.Listeners))
+	listeners := make([]config.ListenerConfig, 0, len(s.Listeners))
 
 	// convert each listener to domain model.
 	for i := range s.Listeners {
-		listeners[i] = s.Listeners[i].ToDomain()
+		listeners = append(listeners, s.Listeners[i].ToDomain())
 	}
 
 	// return assembled domain service config.
@@ -709,7 +727,7 @@ func (s *ServiceConfigDTO) ToDomain() config.ServiceConfig {
 // Returns:
 //   - config.ListenerConfig: the converted domain listener configuration
 func (l *ListenerDTO) ToDomain() config.ListenerConfig {
-	// Default to TCP when no protocol is specified.
+	// default to TCP when no protocol is specified.
 	protocol := l.Protocol
 	// apply default TCP protocol.
 	if protocol == "" {
@@ -766,14 +784,14 @@ func (p *ProbeDTO) ToDomain() config.ProbeConfig {
 //   - int: success threshold (default 1).
 //   - int: failure threshold (default 3).
 func (p *ProbeDTO) getThresholdDefaults() (successThreshold, failureThreshold int) {
-	// Require at least one success to mark healthy.
+	// require at least one success to mark healthy.
 	successThreshold = p.SuccessThreshold
 	// apply default success threshold.
 	if successThreshold <= 0 {
 		successThreshold = 1
 	}
 
-	// Allow three failures before marking unhealthy.
+	// allow three failures before marking unhealthy.
 	failureThreshold = p.FailureThreshold
 	// apply default failure threshold.
 	if failureThreshold <= 0 {
@@ -888,11 +906,11 @@ func (l *LoggingConfigDTO) ToDomain() config.LoggingConfig {
 // Returns:
 //   - config.DaemonLogging: the converted domain daemon logging configuration
 func (d *DaemonLoggingDTO) ToDomain() config.DaemonLogging {
-	writers := make([]config.WriterConfig, len(d.Writers))
+	writers := make([]config.WriterConfig, 0, len(d.Writers))
 
 	// convert each writer to domain model.
 	for i := range d.Writers {
-		writers[i] = d.Writers[i].ToDomain()
+		writers = append(writers, d.Writers[i].ToDomain())
 	}
 
 	// return assembled daemon logging config.

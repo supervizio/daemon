@@ -147,10 +147,10 @@ func buildPressureMetricsFromRaw(raw *RawPressureMetrics, ts time.Time) *AllPres
 // Returns:
 //   - []PartitionInfo: the constructed partition info list.
 func buildPartitionsFromRaw(raw []RawPartitionData) []PartitionInfo {
-	partitions := make([]PartitionInfo, len(raw))
+	partitions := make([]PartitionInfo, 0, len(raw))
 	// Convert each raw partition to Go struct.
-	for i, pt := range raw {
-		partitions[i] = PartitionInfo(pt)
+	for _, pt := range raw {
+		partitions = append(partitions, PartitionInfo(pt))
 	}
 	// Return collected partitions.
 	return partitions
@@ -165,10 +165,10 @@ func buildPartitionsFromRaw(raw []RawPartitionData) []PartitionInfo {
 // Returns:
 //   - []DiskUsageInfo: the constructed disk usage info list.
 func buildDiskUsageFromRaw(raw []RawDiskUsageData) []DiskUsageInfo {
-	usage := make([]DiskUsageInfo, len(raw))
+	usage := make([]DiskUsageInfo, 0, len(raw))
 	// Convert each raw disk usage to Go struct.
-	for i, du := range raw {
-		usage[i] = DiskUsageInfo(du)
+	for _, du := range raw {
+		usage = append(usage, DiskUsageInfo(du))
 	}
 	// Return collected disk usage.
 	return usage
@@ -183,10 +183,10 @@ func buildDiskUsageFromRaw(raw []RawDiskUsageData) []DiskUsageInfo {
 // Returns:
 //   - []DiskIOInfo: the constructed disk I/O info list.
 func buildDiskIOFromRaw(raw []RawDiskIOData) []DiskIOInfo {
-	diskIO := make([]DiskIOInfo, len(raw))
+	diskIO := make([]DiskIOInfo, 0, len(raw))
 	// Convert each raw disk I/O to Go struct.
-	for i, dio := range raw {
-		diskIO[i] = DiskIOInfo(dio)
+	for _, dio := range raw {
+		diskIO = append(diskIO, DiskIOInfo(dio))
 	}
 	// Return collected disk I/O.
 	return diskIO
@@ -201,10 +201,10 @@ func buildDiskIOFromRaw(raw []RawDiskIOData) []DiskIOInfo {
 // Returns:
 //   - []NetInterfaceInfo: the constructed network interface info list.
 func buildNetInterfacesFromRaw(raw []RawNetInterfaceData) []NetInterfaceInfo {
-	interfaces := make([]NetInterfaceInfo, len(raw))
+	interfaces := make([]NetInterfaceInfo, 0, len(raw))
 	// Convert each raw network interface to Go struct.
-	for i, iface := range raw {
-		interfaces[i] = NetInterfaceInfo(iface)
+	for _, iface := range raw {
+		interfaces = append(interfaces, NetInterfaceInfo(iface))
 	}
 	// Return collected interfaces.
 	return interfaces
@@ -219,10 +219,10 @@ func buildNetInterfacesFromRaw(raw []RawNetInterfaceData) []NetInterfaceInfo {
 // Returns:
 //   - []NetStatsInfo: the constructed network stats info list.
 func buildNetStatsFromRaw(raw []RawNetStatsData) []NetStatsInfo {
-	stats := make([]NetStatsInfo, len(raw))
+	stats := make([]NetStatsInfo, 0, len(raw))
 	// Convert each raw network stat to Go struct.
-	for i, ns := range raw {
-		stats[i] = NetStatsInfo(ns)
+	for _, ns := range raw {
+		stats = append(stats, NetStatsInfo(ns))
 	}
 	// Return collected network stats.
 	return stats

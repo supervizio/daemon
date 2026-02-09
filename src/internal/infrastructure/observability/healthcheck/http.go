@@ -22,17 +22,29 @@ const defaultHTTPMethod string = http.MethodGet
 // defaultHTTPStatusCode is the default expected status code.
 const defaultHTTPStatusCode int = http.StatusOK
 
-// ErrHTTPStatusMismatch indicates the status code didn't match.
-var ErrHTTPStatusMismatch error = errors.New("status code mismatch")
+// maxIdleConns is the maximum number of idle connections across all hosts.
+const maxIdleConns int = 100
 
-// defaultHTTPTransport is a shared HTTP transport for connection pooling.
-// Reusing a single transport across all HTTP probers enables connection reuse
-// and reduces TCP handshake overhead for repeated health checks.
-var defaultHTTPTransport *http.Transport = &http.Transport{
-	MaxIdleConns:        100,
-	MaxIdleConnsPerHost: 10,
-	IdleConnTimeout:     90 * time.Second,
-}
+// maxIdleConnsPerHost is the maximum number of idle connections per host.
+const maxIdleConnsPerHost int = 10
+
+// idleConnTimeout is the timeout for idle connections.
+const idleConnTimeout time.Duration = 90 * time.Second
+
+// Package-level variables for HTTP probing infrastructure.
+var (
+	// ErrHTTPStatusMismatch indicates the status code didn't match.
+	ErrHTTPStatusMismatch error = errors.New("status code mismatch")
+
+	// defaultHTTPTransport is a shared HTTP transport for connection pooling.
+	// Reusing a single transport across all HTTP probers enables connection reuse
+	// and reduces TCP handshake overhead for repeated health checks.
+	defaultHTTPTransport *http.Transport = &http.Transport{
+		MaxIdleConns:        maxIdleConns,
+		MaxIdleConnsPerHost: maxIdleConnsPerHost,
+		IdleConnTimeout:     idleConnTimeout,
+	}
+)
 
 // HTTPProber performs HTTP endpoint probes.
 // It verifies service health by making HTTP requests.

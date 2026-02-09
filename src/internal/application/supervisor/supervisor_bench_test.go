@@ -4,30 +4,28 @@ package supervisor_test
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/kodflow/daemon/internal/application/supervisor"
 	domainconfig "github.com/kodflow/daemon/internal/domain/config"
-	domainlifecycle "github.com/kodflow/daemon/internal/domain/lifecycle"
 	domainprocess "github.com/kodflow/daemon/internal/domain/process"
-	domainshared "github.com/kodflow/daemon/internal/domain/shared"
 )
 
 // benchmarkExecutor implements domain.Executor for benchmarking.
 type benchmarkExecutor struct{}
 
-func (m *benchmarkExecutor) Start(ctx context.Context, spec *domainprocess.Spec) (*domainprocess.State, error) {
-	return &domainprocess.State{
-		PID: 1234,
-	}, nil
+func (m *benchmarkExecutor) Start(_ context.Context, _ domainprocess.Spec) (int, <-chan domainprocess.ExitResult, error) {
+	ch := make(chan domainprocess.ExitResult, 1)
+	return 1234, ch, nil
 }
 
-func (m *benchmarkExecutor) Stop(ctx context.Context, pid int, timeout domainshared.Duration) error {
+func (m *benchmarkExecutor) Stop(_ int, _ time.Duration) error {
 	return nil
 }
 
-func (m *benchmarkExecutor) Signal(pid int, sig string) error {
+func (m *benchmarkExecutor) Signal(_ int, _ os.Signal) error {
 	return nil
 }
 
@@ -36,39 +34,35 @@ type benchmarkLoader struct {
 	cfg *domainconfig.Config
 }
 
-func (m *benchmarkLoader) Load(ctx context.Context, path string) (*domainconfig.Config, error) {
+func (m *benchmarkLoader) Load(_ string) (*domainconfig.Config, error) {
 	return m.cfg, nil
-}
-
-func (m *benchmarkLoader) Validate(cfg *domainconfig.Config) error {
-	return nil
 }
 
 // benchmarkReaper implements lifecycle.Reaper for benchmarking.
 type benchmarkReaper struct{}
 
-func (m *benchmarkReaper) Start(ctx context.Context) error {
-	return nil
+func (m *benchmarkReaper) Start() {}
+
+func (m *benchmarkReaper) Stop() {}
+
+func (m *benchmarkReaper) ReapOnce() int {
+	return 0
 }
 
-func (m *benchmarkReaper) Stop(ctx context.Context) error {
-	return nil
-}
-
-func (m *benchmarkReaper) WaitOne(ctx context.Context) (int, error) {
-	return -1, nil
+func (m *benchmarkReaper) IsPID1() bool {
+	return false
 }
 
 // createTestConfig creates a test configuration with N services.
 func createTestConfig(serviceCount int) *domainconfig.Config {
 	services := make([]domainconfig.ServiceConfig, serviceCount)
-	for i := 0; i < serviceCount; i++ {
+	for i := range serviceCount {
 		services[i] = domainconfig.ServiceConfig{
 			Name:    "test-service-" + string(rune('a'+i)),
 			Command: "/bin/sleep",
 			Args:    []string{"infinity"},
 			Restart: domainconfig.RestartConfig{
-				Policy: domainconfig.RestartPolicyNever,
+				Policy: domainconfig.RestartNever,
 			},
 		}
 	}
@@ -99,8 +93,8 @@ func BenchmarkSupervisorStart(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
 
-			for i := 0; i < b.N; i++ {
-				sup := supervisor.NewSupervisor(cfg, loader, executor, reaper)
+			for range b.N {
+				sup, _ := supervisor.NewSupervisor(cfg, loader, executor, reaper)
 				ctx := context.Background()
 				_ = sup.Start(ctx)
 				_ = sup.Stop()
@@ -116,7 +110,7 @@ func BenchmarkSupervisorReload(b *testing.B) {
 	executor := &benchmarkExecutor{}
 	reaper := &benchmarkReaper{}
 
-	sup := supervisor.NewSupervisor(cfg, loader, executor, reaper)
+	sup, _ := supervisor.NewSupervisor(cfg, loader, executor, reaper)
 	ctx := context.Background()
 	_ = sup.Start(ctx)
 	defer sup.Stop()
@@ -124,7 +118,7 @@ func BenchmarkSupervisorReload(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = sup.Reload()
 	}
 }
@@ -148,7 +142,7 @@ func BenchmarkSupervisorServices(b *testing.B) {
 			executor := &benchmarkExecutor{}
 			reaper := &benchmarkReaper{}
 
-			sup := supervisor.NewSupervisor(cfg, loader, executor, reaper)
+			sup, _ := supervisor.NewSupervisor(cfg, loader, executor, reaper)
 			ctx := context.Background()
 			_ = sup.Start(ctx)
 			defer sup.Stop()
@@ -156,7 +150,7 @@ func BenchmarkSupervisorServices(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				_ = sup.Services()
 			}
 		})
@@ -170,7 +164,7 @@ func BenchmarkSupervisorStats(b *testing.B) {
 	executor := &benchmarkExecutor{}
 	reaper := &benchmarkReaper{}
 
-	sup := supervisor.NewSupervisor(cfg, loader, executor, reaper)
+	sup, _ := supervisor.NewSupervisor(cfg, loader, executor, reaper)
 	ctx := context.Background()
 	_ = sup.Start(ctx)
 	defer sup.Stop()
@@ -178,7 +172,7 @@ func BenchmarkSupervisorStats(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = sup.AllStats()
 	}
 }
@@ -190,7 +184,7 @@ func BenchmarkSupervisorConcurrentAccess(b *testing.B) {
 	executor := &benchmarkExecutor{}
 	reaper := &benchmarkReaper{}
 
-	sup := supervisor.NewSupervisor(cfg, loader, executor, reaper)
+	sup, _ := supervisor.NewSupervisor(cfg, loader, executor, reaper)
 	ctx := context.Background()
 	_ = sup.Start(ctx)
 	defer sup.Stop()

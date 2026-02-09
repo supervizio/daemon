@@ -68,7 +68,7 @@ logging:
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		cfg, err := loader.Parse(yamlContent)
 		if err != nil {
 			b.Fatalf("Failed to parse config: %v", err)
