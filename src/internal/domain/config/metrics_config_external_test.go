@@ -126,8 +126,8 @@ func TestFullMetricsConfig(t *testing.T) {
 	}
 }
 
-// TestNewMonitoringConfig verifies monitoring config includes metrics.
-func TestNewMonitoringConfig(t *testing.T) {
+// TestNewMonitoringConfigIncludesMetrics verifies monitoring config includes metrics.
+func TestNewMonitoringConfigIncludesMetrics(t *testing.T) {
 	tests := []struct {
 		name string
 	}{

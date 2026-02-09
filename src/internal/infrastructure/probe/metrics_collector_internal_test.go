@@ -6,8 +6,13 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kodflow/daemon/internal/domain/config"
 	"github.com/stretchr/testify/assert"
 )
+
+func defaultMetricsConfigForTest() config.MetricsConfig {
+	return config.DefaultMetricsConfig()
+}
 
 func TestJoinOptions(t *testing.T) {
 	tests := []struct {
@@ -100,7 +105,8 @@ func TestCollectBasicMetrics(t *testing.T) {
 
 			collector := NewCollector()
 			result := &AllSystemMetrics{}
-			collectBasicMetrics(context.Background(), collector, result)
+			cfg := defaultMetricsConfigForTest()
+			collectBasicMetrics(context.Background(), collector, result, &cfg)
 			// Result pointer is not nil, but fields may be nil.
 			assert.NotNil(t, result)
 		})
@@ -131,7 +137,7 @@ func TestCollectCPUMetricsWithPressure(t *testing.T) {
 			}()
 
 			collector := NewCollector()
-			result := collectCPUMetricsWithPressure(context.Background(), collector)
+			result := collectCPUMetricsWithPressure(context.Background(), collector, true)
 			// Returns nil when not initialized.
 			assert.Nil(t, result)
 		})
@@ -162,7 +168,7 @@ func TestCollectMemoryMetricsWithPressure(t *testing.T) {
 			}()
 
 			collector := NewCollector()
-			result := collectMemoryMetricsWithPressure(context.Background(), collector)
+			result := collectMemoryMetricsWithPressure(context.Background(), collector, true)
 			// Returns nil when not initialized.
 			assert.Nil(t, result)
 		})
@@ -225,7 +231,8 @@ func TestCollectResourceMetrics(t *testing.T) {
 
 			collector := NewCollector()
 			result := &AllSystemMetrics{}
-			collectResourceMetrics(context.Background(), collector, result)
+			cfg := defaultMetricsConfigForTest()
+			collectResourceMetrics(context.Background(), collector, result, &cfg)
 			// Result pointer is not nil, but fields may be nil.
 			assert.NotNil(t, result)
 		})
@@ -256,7 +263,8 @@ func TestCollectSystemMetrics(t *testing.T) {
 			}()
 
 			result := &AllSystemMetrics{}
-			collectSystemMetrics(context.Background(), result)
+			cfg := defaultMetricsConfigForTest()
+			collectSystemMetrics(context.Background(), result, &cfg)
 			// Result pointer is not nil, but fields may be nil.
 			assert.NotNil(t, result)
 		})
@@ -287,7 +295,8 @@ func TestCollectDiskMetricsJSON(t *testing.T) {
 			}()
 
 			collector := NewCollector()
-			result := collectDiskMetricsJSON(context.Background(), collector)
+			diskCfg := &config.DiskMetricsConfig{Enabled: true, Partitions: true, Usage: true, IO: true}
+			result := collectDiskMetricsJSON(context.Background(), collector, diskCfg)
 			assert.NotNil(t, result)
 		})
 	}
@@ -410,7 +419,8 @@ func TestCollectNetworkMetricsJSON(t *testing.T) {
 			}()
 
 			collector := NewCollector()
-			result := collectNetworkMetricsJSON(context.Background(), collector)
+			netCfg := &config.NetworkMetricsConfig{Enabled: true, Interfaces: true, Stats: true}
+			result := collectNetworkMetricsJSON(context.Background(), collector, netCfg)
 			assert.NotNil(t, result)
 		})
 	}
@@ -440,7 +450,7 @@ func TestCollectIOMetricsJSON(t *testing.T) {
 			}()
 
 			collector := NewCollector()
-			result := collectIOMetricsJSON(context.Background(), collector)
+			result := collectIOMetricsJSON(context.Background(), collector, true)
 			assert.NotNil(t, result)
 		})
 	}
@@ -532,7 +542,8 @@ func TestCollectConnectionMetricsJSON(t *testing.T) {
 				initMu.Unlock()
 			}()
 
-			result := collectConnectionMetricsJSON(context.Background())
+			connCfg := &config.ConnectionMetricsConfig{Enabled: true, TCPStats: true, TCPConnections: true, UDPSockets: true, UnixSockets: true, ListeningPorts: true}
+			result := collectConnectionMetricsJSON(context.Background(), connCfg)
 			assert.NotNil(t, result)
 		})
 	}

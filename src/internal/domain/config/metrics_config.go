@@ -197,21 +197,7 @@ func DefaultMetricsConfig() MetricsConfig {
 //   - MetricsConfig: standard configuration with all metrics enabled.
 func StandardMetricsConfig() MetricsConfig {
 	// Enable all categories and sub-features.
-	return MetricsConfig{
-		Enabled:     true,
-		CPU:         CPUMetricsConfig{Enabled: true, Pressure: true},
-		Memory:      MemoryMetricsConfig{Enabled: true, Pressure: true},
-		Load:        LoadMetricsConfig{Enabled: true},
-		Disk:        DiskMetricsConfig{Enabled: true, Partitions: true, Usage: true, IO: true},
-		Network:     NetworkMetricsConfig{Enabled: true, Interfaces: true, Stats: true},
-		Connections: ConnectionMetricsConfig{Enabled: true, TCPStats: true, TCPConnections: true, UDPSockets: true, UnixSockets: true, ListeningPorts: true},
-		Thermal:     ThermalMetricsConfig{Enabled: true},
-		Process:     ProcessMetricsConfig{Enabled: true},
-		IO:          IOMetricsConfig{Enabled: true, Pressure: true},
-		Quota:       QuotaMetricsConfig{Enabled: true},
-		Container:   ContainerMetricsConfig{Enabled: true},
-		Runtime:     RuntimeMetricsConfig{Enabled: true},
-	}
+	return newMetricsConfig(true, true)
 }
 
 // MinimalMetricsConfig returns the minimal template configuration.
@@ -222,20 +208,28 @@ func StandardMetricsConfig() MetricsConfig {
 //   - MetricsConfig: minimal configuration for low resource consumption.
 func MinimalMetricsConfig() MetricsConfig {
 	// Enable only essential metrics without expensive sub-features.
+	return newMetricsConfig(false, false)
+}
+
+// newMetricsConfig creates a MetricsConfig with essential metrics always enabled.
+// When allCategories is true, all categories are enabled (standard/full template).
+// When false, only CPU, memory, and load are enabled (minimal template).
+// The pressure parameter controls PSI collection for CPU/memory.
+func newMetricsConfig(allCategories, pressure bool) MetricsConfig {
 	return MetricsConfig{
 		Enabled:     true,
-		CPU:         CPUMetricsConfig{Enabled: true, Pressure: false},
-		Memory:      MemoryMetricsConfig{Enabled: true, Pressure: false},
+		CPU:         CPUMetricsConfig{Enabled: true, Pressure: pressure},
+		Memory:      MemoryMetricsConfig{Enabled: true, Pressure: pressure},
 		Load:        LoadMetricsConfig{Enabled: true},
-		Disk:        DiskMetricsConfig{Enabled: false, Partitions: false, Usage: false, IO: false},
-		Network:     NetworkMetricsConfig{Enabled: false, Interfaces: false, Stats: false},
-		Connections: ConnectionMetricsConfig{Enabled: false, TCPStats: false, TCPConnections: false, UDPSockets: false, UnixSockets: false, ListeningPorts: false},
-		Thermal:     ThermalMetricsConfig{Enabled: false},
-		Process:     ProcessMetricsConfig{Enabled: false},
-		IO:          IOMetricsConfig{Enabled: false, Pressure: false},
-		Quota:       QuotaMetricsConfig{Enabled: false},
-		Container:   ContainerMetricsConfig{Enabled: false},
-		Runtime:     RuntimeMetricsConfig{Enabled: false},
+		Disk:        DiskMetricsConfig{Enabled: allCategories, Partitions: allCategories, Usage: allCategories, IO: allCategories},
+		Network:     NetworkMetricsConfig{Enabled: allCategories, Interfaces: allCategories, Stats: allCategories},
+		Connections: ConnectionMetricsConfig{Enabled: allCategories, TCPStats: allCategories, TCPConnections: allCategories, UDPSockets: allCategories, UnixSockets: allCategories, ListeningPorts: allCategories},
+		Thermal:     ThermalMetricsConfig{Enabled: allCategories},
+		Process:     ProcessMetricsConfig{Enabled: allCategories},
+		IO:          IOMetricsConfig{Enabled: allCategories, Pressure: allCategories && pressure},
+		Quota:       QuotaMetricsConfig{Enabled: allCategories},
+		Container:   ContainerMetricsConfig{Enabled: allCategories},
+		Runtime:     RuntimeMetricsConfig{Enabled: allCategories},
 	}
 }
 
