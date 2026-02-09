@@ -1,4 +1,6 @@
 // Package yaml provides YAML configuration loading infrastructure.
+// This file groups related metrics DTO types for configuration parsing.
+// Grouping is permitted by dto tag convention (exception to KTN-STRUCT-ONEFILE).
 package yaml
 
 import (
@@ -8,92 +10,104 @@ import (
 // MetricsConfigDTO is the YAML representation of metrics configuration.
 // It provides granular control over metrics collection to reduce resource consumption.
 type MetricsConfigDTO struct {
-	Enabled     *bool                       `yaml:"enabled,omitempty"`
-	CPU         *CPUMetricsConfigDTO        `yaml:"cpu,omitempty"`
-	Memory      *MemoryMetricsConfigDTO     `yaml:"memory,omitempty"`
-	Load        *LoadMetricsConfigDTO       `yaml:"load,omitempty"`
-	Disk        *DiskMetricsConfigDTO       `yaml:"disk,omitempty"`
-	Network     *NetworkMetricsConfigDTO    `yaml:"network,omitempty"`
-	Connections *ConnectionMetricsConfigDTO `yaml:"connections,omitempty"`
-	Thermal     *ThermalMetricsConfigDTO    `yaml:"thermal,omitempty"`
-	Process     *ProcessMetricsConfigDTO    `yaml:"process,omitempty"`
-	IO          *IOMetricsConfigDTO         `yaml:"io,omitempty"`
-	Quota       *QuotaMetricsConfigDTO      `yaml:"quota,omitempty"`
-	Container   *ContainerMetricsConfigDTO  `yaml:"container,omitempty"`
-	Runtime     *RuntimeMetricsConfigDTO    `yaml:"runtime,omitempty"`
+	Enabled     *bool                       `yaml:"enabled,omitempty"`     // global metrics toggle
+	CPU         *CPUMetricsConfigDTO        `yaml:"cpu,omitempty"`         // CPU metrics configuration
+	Memory      *MemoryMetricsConfigDTO     `yaml:"memory,omitempty"`      // memory metrics configuration
+	Load        *LoadMetricsConfigDTO       `yaml:"load,omitempty"`        // load average configuration
+	Disk        *DiskMetricsConfigDTO       `yaml:"disk,omitempty"`        // disk metrics configuration
+	Network     *NetworkMetricsConfigDTO    `yaml:"network,omitempty"`     // network metrics configuration
+	Connections *ConnectionMetricsConfigDTO `yaml:"connections,omitempty"` // connection metrics configuration
+	Thermal     *ThermalMetricsConfigDTO    `yaml:"thermal,omitempty"`     // thermal zone configuration
+	Process     *ProcessMetricsConfigDTO    `yaml:"process,omitempty"`     // process metrics configuration
+	IO          *IOMetricsConfigDTO         `yaml:"io,omitempty"`          // I/O metrics configuration
+	Quota       *QuotaMetricsConfigDTO      `yaml:"quota,omitempty"`       // quota metrics configuration
+	Container   *ContainerMetricsConfigDTO  `yaml:"container,omitempty"`   // container metrics configuration
+	Runtime     *RuntimeMetricsConfigDTO    `yaml:"runtime,omitempty"`     // runtime metrics configuration
 }
 
 // CPUMetricsConfigDTO is the YAML representation of CPU metrics configuration.
+// It controls CPU usage metrics and pressure stall information collection.
 type CPUMetricsConfigDTO struct {
-	Enabled  *bool `yaml:"enabled,omitempty"`
-	Pressure *bool `yaml:"pressure,omitempty"`
+	Enabled  *bool `yaml:"enabled,omitempty"`  // enable CPU metrics collection
+	Pressure *bool `yaml:"pressure,omitempty"` // enable PSI (pressure stall information)
 }
 
 // MemoryMetricsConfigDTO is the YAML representation of memory metrics configuration.
+// It controls memory usage metrics and pressure stall information collection.
 type MemoryMetricsConfigDTO struct {
-	Enabled  *bool `yaml:"enabled,omitempty"`
-	Pressure *bool `yaml:"pressure,omitempty"`
+	Enabled  *bool `yaml:"enabled,omitempty"`  // enable memory metrics collection
+	Pressure *bool `yaml:"pressure,omitempty"` // enable PSI (pressure stall information)
 }
 
 // LoadMetricsConfigDTO is the YAML representation of load metrics configuration.
+// It controls system load average collection (1min, 5min, 15min).
 type LoadMetricsConfigDTO struct {
-	Enabled *bool `yaml:"enabled,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty"` // enable load average metrics
 }
 
 // DiskMetricsConfigDTO is the YAML representation of disk metrics configuration.
+// It controls disk partition, usage, and I/O statistics collection.
 type DiskMetricsConfigDTO struct {
-	Enabled    *bool `yaml:"enabled,omitempty"`
-	Partitions *bool `yaml:"partitions,omitempty"`
-	Usage      *bool `yaml:"usage,omitempty"`
-	IO         *bool `yaml:"io,omitempty"`
+	Enabled    *bool `yaml:"enabled,omitempty"`    // enable disk metrics collection
+	Partitions *bool `yaml:"partitions,omitempty"` // include partition information
+	Usage      *bool `yaml:"usage,omitempty"`      // include filesystem usage
+	IO         *bool `yaml:"io,omitempty"`         // include I/O statistics
 }
 
 // NetworkMetricsConfigDTO is the YAML representation of network metrics configuration.
+// It controls network interface and statistics collection.
 type NetworkMetricsConfigDTO struct {
-	Enabled    *bool `yaml:"enabled,omitempty"`
-	Interfaces *bool `yaml:"interfaces,omitempty"`
-	Stats      *bool `yaml:"stats,omitempty"`
+	Enabled    *bool `yaml:"enabled,omitempty"`    // enable network metrics collection
+	Interfaces *bool `yaml:"interfaces,omitempty"` // include interface details
+	Stats      *bool `yaml:"stats,omitempty"`      // include transfer statistics
 }
 
 // ConnectionMetricsConfigDTO is the YAML representation of connection metrics configuration.
+// It controls TCP, UDP, and Unix socket connection enumeration.
 type ConnectionMetricsConfigDTO struct {
-	Enabled        *bool `yaml:"enabled,omitempty"`
-	TCPStats       *bool `yaml:"tcp_stats,omitempty"`
-	TCPConnections *bool `yaml:"tcp_connections,omitempty"`
-	UDPSockets     *bool `yaml:"udp_sockets,omitempty"`
-	UnixSockets    *bool `yaml:"unix_sockets,omitempty"`
-	ListeningPorts *bool `yaml:"listening_ports,omitempty"`
+	Enabled        *bool `yaml:"enabled,omitempty"`         // enable connection metrics collection
+	TCPStats       *bool `yaml:"tcp_stats,omitempty"`       // include TCP protocol statistics
+	TCPConnections *bool `yaml:"tcp_connections,omitempty"` // enumerate TCP connections
+	UDPSockets     *bool `yaml:"udp_sockets,omitempty"`     // enumerate UDP sockets
+	UnixSockets    *bool `yaml:"unix_sockets,omitempty"`    // enumerate Unix domain sockets
+	ListeningPorts *bool `yaml:"listening_ports,omitempty"` // include listening port information
 }
 
 // ThermalMetricsConfigDTO is the YAML representation of thermal metrics configuration.
+// It controls thermal zone temperature collection.
 type ThermalMetricsConfigDTO struct {
-	Enabled *bool `yaml:"enabled,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty"` // enable thermal zone metrics
 }
 
 // ProcessMetricsConfigDTO is the YAML representation of process metrics configuration.
+// It controls per-process metrics collection (CPU, memory, I/O per process).
 type ProcessMetricsConfigDTO struct {
-	Enabled *bool `yaml:"enabled,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty"` // enable per-process metrics
 }
 
 // IOMetricsConfigDTO is the YAML representation of I/O metrics configuration.
+// It controls I/O statistics and pressure stall information collection.
 type IOMetricsConfigDTO struct {
-	Enabled  *bool `yaml:"enabled,omitempty"`
-	Pressure *bool `yaml:"pressure,omitempty"`
+	Enabled  *bool `yaml:"enabled,omitempty"`  // enable I/O metrics collection
+	Pressure *bool `yaml:"pressure,omitempty"` // enable PSI (pressure stall information)
 }
 
 // QuotaMetricsConfigDTO is the YAML representation of quota metrics configuration.
+// It controls disk quota and limit collection.
 type QuotaMetricsConfigDTO struct {
-	Enabled *bool `yaml:"enabled,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty"` // enable quota metrics collection
 }
 
 // ContainerMetricsConfigDTO is the YAML representation of container metrics configuration.
+// It controls container-specific metrics collection (cgroups, namespaces).
 type ContainerMetricsConfigDTO struct {
-	Enabled *bool `yaml:"enabled,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty"` // enable container metrics collection
 }
 
 // RuntimeMetricsConfigDTO is the YAML representation of runtime metrics configuration.
+// It controls runtime environment detection (Docker, Kubernetes, etc.).
 type RuntimeMetricsConfigDTO struct {
-	Enabled *bool `yaml:"enabled,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty"` // enable runtime detection metrics
 }
 
 // ToDomain converts MetricsConfigDTO to domain MetricsConfig.
@@ -105,53 +119,64 @@ type RuntimeMetricsConfigDTO struct {
 // Returns:
 //   - config.MetricsConfig: the converted domain metrics configuration
 func (m *MetricsConfigDTO) ToDomain(template config.MetricsTemplate) config.MetricsConfig {
-	// Start with template as base configuration.
+	// start with template as base configuration.
 	result := resolveTemplate(template)
 
-	// Apply global enabled override if specified.
+	// apply global enabled override if specified.
 	if m.Enabled != nil {
 		result.Enabled = *m.Enabled
 	}
 
-	// Apply category overrides if specified.
+	// apply CPU category overrides if specified.
 	if m.CPU != nil {
 		result.CPU = m.CPU.toDomain(result.CPU)
 	}
+	// apply memory category overrides if specified.
 	if m.Memory != nil {
 		result.Memory = m.Memory.toDomain(result.Memory)
 	}
+	// apply load category overrides if specified.
 	if m.Load != nil {
 		result.Load = m.Load.toDomain(result.Load)
 	}
+	// apply disk category overrides if specified.
 	if m.Disk != nil {
 		result.Disk = m.Disk.toDomain(result.Disk)
 	}
+	// apply network category overrides if specified.
 	if m.Network != nil {
 		result.Network = m.Network.toDomain(result.Network)
 	}
+	// apply connections category overrides if specified.
 	if m.Connections != nil {
 		result.Connections = m.Connections.toDomain(result.Connections)
 	}
+	// apply thermal category overrides if specified.
 	if m.Thermal != nil {
 		result.Thermal = m.Thermal.toDomain(result.Thermal)
 	}
+	// apply process category overrides if specified.
 	if m.Process != nil {
 		result.Process = m.Process.toDomain(result.Process)
 	}
+	// apply I/O category overrides if specified.
 	if m.IO != nil {
 		result.IO = m.IO.toDomain(result.IO)
 	}
+	// apply quota category overrides if specified.
 	if m.Quota != nil {
 		result.Quota = m.Quota.toDomain(result.Quota)
 	}
+	// apply container category overrides if specified.
 	if m.Container != nil {
 		result.Container = m.Container.toDomain(result.Container)
 	}
+	// apply runtime category overrides if specified.
 	if m.Runtime != nil {
 		result.Runtime = m.Runtime.toDomain(result.Runtime)
 	}
 
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -165,15 +190,15 @@ func (m *MetricsConfigDTO) ToDomain(template config.MetricsTemplate) config.Metr
 //   - config.CPUMetricsConfig: the merged CPU metrics configuration
 func (c *CPUMetricsConfigDTO) toDomain(base config.CPUMetricsConfig) config.CPUMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if c.Enabled != nil {
 		result.Enabled = *c.Enabled
 	}
-	// Override pressure if specified.
+	// override pressure if specified.
 	if c.Pressure != nil {
 		result.Pressure = *c.Pressure
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -187,15 +212,15 @@ func (c *CPUMetricsConfigDTO) toDomain(base config.CPUMetricsConfig) config.CPUM
 //   - config.MemoryMetricsConfig: the merged memory metrics configuration
 func (m *MemoryMetricsConfigDTO) toDomain(base config.MemoryMetricsConfig) config.MemoryMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if m.Enabled != nil {
 		result.Enabled = *m.Enabled
 	}
-	// Override pressure if specified.
+	// override pressure if specified.
 	if m.Pressure != nil {
 		result.Pressure = *m.Pressure
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -209,11 +234,11 @@ func (m *MemoryMetricsConfigDTO) toDomain(base config.MemoryMetricsConfig) confi
 //   - config.LoadMetricsConfig: the merged load metrics configuration
 func (l *LoadMetricsConfigDTO) toDomain(base config.LoadMetricsConfig) config.LoadMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if l.Enabled != nil {
 		result.Enabled = *l.Enabled
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -227,23 +252,23 @@ func (l *LoadMetricsConfigDTO) toDomain(base config.LoadMetricsConfig) config.Lo
 //   - config.DiskMetricsConfig: the merged disk metrics configuration
 func (d *DiskMetricsConfigDTO) toDomain(base config.DiskMetricsConfig) config.DiskMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if d.Enabled != nil {
 		result.Enabled = *d.Enabled
 	}
-	// Override partitions if specified.
+	// override partitions if specified.
 	if d.Partitions != nil {
 		result.Partitions = *d.Partitions
 	}
-	// Override usage if specified.
+	// override usage if specified.
 	if d.Usage != nil {
 		result.Usage = *d.Usage
 	}
-	// Override IO if specified.
+	// override IO if specified.
 	if d.IO != nil {
 		result.IO = *d.IO
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -257,19 +282,19 @@ func (d *DiskMetricsConfigDTO) toDomain(base config.DiskMetricsConfig) config.Di
 //   - config.NetworkMetricsConfig: the merged network metrics configuration
 func (n *NetworkMetricsConfigDTO) toDomain(base config.NetworkMetricsConfig) config.NetworkMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if n.Enabled != nil {
 		result.Enabled = *n.Enabled
 	}
-	// Override interfaces if specified.
+	// override interfaces if specified.
 	if n.Interfaces != nil {
 		result.Interfaces = *n.Interfaces
 	}
-	// Override stats if specified.
+	// override stats if specified.
 	if n.Stats != nil {
 		result.Stats = *n.Stats
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -283,31 +308,31 @@ func (n *NetworkMetricsConfigDTO) toDomain(base config.NetworkMetricsConfig) con
 //   - config.ConnectionMetricsConfig: the merged connection metrics configuration
 func (c *ConnectionMetricsConfigDTO) toDomain(base config.ConnectionMetricsConfig) config.ConnectionMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if c.Enabled != nil {
 		result.Enabled = *c.Enabled
 	}
-	// Override tcp_stats if specified.
+	// override tcp_stats if specified.
 	if c.TCPStats != nil {
 		result.TCPStats = *c.TCPStats
 	}
-	// Override tcp_connections if specified.
+	// override tcp_connections if specified.
 	if c.TCPConnections != nil {
 		result.TCPConnections = *c.TCPConnections
 	}
-	// Override udp_sockets if specified.
+	// override udp_sockets if specified.
 	if c.UDPSockets != nil {
 		result.UDPSockets = *c.UDPSockets
 	}
-	// Override unix_sockets if specified.
+	// override unix_sockets if specified.
 	if c.UnixSockets != nil {
 		result.UnixSockets = *c.UnixSockets
 	}
-	// Override listening_ports if specified.
+	// override listening_ports if specified.
 	if c.ListeningPorts != nil {
 		result.ListeningPorts = *c.ListeningPorts
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -321,11 +346,11 @@ func (c *ConnectionMetricsConfigDTO) toDomain(base config.ConnectionMetricsConfi
 //   - config.ThermalMetricsConfig: the merged thermal metrics configuration
 func (t *ThermalMetricsConfigDTO) toDomain(base config.ThermalMetricsConfig) config.ThermalMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if t.Enabled != nil {
 		result.Enabled = *t.Enabled
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -339,11 +364,11 @@ func (t *ThermalMetricsConfigDTO) toDomain(base config.ThermalMetricsConfig) con
 //   - config.ProcessMetricsConfig: the merged process metrics configuration
 func (p *ProcessMetricsConfigDTO) toDomain(base config.ProcessMetricsConfig) config.ProcessMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if p.Enabled != nil {
 		result.Enabled = *p.Enabled
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -357,15 +382,15 @@ func (p *ProcessMetricsConfigDTO) toDomain(base config.ProcessMetricsConfig) con
 //   - config.IOMetricsConfig: the merged I/O metrics configuration
 func (i *IOMetricsConfigDTO) toDomain(base config.IOMetricsConfig) config.IOMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if i.Enabled != nil {
 		result.Enabled = *i.Enabled
 	}
-	// Override pressure if specified.
+	// override pressure if specified.
 	if i.Pressure != nil {
 		result.Pressure = *i.Pressure
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -379,11 +404,11 @@ func (i *IOMetricsConfigDTO) toDomain(base config.IOMetricsConfig) config.IOMetr
 //   - config.QuotaMetricsConfig: the merged quota metrics configuration
 func (q *QuotaMetricsConfigDTO) toDomain(base config.QuotaMetricsConfig) config.QuotaMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if q.Enabled != nil {
 		result.Enabled = *q.Enabled
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -397,11 +422,11 @@ func (q *QuotaMetricsConfigDTO) toDomain(base config.QuotaMetricsConfig) config.
 //   - config.ContainerMetricsConfig: the merged container metrics configuration
 func (c *ContainerMetricsConfigDTO) toDomain(base config.ContainerMetricsConfig) config.ContainerMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if c.Enabled != nil {
 		result.Enabled = *c.Enabled
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -415,11 +440,11 @@ func (c *ContainerMetricsConfigDTO) toDomain(base config.ContainerMetricsConfig)
 //   - config.RuntimeMetricsConfig: the merged runtime metrics configuration
 func (r *RuntimeMetricsConfigDTO) toDomain(base config.RuntimeMetricsConfig) config.RuntimeMetricsConfig {
 	result := base
-	// Override enabled if specified.
+	// override enabled if specified.
 	if r.Enabled != nil {
 		result.Enabled = *r.Enabled
 	}
-	// Return merged configuration.
+	// return merged configuration.
 	return result
 }
 
@@ -432,16 +457,23 @@ func (r *RuntimeMetricsConfigDTO) toDomain(base config.RuntimeMetricsConfig) con
 // Returns:
 //   - config.MetricsConfig: the resolved metrics configuration
 func resolveTemplate(template config.MetricsTemplate) config.MetricsConfig {
-	// Resolve template to configuration.
+	// resolve template to configuration.
 	switch template {
+	// return minimal configuration for minimal template.
 	case config.MetricsTemplateMinimal:
+		// use minimal configuration factory.
 		return config.MinimalMetricsConfig()
+	// return full configuration for full template.
 	case config.MetricsTemplateFull:
+		// use full configuration factory.
 		return config.FullMetricsConfig()
+	// return standard configuration for standard/custom templates.
 	case config.MetricsTemplateStandard, config.MetricsTemplateCustom:
+		// use standard configuration factory.
 		return config.StandardMetricsConfig()
+	// default to standard configuration for unknown templates.
 	default:
-		// Unknown template defaults to standard.
+		// use standard configuration as safe fallback.
 		return config.StandardMetricsConfig()
 	}
 }

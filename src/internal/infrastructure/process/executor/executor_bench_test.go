@@ -4,11 +4,11 @@ package executor_test
 
 import (
 	"context"
+	"syscall"
 	"testing"
 	"time"
 
 	domainprocess "github.com/kodflow/daemon/internal/domain/process"
-	domainshared "github.com/kodflow/daemon/internal/domain/shared"
 	"github.com/kodflow/daemon/internal/infrastructure/process/executor"
 )
 
@@ -17,22 +17,19 @@ func BenchmarkExecutorStart(b *testing.B) {
 	exec := executor.NewExecutor()
 	ctx := context.Background()
 
-	spec := &domainprocess.Spec{
+	spec := domainprocess.Spec{
 		Command: "/bin/true",
-		Args:    []string{},
 	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		state, err := exec.Start(ctx, spec)
+	for range b.N {
+		pid, _, err := exec.Start(ctx, spec)
 		if err != nil {
 			b.Fatalf("Start failed: %v", err)
 		}
-		// Wait for process to complete
-		timeout := domainshared.Duration(time.Second)
-		_ = exec.Stop(ctx, state.PID, timeout)
+		_ = exec.Stop(pid, time.Second)
 	}
 }
 
@@ -41,21 +38,20 @@ func BenchmarkExecutorStartLongRunning(b *testing.B) {
 	exec := executor.NewExecutor()
 	ctx := context.Background()
 
-	spec := &domainprocess.Spec{
+	spec := domainprocess.Spec{
 		Command: "/bin/sleep",
-		Args:    []string{"0.01"}, // 10ms sleep
+		Args:    []string{"0.01"},
 	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		state, err := exec.Start(ctx, spec)
+	for range b.N {
+		pid, _, err := exec.Start(ctx, spec)
 		if err != nil {
 			b.Fatalf("Start failed: %v", err)
 		}
-		timeout := domainshared.Duration(time.Second)
-		_ = exec.Stop(ctx, state.PID, timeout)
+		_ = exec.Stop(pid, time.Second)
 	}
 }
 
@@ -64,26 +60,24 @@ func BenchmarkExecutorStartWithEnv(b *testing.B) {
 	exec := executor.NewExecutor()
 	ctx := context.Background()
 
-	spec := &domainprocess.Spec{
+	spec := domainprocess.Spec{
 		Command: "/bin/true",
-		Args:    []string{},
-		Env: []string{
-			"FOO=bar",
-			"BAZ=qux",
-			"BENCHMARK=true",
+		Env: map[string]string{
+			"FOO":       "bar",
+			"BAZ":       "qux",
+			"BENCHMARK": "true",
 		},
 	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		state, err := exec.Start(ctx, spec)
+	for range b.N {
+		pid, _, err := exec.Start(ctx, spec)
 		if err != nil {
 			b.Fatalf("Start failed: %v", err)
 		}
-		timeout := domainshared.Duration(time.Second)
-		_ = exec.Stop(ctx, state.PID, timeout)
+		_ = exec.Stop(pid, time.Second)
 	}
 }
 
@@ -92,22 +86,20 @@ func BenchmarkExecutorStartWithWorkDir(b *testing.B) {
 	exec := executor.NewExecutor()
 	ctx := context.Background()
 
-	spec := &domainprocess.Spec{
+	spec := domainprocess.Spec{
 		Command: "/bin/true",
-		Args:    []string{},
-		WorkDir: "/tmp",
+		Dir:     "/tmp",
 	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		state, err := exec.Start(ctx, spec)
+	for range b.N {
+		pid, _, err := exec.Start(ctx, spec)
 		if err != nil {
 			b.Fatalf("Start failed: %v", err)
 		}
-		timeout := domainshared.Duration(time.Second)
-		_ = exec.Stop(ctx, state.PID, timeout)
+		_ = exec.Stop(pid, time.Second)
 	}
 }
 
@@ -116,27 +108,25 @@ func BenchmarkExecutorStop(b *testing.B) {
 	exec := executor.NewExecutor()
 	ctx := context.Background()
 
-	// Pre-start N processes
 	pids := make([]int, b.N)
-	spec := &domainprocess.Spec{
+	spec := domainprocess.Spec{
 		Command: "/bin/sleep",
-		Args:    []string{"60"}, // Long-running
+		Args:    []string{"60"},
 	}
 
-	for i := 0; i < b.N; i++ {
-		state, err := exec.Start(ctx, spec)
+	for i := range b.N {
+		pid, _, err := exec.Start(ctx, spec)
 		if err != nil {
 			b.Fatalf("Start failed: %v", err)
 		}
-		pids[i] = state.PID
+		pids[i] = pid
 	}
 
-	timeout := domainshared.Duration(time.Second)
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		_ = exec.Stop(ctx, pids[i], timeout)
+	for i := range b.N {
+		_ = exec.Stop(pids[i], time.Second)
 	}
 }
 
@@ -145,25 +135,24 @@ func BenchmarkExecutorSignal(b *testing.B) {
 	exec := executor.NewExecutor()
 	ctx := context.Background()
 
-	spec := &domainprocess.Spec{
+	spec := domainprocess.Spec{
 		Command: "/bin/sleep",
 		Args:    []string{"60"},
 	}
 
-	state, err := exec.Start(ctx, spec)
+	pid, _, err := exec.Start(ctx, spec)
 	if err != nil {
 		b.Fatalf("Start failed: %v", err)
 	}
 	defer func() {
-		timeout := domainshared.Duration(time.Second)
-		_ = exec.Stop(ctx, state.PID, timeout)
+		_ = exec.Stop(pid, time.Second)
 	}()
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		_ = exec.Signal(state.PID, "USR1")
+	for range b.N {
+		_ = exec.Signal(pid, syscall.SIGUSR1)
 	}
 }
 
@@ -174,7 +163,7 @@ func BenchmarkExecutorStartStop(b *testing.B) {
 		command string
 		args    []string
 	}{
-		{"True", "/bin/true", []string{}},
+		{"True", "/bin/true", nil},
 		{"Echo", "/bin/echo", []string{"benchmark"}},
 		{"Sleep10ms", "/bin/sleep", []string{"0.01"}},
 	}
@@ -184,21 +173,20 @@ func BenchmarkExecutorStartStop(b *testing.B) {
 			exec := executor.NewExecutor()
 			ctx := context.Background()
 
-			spec := &domainprocess.Spec{
+			spec := domainprocess.Spec{
 				Command: bm.command,
 				Args:    bm.args,
 			}
 
-			timeout := domainshared.Duration(time.Second)
 			b.ResetTimer()
 			b.ReportAllocs()
 
-			for i := 0; i < b.N; i++ {
-				state, err := exec.Start(ctx, spec)
+			for range b.N {
+				pid, _, err := exec.Start(ctx, spec)
 				if err != nil {
 					b.Fatalf("Start failed: %v", err)
 				}
-				_ = exec.Stop(ctx, state.PID, timeout)
+				_ = exec.Stop(pid, time.Second)
 			}
 		})
 	}

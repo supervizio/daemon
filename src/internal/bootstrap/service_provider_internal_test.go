@@ -57,42 +57,38 @@ func TestCountTotalListeners(t *testing.T) {
 	}
 }
 
-// TestConvertListenersAt tests the convertListenersAt helper function.
-func TestConvertListenersAt(t *testing.T) {
+// TestAppendConvertedListeners tests the appendConvertedListeners helper function.
+func TestAppendConvertedListeners(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name         string
 		destSize     int
-		startIdx     int
 		listeners    []appsupervisor.ListenerSnapshotForTUI
-		expectedNext int
+		expectedLen  int
 	}{
 		{
-			name:     "convert to empty slice at index 0",
-			destSize: 1,
-			startIdx: 0,
+			name:     "append to empty slice",
+			destSize: 0,
 			listeners: []appsupervisor.ListenerSnapshotForTUI{
 				{Name: "http", Port: 8080},
 			},
-			expectedNext: 1,
+			expectedLen: 1,
 		},
 		{
-			name:     "convert to slice at middle index",
-			destSize: 5,
-			startIdx: 2,
+			name:     "append to existing slice",
+			destSize: 2,
 			listeners: []appsupervisor.ListenerSnapshotForTUI{
 				{Name: "http", Port: 8080},
 				{Name: "grpc", Port: 9090},
 			},
-			expectedNext: 4,
+			expectedLen: 4,
 		},
 		{
-			name:         "convert empty listeners",
-			destSize:     3,
-			startIdx:     1,
-			listeners:    []appsupervisor.ListenerSnapshotForTUI{},
-			expectedNext: 1,
+			name:        "append empty listeners",
+			destSize:    3,
+			listeners:   []appsupervisor.ListenerSnapshotForTUI{},
+			expectedLen: 3,
 		},
 	}
 
@@ -100,9 +96,15 @@ func TestConvertListenersAt(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			dest := make([]model.ListenerSnapshot, tc.destSize)
-			nextIdx := convertListenersAt(dest, tc.startIdx, tc.listeners)
-			assert.Equal(t, tc.expectedNext, nextIdx)
+			// Pre-allocate dest with capacity for append.
+			dest := make([]model.ListenerSnapshot, tc.destSize, tc.destSize+len(tc.listeners))
+			result := appendConvertedListeners(dest, tc.listeners)
+			assert.Equal(t, tc.expectedLen, len(result))
+			// Verify that original listeners were preserved.
+			if tc.destSize > 0 {
+				// Check that appending doesn't modify existing elements.
+				assert.Equal(t, dest[:tc.destSize], result[:tc.destSize])
+			}
 		})
 	}
 }

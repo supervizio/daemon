@@ -28,15 +28,15 @@ import (
 //   - *AllSystemMetrics: collected system metrics
 //   - error: nil on success, error if probe not initialized
 func CollectAllMetrics(ctx context.Context, cfg *config.MetricsConfig) (*AllSystemMetrics, error) {
-	// Check if probe library is initialized.
+	// check if probe library is initialized
 	if err := checkInitialized(); err != nil {
-		// Return error if not initialized.
+		// return error if not initialized
 		return nil, err
 	}
 
-	// Check global enabled flag.
+	// check global enabled flag
 	if cfg == nil || !cfg.Enabled {
-		// Return minimal result with only metadata.
+		// return minimal result with only metadata
 		return &AllSystemMetrics{
 			Timestamp:   time.Now(),
 			Platform:    runtime.GOOS,
@@ -59,7 +59,7 @@ func CollectAllMetrics(ctx context.Context, cfg *config.MetricsConfig) (*AllSyst
 	collectResourceMetrics(ctx, collector, result, cfg)
 	collectSystemMetrics(ctx, result, cfg)
 
-	// Return collected metrics.
+	// return collected metrics
 	return result, nil
 }
 
@@ -69,6 +69,7 @@ func CollectAllMetrics(ctx context.Context, cfg *config.MetricsConfig) (*AllSyst
 //   - string: system hostname
 func getHostname() string {
 	hostname, _ := os.Hostname()
+	// return hostname or empty string on error
 	return hostname
 }
 
@@ -80,15 +81,15 @@ func getHostname() string {
 //   - result: result structure to populate
 //   - cfg: metrics configuration
 func collectBasicMetrics(ctx context.Context, collector *Collector, result *AllSystemMetrics, cfg *config.MetricsConfig) {
-	// Collect CPU metrics if enabled.
+	// collect CPU metrics if enabled
 	if cfg.CPU.Enabled {
 		result.CPU = collectCPUMetricsWithPressure(ctx, collector, cfg.CPU.Pressure)
 	}
-	// Collect memory metrics if enabled.
+	// collect memory metrics if enabled
 	if cfg.Memory.Enabled {
 		result.Memory = collectMemoryMetricsWithPressure(ctx, collector, cfg.Memory.Pressure)
 	}
-	// Collect load metrics if enabled.
+	// collect load metrics if enabled
 	if cfg.Load.Enabled {
 		result.Load = collectLoadMetricsJSON(ctx, collector)
 	}
@@ -105,9 +106,9 @@ func collectBasicMetrics(ctx context.Context, collector *Collector, result *AllS
 //   - *CPUMetricsJSON: collected CPU metrics, nil on error.
 func collectCPUMetricsWithPressure(ctx context.Context, collector *Collector, collectPressure bool) *CPUMetricsJSON {
 	cpu, err := collector.Cpu().CollectSystem(ctx)
-	// Check for CPU collection error.
+	// check for CPU collection error
 	if err != nil {
-		// Return nil on error.
+		// return nil on error
 		return nil
 	}
 
@@ -116,8 +117,9 @@ func collectCPUMetricsWithPressure(ctx context.Context, collector *Collector, co
 		Cores:        uint32(runtime.NumCPU()),
 	}
 
-	// Add CPU pressure if enabled and available.
+	// add CPU pressure if enabled and available
 	if collectPressure {
+		// attempt to collect CPU pressure information
 		if pressure, err := collector.Cpu().CollectPressure(ctx); err == nil {
 			cpuMetrics.Pressure = &CPUPressureJSON{
 				SomeAvg10:   pressure.SomeAvg10,
@@ -128,7 +130,7 @@ func collectCPUMetricsWithPressure(ctx context.Context, collector *Collector, co
 		}
 	}
 
-	// Return collected CPU metrics with optional pressure data.
+	// return collected CPU metrics with optional pressure data
 	return cpuMetrics
 }
 
@@ -143,9 +145,9 @@ func collectCPUMetricsWithPressure(ctx context.Context, collector *Collector, co
 //   - *MemoryMetricsJSON: collected memory metrics, nil on error.
 func collectMemoryMetricsWithPressure(ctx context.Context, collector *Collector, collectPressure bool) *MemoryMetricsJSON {
 	mem, err := collector.Memory().CollectSystem(ctx)
-	// Check for memory collection error.
+	// check for memory collection error
 	if err != nil {
-		// Return nil on error.
+		// return nil on error
 		return nil
 	}
 
@@ -160,8 +162,9 @@ func collectMemoryMetricsWithPressure(ctx context.Context, collector *Collector,
 		UsedPercent:    mem.UsagePercent,
 	}
 
-	// Add memory pressure if enabled and available.
+	// add memory pressure if enabled and available
 	if collectPressure {
+		// attempt to collect memory pressure information
 		if pressure, err := collector.Memory().CollectPressure(ctx); err == nil {
 			memMetrics.Pressure = &MemoryPressureJSON{
 				SomeAvg10:   pressure.SomeAvg10,
@@ -176,7 +179,7 @@ func collectMemoryMetricsWithPressure(ctx context.Context, collector *Collector,
 		}
 	}
 
-	// Return collected memory metrics with optional pressure data.
+	// return collected memory metrics with optional pressure data
 	return memMetrics
 }
 
@@ -190,12 +193,12 @@ func collectMemoryMetricsWithPressure(ctx context.Context, collector *Collector,
 //   - *LoadMetricsJSON: collected load average metrics, nil on error.
 func collectLoadMetricsJSON(ctx context.Context, collector *Collector) *LoadMetricsJSON {
 	load, err := collector.cpu.CollectLoadAverage(ctx)
-	// Check for load average collection error.
+	// check for load average collection error
 	if err != nil {
-		// Return nil on error.
+		// return nil on error
 		return nil
 	}
-	// Return collected load average metrics.
+	// return collected load average metrics
 	return &LoadMetricsJSON{
 		Load1Min:  load.Load1,
 		Load5Min:  load.Load5,
@@ -211,15 +214,15 @@ func collectLoadMetricsJSON(ctx context.Context, collector *Collector) *LoadMetr
 //   - result: result structure to populate
 //   - cfg: metrics configuration
 func collectResourceMetrics(ctx context.Context, collector *Collector, result *AllSystemMetrics, cfg *config.MetricsConfig) {
-	// Collect disk metrics if enabled.
+	// collect disk metrics if enabled
 	if cfg.Disk.Enabled {
 		result.Disk = collectDiskMetricsJSON(ctx, collector, &cfg.Disk)
 	}
-	// Collect network metrics if enabled.
+	// collect network metrics if enabled
 	if cfg.Network.Enabled {
 		result.Network = collectNetworkMetricsJSON(ctx, collector, &cfg.Network)
 	}
-	// Collect I/O metrics if enabled.
+	// collect I/O metrics if enabled
 	if cfg.IO.Enabled {
 		result.IO = collectIOMetricsJSON(ctx, collector, cfg.IO.Pressure)
 	}
@@ -232,29 +235,29 @@ func collectResourceMetrics(ctx context.Context, collector *Collector, result *A
 //   - result: result structure to populate
 //   - cfg: metrics configuration
 func collectSystemMetrics(ctx context.Context, result *AllSystemMetrics, cfg *config.MetricsConfig) {
-	// Collect process metrics if enabled.
+	// collect process metrics if enabled
 	if cfg.Process.Enabled {
 		result.Process = collectProcessMetricsJSON(ctx)
 	}
-	// Collect thermal metrics if enabled.
+	// collect thermal metrics if enabled
 	if cfg.Thermal.Enabled {
 		result.Thermal = collectThermalMetricsJSON()
 	}
-	// Collect context switch metrics (always enabled, minimal overhead).
+	// collect context switch metrics (always enabled, minimal overhead)
 	result.ContextSwitches = collectContextSwitchMetricsJSON()
-	// Collect connection metrics if enabled.
+	// collect connection metrics if enabled
 	if cfg.Connections.Enabled {
 		result.Connections = collectConnectionMetricsJSON(ctx, &cfg.Connections)
 	}
-	// Collect quota metrics if enabled.
+	// collect quota metrics if enabled
 	if cfg.Quota.Enabled {
 		result.Quota = collectQuotaMetricsJSON()
 	}
-	// Collect container metrics if enabled.
+	// collect container metrics if enabled
 	if cfg.Container.Enabled {
 		result.Container = collectContainerMetricsJSON()
 	}
-	// Collect runtime metrics if enabled.
+	// collect runtime metrics if enabled
 	if cfg.Runtime.Enabled {
 		result.Runtime = collectRuntimeMetricsJSON()
 	}
@@ -271,19 +274,19 @@ func collectSystemMetrics(ctx context.Context, result *AllSystemMetrics, cfg *co
 //   - *DiskMetricsJSON: collected disk metrics
 func collectDiskMetricsJSON(ctx context.Context, coll *Collector, cfg *config.DiskMetricsConfig) *DiskMetricsJSON {
 	disk := &DiskMetricsJSON{}
-	// Collect partitions if enabled.
+	// collect partitions if enabled
 	if cfg.Partitions {
 		disk.Partitions = extractPartitionInfo(ctx, coll)
 	}
-	// Collect usage if enabled.
+	// collect usage if enabled
 	if cfg.Usage {
 		disk.Usage = extractDiskUsageInfo(ctx, coll)
 	}
-	// Collect I/O if enabled.
+	// collect I/O if enabled
 	if cfg.IO {
 		disk.IO = extractDiskIOInfo(ctx, coll)
 	}
-	// Return collected disk metrics.
+	// return collected disk metrics
 	return disk
 }
 
@@ -297,23 +300,24 @@ func collectDiskMetricsJSON(ctx context.Context, coll *Collector, cfg *config.Di
 //   - []PartitionInfo: partition information
 func extractPartitionInfo(ctx context.Context, coll *Collector) []PartitionInfo {
 	partitions, err := coll.Disk().ListPartitions(ctx)
-	// Check for partition listing error.
+	// check for partition listing error
 	if err != nil {
-		// Return nil on error.
+		// return nil on error
 		return nil
 	}
 
-	result := make([]PartitionInfo, len(partitions))
-	// Iterate through each partition.
-	for i, pt := range partitions {
-		result[i] = PartitionInfo{
+	// preallocate slice with capacity
+	result := make([]PartitionInfo, 0, len(partitions))
+	// iterate through each partition
+	for _, pt := range partitions {
+		result = append(result, PartitionInfo{
 			Device:     pt.Device,
 			MountPoint: pt.Mountpoint,
 			FSType:     pt.FSType,
 			Options:    joinOptions(pt.Options),
-		}
+		})
 	}
-	// Return extracted partition info.
+	// return extracted partition info
 	return result
 }
 
@@ -327,16 +331,17 @@ func extractPartitionInfo(ctx context.Context, coll *Collector) []PartitionInfo 
 //   - []DiskUsageInfo: disk usage information
 func extractDiskUsageInfo(ctx context.Context, coll *Collector) []DiskUsageInfo {
 	usage, err := coll.Disk().CollectAllUsage(ctx)
-	// Check for usage collection error.
+	// check for usage collection error
 	if err != nil {
-		// Return nil on error.
+		// return nil on error
 		return nil
 	}
 
-	result := make([]DiskUsageInfo, len(usage))
-	// Iterate through each usage entry.
-	for i, us := range usage {
-		result[i] = DiskUsageInfo{
+	// preallocate slice with capacity
+	result := make([]DiskUsageInfo, 0, len(usage))
+	// iterate through each usage entry
+	for _, us := range usage {
+		result = append(result, DiskUsageInfo{
 			Path:        us.Path,
 			TotalBytes:  us.Total,
 			UsedBytes:   us.Used,
@@ -345,9 +350,9 @@ func extractDiskUsageInfo(ctx context.Context, coll *Collector) []DiskUsageInfo 
 			InodesTotal: us.InodesTotal,
 			InodesUsed:  us.InodesUsed,
 			InodesFree:  us.InodesFree,
-		}
+		})
 	}
-	// Return extracted disk usage info.
+	// return extracted disk usage info
 	return result
 }
 
@@ -361,16 +366,17 @@ func extractDiskUsageInfo(ctx context.Context, coll *Collector) []DiskUsageInfo 
 //   - []DiskIOInfo: disk I/O information
 func extractDiskIOInfo(ctx context.Context, coll *Collector) []DiskIOInfo {
 	ioStats, err := coll.Disk().CollectIO(ctx)
-	// Check for I/O collection error.
+	// check for I/O collection error
 	if err != nil {
-		// Return nil on error.
+		// return nil on error
 		return nil
 	}
 
-	result := make([]DiskIOInfo, len(ioStats))
-	// Iterate through each I/O stats entry.
-	for i, io := range ioStats {
-		result[i] = DiskIOInfo{
+	// preallocate slice with capacity
+	result := make([]DiskIOInfo, 0, len(ioStats))
+	// iterate through each I/O stats entry
+	for _, io := range ioStats {
+		result = append(result, DiskIOInfo{
 			Device:           io.Device,
 			ReadsCompleted:   io.ReadCount,
 			SectorsRead:      io.ReadBytes / sectorSize,
@@ -381,9 +387,9 @@ func extractDiskIOInfo(ctx context.Context, coll *Collector) []DiskIOInfo {
 			IOInProgress:     io.IOInProgress,
 			IOTimeMs:         uint64(io.IOTime.Milliseconds()),
 			WeightedIOTimeMs: uint64(io.WeightedIOTime.Milliseconds()),
-		}
+		})
 	}
-	// Return extracted disk I/O info.
+	// return extracted disk I/O info
 	return result
 }
 
@@ -395,12 +401,12 @@ func extractDiskIOInfo(ctx context.Context, coll *Collector) []DiskIOInfo {
 // Returns:
 //   - string: comma-separated options string
 func joinOptions(opts []string) string {
-	// Return empty string for empty slice
+	// return empty string for empty slice
 	if len(opts) == 0 {
-		// Return empty string
+		// return empty string
 		return ""
 	}
-	// Use strings.Join for efficient string concatenation
+	// use strings.Join for efficient string concatenation
 	return strings.Join(opts, ",")
 }
 
@@ -413,7 +419,7 @@ func joinOptions(opts []string) string {
 // Returns:
 //   - bool: true if flag is present, false otherwise
 func containsFlag(flags []string, flag string) bool {
-	// Use slices.Contains for efficient membership check
+	// use slices.Contains for efficient membership check
 	return slices.Contains(flags, flag)
 }
 
@@ -427,37 +433,38 @@ func containsFlag(flags []string, flag string) bool {
 // Returns:
 //   - *NetworkMetricsJSON: collected network metrics
 func collectNetworkMetricsJSON(ctx context.Context, coll *Collector, cfg *config.NetworkMetricsConfig) *NetworkMetricsJSON {
-	// Initialize network metrics struct
+	// initialize network metrics struct
 	network := &NetworkMetricsJSON{}
 
-	// Collect interface information if enabled and collection succeeds.
+	// collect interface information if enabled and collection succeeds
 	if cfg.Interfaces {
+		// attempt to collect network interfaces
 		if ifaces, err := coll.Network().ListInterfaces(ctx); err == nil {
-			network.Interfaces = make([]NetInterfaceJSON, len(ifaces))
-			// Iterate over each interface
-			for i, iface := range ifaces {
-				// Derive IsUp and IsLoopback from flags
-				isUp := containsFlag(iface.Flags, "up")
-				isLoopback := containsFlag(iface.Flags, "loopback")
-				network.Interfaces[i] = NetInterfaceJSON{
+			// preallocate slice with capacity
+			network.Interfaces = make([]NetInterfaceJSON, 0, len(ifaces))
+			// convert each interface to JSON format.
+			for _, iface := range ifaces {
+				network.Interfaces = append(network.Interfaces, NetInterfaceJSON{
 					Name:       iface.Name,
 					MACAddress: iface.HardwareAddr,
 					MTU:        uint32(iface.MTU),
-					IsUp:       isUp,
-					IsLoopback: isLoopback,
+					IsUp:       containsFlag(iface.Flags, "up"),
+					IsLoopback: containsFlag(iface.Flags, "loopback"),
 					Flags:      iface.Flags,
-				}
+				})
 			}
 		}
 	}
 
-	// Collect network statistics if enabled and collection succeeds.
+	// collect network statistics if enabled and collection succeeds
 	if cfg.Stats {
+		// attempt to collect network statistics
 		if stats, err := coll.Network().CollectAllStats(ctx); err == nil {
-			network.Stats = make([]NetStatsJSON, len(stats))
-			// Iterate over each stats entry
-			for i, st := range stats {
-				network.Stats[i] = NetStatsJSON{
+			// preallocate slice with capacity
+			network.Stats = make([]NetStatsJSON, 0, len(stats))
+			// iterate over each stats entry
+			for _, st := range stats {
+				network.Stats = append(network.Stats, NetStatsJSON{
 					Interface:   st.Interface,
 					BytesRecv:   st.BytesRecv,
 					BytesSent:   st.BytesSent,
@@ -467,12 +474,12 @@ func collectNetworkMetricsJSON(ctx context.Context, coll *Collector, cfg *config
 					ErrorsOut:   st.ErrorsOut,
 					DropsIn:     st.DropsIn,
 					DropsOut:    st.DropsOut,
-				}
+				})
 			}
 		}
 	}
 
-	// Return the collected network metrics
+	// return the collected network metrics
 	return network
 }
 
@@ -486,10 +493,10 @@ func collectNetworkMetricsJSON(ctx context.Context, coll *Collector, cfg *config
 // Returns:
 //   - *IOMetricsJSON: collected I/O metrics
 func collectIOMetricsJSON(ctx context.Context, coll *Collector, collectPressure bool) *IOMetricsJSON {
-	// Initialize I/O metrics struct
+	// initialize I/O metrics struct
 	ioMetrics := &IOMetricsJSON{}
 
-	// Collect I/O statistics if collection succeeds.
+	// collect I/O statistics if collection succeeds
 	if stats, err := coll.Io().CollectStats(ctx); err == nil {
 		ioMetrics.ReadOps = stats.ReadOpsTotal
 		ioMetrics.ReadBytes = stats.ReadBytesTotal
@@ -497,8 +504,9 @@ func collectIOMetricsJSON(ctx context.Context, coll *Collector, collectPressure 
 		ioMetrics.WriteBytes = stats.WriteBytesTotal
 	}
 
-	// Collect I/O pressure if enabled and available (Linux only).
+	// collect I/O pressure if enabled and available (Linux only)
 	if collectPressure {
+		// attempt to collect I/O pressure information
 		if pressure, err := coll.Io().CollectPressure(ctx); err == nil {
 			ioMetrics.Pressure = &IOPressureJSON{
 				SomeAvg10:   pressure.SomeAvg10,
@@ -513,7 +521,7 @@ func collectIOMetricsJSON(ctx context.Context, coll *Collector, collectPressure 
 		}
 	}
 
-	// Return the collected I/O metrics
+	// return the collected I/O metrics
 	return ioMetrics
 }
 
@@ -525,20 +533,20 @@ func collectIOMetricsJSON(ctx context.Context, coll *Collector, collectPressure 
 // Returns:
 //   - *ProcessMetricsJSON: collected process metrics
 func collectProcessMetricsJSON(ctx context.Context) *ProcessMetricsJSON {
-	// Get current process ID
+	// get current process ID
 	pid := os.Getpid()
 	pm := &ProcessMetricsJSON{
 		CurrentPID: int32(pid),
 	}
 
-	// Get current process info using ProcessCollector
+	// get current process info using ProcessCollector
 	pc := NewProcessCollector()
 	cpuInfo, cpuErr := pc.CollectCPU(ctx, pid)
 	memInfo, memErr := pc.CollectMemory(ctx, pid)
 	fdsInfo, fdsErr := pc.CollectFDs(ctx, pid)
 	ioInfo, ioErr := pc.CollectIO(ctx, pid)
 
-	// Check if CPU and memory collections succeeded.
+	// check if CPU and memory collections succeeded
 	if cpuErr == nil && memErr == nil {
 		processInfo := ProcessInfoJSON{
 			PID:            int32(cpuInfo.PID),
@@ -548,12 +556,12 @@ func collectProcessMetricsJSON(ctx context.Context) *ProcessMetricsJSON {
 			MemoryPercent:  memInfo.UsagePercent,
 		}
 
-		// Add FD count if available
+		// add FD count if available
 		if fdsErr == nil {
 			processInfo.NumFDs = fdsInfo.Count
 		}
 
-		// Add I/O stats if available
+		// add I/O stats if available
 		if ioErr == nil {
 			processInfo.ReadBytesPerSec = ioInfo.ReadBytesPerSec
 			processInfo.WriteBytesPerSec = ioInfo.WriteBytesPerSec
@@ -562,7 +570,7 @@ func collectProcessMetricsJSON(ctx context.Context) *ProcessMetricsJSON {
 		pm.TopProcesses = []ProcessInfoJSON{processInfo}
 	}
 
-	// Return the collected process metrics
+	// return the collected process metrics
 	return pm
 }
 
@@ -571,28 +579,29 @@ func collectProcessMetricsJSON(ctx context.Context) *ProcessMetricsJSON {
 // Returns:
 //   - *ThermalMetricsJSON: collected thermal metrics
 func collectThermalMetricsJSON() *ThermalMetricsJSON {
-	// Initialize thermal metrics struct
+	// initialize thermal metrics struct
 	thermal := &ThermalMetricsJSON{
 		Supported: ThermalIsSupported(),
 	}
 
-	// Return early if not supported
+	// return early if not supported
 	if !thermal.Supported {
-		// Return unsupported thermal metrics
+		// return unsupported thermal metrics
 		return thermal
 	}
 
-	// Collect thermal zones
+	// collect thermal zones
 	if zones, err := CollectThermalZones(); err == nil {
-		thermal.Zones = make([]ThermalZoneJSON, len(zones))
-		// Iterate over each zone
-		for i, zn := range zones {
-			// ThermalZone and ThermalZoneJSON have identical underlying types.
-			thermal.Zones[i] = ThermalZoneJSON(zn)
+		// preallocate slice with capacity
+		thermal.Zones = make([]ThermalZoneJSON, 0, len(zones))
+		// iterate over each zone
+		for _, zn := range zones {
+			// ThermalZone and ThermalZoneJSON have identical underlying types
+			thermal.Zones = append(thermal.Zones, ThermalZoneJSON(zn))
 		}
 	}
 
-	// Return the collected thermal metrics
+	// return the collected thermal metrics
 	return thermal
 }
 
@@ -601,15 +610,15 @@ func collectThermalMetricsJSON() *ThermalMetricsJSON {
 // Returns:
 //   - *ContextSwitchMetricsJSON: collected context switch metrics
 func collectContextSwitchMetricsJSON() *ContextSwitchMetricsJSON {
-	// Initialize context switch metrics struct
+	// initialize context switch metrics struct
 	cs := &ContextSwitchMetricsJSON{}
 
-	// Collect system-wide context switches
+	// collect system-wide context switches
 	if total, err := CollectSystemContextSwitches(); err == nil {
 		cs.SystemTotal = total
 	}
 
-	// Collect self context switches
+	// collect self context switches
 	if self, err := CollectSelfContextSwitches(); err == nil {
 		cs.Self = &ContextSwitchInfoJSON{
 			Voluntary:   self.Voluntary,
@@ -617,7 +626,7 @@ func collectContextSwitchMetricsJSON() *ContextSwitchMetricsJSON {
 		}
 	}
 
-	// Return the collected context switch metrics
+	// return the collected context switch metrics
 	return cs
 }
 
@@ -633,28 +642,28 @@ func collectConnectionMetricsJSON(ctx context.Context, cfg *config.ConnectionMet
 	conn := &ConnectionMetricsJSON{}
 	collector := NewConnectionCollector()
 
-	// Collect TCP stats if enabled.
+	// collect TCP stats if enabled
 	if cfg.TCPStats {
 		conn.TCPStats = collectTCPStatsJSON(ctx, collector)
 	}
-	// Collect TCP connections if enabled.
+	// collect TCP connections if enabled
 	if cfg.TCPConnections {
 		conn.TCPConnections = collectTCPConnectionsJSON(ctx, collector)
 	}
-	// Collect UDP sockets if enabled.
+	// collect UDP sockets if enabled
 	if cfg.UDPSockets {
 		conn.UDPSockets = collectUDPSocketsJSON(ctx, collector)
 	}
-	// Collect Unix sockets if enabled.
+	// collect Unix sockets if enabled
 	if cfg.UnixSockets {
 		conn.UnixSockets = collectUnixSocketsJSON(ctx, collector)
 	}
-	// Collect listening ports if enabled.
+	// collect listening ports if enabled
 	if cfg.ListeningPorts {
 		conn.ListeningPorts = collectListeningPortsJSON(ctx, collector)
 	}
 
-	// Return populated connection metrics.
+	// return populated connection metrics
 	return conn
 }
 
@@ -668,12 +677,12 @@ func collectConnectionMetricsJSON(ctx context.Context, cfg *config.ConnectionMet
 //   - *TcpStatsJSON: collected TCP stats or nil on error
 func collectTCPStatsJSON(ctx context.Context, collector *ConnectionCollector) *TcpStatsJSON {
 	stats, err := collector.CollectTCPStats(ctx)
-	// Return nil if collection failed.
+	// return nil if collection failed
 	if err != nil {
-		// Skip on error.
+		// skip on error
 		return nil
 	}
-	// Return TCP stats with all fields.
+	// return TCP stats with all fields
 	return &TcpStatsJSON{
 		Established: stats.Established,
 		SynSent:     stats.SynSent,
@@ -700,17 +709,17 @@ func collectTCPStatsJSON(ctx context.Context, collector *ConnectionCollector) *T
 //   - []TcpConnJSON: collected TCP connections
 func collectTCPConnectionsJSON(ctx context.Context, collector *ConnectionCollector) []TcpConnJSON {
 	tcpConns, err := collector.CollectTCP(ctx)
-	// Return nil if collection failed.
+	// return nil if collection failed
 	if err != nil {
-		// Skip on error.
+		// skip on error
 		return nil
 	}
 
-	// Get pooled slice
+	// get pooled slice
 	resultPtr := getTCPConnSlice()
 	result := *resultPtr
 
-	// Convert each TCP connection to JSON format.
+	// convert each TCP connection to JSON format
 	for _, tc := range tcpConns {
 		result = append(result, TcpConnJSON{
 			Family:      tc.Family.String(),
@@ -724,14 +733,13 @@ func collectTCPConnectionsJSON(ctx context.Context, collector *ConnectionCollect
 		})
 	}
 
-	// Make a copy for return (caller owns this)
-	resultCopy := make([]TcpConnJSON, len(result))
-	copy(resultCopy, result)
+	// use slices.Clone() for efficient copying
+	resultCopy := slices.Clone(result)
 
-	// Return pooled slice
+	// return pooled slice
 	putTCPConnSlice(resultPtr)
 
-	// Return collected TCP connections.
+	// return collected TCP connections
 	return resultCopy
 }
 
@@ -745,17 +753,17 @@ func collectTCPConnectionsJSON(ctx context.Context, collector *ConnectionCollect
 //   - []UdpConnJSON: collected UDP sockets
 func collectUDPSocketsJSON(ctx context.Context, collector *ConnectionCollector) []UdpConnJSON {
 	udpConns, err := collector.CollectUDP(ctx)
-	// Return nil if collection failed.
+	// return nil if collection failed
 	if err != nil {
-		// Skip on error.
+		// skip on error
 		return nil
 	}
 
-	// Get pooled slice
+	// get pooled slice
 	resultPtr := getUDPConnSlice()
 	result := *resultPtr
 
-	// Convert each UDP socket to JSON format.
+	// convert each UDP socket to JSON format
 	for _, uc := range udpConns {
 		result = append(result, UdpConnJSON{
 			Family:      uc.Family.String(),
@@ -768,14 +776,13 @@ func collectUDPSocketsJSON(ctx context.Context, collector *ConnectionCollector) 
 		})
 	}
 
-	// Make a copy for return (caller owns this)
-	resultCopy := make([]UdpConnJSON, len(result))
-	copy(resultCopy, result)
+	// use slices.Clone() for efficient copying
+	resultCopy := slices.Clone(result)
 
-	// Return pooled slice
+	// return pooled slice
 	putUDPConnSlice(resultPtr)
 
-	// Return collected UDP sockets.
+	// return collected UDP sockets
 	return resultCopy
 }
 
@@ -789,17 +796,17 @@ func collectUDPSocketsJSON(ctx context.Context, collector *ConnectionCollector) 
 //   - []UnixSockJSON: collected Unix sockets
 func collectUnixSocketsJSON(ctx context.Context, collector *ConnectionCollector) []UnixSockJSON {
 	unixSocks, err := collector.CollectUnix(ctx)
-	// Return nil if collection failed.
+	// return nil if collection failed
 	if err != nil {
-		// Skip on error.
+		// skip on error
 		return nil
 	}
 
-	// Get pooled slice
+	// get pooled slice
 	resultPtr := getUnixSockSlice()
 	result := *resultPtr
 
-	// Convert each Unix socket to JSON format.
+	// convert each Unix socket to JSON format
 	for _, us := range unixSocks {
 		result = append(result, UnixSockJSON{
 			Path:        us.Path,
@@ -810,14 +817,13 @@ func collectUnixSocketsJSON(ctx context.Context, collector *ConnectionCollector)
 		})
 	}
 
-	// Make a copy for return (caller owns this)
-	resultCopy := make([]UnixSockJSON, len(result))
-	copy(resultCopy, result)
+	// use slices.Clone() for efficient copying
+	resultCopy := slices.Clone(result)
 
-	// Return pooled slice
+	// return pooled slice
 	putUnixSockSlice(resultPtr)
 
-	// Return collected Unix sockets.
+	// return collected Unix sockets
 	return resultCopy
 }
 
@@ -831,17 +837,17 @@ func collectUnixSocketsJSON(ctx context.Context, collector *ConnectionCollector)
 //   - []ListenInfoJSON: collected listening ports
 func collectListeningPortsJSON(ctx context.Context, collector *ConnectionCollector) []ListenInfoJSON {
 	listening, err := collector.CollectListeningPorts(ctx)
-	// Return nil if collection failed.
+	// return nil if collection failed
 	if err != nil {
-		// Skip on error.
+		// skip on error
 		return nil
 	}
 
-	// Get pooled slice
+	// get pooled slice
 	resultPtr := getListenInfoSlice()
 	result := *resultPtr
 
-	// Convert each listening port to JSON format.
+	// convert each listening port to JSON format
 	for _, lp := range listening {
 		result = append(result, ListenInfoJSON{
 			Protocol:    "tcp",
@@ -852,14 +858,13 @@ func collectListeningPortsJSON(ctx context.Context, collector *ConnectionCollect
 		})
 	}
 
-	// Make a copy for return (caller owns this)
-	resultCopy := make([]ListenInfoJSON, len(result))
-	copy(resultCopy, result)
+	// use slices.Clone() for efficient copying
+	resultCopy := slices.Clone(result)
 
-	// Return pooled slice
+	// return pooled slice
 	putListenInfoSlice(resultPtr)
 
-	// Return collected listening ports.
+	// return collected listening ports
 	return resultCopy
 }
 
@@ -868,15 +873,15 @@ func collectListeningPortsJSON(ctx context.Context, collector *ConnectionCollect
 // Returns:
 //   - *QuotaMetricsJSON: collected quota metrics
 func collectQuotaMetricsJSON() *QuotaMetricsJSON {
-	// Initialize quota metrics struct
+	// initialize quota metrics struct
 	quota := &QuotaMetricsJSON{
 		Supported: true, // Probe is supported if we got this far
 	}
 
-	// Get current process ID
+	// get current process ID
 	pid := os.Getpid()
 
-	// Collect quota limits
+	// collect quota limits
 	if limits, err := ReadQuotaLimits(pid); err == nil {
 		quota.Limits = &QuotaInfoJSON{
 			CPUQuotaUs:       limits.CPUQuotaUS,
@@ -886,11 +891,11 @@ func collectQuotaMetricsJSON() *QuotaMetricsJSON {
 			NofileLimit:      limits.NofileLimit,
 		}
 	} else {
-		// Quota limits unavailable, mark as unsupported
+		// quota limits unavailable, mark as unsupported
 		quota.Supported = false
 	}
 
-	// Collect quota usage
+	// collect quota usage
 	if usage, err := ReadQuotaUsage(pid); err == nil {
 		quota.Usage = &UsageInfoJSON{
 			MemoryBytes:      usage.MemoryBytes,
@@ -902,7 +907,7 @@ func collectQuotaMetricsJSON() *QuotaMetricsJSON {
 		}
 	}
 
-	// Return the collected quota metrics
+	// return the collected quota metrics
 	return quota
 }
 
@@ -911,15 +916,15 @@ func collectQuotaMetricsJSON() *QuotaMetricsJSON {
 // Returns:
 //   - *ContainerMetricsJSON: collected container metrics
 func collectContainerMetricsJSON() *ContainerMetricsJSON {
-	// Detect container environment
+	// detect container environment
 	info, err := DetectContainer()
-	// Check if detection failed
+	// check if detection failed
 	if err != nil {
-		// Return not containerized on error
+		// return not containerized on error
 		return &ContainerMetricsJSON{IsContainerized: false}
 	}
 
-	// Return the collected container metrics
+	// return the collected container metrics
 	return &ContainerMetricsJSON{
 		IsContainerized: info.IsContainerized,
 		Runtime:         info.Runtime.String(),
@@ -932,15 +937,15 @@ func collectContainerMetricsJSON() *ContainerMetricsJSON {
 // Returns:
 //   - *RuntimeMetricsJSON: collected runtime metrics
 func collectRuntimeMetricsJSON() *RuntimeMetricsJSON {
-	// Detect runtime environment
+	// detect runtime environment
 	info, err := DetectRuntime()
-	// Check if detection failed
+	// check if detection failed
 	if err != nil {
-		// Return not containerized on error
+		// return not containerized on error
 		return &RuntimeMetricsJSON{IsContainerized: false}
 	}
 
-	// Build runtime metrics struct
+	// build runtime metrics struct
 	rm := &RuntimeMetricsJSON{
 		IsContainerized:  info.IsContainerized,
 		ContainerRuntime: info.ContainerRuntime.String(),
@@ -951,21 +956,22 @@ func collectRuntimeMetricsJSON() *RuntimeMetricsJSON {
 		Namespace:        info.Namespace,
 	}
 
-	// Check if available runtimes exist
+	// check if available runtimes exist
 	if len(info.AvailableRuntimes) > 0 {
-		rm.AvailableRuntimes = make([]AvailableRuntimeInfoJSON, len(info.AvailableRuntimes))
-		// Iterate over each available runtime
-		for i, ar := range info.AvailableRuntimes {
-			rm.AvailableRuntimes[i] = AvailableRuntimeInfoJSON{
+		// preallocate slice with capacity
+		rm.AvailableRuntimes = make([]AvailableRuntimeInfoJSON, 0, len(info.AvailableRuntimes))
+		// iterate over each available runtime
+		for _, ar := range info.AvailableRuntimes {
+			rm.AvailableRuntimes = append(rm.AvailableRuntimes, AvailableRuntimeInfoJSON{
 				Runtime:    ar.Runtime.String(),
 				SocketPath: ar.SocketPath,
 				Version:    ar.Version,
 				IsRunning:  ar.IsRunning,
-			}
+			})
 		}
 	}
 
-	// Return the collected runtime metrics
+	// return the collected runtime metrics
 	return rm
 }
 
@@ -980,25 +986,26 @@ func collectRuntimeMetricsJSON() *RuntimeMetricsJSON {
 //   - string: JSON-encoded metrics
 //   - error: nil on success, error if collection or encoding fails
 func CollectAllMetricsJSON(ctx context.Context, cfg *config.MetricsConfig) (string, error) {
-	// Collect all metrics with configuration
+	// collect all metrics with configuration
 	metrics, err := CollectAllMetrics(ctx, cfg)
-	// Check if collection failed
+	// check if collection failed
 	if err != nil {
-		// Return empty string with error
+		// return empty string with error
 		return "", err
 	}
 
-	// Get pooled buffer
+	// get pooled buffer
 	buf := getJSONBuffer()
 	defer putJSONBuffer(buf)
 
-	// Encode metrics to JSON using pooled buffer
+	// encode metrics to JSON using pooled buffer
 	enc := json.NewEncoder(buf)
+	// check if encoding failed
 	if err := enc.Encode(metrics); err != nil {
-		// Return empty string with error
+		// return empty string with error
 		return "", err
 	}
 
-	// Return the JSON string (buf.String() makes a copy)
+	// return the JSON string (buf.String() makes a copy)
 	return buf.String(), nil
 }

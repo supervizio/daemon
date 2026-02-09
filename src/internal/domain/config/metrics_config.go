@@ -1,4 +1,9 @@
 // Package config provides domain value objects for service configuration.
+//
+// This file contains metrics configuration types grouped together because they form
+// a cohesive unit of tightly coupled value objects. The granular metrics configuration
+// allows users to selectively enable/disable metric categories for performance optimization.
+// Splitting into separate files would reduce cohesion without improving clarity.
 package config
 
 // MetricsTemplate defines preset configurations for common use cases.
@@ -68,6 +73,8 @@ type MetricsConfig struct {
 }
 
 // CPUMetricsConfig defines CPU metrics collection settings.
+// CPUMetricsConfig defines CPU metrics collection settings.
+// Enables control over CPU metrics and PSI collection.
 type CPUMetricsConfig struct {
 	// Enabled controls CPU metrics collection.
 	Enabled bool
@@ -77,6 +84,8 @@ type CPUMetricsConfig struct {
 }
 
 // MemoryMetricsConfig defines memory metrics collection settings.
+// MemoryMetricsConfig defines memory metrics collection settings.
+// Enables control over memory metrics and PSI collection.
 type MemoryMetricsConfig struct {
 	// Enabled controls memory metrics collection.
 	Enabled bool
@@ -86,12 +95,16 @@ type MemoryMetricsConfig struct {
 }
 
 // LoadMetricsConfig defines load average metrics collection settings.
+// LoadMetricsConfig defines load average metrics collection settings.
+// Enables control over load average collection.
 type LoadMetricsConfig struct {
 	// Enabled controls load average collection.
 	Enabled bool
 }
 
 // DiskMetricsConfig defines disk metrics collection settings.
+// DiskMetricsConfig defines disk metrics collection settings.
+// Enables control over partition, usage, and I/O statistics.
 type DiskMetricsConfig struct {
 	// Enabled controls disk metrics collection.
 	Enabled bool
@@ -107,6 +120,8 @@ type DiskMetricsConfig struct {
 }
 
 // NetworkMetricsConfig defines network metrics collection settings.
+// NetworkMetricsConfig defines network metrics collection settings.
+// Enables control over interface enumeration and statistics.
 type NetworkMetricsConfig struct {
 	// Enabled controls network metrics collection.
 	Enabled bool
@@ -120,6 +135,8 @@ type NetworkMetricsConfig struct {
 
 // ConnectionMetricsConfig defines connection metrics collection settings.
 // This is the most expensive category, especially on systems with many connections.
+// ConnectionMetricsConfig defines connection metrics collection settings.
+// Most expensive category, especially on systems with many connections.
 type ConnectionMetricsConfig struct {
 	// Enabled controls connection metrics collection.
 	Enabled bool
@@ -142,18 +159,24 @@ type ConnectionMetricsConfig struct {
 }
 
 // ThermalMetricsConfig defines thermal metrics collection settings.
+// ThermalMetricsConfig defines thermal metrics collection settings.
+// Enables control over thermal sensor collection (Linux only).
 type ThermalMetricsConfig struct {
 	// Enabled controls thermal sensor collection (Linux only).
 	Enabled bool
 }
 
 // ProcessMetricsConfig defines process metrics collection settings.
+// ProcessMetricsConfig defines process metrics collection settings.
+// Enables control over process metrics collection.
 type ProcessMetricsConfig struct {
 	// Enabled controls process metrics collection.
 	Enabled bool
 }
 
 // IOMetricsConfig defines I/O metrics collection settings.
+// IOMetricsConfig defines I/O metrics collection settings.
+// Enables control over I/O metrics and PSI collection.
 type IOMetricsConfig struct {
 	// Enabled controls I/O metrics collection.
 	Enabled bool
@@ -163,18 +186,24 @@ type IOMetricsConfig struct {
 }
 
 // QuotaMetricsConfig defines resource quota metrics collection settings.
+// QuotaMetricsConfig defines resource quota metrics collection settings.
+// Enables control over resource quota collection.
 type QuotaMetricsConfig struct {
 	// Enabled controls resource quota collection.
 	Enabled bool
 }
 
 // ContainerMetricsConfig defines container detection metrics settings.
+// ContainerMetricsConfig defines container detection metrics settings.
+// Enables control over container detection.
 type ContainerMetricsConfig struct {
 	// Enabled controls container detection.
 	Enabled bool
 }
 
 // RuntimeMetricsConfig defines runtime detection metrics settings.
+// RuntimeMetricsConfig defines runtime detection metrics settings.
+// Enables control over runtime detection.
 type RuntimeMetricsConfig struct {
 	// Enabled controls runtime detection.
 	Enabled bool
@@ -215,7 +244,15 @@ func MinimalMetricsConfig() MetricsConfig {
 // When allCategories is true, all categories are enabled (standard/full template).
 // When false, only CPU, memory, and load are enabled (minimal template).
 // The pressure parameter controls PSI collection for CPU/memory.
+//
+// Params:
+//   - allCategories: when true enables all metric categories, when false only essential metrics.
+//   - pressure: when true enables PSI collection for CPU/memory/IO.
+//
+// Returns:
+//   - MetricsConfig: configured metrics with specified categories and pressure settings.
 func newMetricsConfig(allCategories, pressure bool) MetricsConfig {
+	// Build config with essential metrics always enabled and optional categories based on flags.
 	return MetricsConfig{
 		Enabled:     true,
 		CPU:         CPUMetricsConfig{Enabled: true, Pressure: pressure},

@@ -17,27 +17,30 @@ import (
 // notFoundPID represents the PID value returned when no process is found.
 const notFoundPID int32 = -1
 
+// establishedConnMultiplier is used to calculate 70% of connections (7/10).
+const establishedConnMultiplier int = 7
+
 // String constants for address families (interned to avoid allocations).
 const (
-	strIPv4    = "ipv4"
-	strIPv6    = "ipv6"
-	strUnknown = "unknown"
+	strIPv4    string = "ipv4"
+	strIPv6    string = "ipv6"
+	strUnknown string = "unknown"
 )
 
 // String constants for socket states (interned to avoid allocations).
 const (
-	strStateUnknown     = "UNKNOWN"
-	strStateEstablished = "ESTABLISHED"
-	strStateSynSent     = "SYN_SENT"
-	strStateSynRecv     = "SYN_RECV"
-	strStateFinWait1    = "FIN_WAIT1"
-	strStateFinWait2    = "FIN_WAIT2"
-	strStateTimeWait    = "TIME_WAIT"
-	strStateClose       = "CLOSE"
-	strStateCloseWait   = "CLOSE_WAIT"
-	strStateLastAck     = "LAST_ACK"
-	strStateListen      = "LISTEN"
-	strStateClosing     = "CLOSING"
+	strStateUnknown     string = "UNKNOWN"
+	strStateEstablished string = "ESTABLISHED"
+	strStateSynSent     string = "SYN_SENT"
+	strStateSynRecv     string = "SYN_RECV"
+	strStateFinWait1    string = "FIN_WAIT1"
+	strStateFinWait2    string = "FIN_WAIT2"
+	strStateTimeWait    string = "TIME_WAIT"
+	strStateClose       string = "CLOSE"
+	strStateCloseWait   string = "CLOSE_WAIT"
+	strStateLastAck     string = "LAST_ACK"
+	strStateListen      string = "LISTEN"
+	strStateClosing     string = "CLOSING"
 )
 
 // SocketState represents the state of a network socket.
@@ -103,12 +106,12 @@ var socketStateNames map[SocketState]string = map[SocketState]string{
 // Returns:
 //   - string: human-readable name of the socket state
 func (s SocketState) String() string {
-	// Look up state name in the map
+	// look up state name in the map
 	if name, ok := socketStateNames[s]; ok {
-		// Return the mapped name
+		// return the mapped name
 		return name
 	}
-	// Return UNKNOWN for any unrecognized value
+	// return UNKNOWN for any unrecognized value
 	return strStateUnknown
 }
 
@@ -117,17 +120,17 @@ func (s SocketState) String() string {
 // Returns:
 //   - string: human-readable name of the address family
 func (f AddressFamily) String() string {
-	// Check for IPv4 family
+	// check for IPv4 family
 	if f == AddressFamilyIPv4 {
-		// Return IPv4 string
+		// return IPv4 string
 		return strIPv4
 	}
-	// Check for IPv6 family
+	// check for IPv6 family
 	if f == AddressFamilyIPv6 {
-		// Return IPv6 string
+		// return IPv6 string
 		return strIPv6
 	}
-	// Return Unknown for any unrecognized value
+	// return Unknown for any unrecognized value
 	return strUnknown
 }
 
@@ -140,7 +143,7 @@ type ConnectionCollector struct{}
 // Returns:
 //   - *ConnectionCollector: new collector instance
 func NewConnectionCollector() *ConnectionCollector {
-	// Return a new empty collector
+	// return a new empty collector
 	return &ConnectionCollector{}
 }
 
@@ -153,21 +156,21 @@ func NewConnectionCollector() *ConnectionCollector {
 //   - []TcpConnection: list of TCP connections
 //   - error: nil on success, error if probe not initialized or collection fails
 func (c *ConnectionCollector) CollectTCP(ctx context.Context) ([]TcpConnection, error) {
-	// Validate context and initialization state.
+	// validate context and initialization state
 	if err := validateCollectionContext(ctx); err != nil {
-		// Return nil on validation failure.
+		// return nil on validation failure
 		return nil, err
 	}
-	// Collect TCP connections from C library.
+	// collect TCP connections from C library
 	var list C.TcpConnectionList
 	result := C.probe_collect_tcp_connections(&list)
-	// Check if collection failed.
+	// check if collection failed
 	if err := resultToError(result); err != nil {
-		// Return nil on collection failure.
+		// return nil on collection failure
 		return nil, err
 	}
 	defer C.probe_free_tcp_connection_list(&list)
-	// Convert C list to Go slice and return.
+	// convert C list to Go slice and return
 	return convertTCPConnections(&list), nil
 }
 
@@ -179,12 +182,12 @@ func (c *ConnectionCollector) CollectTCP(ctx context.Context) ([]TcpConnection, 
 // Returns:
 //   - []TcpConnection: the converted Go slice
 func convertTCPConnections(list *C.TcpConnectionList) []TcpConnection {
-	// Allocate slice with capacity matching list count.
-	connections := make([]TcpConnection, list.count)
+	// allocate slice with capacity matching list count
+	connections := make([]TcpConnection, 0, list.count)
 	items := unsafe.Slice(list.items, list.count)
-	// Iterate over each connection item.
-	for i, item := range items {
-		connections[i] = TcpConnection{
+	// iterate over each connection item
+	for _, item := range items {
+		connections = append(connections, TcpConnection{
 			Family:      AddressFamily(item.family),
 			LocalAddr:   cCharArrayToString(item.local_addr[:]),
 			LocalPort:   uint16(item.local_port),
@@ -196,9 +199,9 @@ func convertTCPConnections(list *C.TcpConnectionList) []TcpConnection {
 			Inode:       uint64(item.inode),
 			RxQueue:     uint32(item.rx_queue),
 			TxQueue:     uint32(item.tx_queue),
-		}
+		})
 	}
-	// Return the converted connections.
+	// return the converted connections
 	return connections
 }
 
@@ -211,21 +214,21 @@ func convertTCPConnections(list *C.TcpConnectionList) []TcpConnection {
 //   - []UdpConnection: list of UDP connections
 //   - error: nil on success, error if probe not initialized or collection fails
 func (c *ConnectionCollector) CollectUDP(ctx context.Context) ([]UdpConnection, error) {
-	// Validate context and initialization state.
+	// validate context and initialization state
 	if err := validateCollectionContext(ctx); err != nil {
-		// Return nil on validation failure.
+		// return nil on validation failure
 		return nil, err
 	}
-	// Collect UDP connections from C library.
+	// collect UDP connections from C library
 	var list C.UdpConnectionList
 	result := C.probe_collect_udp_connections(&list)
-	// Check if collection failed.
+	// check if collection failed
 	if err := resultToError(result); err != nil {
-		// Return nil on collection failure.
+		// return nil on collection failure
 		return nil, err
 	}
 	defer C.probe_free_udp_connection_list(&list)
-	// Convert C list to Go slice and return.
+	// convert C list to Go slice and return
 	return convertUDPConnections(&list), nil
 }
 
@@ -237,12 +240,12 @@ func (c *ConnectionCollector) CollectUDP(ctx context.Context) ([]UdpConnection, 
 // Returns:
 //   - []UdpConnection: the converted Go slice
 func convertUDPConnections(list *C.UdpConnectionList) []UdpConnection {
-	// Allocate slice with capacity matching list count.
-	connections := make([]UdpConnection, list.count)
+	// allocate slice with capacity matching list count
+	connections := make([]UdpConnection, 0, list.count)
 	items := unsafe.Slice(list.items, list.count)
-	// Iterate over each connection item.
-	for i, item := range items {
-		connections[i] = UdpConnection{
+	// iterate over each connection item
+	for _, item := range items {
+		connections = append(connections, UdpConnection{
 			Family:      AddressFamily(item.family),
 			LocalAddr:   cCharArrayToString(item.local_addr[:]),
 			LocalPort:   uint16(item.local_port),
@@ -254,9 +257,9 @@ func convertUDPConnections(list *C.UdpConnectionList) []UdpConnection {
 			Inode:       uint64(item.inode),
 			RxQueue:     uint32(item.rx_queue),
 			TxQueue:     uint32(item.tx_queue),
-		}
+		})
 	}
-	// Return the converted connections.
+	// return the converted connections
 	return connections
 }
 
@@ -269,42 +272,42 @@ func convertUDPConnections(list *C.UdpConnectionList) []UdpConnection {
 //   - []UnixSocket: list of Unix sockets
 //   - error: nil on success, error if probe not initialized or collection fails
 func (c *ConnectionCollector) CollectUnix(ctx context.Context) ([]UnixSocket, error) {
-	// Check if context has been cancelled before expensive FFI call.
+	// check if context has been cancelled before expensive FFI call
 	if err := checkContext(ctx); err != nil {
-		// Return nil slice with context error.
+		// return nil slice with context error
 		return nil, err
 	}
-	// Check if probe is initialized
+	// check if probe is initialized
 	if err := checkInitialized(); err != nil {
-		// Return early if not initialized
+		// return early if not initialized
 		return nil, err
 	}
 
 	var list C.UnixSocketList
 	result := C.probe_collect_unix_sockets(&list)
-	// Check collection result
+	// check collection result
 	if err := resultToError(result); err != nil {
-		// Return early on collection failure
+		// return early on collection failure
 		return nil, err
 	}
 	defer C.probe_free_unix_socket_list(&list)
 
-	// Convert C list to Go slice with capacity
-	sockets := make([]UnixSocket, list.count)
+	// convert C list to Go slice with capacity
+	sockets := make([]UnixSocket, 0, list.count)
 	items := unsafe.Slice(list.items, list.count)
-	// Iterate over each socket item
-	for i, item := range items {
-		sockets[i] = UnixSocket{
+	// iterate over each socket item
+	for _, item := range items {
+		sockets = append(sockets, UnixSocket{
 			Path:        cCharArrayToString(item.path[:]),
 			SocketType:  cCharArrayToString(item.socket_type[:]),
 			State:       SocketState(item.state),
 			PID:         int32(item.pid),
 			ProcessName: cCharArrayToString(item.process_name[:]),
 			Inode:       uint64(item.inode),
-		}
+		})
 	}
 
-	// Return the collected sockets
+	// return the collected sockets
 	return sockets, nil
 }
 
@@ -317,26 +320,26 @@ func (c *ConnectionCollector) CollectUnix(ctx context.Context) ([]UnixSocket, er
 //   - *TcpStats: aggregated TCP statistics
 //   - error: nil on success, error if probe not initialized or collection fails
 func (c *ConnectionCollector) CollectTCPStats(ctx context.Context) (*TcpStats, error) {
-	// Check if context has been cancelled before expensive FFI call.
+	// check if context has been cancelled before expensive FFI call
 	if err := checkContext(ctx); err != nil {
-		// Return nil with context error.
+		// return nil with context error
 		return nil, err
 	}
-	// Check if probe is initialized
+	// check if probe is initialized
 	if err := checkInitialized(); err != nil {
-		// Return early if not initialized
+		// return early if not initialized
 		return nil, err
 	}
 
 	var stats C.TcpStats
 	result := C.probe_collect_tcp_stats(&stats)
-	// Check collection result
+	// check collection result
 	if err := resultToError(result); err != nil {
-		// Return early on collection failure
+		// return early on collection failure
 		return nil, err
 	}
 
-	// Return the collected stats
+	// return the collected stats
 	return &TcpStats{
 		Established: uint32(stats.established),
 		SynSent:     uint32(stats.syn_sent),
@@ -364,26 +367,26 @@ func (c *ConnectionCollector) CollectTCPStats(ctx context.Context) (*TcpStats, e
 //   - int32: process ID owning the port, or -1 if not found
 //   - error: nil on success, error if probe not initialized or lookup fails
 func (c *ConnectionCollector) FindProcessByPort(ctx context.Context, port uint16, tcp bool) (int32, error) {
-	// Check if context has been cancelled before expensive FFI call.
+	// check if context has been cancelled before expensive FFI call
 	if err := checkContext(ctx); err != nil {
-		// Return not found with context error.
+		// return not found with context error
 		return notFoundPID, err
 	}
-	// Check if probe is initialized
+	// check if probe is initialized
 	if err := checkInitialized(); err != nil {
-		// Return not found with error if not initialized
+		// return not found with error if not initialized
 		return notFoundPID, err
 	}
 
 	var pid C.int32_t
 	result := C.probe_find_process_by_port(C.uint16_t(port), C.bool(tcp), &pid)
-	// Check lookup result
+	// check lookup result
 	if err := resultToError(result); err != nil {
-		// Return not found with error on lookup failure
+		// return not found with error on lookup failure
 		return notFoundPID, err
 	}
 
-	// Return the found process ID
+	// return the found process ID
 	return int32(pid), nil
 }
 
@@ -396,30 +399,31 @@ func (c *ConnectionCollector) FindProcessByPort(ctx context.Context, port uint16
 //   - []TcpConnection: list of listening TCP connections
 //   - error: nil on success, error if collection fails
 func (c *ConnectionCollector) CollectListeningPorts(ctx context.Context) ([]TcpConnection, error) {
-	// Collect all TCP connections first
+	// collect all TCP connections first
 	connections, err := c.CollectTCP(ctx)
-	// Check if collection failed
+	// check if collection failed
 	if err != nil {
-		// Return early on collection failure
+		// return early on collection failure
 		return nil, err
 	}
 
-	// Filter connections in LISTEN state
-	// Capacity heuristic: listening ports are typically 1-5% of total connections
-	estimatedCap := len(connections) / 20
-	if estimatedCap < 8 {
-		estimatedCap = 8
+	// filter connections in LISTEN state
+	// capacity heuristic: listening ports are typically 1-5% of total connections
+	estimatedCap := len(connections) / listeningPortPercentage
+	// ensure minimum capacity for small connection counts
+	if estimatedCap < minListeningCapacity {
+		estimatedCap = minListeningCapacity
 	}
 	listening := make([]TcpConnection, 0, estimatedCap)
-	// Iterate over each connection
+	// iterate over each connection
 	for _, conn := range connections {
-		// Check if connection is in LISTEN state
+		// check if connection is in LISTEN state
 		if conn.State == SocketStateListen {
 			listening = append(listening, conn)
 		}
 	}
 
-	// Return the filtered connections
+	// return the filtered connections
 	return listening, nil
 }
 
@@ -432,30 +436,31 @@ func (c *ConnectionCollector) CollectListeningPorts(ctx context.Context) ([]TcpC
 //   - []TcpConnection: list of established TCP connections
 //   - error: nil on success, error if collection fails
 func (c *ConnectionCollector) CollectEstablishedConnections(ctx context.Context) ([]TcpConnection, error) {
-	// Collect all TCP connections first
+	// collect all TCP connections first
 	connections, err := c.CollectTCP(ctx)
-	// Check if collection failed
+	// check if collection failed
 	if err != nil {
-		// Return early on collection failure
+		// return early on collection failure
 		return nil, err
 	}
 
-	// Filter connections in ESTABLISHED state
-	// Capacity heuristic: established connections are typically 70% of total
-	estimatedCap := (len(connections) * 7) / 10
-	if estimatedCap < 16 {
-		estimatedCap = 16
+	// filter connections in ESTABLISHED state
+	// capacity heuristic: established connections are typically 70% of total
+	estimatedCap := (len(connections) * establishedConnMultiplier) / establishedConnPercentage
+	// ensure minimum capacity for small connection counts
+	if estimatedCap < minEstablishedCapacity {
+		estimatedCap = minEstablishedCapacity
 	}
 	established := make([]TcpConnection, 0, estimatedCap)
-	// Iterate over each connection
+	// iterate over each connection
 	for _, conn := range connections {
-		// Check if connection is in ESTABLISHED state
+		// check if connection is in ESTABLISHED state
 		if conn.State == SocketStateEstablished {
 			established = append(established, conn)
 		}
 	}
 
-	// Return the filtered connections
+	// return the filtered connections
 	return established, nil
 }
 
@@ -470,52 +475,54 @@ func (c *ConnectionCollector) CollectEstablishedConnections(ctx context.Context)
 //   - []UdpConnection: list of UDP connections for the process
 //   - error: nil on success, error if collection fails
 func (c *ConnectionCollector) CollectProcessConnections(ctx context.Context, pid int32) ([]TcpConnection, []UdpConnection, error) {
-	// Collect all TCP connections first
+	// collect all TCP connections first
 	tcpConns, err := c.CollectTCP(ctx)
-	// Check if TCP collection failed
+	// check if TCP collection failed
 	if err != nil {
-		// Return early on TCP collection failure
+		// return early on TCP collection failure
 		return nil, nil, err
 	}
 
-	// Collect all UDP connections
+	// collect all UDP connections
 	udpConns, err := c.CollectUDP(ctx)
-	// Check if UDP collection failed
+	// check if UDP collection failed
 	if err != nil {
-		// Return early on UDP collection failure
+		// return early on UDP collection failure
 		return nil, nil, err
 	}
 
-	// Filter TCP connections by PID
-	// Capacity heuristic: a process typically owns 5-10% of total connections
-	tcpEstimatedCap := len(tcpConns) / 10
-	if tcpEstimatedCap < 4 {
-		tcpEstimatedCap = 4
+	// filter TCP connections by PID
+	// capacity heuristic: a process typically owns 5-10% of total connections
+	tcpEstimatedCap := len(tcpConns) / processConnPercentage
+	// ensure minimum capacity for small connection counts
+	if tcpEstimatedCap < minProcessConnCapacity {
+		tcpEstimatedCap = minProcessConnCapacity
 	}
 	tcpFiltered := make([]TcpConnection, 0, tcpEstimatedCap)
-	// Iterate over each TCP connection
+	// iterate over each TCP connection
 	for _, conn := range tcpConns {
-		// Check if connection belongs to the process
+		// check if connection belongs to the process
 		if conn.PID == pid {
 			tcpFiltered = append(tcpFiltered, conn)
 		}
 	}
 
-	// Filter UDP connections by PID
-	// Capacity heuristic: a process typically owns 5-10% of total connections
-	udpEstimatedCap := len(udpConns) / 10
-	if udpEstimatedCap < 4 {
-		udpEstimatedCap = 4
+	// filter UDP connections by PID
+	// capacity heuristic: a process typically owns 5-10% of total connections
+	udpEstimatedCap := len(udpConns) / processConnPercentage
+	// ensure minimum capacity for small connection counts
+	if udpEstimatedCap < minProcessConnCapacity {
+		udpEstimatedCap = minProcessConnCapacity
 	}
 	udpFiltered := make([]UdpConnection, 0, udpEstimatedCap)
-	// Iterate over each UDP connection
+	// iterate over each UDP connection
 	for _, conn := range udpConns {
-		// Check if connection belongs to the process
+		// check if connection belongs to the process
 		if conn.PID == pid {
 			udpFiltered = append(udpFiltered, conn)
 		}
 	}
 
-	// Return the filtered connections
+	// return the filtered connections
 	return tcpFiltered, udpFiltered, nil
 }

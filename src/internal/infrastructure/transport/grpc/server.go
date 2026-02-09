@@ -324,11 +324,13 @@ func (s *Server) ListProcesses(ctx context.Context, req *emptypb.Empty) (*daemon
 		return nil, ctx.Err()
 	}
 	allMetrics := s.metricsProvider.GetAllProcessMetrics()
-	processes := make([]*daemonpb.ProcessMetrics, len(allMetrics))
+	// Pre-allocate with capacity to avoid reallocation.
+	processes := make([]*daemonpb.ProcessMetrics, 0, len(allMetrics))
 
 	// Convert all process metrics.
 	for i := range allMetrics {
-		processes[i] = s.convertProcessMetrics(&allMetrics[i])
+		// Append converted metrics.
+		processes = append(processes, s.convertProcessMetrics(&allMetrics[i]))
 	}
 
 	// Return process list.
@@ -499,10 +501,12 @@ func (s *Server) StreamAllProcessMetrics(req *daemonpb.StreamMetricsRequest, str
 // Returns:
 //   - *daemonpb.DaemonState: protobuf daemon state.
 func (s *Server) convertDaemonState(ds *lifecycle.DaemonState) *daemonpb.DaemonState {
-	processes := make([]*daemonpb.ProcessMetrics, len(ds.Processes))
+	// Pre-allocate with capacity to avoid reallocation.
+	processes := make([]*daemonpb.ProcessMetrics, 0, len(ds.Processes))
 	// Convert all process metrics.
 	for i := range ds.Processes {
-		processes[i] = s.convertProcessMetrics(&ds.Processes[i])
+		// Append converted metrics.
+		processes = append(processes, s.convertProcessMetrics(&ds.Processes[i]))
 	}
 
 	// Compute overall healthy status.
