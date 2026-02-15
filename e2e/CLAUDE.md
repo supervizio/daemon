@@ -55,10 +55,10 @@ e2e/
 | Platform | Coverage | Exclusions |
 |----------|----------|------------|
 | Linux | 100% | None |
-| FreeBSD | 98% | PSI, iowait, steal, buffers |
+| FreeBSD | 99% | PSI, iowait, steal |
 | macOS | 95% | PSI, iowait, steal, buffers |
-| OpenBSD | 92% | + temp_max/crit |
-| NetBSD | 90% | + temp_max/crit |
+| OpenBSD | 93% | + temp_max/crit |
+| NetBSD | 91% | + temp_max/crit |
 
 ## Local Testing
 
