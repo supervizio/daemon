@@ -271,24 +271,28 @@ pub fn get_memory_info() -> Result<MemInfo> {
 fn get_buffers_bytes(page_size: u64) -> u64 {
     #[cfg(target_os = "freebsd")]
     {
-        // vfs.bufspace returns bytes directly (u64).
+        // vfs.bufspace is CTLTYPE_LONG (signed long) per sys/kern/vfs_bio.c.
+        // Use c_long for correct size on both 32-bit and 64-bit architectures.
         // On ZFS systems this may return 0 (ZFS uses its own ARC cache).
         let name = match CString::new("vfs.bufspace") {
             Ok(n) => n,
             Err(_) => return 0,
         };
-        let mut bufspace: u64 = 0;
-        let mut len = mem::size_of::<u64>();
-        unsafe {
+        let mut bufspace: libc::c_long = 0;
+        let mut len = mem::size_of::<libc::c_long>();
+        let result = unsafe {
             do_sysctlbyname(
                 name.as_ptr(),
                 &mut bufspace as *mut _ as *mut libc::c_void,
                 &mut len,
                 ptr::null_mut(),
                 0,
-            );
+            )
+        };
+        if result != 0 {
+            return 0;
         }
-        bufspace
+        bufspace.max(0) as u64
     }
 
     #[cfg(target_os = "openbsd")]
@@ -340,7 +344,7 @@ fn get_buffers_bytes(page_size: u64) -> u64 {
             return 0;
         }
 
-        (bcstats.numbufpages as u64).saturating_mul(page_size)
+        (bcstats.numbufpages.max(0) as u64).saturating_mul(page_size)
     }
 
     #[cfg(target_os = "netbsd")]
@@ -352,14 +356,17 @@ fn get_buffers_bytes(page_size: u64) -> u64 {
         };
         let mut bufmem: libc::c_ulong = 0;
         let mut len = mem::size_of::<libc::c_ulong>();
-        unsafe {
+        let result = unsafe {
             do_sysctlbyname(
                 name.as_ptr(),
                 &mut bufmem as *mut _ as *mut libc::c_void,
                 &mut len,
                 ptr::null_mut(),
                 0,
-            );
+            )
+        };
+        if result != 0 {
+            return 0;
         }
         bufmem as u64
     }
