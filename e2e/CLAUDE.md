@@ -15,9 +15,9 @@ End-to-end testing across all supported platforms and init systems.
 | dinit | Artix | pacman | ✅ | - | 100% |
 | SysVinit | Devuan 6 | .deb | ✅ | ✅ | 100% |
 | runit | Void | xbps | ✅ | ✅ | 100% |
-| BSD rc.d | FreeBSD 14 | pkg | ✅ | - | 98% |
-| BSD rc.d | OpenBSD 7 | pkg | ✅ | - | 92% |
-| BSD rc.d | NetBSD 9 | pkgin | ✅ | - | 90% |
+| BSD rc.d | FreeBSD 14 | pkg | ✅ | - | 99% |
+| BSD rc.d | OpenBSD 7 | pkg | ✅ | - | 93% |
+| BSD rc.d | NetBSD 9 | pkgin | ✅ | - | 91% |
 | launchd | macOS | - | - | - | 95% |
 
 ## Structure
@@ -55,10 +55,10 @@ e2e/
 | Platform | Coverage | Exclusions |
 |----------|----------|------------|
 | Linux | 100% | None |
-| FreeBSD | 98% | PSI, iowait, steal, buffers |
+| FreeBSD | 99% | PSI, iowait, steal |
 | macOS | 95% | PSI, iowait, steal, buffers |
-| OpenBSD | 92% | + temp_max/crit |
-| NetBSD | 90% | + temp_max/crit |
+| OpenBSD | 93% | PSI, iowait, steal, temp_max/crit |
+| NetBSD | 91% | PSI, iowait, steal, temp_max/crit |
 
 ## Local Testing
 

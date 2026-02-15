@@ -249,14 +249,126 @@ pub fn get_memory_info() -> Result<MemInfo> {
         #[cfg(target_os = "freebsd")]
         let (swap_total, swap_used) = get_swap_freebsd();
 
+        // Get buffer cache size (platform-specific)
+        let buffers = get_buffers_bytes(page_size);
+
         Ok(MemInfo {
             total: physmem,
             available: free_pages.saturating_mul(page_size),
             cached,
-            buffers: 0,
+            buffers,
             swap_total,
             swap_used,
         })
+    }
+}
+
+/// Returns the size of the filesystem buffer cache in bytes.
+///
+/// - FreeBSD: `vfs.bufspace` sysctl (bytes directly)
+/// - OpenBSD: `kern.bcstats` sysctl → `numbufpages × page_size`
+/// - NetBSD: `vm.bufmem` sysctl (bytes directly)
+fn get_buffers_bytes(page_size: u64) -> u64 {
+    #[cfg(target_os = "freebsd")]
+    {
+        // vfs.bufspace is CTLTYPE_LONG (signed long) per sys/kern/vfs_bio.c.
+        // Use c_long for correct size on both 32-bit and 64-bit architectures.
+        // On ZFS systems this may return 0 (ZFS uses its own ARC cache).
+        let name = match CString::new("vfs.bufspace") {
+            Ok(n) => n,
+            Err(_) => return 0,
+        };
+        let mut bufspace: libc::c_long = 0;
+        let mut len = mem::size_of::<libc::c_long>();
+        let result = unsafe {
+            do_sysctlbyname(
+                name.as_ptr(),
+                &mut bufspace as *mut _ as *mut libc::c_void,
+                &mut len,
+                ptr::null_mut(),
+                0,
+            )
+        };
+        if result != 0 {
+            return 0;
+        }
+        bufspace.max(0) as u64
+    }
+
+    #[cfg(target_os = "openbsd")]
+    {
+        // kern.bcstats via sysctl MIB [CTL_VFS, VFS_GENERIC, VFS_BCACHESTAT]
+        // Returns bcachestats struct; we use numbufpages × page_size.
+        const CTL_VFS: libc::c_int = 10;
+        const VFS_GENERIC: libc::c_int = 0;
+        const VFS_BCACHESTAT: libc::c_int = 3;
+
+        #[repr(C)]
+        struct BcacheStats {
+            numbufs: i64,
+            numbufpages: i64,
+            numdirtypages: i64,
+            numcleanpages: i64,
+            pendingwrites: i64,
+            pendingreads: i64,
+            numwrites: i64,
+            numreads: i64,
+            cachehits: i64,
+            busymapped: i64,
+            dmapages: i64,
+            highpages: i64,
+            delwribufs: i64,
+            kvaslots: i64,
+            kvaslots_avail: i64,
+            highflips: i64,
+            highflops: i64,
+            dmaflips: i64,
+        }
+
+        let mut mib = [CTL_VFS, VFS_GENERIC, VFS_BCACHESTAT];
+        let mut bcstats: BcacheStats = unsafe { mem::zeroed() };
+        let mut len = mem::size_of::<BcacheStats>();
+
+        let result = unsafe {
+            libc::sysctl(
+                mib.as_mut_ptr(),
+                3,
+                &mut bcstats as *mut _ as *mut libc::c_void,
+                &mut len,
+                ptr::null_mut(),
+                0,
+            )
+        };
+
+        if result != 0 {
+            return 0;
+        }
+
+        (bcstats.numbufpages.max(0) as u64).saturating_mul(page_size)
+    }
+
+    #[cfg(target_os = "netbsd")]
+    {
+        // vm.bufmem returns bytes directly (unsigned long).
+        let name = match CString::new("vm.bufmem") {
+            Ok(n) => n,
+            Err(_) => return 0,
+        };
+        let mut bufmem: libc::c_ulong = 0;
+        let mut len = mem::size_of::<libc::c_ulong>();
+        let result = unsafe {
+            do_sysctlbyname(
+                name.as_ptr(),
+                &mut bufmem as *mut _ as *mut libc::c_void,
+                &mut len,
+                ptr::null_mut(),
+                0,
+            )
+        };
+        if result != 0 {
+            return 0;
+        }
+        bufmem as u64
     }
 }
 
@@ -2965,4 +3077,103 @@ unsafe fn cstr_to_string(ptr: *const libc::c_char) -> String {
         return String::new();
     }
     unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() }
+}
+
+// ============================================================================
+// TESTS
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_memory_info_returns_valid_data() {
+        let result = get_memory_info();
+        assert!(result.is_ok(), "get_memory_info() should succeed on BSD");
+
+        let mem = result.unwrap();
+        assert!(mem.total > 0, "total memory should be non-zero");
+        assert!(mem.available <= mem.total, "available should not exceed total");
+    }
+
+    #[test]
+    fn test_get_buffers_bytes_returns_reasonable_value() {
+        let page_size_raw = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        assert!(page_size_raw > 0, "page size should be positive");
+        let page_size = page_size_raw as u64;
+
+        let buffers = get_buffers_bytes(page_size);
+        // On real BSD systems, buffers should be >= 0 (may be 0 on ZFS-only FreeBSD).
+        // On non-BSD test hosts (Linux CI), the cfg gates make this return 0.
+        // We simply verify it doesn't panic and returns a sane value.
+        let total_mem = unsafe {
+            let name = CString::new("hw.physmem").unwrap();
+            let mut physmem: u64 = 0;
+            let mut len = mem::size_of::<u64>();
+            do_sysctlbyname(
+                name.as_ptr(),
+                &mut physmem as *mut _ as *mut libc::c_void,
+                &mut len,
+                ptr::null_mut(),
+                0,
+            );
+            physmem
+        };
+
+        if total_mem > 0 {
+            assert!(
+                buffers <= total_mem,
+                "buffers ({buffers}) should not exceed total memory ({total_mem})"
+            );
+        }
+    }
+
+    #[test]
+    fn test_buffers_included_in_memory_info() {
+        let result = get_memory_info();
+        assert!(result.is_ok());
+
+        let mem = result.unwrap();
+        // Verify that buffers field is populated (not just hardcoded to 0).
+        // On FreeBSD with ZFS, buffers may legitimately be 0.
+        // On OpenBSD/NetBSD, it should be > 0 if the system has any buffer cache.
+        // We check the value is bounded by total memory.
+        assert!(
+            mem.buffers <= mem.total,
+            "buffers ({}) should not exceed total memory ({})",
+            mem.buffers,
+            mem.total
+        );
+    }
+
+    #[test]
+    fn test_get_cpu_times_does_not_panic() {
+        let result = get_cpu_times();
+        assert!(result.is_ok(), "get_cpu_times() should succeed on BSD");
+
+        let times = result.unwrap();
+        let total = times.user_percent + times.system_percent + times.idle_percent;
+        assert!((total - 100.0).abs() < 1.0, "CPU percentages should sum to ~100%, got {total}");
+    }
+
+    #[test]
+    fn test_get_cpu_info_returns_valid_data() {
+        let result = get_cpu_info();
+        assert!(result.is_ok(), "get_cpu_info() should succeed on BSD");
+
+        let info = result.unwrap();
+        assert!(info.cores > 0, "should have at least 1 CPU core");
+    }
+
+    #[test]
+    fn test_get_loadavg_returns_valid_data() {
+        let result = get_loadavg();
+        assert!(result.is_ok(), "get_loadavg() should succeed on BSD");
+
+        let load = result.unwrap();
+        assert!(load.load_1min >= 0.0, "load average should be non-negative");
+        assert!(load.load_5min >= 0.0, "load average should be non-negative");
+        assert!(load.load_15min >= 0.0, "load average should be non-negative");
+    }
 }

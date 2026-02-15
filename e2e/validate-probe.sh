@@ -217,13 +217,13 @@ if has_section ".memory" "memory"; then
     check_field_numeric ".memory.swap_used_bytes"
     check_field_numeric ".memory.used_percent"
 
-    # buffers_bytes: Linux only
+    # buffers_bytes: Linux and BSD (not macOS — Unified Buffer Cache)
     case "$PLATFORM" in
-        linux)
+        linux|freebsd|openbsd|netbsd)
             check_field_numeric ".memory.buffers_bytes"
             ;;
         *)
-            skip_field ".memory.buffers_bytes" "Linux page cache architecture only"
+            skip_field ".memory.buffers_bytes" "macOS Unified Buffer Cache — no separate buffers"
             ;;
     esac
 fi
