@@ -13,36 +13,36 @@ type AllSystemMetrics struct {
 	Timestamp   time.Time `json:"timestamp"`
 	Platform    string    `json:"platform"`
 	Hostname    string    `json:"hostname,omitempty"`
-	CollectedAt int64     `json:"collected_at_ns"`
+	CollectedAt int64     `json:"collected_at_us"`
 
 	// Basic system metrics
-	CPU    *CPUMetricsJSON    `json:"cpu,omitempty"`
-	Memory *MemoryMetricsJSON `json:"memory,omitempty"`
-	Load   *LoadMetricsJSON   `json:"load,omitempty"`
+	CPU    *CPUMetricsJSON    `json:"cpu"`
+	Memory *MemoryMetricsJSON `json:"memory"`
+	Load   *LoadMetricsJSON   `json:"load"`
 
 	// Disk metrics
-	Disk *DiskMetricsJSON `json:"disk,omitempty"`
+	Disk *DiskMetricsJSON `json:"disk"`
 
 	// Network metrics
-	Network *NetworkMetricsJSON `json:"network,omitempty"`
+	Network *NetworkMetricsJSON `json:"network"`
 
 	// I/O metrics
-	IO *IOMetricsJSON `json:"io,omitempty"`
+	IO *IOMetricsJSON `json:"io"`
 
 	// Process metrics
-	Process *ProcessMetricsJSON `json:"process,omitempty"`
+	Process *ProcessMetricsJSON `json:"process"`
 
 	// Thermal metrics (Linux only)
-	Thermal *ThermalMetricsJSON `json:"thermal,omitempty"`
+	Thermal *ThermalMetricsJSON `json:"thermal"`
 
 	// Context switches (Linux only)
-	ContextSwitches *ContextSwitchMetricsJSON `json:"context_switches,omitempty"`
+	ContextSwitches *ContextSwitchMetricsJSON `json:"context_switches"`
 
 	// Network connections (Linux only)
-	Connections *ConnectionMetricsJSON `json:"connections,omitempty"`
+	Connections *ConnectionMetricsJSON `json:"connections"`
 
 	// Resource quotas and container info
-	Quota     *QuotaMetricsJSON     `json:"quota,omitempty"`
-	Container *ContainerMetricsJSON `json:"container,omitempty"`
-	Runtime   *RuntimeMetricsJSON   `json:"runtime,omitempty"`
+	Quota     *QuotaMetricsJSON     `json:"quota"`
+	Container *ContainerMetricsJSON `json:"container"`
+	Runtime   *RuntimeMetricsJSON   `json:"runtime"`
 }

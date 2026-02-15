@@ -19,8 +19,6 @@ import (
 	"github.com/kodflow/daemon/internal/domain/metrics"
 )
 
-// sectorSize is the standard disk sector size in bytes.
-const sectorSize uint64 = 512
 
 // DiskCollector provides disk metrics via the Rust probe library.
 // It implements the metrics.DiskCollector interface for disk statistics.
@@ -181,15 +179,15 @@ func (d *DiskCollector) CollectIO(ctx context.Context) ([]metrics.DiskIOStats, e
 	for _, item := range items {
 		stats = append(stats, metrics.DiskIOStats{
 			Device:         cCharArrayToStringCached(item.device[:], true), // stable: device names don't change
-			ReadBytes:      uint64(item.sectors_read) * sectorSize,
-			WriteBytes:     uint64(item.sectors_written) * sectorSize,
+			ReadBytes:      uint64(item.read_bytes),
+			WriteBytes:     uint64(item.write_bytes),
 			ReadCount:      uint64(item.reads_completed),
 			WriteCount:     uint64(item.writes_completed),
-			ReadTime:       time.Duration(item.read_time_ms) * time.Millisecond,
-			WriteTime:      time.Duration(item.write_time_ms) * time.Millisecond,
+			ReadTime:       time.Duration(item.read_time_us) * time.Microsecond,
+			WriteTime:      time.Duration(item.write_time_us) * time.Microsecond,
 			IOInProgress:   uint64(item.io_in_progress),
-			IOTime:         time.Duration(item.io_time_ms) * time.Millisecond,
-			WeightedIOTime: time.Duration(item.weighted_io_time_ms) * time.Millisecond,
+			IOTime:         time.Duration(item.io_time_us) * time.Microsecond,
+			WeightedIOTime: time.Duration(item.weighted_io_time_us) * time.Microsecond,
 			Timestamp:      time.Now(),
 		})
 	}

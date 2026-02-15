@@ -433,7 +433,7 @@ func TestBuildAllMetricsFromRaw(t *testing.T) {
 		{
 			name: "full_metrics",
 			raw: &RawAllMetrics{
-				TimestampNs:   1000000000,
+				TimestampUs:   1000000,
 				CPU:           RawCPUData{IdlePercent: 50},
 				Memory:        RawMemoryData{TotalBytes: 16000000000},
 				Load:          RawLoadData{Load1Min: 1.0},
@@ -450,7 +450,7 @@ func TestBuildAllMetricsFromRaw(t *testing.T) {
 		{
 			name: "no_pressure",
 			raw: &RawAllMetrics{
-				TimestampNs: 2000000000,
+				TimestampUs: 2000000,
 				CPU:         RawCPUData{IdlePercent: 75},
 				Memory:      RawMemoryData{TotalBytes: 8000000000},
 				Load:        RawLoadData{Load1Min: 0.5},

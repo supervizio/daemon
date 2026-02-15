@@ -1333,14 +1333,13 @@ mod freebsd {
                     continue;
                 }
 
-                // Convert bytes to sectors (512 bytes per sector)
-                let sectors_read = ds.bytes[0] / 512;
-                let sectors_written = ds.bytes[1] / 512;
+                let read_bytes = ds.bytes[0];
+                let write_bytes = ds.bytes[1];
 
-                // Calculate time in milliseconds from bintime (sec + frac/2^64)
-                let read_time_ms = bintime_to_ms(ds.duration[0].sec, ds.duration[0].frac);
-                let write_time_ms = bintime_to_ms(ds.duration[1].sec, ds.duration[1].frac);
-                let busy_time_ms = bintime_to_ms(ds.busy_time.sec, ds.busy_time.frac);
+                // Calculate time in microseconds from bintime (sec + frac/2^64)
+                let read_time_us = bintime_to_us(ds.duration[0].sec, ds.duration[0].frac);
+                let write_time_us = bintime_to_us(ds.duration[1].sec, ds.duration[1].frac);
+                let busy_time_us = bintime_to_us(ds.busy_time.sec, ds.busy_time.frac);
 
                 // IO in progress: difference between start and end counts
                 let io_in_progress = ds.start_count.saturating_sub(ds.end_count) as u64;
@@ -1348,14 +1347,14 @@ mod freebsd {
                 results.push(DiskIOStats {
                     device,
                     reads_completed: reads,
-                    sectors_read,
-                    read_time_ms,
+                    read_bytes,
+                    read_time_us,
                     writes_completed: writes,
-                    sectors_written,
-                    write_time_ms,
+                    write_bytes,
+                    write_time_us,
                     io_in_progress,
-                    io_time_ms: busy_time_ms,
-                    weighted_io_time_ms: busy_time_ms,
+                    io_time_us: busy_time_us,
+                    weighted_io_time_us: busy_time_us,
                 });
             }
 
@@ -1363,13 +1362,13 @@ mod freebsd {
         }
     }
 
-    /// Convert bintime (seconds + fraction) to milliseconds.
-    fn bintime_to_ms(sec: i64, frac: u64) -> u64 {
+    /// Convert bintime (seconds + fraction) to microseconds.
+    fn bintime_to_us(sec: i64, frac: u64) -> u64 {
         // bintime fraction is scaled by 2^64
         // frac / 2^64 gives the fractional seconds
-        // Multiply by 1000 to get milliseconds
-        let frac_ms = (frac as u128 * 1000) >> 64;
-        (sec as u64 * 1000).saturating_add(frac_ms as u64)
+        // Multiply by 1_000_000 to get microseconds
+        let frac_us = (frac as u128 * 1_000_000) >> 64;
+        (sec as u64 * 1_000_000).saturating_add(frac_us as u64)
     }
 }
 
@@ -1460,24 +1459,23 @@ mod openbsd {
                     continue;
                 }
 
-                // Convert time from seconds + microseconds to milliseconds
-                let time_ms = (disk.ds_time_sec * 1000).saturating_add(disk.ds_time_usec / 1000);
+                // Convert time from seconds + microseconds to microseconds
+                let time_us = (disk.ds_time_sec * 1_000_000).saturating_add(disk.ds_time_usec);
 
-                // OpenBSD provides bytes, convert to sectors (512 bytes)
-                let sectors_read = disk.ds_rbytes / 512;
-                let sectors_written = disk.ds_wbytes / 512;
+                let read_bytes = disk.ds_rbytes;
+                let write_bytes = disk.ds_wbytes;
 
                 results.push(DiskIOStats {
                     device,
                     reads_completed: disk.ds_rxfer,
-                    sectors_read,
-                    read_time_ms: (time_ms / 2).max(1) as u64, // Estimate split
+                    read_bytes,
+                    read_time_us: (time_us / 2).max(0) as u64, // Estimate split
                     writes_completed: disk.ds_wxfer,
-                    sectors_written,
-                    write_time_ms: (time_ms / 2).max(1) as u64, // Estimate split
+                    write_bytes,
+                    write_time_us: (time_us / 2).max(0) as u64, // Estimate split
                     io_in_progress: disk.ds_busy as u64,
-                    io_time_ms: time_ms as u64,
-                    weighted_io_time_ms: time_ms as u64,
+                    io_time_us: time_us.max(0) as u64,
+                    weighted_io_time_us: time_us.max(0) as u64,
                 });
             }
 
@@ -1600,25 +1598,24 @@ mod netbsd {
                     continue;
                 }
 
-                // Convert time from seconds + microseconds to milliseconds
-                let time_ms =
-                    (disk.dk_time_sec * 1000).saturating_add((disk.dk_time_usec / 1000) as i64);
+                // Convert time from seconds + microseconds to microseconds
+                let time_us =
+                    (disk.dk_time_sec * 1_000_000).saturating_add(disk.dk_time_usec as i64);
 
-                // NetBSD provides bytes, convert to sectors (512 bytes)
-                let sectors_read = disk.dk_rbytes / 512;
-                let sectors_written = disk.dk_wbytes / 512;
+                let read_bytes = disk.dk_rbytes;
+                let write_bytes = disk.dk_wbytes;
 
                 results.push(DiskIOStats {
                     device,
                     reads_completed: disk.dk_rxfer,
-                    sectors_read,
-                    read_time_ms: (time_ms / 2).max(1) as u64,
+                    read_bytes,
+                    read_time_us: (time_us / 2).max(0) as u64,
                     writes_completed: disk.dk_wxfer,
-                    sectors_written,
-                    write_time_ms: (time_ms / 2).max(1) as u64,
+                    write_bytes,
+                    write_time_us: (time_us / 2).max(0) as u64,
                     io_in_progress: disk.dk_busy as u64,
-                    io_time_ms: time_ms as u64,
-                    weighted_io_time_ms: time_ms as u64,
+                    io_time_us: time_us.max(0) as u64,
+                    weighted_io_time_us: time_us.max(0) as u64,
                 });
             }
 
@@ -1648,26 +1645,26 @@ mod netbsd {
             // Parse fields (same format as Linux)
             let device = fields[2].to_string();
             let reads_completed = fields[3].parse().unwrap_or(0);
-            let sectors_read = fields[5].parse().unwrap_or(0);
-            let read_time_ms = fields[6].parse().unwrap_or(0);
+            let read_bytes = fields[5].parse::<u64>().unwrap_or(0) * 512;
+            let read_time_us = fields[6].parse::<u64>().unwrap_or(0) * 1000;
             let writes_completed = fields[7].parse().unwrap_or(0);
-            let sectors_written = fields[9].parse().unwrap_or(0);
-            let write_time_ms = fields[10].parse().unwrap_or(0);
+            let write_bytes = fields[9].parse::<u64>().unwrap_or(0) * 512;
+            let write_time_us = fields[10].parse::<u64>().unwrap_or(0) * 1000;
             let io_in_progress = fields[11].parse().unwrap_or(0);
-            let io_time_ms = fields[12].parse().unwrap_or(0);
-            let weighted_io_time_ms = fields[13].parse().unwrap_or(0);
+            let io_time_us = fields[12].parse::<u64>().unwrap_or(0) * 1000;
+            let weighted_io_time_us = fields[13].parse::<u64>().unwrap_or(0) * 1000;
 
             results.push(DiskIOStats {
                 device,
                 reads_completed,
-                sectors_read,
-                read_time_ms,
+                read_bytes,
+                read_time_us,
                 writes_completed,
-                sectors_written,
-                write_time_ms,
+                write_bytes,
+                write_time_us,
                 io_in_progress,
-                io_time_ms,
-                weighted_io_time_ms,
+                io_time_us,
+                weighted_io_time_us,
             });
         }
 

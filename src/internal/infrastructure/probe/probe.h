@@ -157,14 +157,14 @@ typedef struct {
 typedef struct {
     char device[64];
     uint64_t reads_completed;
-    uint64_t sectors_read;
-    uint64_t read_time_ms;
+    uint64_t read_bytes;
+    uint64_t read_time_us;
     uint64_t writes_completed;
-    uint64_t sectors_written;
-    uint64_t write_time_ms;
+    uint64_t write_bytes;
+    uint64_t write_time_us;
     uint64_t io_in_progress;
-    uint64_t io_time_ms;
-    uint64_t weighted_io_time_ms;
+    uint64_t io_time_us;
+    uint64_t weighted_io_time_us;
 } DiskIOStats;
 
 // List of disk I/O stats
@@ -482,7 +482,7 @@ typedef struct {
     LoadAverage load;
     IOStats io_stats;
     AllPressure pressure;
-    uint64_t timestamp_ns;
+    uint64_t timestamp_us;
 
     uint32_t partition_count;
     uint32_t disk_usage_count;

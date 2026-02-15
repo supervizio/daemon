@@ -5,8 +5,8 @@ package probe
 // RawAllMetrics holds all raw metrics data for Go-only building.
 // This struct mirrors C data without requiring CGO for testing.
 type RawAllMetrics struct {
-	// TimestampNs is the timestamp in nanoseconds.
-	TimestampNs int64
+	// TimestampUs is the timestamp in microseconds.
+	TimestampUs int64
 	// CPU holds raw CPU data.
 	CPU RawCPUData
 	// Memory holds raw memory data.

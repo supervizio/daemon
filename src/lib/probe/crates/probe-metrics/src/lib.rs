@@ -218,22 +218,22 @@ pub struct DiskIOStats {
     pub device: String,
     /// Read operations completed.
     pub reads_completed: u64,
-    /// Sectors read.
-    pub sectors_read: u64,
-    /// Time spent reading (milliseconds).
-    pub read_time_ms: u64,
+    /// Bytes read.
+    pub read_bytes: u64,
+    /// Time spent reading (microseconds).
+    pub read_time_us: u64,
     /// Write operations completed.
     pub writes_completed: u64,
-    /// Sectors written.
-    pub sectors_written: u64,
-    /// Time spent writing (milliseconds).
-    pub write_time_ms: u64,
+    /// Bytes written.
+    pub write_bytes: u64,
+    /// Time spent writing (microseconds).
+    pub write_time_us: u64,
     /// I/O operations currently in progress.
     pub io_in_progress: u64,
-    /// Time spent doing I/O (milliseconds).
-    pub io_time_ms: u64,
-    /// Weighted time spent doing I/O (milliseconds).
-    pub weighted_io_time_ms: u64,
+    /// Time spent doing I/O (microseconds).
+    pub io_time_us: u64,
+    /// Weighted time spent doing I/O (microseconds).
+    pub weighted_io_time_us: u64,
 }
 
 // ============================================================================
@@ -658,8 +658,8 @@ pub struct AllMetrics {
     pub net_stats: Vec<NetStats>,
     /// Pressure metrics (Linux only, None on other platforms).
     pub pressure: Option<AllPressure>,
-    /// Timestamp when metrics were collected (nanoseconds since epoch).
-    pub timestamp_ns: u64,
+    /// Timestamp when metrics were collected (microseconds since epoch).
+    pub timestamp_us: u64,
 }
 
 /// Combined system collector interface.
@@ -687,8 +687,8 @@ pub trait SystemCollector: Send + Sync {
     fn collect_all(&self) -> Result<AllMetrics> {
         use std::time::{SystemTime, UNIX_EPOCH};
 
-        let timestamp_ns =
-            SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
+        let timestamp_us =
+            SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_micros() as u64).unwrap_or(0);
 
         // Collect all metrics, using defaults for any that fail
         let cpu = self.cpu().collect_system().unwrap_or_default();
@@ -726,7 +726,7 @@ pub trait SystemCollector: Send + Sync {
             net_interfaces,
             net_stats,
             pressure,
-            timestamp_ns,
+            timestamp_us,
         })
     }
 }

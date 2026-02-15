@@ -36,7 +36,7 @@ func CollectAll() (*AllMetrics, error) {
 
 	// Build raw data by extracting scalar values from C.
 	raw := &RawAllMetrics{
-		TimestampNs: int64(cAll.timestamp_ns),
+		TimestampUs: int64(cAll.timestamp_us),
 		CPU:         RawCPUData{IdlePercent: float64(cAll.cpu.idle_percent)},
 		Memory: RawMemoryData{
 			TotalBytes:     uint64(cAll.memory.total_bytes),
@@ -182,14 +182,14 @@ func extractDiskIOFromC(cAll *C.AllMetrics) []RawDiskIOData {
 		result = append(result, RawDiskIOData{
 			Device:           C.GoString(&dio.device[0]),
 			ReadsCompleted:   uint64(dio.reads_completed),
-			SectorsRead:      uint64(dio.sectors_read),
-			ReadTimeMs:       uint64(dio.read_time_ms),
+			ReadBytes:        uint64(dio.read_bytes),
+			ReadTimeUs:       uint64(dio.read_time_us),
 			WritesCompleted:  uint64(dio.writes_completed),
-			SectorsWritten:   uint64(dio.sectors_written),
-			WriteTimeMs:      uint64(dio.write_time_ms),
+			WriteBytes:       uint64(dio.write_bytes),
+			WriteTimeUs:      uint64(dio.write_time_us),
 			IOInProgress:     uint64(dio.io_in_progress),
-			IOTimeMs:         uint64(dio.io_time_ms),
-			WeightedIOTimeMs: uint64(dio.weighted_io_time_ms),
+			IOTimeUs:         uint64(dio.io_time_us),
+			WeightedIOTimeUs: uint64(dio.weighted_io_time_us),
 		})
 	}
 	// Return extracted disk I/O.

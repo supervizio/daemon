@@ -437,19 +437,19 @@ func TestRawAllMetrics(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name        string
-		timestampNs int64
+		timestampUs int64
 		idlePercent float64
 		totalBytes  uint64
 	}{
 		{
 			name:        "full_metrics",
-			timestampNs: 1000000000,
+			timestampUs: 1000000,
 			idlePercent: 50,
 			totalBytes:  16000000000,
 		},
 		{
 			name:        "empty_metrics",
-			timestampNs: 2000000000,
+			timestampUs: 2000000,
 			idlePercent: 0,
 			totalBytes:  0,
 		},
@@ -460,12 +460,12 @@ func TestRawAllMetrics(t *testing.T) {
 			t.Parallel()
 			// Create raw all metrics.
 			raw := probe.RawAllMetrics{
-				TimestampNs: tt.timestampNs,
+				TimestampUs: tt.timestampUs,
 				CPU:         probe.RawCPUData{IdlePercent: tt.idlePercent},
 				Memory:      probe.RawMemoryData{TotalBytes: tt.totalBytes},
 			}
 			// Verify timestamp.
-			assert.Equal(t, tt.timestampNs, raw.TimestampNs)
+			assert.Equal(t, tt.timestampUs, raw.TimestampUs)
 			// Verify CPU data.
 			assert.Equal(t, tt.idlePercent, raw.CPU.IdlePercent)
 			// Verify memory data.
