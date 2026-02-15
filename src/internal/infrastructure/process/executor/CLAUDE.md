@@ -1,6 +1,7 @@
-# Executor - Exécution de Processus
+<!-- updated: 2026-02-15T21:30:00Z -->
+# Executor - Process Execution
 
-Implémente `domain.Executor` : démarrer, arrêter, signaler des processus.
+Implements `domain.Executor`: start, stop, signal processes.
 
 ## Interface
 
@@ -12,33 +13,33 @@ type Executor interface {
 }
 ```
 
-## Fichiers
+## Files
 
-| Fichier | Rôle |
-|---------|------|
-| `executor.go` | Implémentation Start/Stop/Signal |
-| `command.go` | `TrustedCommand()` - wrapper exec sécurisé |
-| `os_process_wrapper.go` | Abstraction os.Process pour tests |
+| File | Role |
+|------|------|
+| `executor.go` | Start/Stop/Signal implementation |
+| `command.go` | `TrustedCommand()` - secure exec wrapper |
+| `os_process_wrapper.go` | os.Process abstraction for testing |
 
-## Constructeurs
+## Constructors
 
 ```go
 New()                      // Standalone
 NewWithDeps(creds, ctrl)   // Wire DI
-NewWithOptions(...)        // Tests avec mocks
+NewWithOptions(...)        // Tests with mocks
 ```
 
-## Sécurité
+## Security
 
-Toute commande passe par `TrustedCommand()` :
+All commands go through `TrustedCommand()`:
 
 ```go
 func TrustedCommand(ctx, name, args...) *exec.Cmd
 ```
 
-**Modèle de confiance** : Commandes viennent de YAML admin, jamais d'input user.
+**Trust model**: Commands come from admin YAML config, never from user input.
 
-## Dépendances
+## Dependencies
 
-- `credentials.CredentialManager` : résolution user/group
-- `control.ProcessControl` : configuration process group
+- `credentials.CredentialManager`: user/group resolution
+- `control.ProcessControl`: process group configuration

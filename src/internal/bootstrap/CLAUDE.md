@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Bootstrap - Dependency Injection with Wire
 
 Wire-based dependency injection for the superviz.io daemon.

@@ -1,10 +1,11 @@
-# Config - Chargement Configuration
+<!-- updated: 2026-02-15T21:30:00Z -->
+# Config - Configuration Loading
 
-Adaptateurs pour charger la configuration au démarrage.
+Adapters for loading configuration at startup.
 
-## Rôle
+## Role
 
-Parser les fichiers de configuration et les mapper vers les types du domaine.
+Parse configuration files and map them to domain types.
 
 ## Navigation
 
@@ -16,16 +17,17 @@ Parser les fichiers de configuration et les mapper vers les types du domaine.
 
 ```
 config/
-└── yaml/              # Parser YAML
-    ├── loader.go      # Loader principal
-    └── types.go       # Types intermédiaires
+└── yaml/              # YAML parser
+    ├── loader.go      # Main loader
+    ├── types.go       # Intermediate mapping types
+    └── metrics_dto.go # Metrics configuration DTO
 ```
 
-## Interface Implémentée
+## Implemented Interface
 
 ```go
 // application/config/loader.go
 type Loader interface {
-    Load(path string) (*service.Config, error)
+    Load(path string) (*config.Config, error)
 }
 ```

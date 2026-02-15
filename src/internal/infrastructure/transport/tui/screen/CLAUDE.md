@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Screen - Screen Renderers
 
 Full-screen section renderers for TUI.

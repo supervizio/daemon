@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Terminal - Size Detection
 
 Cross-platform terminal size detection using ioctl syscalls.

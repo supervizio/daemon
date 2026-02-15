@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # ANSI - Terminal Escape Sequences
 
 ANSI escape codes for terminal styling and status icons.

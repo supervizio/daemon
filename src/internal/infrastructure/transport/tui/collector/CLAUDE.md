@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Collector - Data Collectors
 
 System data collectors for TUI snapshots using procfs/sysfs.

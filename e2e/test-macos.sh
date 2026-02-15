@@ -153,6 +153,9 @@ else
 
         # Core fields that must exist on macOS
         check_field ".platform"
+        check_field ".os_version"
+        check_field ".kernel_version"
+        check_field ".arch"
         check_field ".cpu.user_percent"
         check_field ".cpu.system_percent"
         check_field ".cpu.cores"

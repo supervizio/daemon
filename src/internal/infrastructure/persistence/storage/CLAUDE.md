@@ -1,10 +1,11 @@
-# Storage - Adaptateurs de Stockage
+<!-- updated: 2026-02-15T21:30:00Z -->
+# Storage - Storage Adapters
 
-Implémentations de stockage persistant.
+Persistent storage implementations.
 
-## Rôle
+## Role
 
-Fournir des adaptateurs pour stocker et récupérer des données de manière persistante.
+Provide adapters for persistent data storage and retrieval.
 
 ## Navigation
 
@@ -16,18 +17,17 @@ Fournir des adaptateurs pour stocker et récupérer des données de manière per
 
 ```
 storage/
-└── boltdb/           # Base de données embedded
-    └── store.go      # Store implémentant domain/storage.Store
+└── boltdb/           # Embedded database
+    └── store.go      # Store implementing domain/storage.MetricsStore
 ```
 
-## Interface Implémentée
+## Implemented Interface
 
 ```go
-// domain/storage/port.go
-type Store interface {
-    Get(bucket, key string) ([]byte, error)
-    Put(bucket, key string, value []byte) error
-    Delete(bucket, key string) error
-    Close() error
+// domain/storage/metrics_store.go
+type MetricsStore interface {
+    MetricsWriter
+    MetricsReader
+    MetricsMaintainer
 }
 ```

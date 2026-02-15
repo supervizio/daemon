@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # superviz.io CLI - Main Entry Point
 
 Minimal entry point for the process supervisor.

@@ -62,10 +62,10 @@ func TestAppendConvertedListeners(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		destSize     int
-		listeners    []appsupervisor.ListenerSnapshotForTUI
-		expectedLen  int
+		name        string
+		destSize    int
+		listeners   []appsupervisor.ListenerSnapshotForTUI
+		expectedLen int
 	}{
 		{
 			name:     "append to empty slice",

@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Component - High-Level TUI Components
 
 Composite TUI panels combining widgets with data.

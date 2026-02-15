@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Model - TUI Data Types
 
 Data structures for TUI state and rendering.

@@ -99,6 +99,36 @@ func Platform() string {
 	return C.GoString(cStr)
 }
 
+// OSVersion returns the OS version string (e.g., "Linux 6.12.69", "Darwin 24.6.0").
+//
+// Returns:
+//   - string: OS name and release version from uname
+func OSVersion() string {
+	cStr := C.probe_get_os_version()
+	// Convert C string to Go string.
+	return C.GoString(cStr)
+}
+
+// KernelVersion returns the full kernel build string from uname.
+//
+// Returns:
+//   - string: kernel version string (e.g., "#1 SMP PREEMPT_DYNAMIC ...")
+func KernelVersion() string {
+	cStr := C.probe_get_kernel_version()
+	// Convert C string to Go string.
+	return C.GoString(cStr)
+}
+
+// Arch returns the machine architecture (e.g., "x86_64", "aarch64", "arm64").
+//
+// Returns:
+//   - string: machine architecture from uname
+func Arch() string {
+	cStr := C.probe_get_arch()
+	// Convert C string to Go string.
+	return C.GoString(cStr)
+}
+
 // QuotaSupported returns whether resource quotas are supported on this platform.
 //
 // Returns:

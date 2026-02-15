@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Domain Shared Package
 
 Common value objects, interfaces, and constants used across domain packages.

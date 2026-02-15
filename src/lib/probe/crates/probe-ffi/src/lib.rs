@@ -4,6 +4,7 @@
 //! All types are repr(C) for C ABI compatibility.
 
 use libc::{c_char, c_int};
+use std::ffi::CString;
 use std::ptr;
 use std::sync::OnceLock;
 
@@ -626,6 +627,72 @@ pub extern "C" fn probe_get_platform() -> *const c_char {
         target_os = "netbsd"
     )))]
     return c"unknown".as_ptr();
+}
+
+/// Helper to call libc::uname and return the result.
+fn get_uname_info() -> Option<libc::utsname> {
+    unsafe {
+        let mut info: libc::utsname = std::mem::zeroed();
+        if libc::uname(&mut info) == 0 {
+            Some(info)
+        } else {
+            None
+        }
+    }
+}
+
+/// Helper to convert a C char array to a Rust string.
+#[allow(clippy::unnecessary_cast)] // c_char is i8 on x86_64, u8 on aarch64
+fn carray_to_string(arr: &[c_char]) -> String {
+    let len = arr.iter().position(|&c| c == 0).unwrap_or(arr.len());
+    let bytes: Vec<u8> = arr[..len].iter().map(|&c| c as u8).collect();
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// Get the OS version string (e.g. "Linux 6.12.69", "Darwin 24.6.0").
+#[unsafe(no_mangle)]
+pub extern "C" fn probe_get_os_version() -> *const c_char {
+    static VALUE: OnceLock<CString> = OnceLock::new();
+    VALUE
+        .get_or_init(|| {
+            let s = get_uname_info()
+                .map(|u| {
+                    let sysname = carray_to_string(&u.sysname);
+                    let release = carray_to_string(&u.release);
+                    format!("{sysname} {release}")
+                })
+                .unwrap_or_else(|| "unknown".to_string());
+            CString::new(s).unwrap_or_else(|_| CString::new("unknown").unwrap())
+        })
+        .as_ptr()
+}
+
+/// Get the kernel version string (full build string from uname.version).
+#[unsafe(no_mangle)]
+pub extern "C" fn probe_get_kernel_version() -> *const c_char {
+    static VALUE: OnceLock<CString> = OnceLock::new();
+    VALUE
+        .get_or_init(|| {
+            let s = get_uname_info()
+                .map(|u| carray_to_string(&u.version))
+                .unwrap_or_else(|| "unknown".to_string());
+            CString::new(s).unwrap_or_else(|_| CString::new("unknown").unwrap())
+        })
+        .as_ptr()
+}
+
+/// Get the machine architecture (e.g. "x86_64", "aarch64", "arm64").
+#[unsafe(no_mangle)]
+pub extern "C" fn probe_get_arch() -> *const c_char {
+    static VALUE: OnceLock<CString> = OnceLock::new();
+    VALUE
+        .get_or_init(|| {
+            let s = get_uname_info()
+                .map(|u| carray_to_string(&u.machine))
+                .unwrap_or_else(|| "unknown".to_string());
+            CString::new(s).unwrap_or_else(|_| CString::new("unknown").unwrap())
+        })
+        .as_ptr()
 }
 
 // ============================================================================

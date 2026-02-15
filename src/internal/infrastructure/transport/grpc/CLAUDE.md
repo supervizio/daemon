@@ -1,16 +1,17 @@
-# gRPC - API du Daemon
+<!-- updated: 2026-02-15T21:30:00Z -->
+# gRPC - Daemon API
 
-Serveur gRPC exposant les services de contrôle et monitoring.
+gRPC server exposing control and monitoring services.
 
-## Rôle
+## Role
 
-Permettre le contrôle à distance du daemon : gestion des services, streaming de métriques.
+Enable remote daemon control: service management, metrics streaming.
 
 ## Structure
 
-| Fichier | Rôle |
-|---------|------|
-| `server.go` | `Server` implémentant les services gRPC |
+| File | Role |
+|------|------|
+| `server.go` | `Server` implementing gRPC services |
 
 ## Services
 

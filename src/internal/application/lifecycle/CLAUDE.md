@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Lifecycle - Process Lifecycle Management
 
 Application service for managing individual process lifecycles with restart policies.

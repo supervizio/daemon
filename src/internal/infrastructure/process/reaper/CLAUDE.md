@@ -1,30 +1,31 @@
-# Reaper - Récupération des Zombies
+<!-- updated: 2026-02-15T21:30:00Z -->
+# Reaper - Zombie Process Cleanup
 
-Boucle de nettoyage des processus zombies quand on est PID1.
+Zombie process cleanup loop when running as PID1.
 
-## Contexte
+## Context
 
-Quand le daemon tourne comme PID1 (dans un container), les processus orphelins lui sont réassignés. Sans reaper, ils deviennent zombies.
+When the daemon runs as PID1 (in a container), orphan processes are reassigned to it. Without a reaper, they become zombies.
 
 ## Interface
 
 ```go
 type ZombieReaper interface {
-    Start()           // Démarre la boucle background
-    Stop()            // Arrête la boucle
-    ReapOnce() int    // Un cycle manuel (pour tests)
-    IsPID1() bool     // Vrai si PID == 1
+    Start()           // Start background loop
+    Stop()            // Stop the loop
+    ReapOnce() int    // One manual cycle (for tests)
+    IsPID1() bool     // True if PID == 1
 }
 ```
 
-## Fichiers
+## Files
 
-| Fichier | Rôle |
-|---------|------|
-| `zombie_reaper.go` | Interface `ZombieReaper` |
-| `reaper_unix.go` | Implémentation avec `waitpid(-1, WNOHANG)` |
+| File | Role |
+|------|------|
+| `zombie_reaper.go` | `ZombieReaper` interface |
+| `reaper_unix.go` | Implementation with `waitpid(-1, WNOHANG)` |
 
-## Fonctionnement
+## How It Works
 
 ```go
 func (r *Reaper) Start() {
@@ -53,21 +54,21 @@ func (r *Reaper) ReapOnce() int {
 }
 ```
 
-## Constructeur
+## Constructor
 
 ```go
 New() *Reaper
 ```
 
-## Activation Conditionnelle
+## Conditional Activation
 
-Dans `bootstrap/providers.go` :
+In `bootstrap/providers.go`:
 
 ```go
 func ProvideReaper(r *reaper.Reaper) reaper.ZombieReaper {
     if r.IsPID1() {
         return r
     }
-    return nil  // Pas de reaper si pas PID1
+    return nil  // No reaper if not PID1
 }
 ```

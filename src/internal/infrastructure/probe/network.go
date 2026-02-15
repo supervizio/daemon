@@ -69,8 +69,8 @@ func (n *NetworkCollector) ListInterfaces(ctx context.Context) ([]metrics.NetInt
 			flags = append(flags, "loopback")
 		}
 		ifaces = append(ifaces, metrics.NetInterface{
-			Name:         cCharArrayToStringCached(item.name[:], true),         // stable: interface names don't change
-			HardwareAddr: cCharArrayToStringCached(item.mac_address[:], true),  // stable: MAC addresses don't change
+			Name:         cCharArrayToStringCached(item.name[:], true),        // stable: interface names don't change
+			HardwareAddr: cCharArrayToStringCached(item.mac_address[:], true), // stable: MAC addresses don't change
 			MTU:          int(item.mtu),
 			Flags:        flags,
 		})

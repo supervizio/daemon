@@ -1,32 +1,32 @@
-# BoltDB - Stockage Key-Value
+<!-- updated: 2026-02-15T21:30:00Z -->
+# BoltDB - Key-Value Storage
 
-Adaptateur BoltDB pour stockage embedded.
+BoltDB adapter for embedded storage.
 
-## Contexte
+## Context
 
-BoltDB est une base de données key-value embedded, parfaite pour un daemon :
-- Pas de serveur externe
+BoltDB is an embedded key-value database, ideal for a daemon:
+- No external server
 - ACID transactions
-- Fichier unique
+- Single file
 
-## Interface Implémentée
+## Implemented Interface
 
 ```go
-type Store interface {
-    Get(bucket, key string) ([]byte, error)
-    Put(bucket, key string, value []byte) error
-    Delete(bucket, key string) error
-    Close() error
+type MetricsStore interface {
+    MetricsWriter      // WriteSystemCPU, WriteSystemMemory, WriteProcessMetrics
+    MetricsReader      // GetSystemCPU, GetSystemMemory, GetProcessMetrics
+    MetricsMaintainer  // Prune, Close
 }
 ```
 
 ## Structure
 
-| Fichier | Rôle |
-|---------|------|
-| `store.go` | `Store` wrappant `*bolt.DB` |
+| File | Role |
+|------|------|
+| `store.go` | `Store` wrapping `*bolt.DB` |
 
-## Constructeur
+## Constructor
 
 ```go
 New(path string) (*Store, error)
@@ -36,18 +36,19 @@ NewWithOptions(path string, opts Options) (*Store, error)
 ## Usage
 
 ```go
-store, err := boltdb.New("/var/lib/daemon/state.db")
+store, err := boltdb.New("/var/lib/supervizio/metrics.db")
 defer store.Close()
 
-err = store.Put("services", "nginx", []byte(`{"status":"running"}`))
-data, err := store.Get("services", "nginx")
+err = store.WriteSystemCPU(ctx, cpuMetrics)
+cpu, err := store.GetLatestSystemCPU(ctx)
 ```
 
 ## Buckets
 
-BoltDB organise les données en "buckets" (équivalent de tables) :
+BoltDB organizes data in "buckets" (equivalent to tables):
 
 ```go
-store.Put("services", "nginx", ...)   // bucket=services, key=nginx
-store.Put("metrics", "cpu", ...)      // bucket=metrics, key=cpu
+// Metrics storage with time-series keys
+store.WriteSystemCPU(ctx, metrics)       // bucket=system_cpu
+store.WriteProcessMetrics(ctx, metrics)  // bucket=process_metrics
 ```

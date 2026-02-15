@@ -727,6 +727,15 @@ ProbeResult probe_find_process_by_port(uint16_t port, bool tcp, int32_t* out);
 // Get the platform name ("linux", "darwin", "freebsd", etc.)
 const char* probe_get_platform(void);
 
+// Get the OS version string (e.g. "Linux 6.12.69", "Darwin 24.6.0")
+const char* probe_get_os_version(void);
+
+// Get the kernel version string (full build string from uname.version)
+const char* probe_get_kernel_version(void);
+
+// Get the machine architecture (e.g. "x86_64", "aarch64", "arm64")
+const char* probe_get_arch(void);
+
 #ifdef __cplusplus
 }
 #endif

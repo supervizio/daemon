@@ -10,10 +10,13 @@ import "time"
 // This is used for the --probe CLI command to output comprehensive system information.
 type AllSystemMetrics struct {
 	// Metadata about the collection
-	Timestamp   time.Time `json:"timestamp"`
-	Platform    string    `json:"platform"`
-	Hostname    string    `json:"hostname,omitempty"`
-	CollectedAt int64     `json:"collected_at_us"`
+	Timestamp     time.Time `json:"timestamp"`
+	Platform      string    `json:"platform"`
+	Hostname      string    `json:"hostname,omitempty"`
+	OSVersion     string    `json:"os_version"`
+	KernelVersion string    `json:"kernel_version"`
+	Arch          string    `json:"arch"`
+	CollectedAt   int64     `json:"collected_at_us"`
 
 	// Basic system metrics
 	CPU    *CPUMetricsJSON    `json:"cpu"`

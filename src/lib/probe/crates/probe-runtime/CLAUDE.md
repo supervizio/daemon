@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # probe-runtime - Universal Runtime Detection
 
 Cross-platform detection of container runtimes and orchestrators.

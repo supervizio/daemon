@@ -76,4 +76,3 @@ logging:
 		_ = cfg // Prevent optimization elimination
 	}
 }
-

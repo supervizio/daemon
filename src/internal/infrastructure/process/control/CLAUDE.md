@@ -1,10 +1,11 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Control - Process Groups
 
-Gestion des process groups pour le signal forwarding.
+Process group management for signal forwarding.
 
-## Contexte
+## Context
 
-Quand on envoie SIGTERM à un processus, on veut aussi toucher ses enfants. Les process groups permettent ça.
+When sending SIGTERM to a process, we also want to reach its children. Process groups enable this.
 
 ## Interface
 
@@ -15,19 +16,19 @@ type ProcessControl interface {
 }
 ```
 
-## Fichiers
+## Files
 
-| Fichier | Rôle |
-|---------|------|
-| `control.go` | Interface `ProcessControl` |
-| `process_unix.go` | Implémentation via `syscall.Setpgid` |
+| File | Role |
+|------|------|
+| `control.go` | `ProcessControl` interface |
+| `process_unix.go` | Implementation via `syscall.Setpgid` |
 
-## Implémentation
+## Implementation
 
 ```go
 func (c *Control) SetProcessGroup(cmd *exec.Cmd) {
     cmd.SysProcAttr = &syscall.SysProcAttr{
-        Setpgid: true,  // Nouveau process group
+        Setpgid: true,  // New process group
     }
 }
 
@@ -40,17 +41,17 @@ func (c *Control) GetProcessGroup(pid int) (int, error) {
 }
 ```
 
-## Usage dans Executor
+## Usage in Executor
 
 ```go
 func (e *Executor) buildCommand(ctx, spec) (*exec.Cmd, error) {
     cmd := TrustedCommand(ctx, parts[0], args...)
-    e.process.SetProcessGroup(cmd)  // ← Ici
+    e.process.SetProcessGroup(cmd)  // ← Here
     return cmd, nil
 }
 ```
 
-## Constructeur
+## Constructor
 
 ```go
 New() *Control
