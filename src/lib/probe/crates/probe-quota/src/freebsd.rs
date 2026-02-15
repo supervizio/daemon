@@ -198,32 +198,44 @@ fn read_rlimits_into(limits: &mut QuotaLimits) {
         // RLIMIT_NOFILE (if not already set from rctl)
         if limits.nofile_limit.is_none() {
             if getrlimit(RLIMIT_NOFILE, &mut rl) == 0 {
-                limits.nofile_limit =
-                    Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
+                limits.nofile_limit = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
+                    u64::MAX
+                } else {
+                    rl.rlim_cur as u64
+                });
             }
         }
 
         // RLIMIT_CPU (if not already set)
         if limits.cpu_time_limit_secs.is_none() {
             if getrlimit(RLIMIT_CPU, &mut rl) == 0 {
-                limits.cpu_time_limit_secs =
-                    Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
+                limits.cpu_time_limit_secs = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
+                    u64::MAX
+                } else {
+                    rl.rlim_cur as u64
+                });
             }
         }
 
         // RLIMIT_DATA (if not already set)
         if limits.data_limit_bytes.is_none() {
             if getrlimit(RLIMIT_DATA, &mut rl) == 0 {
-                limits.data_limit_bytes =
-                    Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
+                limits.data_limit_bytes = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
+                    u64::MAX
+                } else {
+                    rl.rlim_cur as u64
+                });
             }
         }
 
         // RLIMIT_NPROC (if not already set)
         if limits.pids_limit.is_none() {
             if getrlimit(RLIMIT_NPROC, &mut rl) == 0 {
-                limits.pids_limit =
-                    Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
+                limits.pids_limit = Some(if rl.rlim_cur == libc::RLIM_INFINITY {
+                    u64::MAX
+                } else {
+                    rl.rlim_cur as u64
+                });
             }
         }
     }

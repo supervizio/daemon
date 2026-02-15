@@ -6,12 +6,19 @@ Application service for orchestrating multiple services and their lifecycle.
 
 ```
 supervisor/
-├── supervisor.go                  # Main orchestrator
-├── supervisor_external_test.go    # Black-box tests
-├── supervisor_internal_test.go    # White-box tests
-├── service_info.go                # ServiceInfo type
-├── service_stats.go               # ServiceStats type
-└── service_stats_external_test.go # Stats tests
+├── supervisor.go                     # Main orchestrator
+├── supervisor_external_test.go       # Black-box tests
+├── supervisor_internal_test.go       # White-box tests
+├── supervisor_benchmark_test.go      # Performance benchmarks
+├── service_info.go                   # ServiceInfo type
+├── service_stats.go                  # ServiceStats type
+├── service_stats_external_test.go    # Stats tests
+├── service_stats_snapshot.go         # Stats snapshot for TUI
+├── service_snapshot_for_tui.go       # Service snapshot for TUI display
+├── listener_snapshot_for_tui.go      # Listener snapshot for TUI display
+├── ports_linux.go                    # Linux-specific port detection
+├── ports_linux_internal_test.go      # Port detection tests
+└── ports_other.go                    # Non-Linux port stub
 ```
 
 ## Key Types

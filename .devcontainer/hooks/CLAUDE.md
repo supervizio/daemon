@@ -1,13 +1,15 @@
+<!-- updated: 2026-02-12T17:05:00Z -->
 # DevContainer Hooks
 
 ## Purpose
 
-Lifecycle scripts for devcontainer events.
+Lifecycle scripts and git hooks for devcontainer events.
 
 ## Structure
 
 ```text
 hooks/
+├── commit-msg          # Git hook: removes AI/Claude mentions from commits
 ├── lifecycle/          # DevContainer lifecycle hooks
 │   ├── initialize.sh   # Initial setup
 │   ├── onCreate.sh     # On container creation

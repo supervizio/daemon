@@ -17,7 +17,32 @@ if [ ! -f /etc/supervizio/config.yaml ] && [ -f /etc/supervizio/config.example.y
     chmod 644 /etc/supervizio/config.yaml
 fi
 
-echo "supervizio installed successfully"
-echo "Configure: /etc/supervizio/config.yaml"
-echo "Start: rc-service supervizio start"
-echo "Enable: rc-update add supervizio"
+# Detect init system and configure
+if command -v s6-svc >/dev/null 2>&1 || [ -d /etc/s6 ]; then
+    # s6 (Alpine s6 overlay, Chimera)
+    echo "supervizio installed successfully"
+    echo "Configure: /etc/supervizio/config.yaml"
+    echo "Enable: s6-rc-bundle-update add default supervizio"
+elif command -v dinitctl >/dev/null 2>&1; then
+    # dinit (Chimera Linux)
+    dinitctl enable supervizio 2>/dev/null || true
+    echo "supervizio installed successfully"
+    echo "Configure: /etc/supervizio/config.yaml"
+    echo "Start: dinitctl start supervizio"
+elif command -v sv >/dev/null 2>&1 && [ -d /etc/sv ]; then
+    # runit
+    ln -sf /etc/sv/supervizio /var/service/ 2>/dev/null || true
+    echo "supervizio installed successfully"
+    echo "Configure: /etc/supervizio/config.yaml"
+    echo "Start: sv start supervizio"
+elif command -v rc-service >/dev/null 2>&1; then
+    # OpenRC (default Alpine)
+    rc-update add supervizio default 2>/dev/null || true
+    echo "supervizio installed successfully"
+    echo "Configure: /etc/supervizio/config.yaml"
+    echo "Start: rc-service supervizio start"
+else
+    echo "supervizio installed successfully"
+    echo "Configure: /etc/supervizio/config.yaml"
+    echo "Note: No supported init system detected. Start manually."
+fi

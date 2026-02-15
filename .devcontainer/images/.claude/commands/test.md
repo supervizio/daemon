@@ -20,6 +20,12 @@ allowed-tools:
 
 $ARGUMENTS
 
+## GREPAI-FIRST (MANDATORY)
+
+Use `grepai_search` for ALL semantic/meaning-based queries BEFORE Grep.
+Use `grepai_trace_callers`/`grepai_trace_callees` for impact analysis.
+Fallback to Grep ONLY for exact string matches or regex patterns.
+
 ---
 
 ## Overview
@@ -99,7 +105,7 @@ Exemples:
 
 ---
 
-## Phase 1 : Peek (RLM Pattern)
+## Phase 1.0 : Peek (RLM Pattern)
 
 **Analyser la page AVANT interaction :**
 
@@ -151,7 +157,7 @@ peek_workflow:
 
 ---
 
-## Phase 2 : Decompose (RLM Pattern)
+## Phase 2.0 : Decompose (RLM Pattern)
 
 **Diviser le test en étapes :**
 
@@ -184,7 +190,7 @@ decompose_workflow:
 
 ---
 
-## Phase 3 : Parallelize (RLM Pattern)
+## Phase 3.0 : Parallelize (RLM Pattern)
 
 **Assertions et captures simultanées :**
 
@@ -216,7 +222,7 @@ parallel_validation:
 
 ---
 
-## Phase 4 : Synthesize (RLM Pattern)
+## Phase 4.0 : Synthesize (RLM Pattern)
 
 **Rapport de test consolidé :**
 

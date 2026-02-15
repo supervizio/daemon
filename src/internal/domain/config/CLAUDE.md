@@ -2,19 +2,22 @@
 
 Configuration value objects for services managed by the supervisor.
 
-## Files
+## Files (48 files)
 
-| File | Purpose |
-|------|---------|
-| `config.go` | `Config` - root configuration |
-| `serviceconfig.go` | `ServiceConfig` - service definition |
-| `listener.go` | `ListenerConfig` - network listener with probe |
-| `probeconfig.go` | `ProbeConfig` - health probe configuration |
-| `restart.go` | `RestartConfig`, `RestartPolicy` |
-| `loggingconfig.go` | `LoggingConfig` - global logging |
-| `logstreamconfig.go` | `LogStreamConfig` - per-stream settings |
-| `rotationconfig.go` | `RotationConfig` - log rotation |
-| `validate.go` | Configuration validation |
+| Category | Key Files | Purpose |
+|----------|-----------|---------|
+| **Core** | `config.go`, `serviceconfig.go`, `validate.go` | Root config, service definition, validation |
+| **Restart** | `restart.go` | RestartConfig, RestartPolicy enum |
+| **Network** | `listener.go`, `probeconfig.go`, `healthcheck.go` | Listener, probe, health check configs |
+| **Logging** | `loggingconfig.go`, `logstreamconfig.go`, `rotationconfig.go` | Global logging, per-stream, rotation |
+| **Logging (ext)** | `daemonlogging.go`, `servicelogging.go`, `logdefaults.go` | Daemon logging, service logging, defaults |
+| **Writers** | `writer_config.go`, `file_writer_config.go`, `json_writer_config.go` | Log output destinations |
+| **Monitoring** | `monitoring.go`, `monitoring_defaults.go`, `metrics_config.go` | External monitoring, metrics config |
+| **Targets** | `target_config.go`, `discovery_config.go` | Target and discovery base configs |
+| **Discovery** | `docker_discovery_config.go`, `kubernetes_discovery_config.go` | Docker, K8s discovery |
+|  | `nomad_discovery_config.go`, `systemd_discovery_config.go` | Nomad, systemd discovery |
+|  | `podman_discovery_config.go`, `bsdrc_discovery_config.go` | Podman, BSD rc discovery |
+|  | `openrc_discovery_config.go`, `portscan_discovery_config.go` | OpenRC, port scan discovery |
 
 ## Key Types
 

@@ -379,7 +379,7 @@ SECURITY:  pub (public) | priv (IDs) | pii (RGPD) | secret (password)
 | KTN-STRUCT-CTOR | Exempte les DTOs (pas de constructeur) |
 | KTN-DTO-TAG | Valide format `dto:"dir,ctx,sec"` |
 
-**Reference:** `.claude/docs/conventions/dto-tags.md`
+**Reference:** `~/.claude/docs/conventions/dto-tags.md`
 
 ## Forbidden (ABSOLUTE)
 

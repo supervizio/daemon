@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-12T17:05:00Z -->
 # TUI - Terminal User Interface
 
 Terminal user interface for superviz.io providing raw (MOTD) and interactive modes.
@@ -6,10 +7,17 @@ Terminal user interface for superviz.io providing raw (MOTD) and interactive mod
 
 ```
 tui/
-├── tui.go             # Main entry, mode selection
-├── raw.go             # Raw mode (static MOTD)
-├── interactive.go     # Interactive mode (Bubble Tea)
-├── adapter.go         # Supervisor/metrics adapters
+├── tui.go                          # Main entry, mode selection
+├── raw.go                          # Raw mode (static MOTD)
+├── interactive.go                  # Interactive mode (Bubble Tea)
+├── config.go                       # TUI configuration
+├── dynamic_service_provider.go     # Dynamic service data provider
+├── log_adapter.go                  # Log adapter for TUI
+├── log_buffer.go                   # Log buffer management
+├── model_config.go                 # Model configuration
+├── system_metrics_adapter.go       # System metrics adapter
+├── tui_log_writer.go               # TUI log writer
+├── tui_snapshot_data.go            # Snapshot data for TUI
 ├── ansi/              # ANSI codes and themes
 ├── collector/         # Data collectors (procfs, sysfs)
 ├── layout/            # Responsive layout

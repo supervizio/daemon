@@ -1,0 +1,7 @@
+type = process
+command = /usr/local/bin/supervizio --config /etc/supervizio/config.yaml
+smooth-recovery = true
+restart = true
+restart-delay = 5
+logfile = /var/log/supervizio/supervizio.log
+depends-on = boot.target

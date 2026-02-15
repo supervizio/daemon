@@ -1,5 +1,5 @@
 # GrepAI Configuration - Optimized for DevContainer (12 languages)
-# Model: qwen3-embedding:0.6b (fast, high-quality, code-aware)
+# Model: bge-m3 (best RAG accuracy 72%, 1024d, multi-granularity retrieval)
 # Hybrid search enabled for mixed semantic + identifier queries
 #
 # Endpoint is auto-detected by postStart.sh (host GPU-accelerated)
@@ -9,7 +9,7 @@ version: 1
 
 embedder:
     provider: ollama
-    model: qwen3-embedding:0.6b
+    model: bge-m3
     endpoint: http://localhost:11434  # Auto-replaced by postStart.sh
     dimensions: 1024  # Reduced from 4096 max for efficiency
 
@@ -17,7 +17,7 @@ store:
     backend: gob
 
 chunking:
-    size: 1024   # Larger chunks - qwen3 supports 32K context
+    size: 1024   # Larger chunks for better semantic context
     overlap: 100 # Better context overlap
 
 watch:

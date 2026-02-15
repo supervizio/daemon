@@ -22,7 +22,7 @@ src/
 
 ```go
 module github.com/kodflow/daemon
-go 1.25
+go 1.25.6
 ```
 
 ## Dependencies
@@ -31,6 +31,11 @@ go 1.25
 |---------|-------|
 | `gopkg.in/yaml.v3` | Configuration parsing |
 | `github.com/stretchr/testify` | Unit tests (assert, require) |
+| `github.com/charmbracelet/bubbletea` | Interactive TUI framework |
+| `github.com/google/wire` | Compile-time dependency injection |
+| `go.etcd.io/bbolt` | Embedded key-value storage |
+| `google.golang.org/grpc` | gRPC server and client |
+| `google.golang.org/protobuf` | Protocol buffer support |
 
 ## Commands
 

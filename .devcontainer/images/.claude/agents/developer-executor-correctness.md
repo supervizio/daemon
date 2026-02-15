@@ -226,7 +226,7 @@ idempotence:
 ```yaml
 documentation:
   1_local_first:
-    path: ".claude/docs/"
+    path: "~/.claude/docs/"
     usage: "Design patterns, language idioms"
 
   2_remote:

@@ -19,46 +19,16 @@ fi
 EXT="${FILE##*.}"
 DIR=$(dirname "$FILE")
 
-# Find project root (look for common config files)
-find_project_root() {
-    local current="$1"
-    while [ "$current" != "/" ]; do
-        if [ -f "$current/Makefile" ] || \
-           [ -f "$current/package.json" ] || \
-           [ -f "$current/pyproject.toml" ] || \
-           [ -f "$current/go.mod" ] || \
-           [ -f "$current/Cargo.toml" ] || \
-           [ -f "$current/pom.xml" ] || \
-           [ -f "$current/build.sbt" ] || \
-           [ -f "$current/mix.exs" ] || \
-           [ -f "$current/pubspec.yaml" ]; then
-            echo "$current"
-            return
-        fi
-        current=$(dirname "$current")
-    done
-    echo "$DIR"
-}
+# Source shared utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+[ -f "$SCRIPT_DIR/common.sh" ] && . "$SCRIPT_DIR/common.sh"
 
-PROJECT_ROOT=$(find_project_root "$DIR")
-
-# Check if Makefile has typecheck target
-has_makefile_typecheck() {
-    if [ -f "$PROJECT_ROOT/Makefile" ]; then
-        grep -qE "^typecheck:" "$PROJECT_ROOT/Makefile" 2>/dev/null
-        return $?
-    fi
-    return 1
-}
+PROJECT_ROOT=$(find_project_root "$DIR" "$DIR")
 
 # === Makefile-first approach ===
-if has_makefile_typecheck; then
-    cd "$PROJECT_ROOT"
-    if grep -qE "FILE\s*[:?]?=" "$PROJECT_ROOT/Makefile" 2>/dev/null; then
-        make typecheck FILE="$FILE" 2>/dev/null || true
-    else
-        make typecheck 2>/dev/null || true
-    fi
+if has_makefile_target "typecheck" "$PROJECT_ROOT"; then
+    run_makefile_target "typecheck" "$FILE" "$PROJECT_ROOT"
     exit 0
 fi
 
@@ -159,6 +129,69 @@ case "$EXT" in
             clang -std=c23 -fsyntax-only -Werror "$FILE" 2>/dev/null || true
         elif command -v gcc &>/dev/null; then
             gcc -std=c23 -fsyntax-only -Werror "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # C# - dotnet build (type checking)
+    cs)
+        if command -v dotnet &>/dev/null; then
+            dotnet build --no-restore 2>/dev/null || true
+        fi
+        ;;
+
+    # Kotlin - kotlinc progressive check
+    kt|kts)
+        if command -v kotlinc &>/dev/null; then
+            kotlinc -progressive -Werror "$FILE" -d /tmp 2>/dev/null || true
+        fi
+        ;;
+
+    # Swift - swiftc typecheck
+    swift)
+        if command -v swiftc &>/dev/null; then
+            swiftc -typecheck "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Perl - syntax check
+    pl|pm)
+        if command -v perl &>/dev/null; then
+            perl -c "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Fortran - syntax check
+    f|f90|f95|f03|f08)
+        if command -v gfortran &>/dev/null; then
+            gfortran -fsyntax-only "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # COBOL - syntax check
+    cob|cbl)
+        if command -v cobc &>/dev/null; then
+            cobc -fsyntax-only "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Pascal - syntax + type check
+    pas|dpr|pp)
+        if command -v fpc &>/dev/null; then
+            fpc -Sew "$FILE" -o/dev/null 2>/dev/null || true
+        fi
+        ;;
+
+    # Visual Basic .NET - dotnet build
+    vb)
+        if command -v dotnet &>/dev/null; then
+            dotnet build --no-restore 2>/dev/null || true
+        fi
+        ;;
+
+    # Ada - gnat compile check
+    adb|ads)
+        if command -v gcc &>/dev/null; then
+            gcc -c -gnatc "$FILE" 2>/dev/null || true
         fi
         ;;
 esac

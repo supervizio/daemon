@@ -1,0 +1,4 @@
+#!/bin/execlineb -P
+# supervizio s6 log service
+# Captures stdout/stderr from the main service
+s6-log -b n20 s1000000 T /var/log/supervizio

@@ -12,7 +12,10 @@ allowed-tools:
   - "Write(**/*)"
   - "Edit(**/*)"
   - "Task(*)"
-  - "TodoWrite(*)"
+  - "TaskCreate(*)"
+  - "TaskUpdate(*)"
+  - "TaskList(*)"
+  - "TaskGet(*)"
   - "Bash(git:*)"
 ---
 
@@ -62,11 +65,11 @@ Options:
   --help            Affiche cette aide
 
 Line Thresholds (CLAUDE.md):
-  IDEAL       :   0-60 lignes (simple directories)
-  ACCEPTABLE  :  61-80 lignes (medium complexity)
-  WARNING     : 81-100 lignes (review recommended)
-  CRITICAL    : 101-150 lignes (must be condensed)
-  FORBIDDEN   :  150+ lignes (split required)
+  IDEAL       :   0-150 lignes (simple directories)
+  ACCEPTABLE  : 151-200 lignes (medium complexity)
+  WARNING     : 201-250 lignes (review recommended)
+  CRITICAL    : 251-300 lignes (must be condensed)
+  FORBIDDEN   :  301+ lignes (split required)
 
 Exclusions (STRICT .gitignore respect):
   - vendor/, node_modules/, .git/
@@ -96,7 +99,7 @@ Workflow:
 
 ## Mode Normal (Préchargement)
 
-### Phase 1 : Peek (Découverte hiérarchie)
+### Phase 1.0 : Peek (Découverte hiérarchie)
 
 ```yaml
 peek_workflow:
@@ -125,6 +128,24 @@ peek_workflow:
       - "Cargo.toml" → Rust
       - "pyproject.toml" → Python
       - "*.tf" → Terraform
+      - "pom.xml" → Java (Maven)
+      - "build.gradle" → Java/Kotlin (Gradle)
+      - "build.sbt" → Scala
+      - "mix.exs" → Elixir
+      - "composer.json" → PHP
+      - "Gemfile" → Ruby
+      - "pubspec.yaml" → Dart/Flutter
+      - "CMakeLists.txt" → C/C++ (CMake)
+      - "*.csproj" → C# (.NET)
+      - "Package.swift" → Swift
+      - "DESCRIPTION" → R
+      - "cpanfile" → Perl
+      - "*.rockspec" → Lua
+      - "fpm.toml" → Fortran
+      - "alire.toml" → Ada
+      - "*.cob" → COBOL
+      - "*.lpi" → Pascal
+      - "*.vbproj" → VB.NET
 ```
 
 **Output Phase 1 :**
@@ -150,7 +171,7 @@ peek_workflow:
 
 ---
 
-### Phase 2 : Funnel (Lecture en entonnoir)
+### Phase 2.0 : Funnel (Lecture en entonnoir)
 
 ```yaml
 funnel_strategy:
@@ -199,7 +220,7 @@ POUR profondeur DE 0 À max_profondeur:
 
 ---
 
-### Phase 3 : Parallelize (Analyse par domaine)
+### Phase 3.0 : Parallelize (Analyse par domaine)
 
 ```yaml
 parallel_analysis:
@@ -237,7 +258,7 @@ parallel_analysis:
 
     - task: "docs-analyzer"
       type: "Explore"
-      scope: ".claude/docs/"
+      scope: "~/.claude/docs/"
       prompt: |
         Analyser la base de connaissances:
         - Catégories de patterns disponibles
@@ -249,7 +270,7 @@ parallel_analysis:
 
 ---
 
-### Phase 4 : Synthesize (Contexte consolidé)
+### Phase 4.0 : Synthesize (Contexte consolidé)
 
 ```yaml
 synthesize_workflow:
@@ -315,7 +336,7 @@ synthesize_workflow:
 
 ## Mode --update (Mise à jour documentation)
 
-### Phase 1 : Scan complet du code
+### Phase 1.0 : Scan complet du code
 
 ```yaml
 scan_workflow:
@@ -361,7 +382,7 @@ scan_workflow:
 
 ---
 
-### Phase 1.5 : Création des CLAUDE.md manquants
+### Phase 2.0 : Création des CLAUDE.md manquants
 
 **Comportement par défaut de --update** (pas une option séparée).
 
@@ -433,7 +454,7 @@ create_missing_workflow:
 
   output: |
     ═══════════════════════════════════════════════════════════
-      /warmup --update - Phase 1.5: Missing CLAUDE.md
+      /warmup --update - Phase 2.0: Missing CLAUDE.md
     ═══════════════════════════════════════════════════════════
 
     .gitignore patterns loaded: <n> patterns
@@ -473,7 +494,7 @@ create_missing_workflow:
 
 ---
 
-### Phase 2 : Détection des obsolescences
+### Phase 3.0 : Détection des obsolescences
 
 ```yaml
 obsolete_detection:
@@ -507,7 +528,7 @@ obsolete_detection:
 
 ---
 
-### Phase 3 : Génération des mises à jour
+### Phase 4.0 : Génération des mises à jour
 
 ```yaml
 update_generation:
@@ -537,8 +558,8 @@ update_generation:
     - <point d'attention détecté dans le code>
 
   constraints:
-    max_lines: 100  # WARNING threshold
-    critical_threshold: 150  # Must be condensed or split
+    max_lines: 200  # ACCEPTABLE threshold
+    critical_threshold: 300  # Must be condensed or split
     no_implementation_details: true
     no_obsolete_info: true
     maintain_existing_structure: true
@@ -546,7 +567,7 @@ update_generation:
 
 ---
 
-### Phase 4 : Application des changements
+### Phase 5.0 : Application des changements
 
 ```yaml
 apply_workflow:
@@ -586,15 +607,31 @@ apply_workflow:
       tool: Edit or Write
       backup: true
 
+  timestamp_injection:
+    action: "Ajouter/mettre à jour le timestamp ISO en première ligne"
+    algorithm: |
+      POUR chaque CLAUDE.md mis à jour:
+        timestamp = "<!-- updated: " + now().toISO8601() + "Z -->"
+        SI première_ligne match '<!-- updated: .* -->':
+          remplacer première_ligne par timestamp
+        SINON:
+          insérer timestamp en première ligne
+    format: "<!-- updated: YYYY-MM-DDTHH:MM:SSZ -->"
+    example: "<!-- updated: 2026-02-11T14:30:00Z -->"
+    purpose: |
+      Permet à /git Phase 3.8 de détecter la fraîcheur (staleness).
+      Les fichiers mis à jour il y a moins de 5 minutes sont ignorés.
+
   validation:
     post_apply:
-      - "Verify file lines: IDEAL(0-60), ACCEPTABLE(61-80), WARNING(81-100), CRITICAL(101-150)"
-      - "Flag files > 150 lines as FORBIDDEN (must split)"
+      - "Verify file lines: IDEAL(0-150), ACCEPTABLE(151-200), WARNING(201-250), CRITICAL(251-300)"
+      - "Flag files > 300 lines as FORBIDDEN (must split)"
       - "Verify no obsolete references"
       - "Verify structure section matches reality"
+      - "Verify timestamp injected in first line"
 ```
 
-### Phase 5 : GrepAI Config Update (Project-Specific Exclusions)
+### Phase 6.0 : GrepAI Config Update (Project-Specific Exclusions)
 
 **Met à jour la configuration grepai avec les exclusions spécifiques au projet.**
 
@@ -655,7 +692,7 @@ grepai_config_update:
 
   output: |
     ═══════════════════════════════════════════════════════════
-      /warmup --update - Phase 5: GrepAI Config
+      /warmup --update - Phase 6.0: GrepAI Config
     ═══════════════════════════════════════════════════════════
 
     Config: /workspace/.grepai/config.yaml
@@ -702,7 +739,7 @@ grepai_config_update:
     ✓ Project-specific exclusions added
 
   Validation:
-    ✓ Line thresholds: 0 FORBIDDEN, 0 CRITICAL, 2 WARNING
+    ✓ Line thresholds: 0 FORBIDDEN, 0 CRITICAL, 0 WARNING
     ✓ Structure sections match reality
     ✓ No broken file references
 
@@ -720,9 +757,9 @@ grepai_config_update:
 | Supprimer CLAUDE.md | ❌ **INTERDIT** | Seule mise à jour autorisée |
 | Ignorer .gitignore | ❌ **INTERDIT** | Source de vérité pour exclusions |
 | Créer CLAUDE.md dans gitignored | ❌ **INTERDIT** | vendor/, node_modules/, etc. |
-| CLAUDE.md > 150 lignes | ❌ **FORBIDDEN** | Doit être splitté |
-| CLAUDE.md 101-150 lignes | 🔴 **CRITICAL** | Condensation obligatoire |
-| CLAUDE.md 81-100 lignes | ⚠ **WARNING** | Révision recommandée |
+| CLAUDE.md > 300 lignes | ❌ **FORBIDDEN** | Doit être splitté |
+| CLAUDE.md 251-300 lignes | 🔴 **CRITICAL** | Condensation obligatoire |
+| CLAUDE.md 201-250 lignes | ⚠ **WARNING** | Révision recommandée |
 | Lecture aléatoire | ❌ **INTERDIT** | Funnel (root→leaves) obligatoire |
 | Détails d'implémentation | ❌ **INTERDIT** | Contexte, pas code |
 | --update sans backup | ⚠ **WARNING** | Risque de perte |
@@ -733,27 +770,27 @@ grepai_config_update:
 ┌────────────┬─────────┬───────────────────────────────────────┐
 │   Niveau   │ Lignes  │             Action                    │
 ├────────────┼─────────┼───────────────────────────────────────┤
-│ IDEAL      │ 0-60    │ ✅ Aucune action                      │
+│ IDEAL      │ 0-150   │ ✅ Aucune action                      │
 ├────────────┼─────────┼───────────────────────────────────────┤
-│ ACCEPTABLE │ 61-80   │ ✅ Dossier moyen, acceptable          │
+│ ACCEPTABLE │ 151-200 │ ✅ Dossier moyen, acceptable          │
 ├────────────┼─────────┼───────────────────────────────────────┤
-│ WARNING    │ 81-100  │ ⚠️ Révision recommandée à la prochaine│
+│ WARNING    │ 201-250 │ ⚠️ Révision recommandée à la prochaine│
 ├────────────┼─────────┼───────────────────────────────────────┤
-│ CRITICAL   │ 101-150 │ 🔴 Condensation obligatoire           │
+│ CRITICAL   │ 251-300 │ 🔴 Condensation obligatoire           │
 ├────────────┼─────────┼───────────────────────────────────────┤
-│ FORBIDDEN  │ 150+    │ ❌ Doit être splitté ou restructuré   │
+│ FORBIDDEN  │ 301+    │ ❌ Doit être splitté ou restructuré   │
 └────────────┴─────────┴───────────────────────────────────────┘
 ```
 
 **Justification des seuils :**
 
-| Critère | 100 lignes (WARNING) | 150 lignes (CRITICAL) |
+| Critère | 250 lignes (WARNING) | 300 lignes (CRITICAL) |
 |---------|----------------------|-----------------------|
-| Temps lecture | ~5 min | ~7-8 min |
-| Tokens LLM | ~1000 | ~1500 |
-| Flexibilité | Projets volumineux OK | Limite absolue |
+| Temps lecture | ~10 min | ~15 min |
+| Tokens LLM | ~2500 | ~3000 |
+| Flexibilité | Projets complexes OK | Limite absolue |
 
-**Quand 150+ lignes ?** → Le dossier doit être splitté en sous-dossiers avec leurs propres CLAUDE.md.
+**Quand 300+ lignes ?** → Le dossier doit être splitté en sous-dossiers avec leurs propres CLAUDE.md.
 
 ---
 
@@ -789,6 +826,6 @@ grepai_config_update:
 | Progressive Disclosure | DevOps | Détail croissant par profondeur |
 
 **Références :**
-- `.claude/docs/cloud/cache-aside.md`
-- `.claude/docs/performance/lazy-load.md`
-- `.claude/docs/devops/feature-toggles.md`
+- `~/.claude/docs/cloud/cache-aside.md`
+- `~/.claude/docs/performance/lazy-load.md`
+- `~/.claude/docs/devops/feature-toggles.md`

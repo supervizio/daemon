@@ -1,7 +1,8 @@
 # =============================================================================
 # nfpm configuration for Linux package generation
 # =============================================================================
-# Generates: .deb (Debian/Devuan), .rpm (Rocky/RHEL), .apk (Alpine)
+# Generates: .deb (Debian/Devuan), .rpm (Rocky/RHEL), .apk (Alpine),
+#            .pkg.tar.zst (Arch/Artix)
 # Docs: https://nfpm.goreleaser.com/configuration/
 # =============================================================================
 
@@ -48,7 +49,7 @@ contents:
     file_info:
       mode: 0755
 
-  # Systemd service file (deb/rpm only)
+  # Systemd service file (deb/rpm/archlinux)
   - src: ./setup/init/systemd/supervizio.service
     dst: /usr/lib/systemd/system/supervizio.service
     file_info:
@@ -61,8 +62,60 @@ contents:
       mode: 0644
     packager: rpm
 
-  # SysVinit script (deb only, for Devuan and similar)
+  - src: ./setup/init/systemd/supervizio.service
+    dst: /usr/lib/systemd/system/supervizio.service
+    file_info:
+      mode: 0644
+    packager: archlinux
+
+  # Dinit service file (archlinux - for Artix)
+  - src: ./setup/init/dinit/supervizio
+    dst: /etc/dinit.d/supervizio
+    file_info:
+      mode: 0644
+    packager: archlinux
+
+  # runit service files (archlinux - Artix with runit)
+  - src: ./setup/init/runit/supervizio/run
+    dst: /etc/sv/supervizio/run
+    file_info:
+      mode: 0755
+    packager: archlinux
+
+  - src: ./setup/init/runit/supervizio/log/run
+    dst: /etc/sv/supervizio/log/run
+    file_info:
+      mode: 0755
+    packager: archlinux
+
+  # s6 service files (archlinux - Artix with s6)
+  - src: ./setup/init/s6/supervizio/run
+    dst: /etc/s6/supervizio/run
+    file_info:
+      mode: 0755
+    packager: archlinux
+
+  - src: ./setup/init/s6/supervizio/type
+    dst: /etc/s6/supervizio/type
+    file_info:
+      mode: 0644
+    packager: archlinux
+
+  - src: ./setup/init/s6/supervizio/log/run
+    dst: /etc/s6/supervizio/log/run
+    file_info:
+      mode: 0755
+    packager: archlinux
+
+  # OpenRC init script (archlinux - Artix with OpenRC)
   - src: ./setup/init/openrc/supervizio
+    dst: /etc/init.d/supervizio
+    file_info:
+      mode: 0755
+    packager: archlinux
+
+  # SysVinit script (deb only, for Devuan and similar)
+  - src: ./setup/init/sysvinit/supervizio
     dst: /etc/init.d/supervizio
     file_info:
       mode: 0755
@@ -73,6 +126,45 @@ contents:
     dst: /etc/init.d/supervizio
     file_info:
       mode: 0755
+    packager: apk
+
+  # s6 service files (apk - Alpine with s6)
+  - src: ./setup/init/s6/supervizio/run
+    dst: /etc/s6/supervizio/run
+    file_info:
+      mode: 0755
+    packager: apk
+
+  - src: ./setup/init/s6/supervizio/type
+    dst: /etc/s6/supervizio/type
+    file_info:
+      mode: 0644
+    packager: apk
+
+  - src: ./setup/init/s6/supervizio/log/run
+    dst: /etc/s6/supervizio/log/run
+    file_info:
+      mode: 0755
+    packager: apk
+
+  # runit service files (apk - Alpine with runit)
+  - src: ./setup/init/runit/supervizio/run
+    dst: /etc/sv/supervizio/run
+    file_info:
+      mode: 0755
+    packager: apk
+
+  - src: ./setup/init/runit/supervizio/log/run
+    dst: /etc/sv/supervizio/log/run
+    file_info:
+      mode: 0755
+    packager: apk
+
+  # dinit service file (apk - Chimera Linux)
+  - src: ./setup/init/dinit/supervizio
+    dst: /etc/dinit.d/supervizio
+    file_info:
+      mode: 0644
     packager: apk
 
 # Package-specific overrides
@@ -91,3 +183,8 @@ overrides:
     scripts:
       postinstall: ./setup/scripts/postinstall-apk.sh
       preremove: ./setup/scripts/preremove-apk.sh
+
+  archlinux:
+    scripts:
+      postinstall: ./setup/scripts/postinstall-arch.sh
+      preremove: ./setup/scripts/preremove-arch.sh

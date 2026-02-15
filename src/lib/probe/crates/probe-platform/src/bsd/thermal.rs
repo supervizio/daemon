@@ -14,8 +14,10 @@
 //! Temperature conversion: Celsius = (deciKelvin / 10.0) - 273.15
 
 use crate::{Error, Result, ThermalZone};
+#[cfg(target_os = "freebsd")]
 use std::ffi::CString;
 use std::mem;
+#[cfg(target_os = "freebsd")]
 use std::process::Command;
 
 /// Maximum number of thermal zones to probe.
@@ -433,7 +435,7 @@ unsafe fn cstr_to_string(ptr: *const libc::c_char) -> String {
     if ptr.is_null() {
         return String::new();
     }
-    std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned()
+    unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() }
 }
 
 // ============================================================================

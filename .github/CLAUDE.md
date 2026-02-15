@@ -1,16 +1,18 @@
 # GitHub - CI/CD Workflows
 
-GitHub Actions and instructions configuration.
+GitHub Actions, scripts, and instructions configuration.
 
 ## Structure
 
 ```
 .github/
 ├── workflows/
-│   ├── ci-x86.yml       # CI: x86/amd64 (lint, test, build, e2e, packages)
-│   ├── ci-arm64.yml     # CI: ARM64 (native ARM runner + Zig cross)
-│   ├── release.yml      # Semantic release + packages + e2e tests
-│   └── deploy-repo.yml  # Package repository deployment (GitHub Pages)
+│   ├── ci.yml             # CI: unified pipeline (32 jobs, VM E2E, ARM64, cross-build, musl)
+│   ├── release.yml        # Semantic release + packages + e2e tests (mirrors CI)
+│   └── deploy-repo.yml    # Package repository deployment (GitHub Pages)
+├── scripts/
+│   ├── vm-acquire.sh      # VM lock acquisition (flambeau mechanism)
+│   └── vm-release.sh      # VM release (stop)
 └── instructions/
     └── codacy.instructions.md
 ```
@@ -19,9 +21,8 @@ GitHub Actions and instructions configuration.
 
 | Workflow | Trigger | Action |
 |----------|---------|--------|
-| `ci-x86.yml` | Push/PR | x86 builds: Rust lint/test, probe, Go test, binaries, e2e |
-| `ci-arm64.yml` | Push/PR | ARM64 builds: native ARM runner + Zig cross-compile |
-| `release.yml` | Tag/Manual | Packages + e2e tests + GitHub release |
+| `ci.yml` | Push/PR | Unified pipeline: lint, test, build, packages, Docker E2E, VM E2E |
+| `release.yml` | Tag/Manual | Build with probe + packages + e2e tests + GitHub release |
 | `deploy-repo.yml` | Release | Deploy apt/yum/apk repos to GitHub Pages |
 
 ## Versioning
@@ -31,9 +32,15 @@ Automatic detection from conventional commits:
 
 ## Platforms
 
-- Linux: amd64, arm64 (glibc + musl)
-- BSD: FreeBSD, OpenBSD, NetBSD (amd64, arm64 via Zig cross)
-- macOS: amd64, arm64
+- Linux: amd64 + arm64 (glibc + musl), arm + 386 + riscv64 (glibc + musl, cross-compiled)
+- BSD: FreeBSD, OpenBSD, NetBSD (native VM builds)
+- macOS: amd64 + arm64 (Apple Silicon)
+
+## VM Locking
+
+Scripts in `scripts/` implement a "flambeau" mechanism:
+- `vm-acquire.sh`: Lock via `/usebyjob` file on VM, retry if busy (max 15min)
+- `vm-release.sh`: Stop VM (lock cleared on next snapshot rollback)
 
 ## Related Directories
 

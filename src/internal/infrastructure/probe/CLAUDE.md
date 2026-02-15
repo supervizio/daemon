@@ -46,7 +46,8 @@ make build-hybrid   # Build both
 
 | Platform | Metrics | Quota Detection |
 |----------|---------|-----------------|
-| Linux (amd64/arm64) | ✅ Full | ✅ cgroups v1/v2 |
+| Linux (amd64/arm64, glibc+musl) | ✅ Full | ✅ cgroups v1/v2 |
+| Linux (arm/386/riscv64, glibc+musl) | ✅ Full | ✅ cgroups v1/v2 |
 | macOS (amd64/arm64) | ✅ Partial | ✅ getrlimit |
 | FreeBSD (amd64) | ✅ Partial | ✅ rctl |
 | OpenBSD (amd64) | ✅ Partial | ✅ getrlimit |

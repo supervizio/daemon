@@ -47,6 +47,12 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+    # Capabilities for VPN clients (OpenVPN, WireGuard, IPsec, PPTP)
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
     # Keep container running
     command: /bin/sh -c "while sleep 1000; do :; done"
 
@@ -119,6 +125,10 @@ services:
 
       # Ollama runs on HOST (installed via initialize.sh)
       # Accessible at host.docker.internal:11434
+
+      # VPN configuration (previously set by openvpn feature containerEnv)
+      - OPENVPN_CONFIG=/home/vscode/.config/openvpn/client.ovpn
+      - OPENVPN_AUTH=/tmp/vpn-auth.txt
 
       # Cloud CLIs (AWS / Google Cloud / Azure)
       - AWS_CONFIG_FILE=/home/vscode/.config/aws/config

@@ -12,6 +12,7 @@ Lire un fichier YAML et le convertir en `*service.Config` du domaine.
 |---------|------|
 | `loader.go` | `Loader` avec `Load(path)` |
 | `types.go` | Types YAML intermédiaires |
+| `metrics_dto.go` | DTO for metrics configuration mapping |
 
 ## Flux
 

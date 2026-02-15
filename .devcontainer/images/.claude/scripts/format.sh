@@ -18,47 +18,22 @@ fi
 EXT="${FILE##*.}"
 DIR=$(dirname "$FILE")
 
-# Find project root
-find_project_root() {
-    local current="$1"
-    while [ "$current" != "/" ]; do
-        if [ -f "$current/Makefile" ] || \
-           [ -f "$current/package.json" ] || \
-           [ -f "$current/pyproject.toml" ] || \
-           [ -f "$current/go.mod" ] || \
-           [ -f "$current/Cargo.toml" ]; then
-            echo "$current"
-            return
-        fi
-        current=$(dirname "$current")
-    done
-    echo "$DIR"
-}
+# Source shared utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+[ -f "$SCRIPT_DIR/common.sh" ] && . "$SCRIPT_DIR/common.sh"
 
-PROJECT_ROOT=$(find_project_root "$DIR")
-
-# Check if Makefile has fmt or format target
-has_makefile_fmt() {
-    if [ -f "$PROJECT_ROOT/Makefile" ]; then
-        grep -qE "^(fmt|format):" "$PROJECT_ROOT/Makefile" 2>/dev/null
-        return $?
-    fi
-    return 1
-}
+PROJECT_ROOT=$(find_project_root "$DIR" "$DIR")
 
 # === Makefile-first approach ===
-if has_makefile_fmt; then
-    cd "$PROJECT_ROOT"
+if has_makefile_target "fmt" "$PROJECT_ROOT" || has_makefile_target "format" "$PROJECT_ROOT"; then
+    cd "$PROJECT_ROOT" || exit 0
     # Try fmt first (more common), then format
     TARGET="fmt"
-    if ! grep -qE "^fmt:" "$PROJECT_ROOT/Makefile" 2>/dev/null; then
+    if ! has_makefile_target "fmt" "$PROJECT_ROOT"; then
         TARGET="format"
     fi
-    if grep -qE "FILE\s*[:?]?=" "$PROJECT_ROOT/Makefile" 2>/dev/null; then
-        make "$TARGET" FILE="$FILE" 2>/dev/null || true
-    else
-        make "$TARGET" 2>/dev/null || true
-    fi
+    run_makefile_target "$TARGET" "$FILE" "$PROJECT_ROOT"
     exit 0
 fi
 
@@ -253,6 +228,62 @@ case "$EXT" in
     toml)
         if command -v taplo &>/dev/null; then
             taplo fmt "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Scala - scalafmt
+    scala)
+        if command -v scalafmt &>/dev/null; then
+            scalafmt --non-interactive "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # C# - dotnet format
+    cs)
+        if command -v dotnet &>/dev/null; then
+            dotnet format "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # R - styler
+    r|R)
+        if command -v Rscript &>/dev/null; then
+            Rscript -e "styler::style_file(commandArgs(TRUE)[1])" "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Fortran - fprettify
+    f|f90|f95|f03|f08)
+        if command -v fprettify &>/dev/null; then
+            fprettify "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Pascal - ptop
+    pas|dpr|pp)
+        if command -v ptop &>/dev/null; then
+            ptop -i 2 "$FILE" "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Visual Basic .NET - dotnet format
+    vb)
+        if command -v dotnet &>/dev/null; then
+            dotnet format "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Ada - gnatpp
+    adb|ads)
+        if command -v gnatpp &>/dev/null; then
+            gnatpp "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Perl - perltidy
+    pl|pm)
+        if command -v perltidy &>/dev/null; then
+            perltidy -b "$FILE" 2>/dev/null || true
         fi
         ;;
 esac

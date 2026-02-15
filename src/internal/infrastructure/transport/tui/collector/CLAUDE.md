@@ -15,8 +15,10 @@ collector/
 ├── sandbox_check.go     # Sandbox check configuration
 ├── system_linux.go      # CPU, RAM, swap, disk from procfs
 ├── system_other.go      # Stub for non-Linux platforms
+├── limits.go            # Cgroup limits base interface
 ├── limits_linux.go      # Cgroup limits (v1/v2)
 ├── limits_other.go      # Stub limits
+├── network.go           # Network collection base interface
 ├── network_linux.go     # Network interface stats from /proc/net
 ├── network_other.go     # Stub network stats
 ├── cpu_sample_linux.go  # CPU usage sampling

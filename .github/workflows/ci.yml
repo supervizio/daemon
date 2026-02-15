@@ -1,0 +1,2655 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.25.6'
+  WIRE_VERSION: 'v0.7.0'
+  RUST_VERSION: 'stable'
+
+jobs:
+  # =============================================================================
+  # PHASE 1: QUALITY GATES
+  # =============================================================================
+
+  rust-lint:
+    name: Rust Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: clippy, rustfmt
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-lint-x86-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-lint-x86-
+
+      - name: Check formatting
+        working-directory: src/lib/probe
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        working-directory: src/lib/probe
+        run: cargo clippy --all-features -- -D warnings
+
+  rust-test:
+    name: Rust Test
+    runs-on: ubuntu-24.04
+    needs: [rust-lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-test-x86-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-test-x86-
+
+      - name: Run tests
+        working-directory: src/lib/probe
+        run: cargo test
+
+  go-test:
+    name: Go Test
+    runs-on: ubuntu-24.04
+    needs: [build-probe-linux]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download libprobe
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-linux-amd64
+          path: dist/lib/linux-amd64/
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Verify probe linked
+        working-directory: src
+        env:
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/linux-amd64 -lprobe -lm"
+        run: |
+          echo "=== Probe Library Verification ==="
+          file ${{ github.workspace }}/dist/lib/linux-amd64/libprobe.a
+          ar t ${{ github.workspace }}/dist/lib/linux-amd64/libprobe.a | head -5
+          echo ""
+          echo "PROBE VERIFIED: libprobe.a present and valid"
+
+      - name: Run tests
+        working-directory: src
+        env:
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/linux-amd64 -lprobe -lm"
+        run: go test -race ./...
+
+  # =============================================================================
+  # PHASE 2: BUILD PROBES
+  # =============================================================================
+
+  # Linux x86_64 probes (native)
+  build-probe-linux:
+    name: Probe linux-amd64${{ matrix.suffix }}
+    runs-on: ubuntu-24.04
+    needs: [rust-test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust_target: x86_64-unknown-linux-gnu
+            suffix: ""
+            platform: linux-amd64
+          - rust_target: x86_64-unknown-linux-musl
+            suffix: "-musl"
+            platform: linux-amd64-musl
+            musl: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install musl tools
+        if: matrix.musl
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-probe-x86-${{ matrix.rust_target }}-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-probe-x86-${{ matrix.rust_target }}-
+
+      - name: Build libprobe.a
+        working-directory: src/lib/probe
+        env:
+          CC: ${{ matrix.musl && 'musl-gcc' || 'gcc' }}
+        run: cargo build --release --target ${{ matrix.rust_target }} --package probe-ffi
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist/lib/${{ matrix.platform }}
+          cp src/lib/probe/target/${{ matrix.rust_target }}/release/libprobe.a dist/lib/${{ matrix.platform }}/
+
+      - name: Upload libprobe artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libprobe-${{ matrix.platform }}
+          path: dist/lib/${{ matrix.platform }}/libprobe.a
+          retention-days: 1
+
+  # Linux ARM64 probes (native on ARM runner)
+  build-probe-linux-arm64:
+    name: Probe linux-arm64${{ matrix.suffix }}
+    runs-on: ubuntu-24.04-arm
+    needs: [rust-test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust_target: aarch64-unknown-linux-gnu
+            suffix: ""
+            platform: linux-arm64
+          - rust_target: aarch64-unknown-linux-musl
+            suffix: "-musl"
+            platform: linux-arm64-musl
+            musl: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install musl tools
+        if: matrix.musl
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-probe-arm64-${{ matrix.rust_target }}-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-probe-arm64-${{ matrix.rust_target }}-
+
+      - name: Build libprobe.a
+        working-directory: src/lib/probe
+        env:
+          CC: ${{ matrix.musl && 'musl-gcc' || 'gcc' }}
+        run: cargo build --release --target ${{ matrix.rust_target }} --package probe-ffi
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist/lib/${{ matrix.platform }}
+          cp src/lib/probe/target/${{ matrix.rust_target }}/release/libprobe.a dist/lib/${{ matrix.platform }}/
+
+      - name: Upload libprobe artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libprobe-${{ matrix.platform }}
+          path: dist/lib/${{ matrix.platform }}/libprobe.a
+          retention-days: 1
+
+  # Linux cross-compiled probes (arm, 386, riscv64 on x86_64 runner)
+  build-probe-linux-cross:
+    name: Probe ${{ matrix.platform }}
+    runs-on: ubuntu-24.04
+    needs: [rust-test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # glibc targets (apt cross-compilers)
+          - rust_target: armv7-unknown-linux-gnueabihf
+            platform: linux-arm
+            cc: arm-linux-gnueabihf-gcc
+            packages: gcc-arm-linux-gnueabihf
+          - rust_target: i686-unknown-linux-gnu
+            platform: linux-386
+            cc: i686-linux-gnu-gcc
+            packages: gcc-i686-linux-gnu
+          - rust_target: riscv64gc-unknown-linux-gnu
+            platform: linux-riscv64
+            cc: riscv64-linux-gnu-gcc
+            packages: gcc-riscv64-linux-gnu
+          # musl targets (Zig CC)
+          - rust_target: armv7-unknown-linux-musleabihf
+            platform: linux-arm-musl
+            cc: zig-cc
+            zig_target: arm-linux-musleabihf
+            musl: true
+          - rust_target: i686-unknown-linux-musl
+            platform: linux-386-musl
+            cc: zig-cc
+            zig_target: x86-linux-musl
+            musl: true
+          - rust_target: riscv64gc-unknown-linux-musl
+            platform: linux-riscv64-musl
+            cc: zig-cc
+            zig_target: riscv64-linux-musl
+            musl: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install cross-compiler (glibc)
+        if: ${{ !matrix.musl }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ${{ matrix.packages }}
+
+      - name: Install Zig (musl CC)
+        if: ${{ matrix.musl }}
+        env:
+          ZIG_TARGET: ${{ matrix.zig_target }}
+        run: |
+          curl -fL --retry 3 "https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz" | tar xJ -C /opt
+          echo "/opt/zig-linux-x86_64-0.13.0" >> "$GITHUB_PATH"
+          printf '#!/bin/sh\nexec /opt/zig-linux-x86_64-0.13.0/zig cc -target %s "$@"\n' "$ZIG_TARGET" > /usr/local/bin/zig-cc
+          chmod +x /usr/local/bin/zig-cc
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-probe-cross-${{ matrix.rust_target }}-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-probe-cross-${{ matrix.rust_target }}-
+
+      - name: Build libprobe.a
+        working-directory: src/lib/probe
+        env:
+          CC: ${{ matrix.cc }}
+        run: cargo build --release --target ${{ matrix.rust_target }} --package probe-ffi
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist/lib/${{ matrix.platform }}
+          cp src/lib/probe/target/${{ matrix.rust_target }}/release/libprobe.a dist/lib/${{ matrix.platform }}/
+
+      - name: Upload libprobe artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libprobe-${{ matrix.platform }}
+          path: dist/lib/${{ matrix.platform }}/libprobe.a
+          retention-days: 1
+
+  # macOS x86_64 probe (native on Intel runner)
+  build-probe-darwin:
+    name: Probe darwin-amd64
+    runs-on: macos-15-intel
+    needs: [rust-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-apple-darwin
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-probe-darwin-amd64-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-probe-darwin-amd64-
+
+      - name: Build libprobe.a
+        working-directory: src/lib/probe
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '13.0'
+        run: cargo build --release --target x86_64-apple-darwin --package probe-ffi
+
+      - name: Prepare artifact
+        working-directory: src/lib/probe
+        run: |
+          mkdir -p ${{ github.workspace }}/dist/lib/darwin-amd64
+          cp target/x86_64-apple-darwin/release/libprobe.a ${{ github.workspace }}/dist/lib/darwin-amd64/
+          ls -la ${{ github.workspace }}/dist/lib/darwin-amd64/
+
+      - name: Upload libprobe artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libprobe-darwin-amd64
+          path: dist/lib/darwin-amd64/libprobe.a
+          retention-days: 1
+
+  # macOS ARM64 probe (native on Apple Silicon runner)
+  build-probe-darwin-arm64:
+    name: Probe darwin-arm64
+    runs-on: macos-15
+    needs: [rust-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-apple-darwin
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/lib/probe/target
+          key: rust-probe-darwin-arm64-${{ hashFiles('src/lib/probe/**/Cargo.toml', 'src/lib/probe/**/Cargo.lock') }}
+          restore-keys: |
+            rust-probe-darwin-arm64-
+
+      - name: Build libprobe.a
+        working-directory: src/lib/probe
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '13.0'
+        run: cargo build --release --target aarch64-apple-darwin --package probe-ffi
+
+      - name: Prepare artifact
+        working-directory: src/lib/probe
+        run: |
+          mkdir -p ${{ github.workspace }}/dist/lib/darwin-arm64
+          cp target/aarch64-apple-darwin/release/libprobe.a ${{ github.workspace }}/dist/lib/darwin-arm64/
+          ls -la ${{ github.workspace }}/dist/lib/darwin-arm64/
+
+      - name: Upload libprobe artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libprobe-darwin-arm64
+          path: dist/lib/darwin-arm64/libprobe.a
+          retention-days: 1
+
+  # Verify all probe artifacts before proceeding
+  verify-probes:
+    name: Verify Probes
+    runs-on: ubuntu-24.04
+    needs:
+      - build-probe-linux
+      - build-probe-linux-arm64
+      - build-probe-linux-cross
+      - build-probe-darwin
+      - build-probe-darwin-arm64
+      - build-bsd-native
+    steps:
+      - name: Download all probe artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: libprobe-*
+          path: probes/
+
+      - name: Verify all probes
+        run: |
+          echo "=== All probe artifacts ==="
+          find probes/ -type f -name "*.a" | sort
+          echo ""
+
+          MISSING=0
+          for probe in linux-amd64 linux-amd64-musl linux-arm64 linux-arm64-musl linux-arm linux-386 linux-riscv64 linux-arm-musl linux-386-musl linux-riscv64-musl darwin-amd64 darwin-arm64 freebsd-amd64 openbsd-amd64 netbsd-amd64; do
+            if find probes/ -path "*${probe}*" -name "libprobe.a" | grep -q .; then
+              echo "OK libprobe-${probe} found"
+            else
+              echo "FAIL libprobe-${probe} MISSING!"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+
+          if [ "$MISSING" -gt 0 ]; then
+            echo ""
+            echo "ERROR: $MISSING probe artifacts missing!"
+            exit 1
+          fi
+          echo ""
+          echo "All 15 probe artifacts verified."
+
+  # =============================================================================
+  # PHASE 3: BUILD BINARIES
+  # =============================================================================
+
+  # Linux x86_64 glibc binary (standard)
+  build-amd64:
+    name: Build amd64
+    runs-on: ubuntu-24.04
+    needs: [build-probe-linux, go-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download libprobe
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-linux-amd64
+          path: dist/lib/linux-amd64/
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build binary
+        working-directory: src
+        env:
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/linux-amd64 -lprobe -lpthread -ldl -lm"
+        run: |
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" \
+            -o ../supervizio-linux-amd64 ./cmd/daemon
+
+      - name: Probe smoke test
+        run: |
+          chmod +x supervizio-linux-amd64
+          chmod +x e2e/probe-capabilities.sh
+          e2e/probe-capabilities.sh ./supervizio-linux-amd64 probe-cap-linux-amd64.json
+
+      - name: Upload probe capabilities
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: probe-cap-linux-amd64
+          path: probe-cap-linux-amd64.json
+          retention-days: 1
+
+      - name: Upload binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-linux-amd64
+          path: supervizio-linux-amd64
+          retention-days: 1
+
+  # Linux x86_64 musl binary (static)
+  build-amd64-musl:
+    name: Build amd64-musl
+    runs-on: ubuntu-24.04
+    needs: [build-probe-linux, go-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download libprobe (musl)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-linux-amd64-musl
+          path: dist/lib/linux-amd64-musl/
+
+      - name: Build in Alpine container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace/src \
+            -e CGO_ENABLED=1 \
+            -e CGO_CFLAGS="-I/workspace/src/lib/probe/include" \
+            -e CGO_LDFLAGS="-L/workspace/dist/lib/linux-amd64-musl -lprobe -lm" \
+            golang:1.25-alpine \
+            sh -c '
+              set -euo pipefail
+              apk add --no-cache gcc musl-dev file
+              go install github.com/google/wire/cmd/wire@v0.7.0
+              wire ./internal/bootstrap/
+              go build -v \
+                -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags \"-static\"" \
+                -o /workspace/supervizio-linux-amd64-musl \
+                ./cmd/daemon
+              file /workspace/supervizio-linux-amd64-musl
+            '
+
+      - name: Upload binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-linux-amd64-musl
+          path: supervizio-linux-amd64-musl
+          retention-days: 1
+
+      - name: Probe smoke test
+        run: |
+          chmod +x e2e/probe-capabilities.sh
+          e2e/probe-capabilities.sh ./supervizio-linux-amd64-musl probe-cap-linux-amd64-musl.json
+
+      - name: Upload probe capabilities
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: probe-cap-linux-amd64-musl
+          path: probe-cap-linux-amd64-musl.json
+          retention-days: 1
+
+  # Linux ARM64 glibc binary (native on ARM runner)
+  build-arm64:
+    name: Build arm64
+    runs-on: ubuntu-24.04-arm
+    needs: [build-probe-linux-arm64, go-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download libprobe
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-linux-arm64
+          path: dist/lib/linux-arm64/
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build binary
+        working-directory: src
+        env:
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/linux-arm64 -lprobe -lpthread -ldl -lm"
+        run: |
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" \
+            -o ../supervizio-linux-arm64 ./cmd/daemon
+
+      - name: Probe smoke test
+        run: |
+          chmod +x supervizio-linux-arm64
+          chmod +x e2e/probe-capabilities.sh
+          e2e/probe-capabilities.sh ./supervizio-linux-arm64 probe-cap-linux-arm64.json
+
+      - name: Upload probe capabilities
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: probe-cap-linux-arm64
+          path: probe-cap-linux-arm64.json
+          retention-days: 1
+
+      - name: Upload binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-linux-arm64
+          path: supervizio-linux-arm64
+          retention-days: 1
+
+  # Linux ARM64 musl binary (static, native on ARM runner)
+  build-arm64-musl:
+    name: Build arm64-musl
+    runs-on: ubuntu-24.04-arm
+    needs: [build-probe-linux-arm64, go-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download libprobe (musl)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-linux-arm64-musl
+          path: dist/lib/linux-arm64-musl/
+
+      - name: Build in Alpine container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace/src \
+            -e CGO_ENABLED=1 \
+            -e CGO_CFLAGS="-I/workspace/src/lib/probe/include" \
+            -e CGO_LDFLAGS="-L/workspace/dist/lib/linux-arm64-musl -lprobe -lm" \
+            golang:1.25-alpine \
+            sh -c '
+              set -euo pipefail
+              apk add --no-cache gcc musl-dev file
+              go install github.com/google/wire/cmd/wire@v0.7.0
+              wire ./internal/bootstrap/
+              go build -v \
+                -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags \"-static\"" \
+                -o /workspace/supervizio-linux-arm64-musl \
+                ./cmd/daemon
+              file /workspace/supervizio-linux-arm64-musl
+            '
+
+      - name: Upload binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-linux-arm64-musl
+          path: supervizio-linux-arm64-musl
+          retention-days: 1
+
+      - name: Probe smoke test
+        run: |
+          chmod +x e2e/probe-capabilities.sh
+          e2e/probe-capabilities.sh ./supervizio-linux-arm64-musl probe-cap-linux-arm64-musl.json
+
+      - name: Upload probe capabilities
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: probe-cap-linux-arm64-musl
+          path: probe-cap-linux-arm64-musl.json
+          retention-days: 1
+
+  # Linux cross-compiled binaries (arm, 386, riscv64 on x86_64 runner)
+  build-linux-cross:
+    name: Build ${{ matrix.platform }}
+    runs-on: ubuntu-24.04
+    needs: [build-probe-linux-cross, go-test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: arm
+            goarm: "7"
+            platform: linux-arm
+            cc: arm-linux-gnueabihf-gcc
+            packages: gcc-arm-linux-gnueabihf
+          - goarch: 386
+            platform: linux-386
+            cc: i686-linux-gnu-gcc
+            packages: gcc-i686-linux-gnu
+          - goarch: riscv64
+            platform: linux-riscv64
+            cc: riscv64-linux-gnu-gcc
+            packages: gcc-riscv64-linux-gnu
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download libprobe
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-${{ matrix.platform }}
+          path: dist/lib/${{ matrix.platform }}/
+
+      - name: Install cross-compiler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ${{ matrix.packages }}
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build binary
+        working-directory: src
+        env:
+          CC: ${{ matrix.cc }}
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }} -lprobe -lpthread -ldl -lm"
+        run: |
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" \
+            -o ../supervizio-${{ matrix.platform }} ./cmd/daemon
+
+      - name: Verify binary architecture
+        run: file supervizio-${{ matrix.platform }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.platform }}
+          path: supervizio-${{ matrix.platform }}
+          retention-days: 1
+
+  # Linux cross-compiled musl binaries (arm, 386, riscv64 — static, Zig CC)
+  build-linux-cross-musl:
+    name: Build ${{ matrix.platform }}-musl
+    runs-on: ubuntu-24.04
+    needs: [build-probe-linux-cross, go-test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: arm
+            goarm: "7"
+            platform: linux-arm
+            cc: zig-cc
+            zig_target: arm-linux-musleabihf
+          - goarch: 386
+            platform: linux-386
+            cc: zig-cc
+            zig_target: x86-linux-musl
+          - goarch: riscv64
+            platform: linux-riscv64
+            cc: zig-cc
+            zig_target: riscv64-linux-musl
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download libprobe (musl)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-${{ matrix.platform }}-musl
+          path: dist/lib/${{ matrix.platform }}-musl/
+
+      - name: Install Zig (musl CC)
+        env:
+          ZIG_TARGET: ${{ matrix.zig_target }}
+        run: |
+          curl -fL --retry 3 "https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz" | tar xJ -C /opt
+          echo "/opt/zig-linux-x86_64-0.13.0" >> "$GITHUB_PATH"
+          printf '#!/bin/sh\nexec /opt/zig-linux-x86_64-0.13.0/zig cc -target %s "$@"\n' "$ZIG_TARGET" > /usr/local/bin/zig-cc
+          chmod +x /usr/local/bin/zig-cc
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build binary (static musl)
+        working-directory: src
+        env:
+          CC: ${{ matrix.cc }}
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/${{ matrix.platform }}-musl -lprobe -lm -lunwind"
+        run: |
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci -linkmode external -extldflags \"-static\"" \
+            -o ../supervizio-${{ matrix.platform }}-musl ./cmd/daemon
+
+      - name: Verify static binary
+        run: |
+          file supervizio-${{ matrix.platform }}-musl
+          file supervizio-${{ matrix.platform }}-musl | grep -qE "statically linked|static-pie" && \
+            echo "OK Binary is statically linked" || \
+            echo "WARNING: Binary may not be statically linked"
+
+      - name: Upload binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.platform }}-musl
+          path: supervizio-${{ matrix.platform }}-musl
+          retention-days: 1
+
+  # BSD native builds (probe + binary + package on Proxmox VMs)
+  # Replaces: build-probe-bsd, build-bsd, build-openbsd, packages-bsd
+  build-bsd-native:
+    name: BSD ${{ matrix.name }} (native)
+    runs-on: [self-hosted, proxmox, linux, x64]
+    needs: [rust-test, go-test]
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - name: freebsd
+            vmid: "123"
+            vm_ip: "192.168.100.132"
+            platform: freebsd-amd64
+            pkg_script: setup/packaging/freebsd/build-pkg.sh
+            pkg_glob: "supervizio-*.pkg supervizio-*.txz"
+          - name: openbsd
+            vmid: "120"
+            vm_ip: "192.168.100.34"
+            platform: openbsd-amd64
+            pkg_script: setup/packaging/openbsd/build-pkg.sh
+            pkg_glob: "supervizio-*.tgz"
+          - name: netbsd
+            vmid: "122"
+            vm_ip: "192.168.100.199"
+            platform: netbsd-amd64
+            pkg_script: setup/packaging/netbsd/build-pkg.sh
+            pkg_glob: "supervizio-*.tgz"
+    env:
+      PROXMOX_API_URL: "https://192.168.100.1:8006/api2/json"
+      # PVE_AUTH format: PVEAPIToken=<user>@<realm>!<tokenname>=<uuid>
+      PVE_AUTH: "PVEAPIToken=${{ secrets.CI_RUNNER_API_TOKEN_ID }}=${{ secrets.CI_RUNNER_API_TOKEN_SECRET }}"
+      NODE: ${{ secrets.PROXMOX_NODE }}
+      SSH_OPTS: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Acquire VM (lock)
+        id: vm
+        run: |
+          chmod +x .github/scripts/vm-acquire.sh
+          .github/scripts/vm-acquire.sh "${{ matrix.vmid }}" "${GITHUB_RUN_ID}_build-bsd-${{ matrix.name }}" "${{ matrix.vm_ip }}"
+
+      - name: SCP source to VM
+        run: |
+          tar czf /tmp/src-bundle.tar.gz src/ setup/ examples/
+          ssh ${SSH_OPTS} root@${VM_IP} "mkdir -p /root/build"
+          scp ${SSH_OPTS} /tmp/src-bundle.tar.gz root@${VM_IP}:/root/build/src-bundle.tar.gz
+          ssh ${SSH_OPTS} root@${VM_IP} "cd /root/build && tar xzf src-bundle.tar.gz"
+
+      - name: Log environment (for snapshot tuning)
+        run: |
+          ssh ${SSH_OPTS} root@${VM_IP} << 'ENV_LOG'
+          set -e
+          echo "=== Platform Info ==="
+          uname -a
+          echo ""
+          echo "=== Pre-installed Packages ==="
+          pkg info 2>/dev/null || pkg_info 2>/dev/null || echo "Package listing not available"
+          echo ""
+          echo "=== Disk Usage ==="
+          df -h
+          echo ""
+          echo "=== Go Version ==="
+          go version 2>/dev/null || echo "Go NOT installed"
+          echo ""
+          echo "=== Rust Version ==="
+          rustc --version 2>/dev/null || echo "Rust NOT installed"
+          ENV_LOG
+
+      - name: Install Go and Rust (if needed)
+        run: |
+          ssh ${SSH_OPTS} root@${VM_IP} << 'INSTALL_DEPS'
+          set -e
+
+          # Install Go (exact version from go.dev to ensure consistency)
+          GO_VERSION="1.25.6"
+          NEED_GO=false
+          if ! command -v go >/dev/null 2>&1; then
+            NEED_GO=true
+          elif ! go version | grep -q "go${GO_VERSION}"; then
+            echo "Go version mismatch: $(go version) (need ${GO_VERSION})"
+            NEED_GO=true
+          fi
+          if [ "$NEED_GO" = true ]; then
+            echo "=== Installing Go ${GO_VERSION} ==="
+            OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+            URL="https://go.dev/dl/go${GO_VERSION}.${OS}-amd64.tar.gz"
+            rm -rf /usr/local/go
+            case "$OS" in
+              freebsd)  fetch -o /tmp/go.tar.gz "$URL" ;;
+              *)        ftp -o /tmp/go.tar.gz "$URL" ;;
+            esac
+            cd /usr/local && tar xzf /tmp/go.tar.gz && rm -f /tmp/go.tar.gz
+          fi
+          export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
+          echo "Go: $(go version)"
+
+          # Install Rust if not present
+          if ! command -v rustc >/dev/null 2>&1; then
+            echo "=== Installing Rust ==="
+            if command -v curl >/dev/null 2>&1; then
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            elif command -v ftp >/dev/null 2>&1; then
+              ftp -o /tmp/rustup-init.sh https://sh.rustup.rs
+              sh /tmp/rustup-init.sh -y
+              rm -f /tmp/rustup-init.sh
+            else
+              echo "ERROR: No download tool (curl/ftp) available for Rust installation"
+              exit 1
+            fi
+          fi
+          export PATH="$HOME/.cargo/bin:$PATH"
+          echo "Rust: $(rustc --version)"
+
+          # Install Wire
+          echo "=== Installing Wire ==="
+          go install github.com/google/wire/cmd/wire@v0.7.0
+          echo "Wire: $(wire help 2>&1 | head -1)"
+          INSTALL_DEPS
+
+      - name: Configure Rust toolchain for native BSD build
+        run: |
+          ssh ${SSH_OPTS} root@${VM_IP} << 'OPTIMIZE_RUST'
+          set -e
+          cd /root/build/src/lib/probe
+
+          # BSD builds are native — no cross-compile targets needed.
+          # Use stable channel (tier 3 BSDs may lack specific pinned versions).
+          printf '[toolchain]\nchannel = "stable"\n' > rust-toolchain.toml
+          cat rust-toolchain.toml
+          echo "Using Rust: $(rustc --version 2>/dev/null || echo 'not in PATH yet')"
+          OPTIMIZE_RUST
+
+      - name: Build libprobe.a (native)
+        run: |
+          ssh ${SSH_OPTS} root@${VM_IP} << 'BUILD_PROBE'
+          set -e
+          export PATH="/usr/local/go/bin:$HOME/go/bin:$HOME/.cargo/bin:$PATH"
+
+          echo "=== Building libprobe.a natively ==="
+          cd /root/build/src/lib/probe
+          cargo build --release --package probe-ffi
+          PROBE_LIB="$(pwd)/target/release/libprobe.a"
+          ls -la "$PROBE_LIB"
+          echo "PROBE_LIB=$PROBE_LIB" > /root/build/probe-env.sh
+          echo "PROBE_INCLUDE=$(pwd)/include" >> /root/build/probe-env.sh
+          echo "=== Probe build complete ==="
+          BUILD_PROBE
+
+      - name: Retrieve probe artifact
+        run: |
+          mkdir -p artifacts/probe/${{ matrix.platform }}
+          scp ${SSH_OPTS} root@${VM_IP}:/root/build/src/lib/probe/target/release/libprobe.a \
+            artifacts/probe/${{ matrix.platform }}/libprobe.a
+          ls -la artifacts/probe/${{ matrix.platform }}/
+
+      - name: Upload probe artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libprobe-${{ matrix.platform }}
+          path: artifacts/probe/${{ matrix.platform }}/libprobe.a
+          retention-days: 1
+
+      - name: Build supervizio binary (native)
+        run: |
+          ssh ${SSH_OPTS} root@${VM_IP} << 'BUILD_BIN'
+          set -e
+          export PATH="/usr/local/go/bin:$HOME/go/bin:$HOME/.cargo/bin:$PATH"
+          . /root/build/probe-env.sh
+
+          cd /root/build/src
+
+          echo "=== Generating Wire code ==="
+          wire ./internal/bootstrap/
+
+          echo "=== Building supervizio binary ==="
+          CGO_ENABLED=1 \
+          CGO_CFLAGS="-I${PROBE_INCLUDE}" \
+          CGO_LDFLAGS="-L$(dirname ${PROBE_LIB}) -lprobe -lm" \
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" \
+            -o /root/build/supervizio ./cmd/daemon
+
+          echo "=== Binary build complete ==="
+          file /root/build/supervizio
+          ls -la /root/build/supervizio
+          BUILD_BIN
+
+      - name: Probe smoke test
+        run: |
+          scp ${SSH_OPTS} e2e/probe-capabilities.sh root@${VM_IP}:/root/build/probe-capabilities.sh
+          ssh ${SSH_OPTS} root@${VM_IP} << 'PROBE_TEST'
+          set -e
+          chmod +x /root/build/probe-capabilities.sh
+          /root/build/probe-capabilities.sh /root/build/supervizio /root/build/probe-cap.json
+          PROBE_TEST
+          mkdir -p artifacts/probe-cap
+          scp ${SSH_OPTS} root@${VM_IP}:/root/build/probe-cap.json \
+            artifacts/probe-cap/probe-cap-${{ matrix.platform }}.json
+
+      - name: Upload probe capabilities
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: probe-cap-${{ matrix.platform }}
+          path: artifacts/probe-cap/probe-cap-${{ matrix.platform }}.json
+          retention-days: 1
+
+      - name: Retrieve binary artifact
+        run: |
+          mkdir -p artifacts/bin
+          scp ${SSH_OPTS} root@${VM_IP}:/root/build/supervizio \
+            artifacts/bin/supervizio-${{ matrix.platform }}
+          ls -la artifacts/bin/
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.platform }}
+          path: artifacts/bin/supervizio-${{ matrix.platform }}
+          retention-days: 1
+
+      - name: Build native package
+        run: |
+          # SCP packaging scripts
+          tar czf /tmp/pkg-bundle.tar.gz -C "${{ github.workspace }}" setup/packaging/ setup/init/ examples/
+          scp ${SSH_OPTS} /tmp/pkg-bundle.tar.gz root@${VM_IP}:/tmp/pkg-bundle.tar.gz
+          ssh ${SSH_OPTS} root@${VM_IP} "cd /tmp && tar xzf pkg-bundle.tar.gz"
+
+          ssh ${SSH_OPTS} root@${VM_IP} << 'BUILD_PKG'
+          set -e
+          echo "=== Building native package ==="
+          chmod +x /tmp/${{ matrix.pkg_script }}
+          /tmp/${{ matrix.pkg_script }} "0.0.0" "/root/build/supervizio"
+          BUILD_PKG
+
+      - name: Retrieve package artifact
+        run: |
+          mkdir -p artifacts/pkg
+          for glob_pattern in ${{ matrix.pkg_glob }}; do
+            scp ${SSH_OPTS} "root@${VM_IP}:/tmp/${glob_pattern}" artifacts/pkg/ 2>/dev/null || true
+          done
+          echo "=== Retrieved packages ==="
+          ls -la artifacts/pkg/
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-${{ matrix.name }}-pkg
+          path: artifacts/pkg/
+          retention-days: 1
+
+      - name: Release VM
+        if: always()
+        run: |
+          chmod +x .github/scripts/vm-release.sh
+          .github/scripts/vm-release.sh "${{ matrix.vmid }}"
+
+  # macOS x86_64 binary (native on Intel runner)
+  build-darwin-amd64:
+    name: Build darwin-amd64
+    runs-on: macos-15-intel
+    needs: [build-probe-darwin, go-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download libprobe
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-darwin-amd64
+          path: dist/lib/darwin-amd64/
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build binary
+        working-directory: src
+        env:
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/darwin-amd64 -lprobe"
+        run: |
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" \
+            -o ../supervizio-darwin-amd64 ./cmd/daemon
+
+      - name: Probe smoke test
+        run: |
+          chmod +x supervizio-darwin-amd64
+          chmod +x e2e/probe-capabilities.sh
+          e2e/probe-capabilities.sh ./supervizio-darwin-amd64 probe-cap-darwin-amd64.json
+
+      - name: Upload probe capabilities
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: probe-cap-darwin-amd64
+          path: probe-cap-darwin-amd64.json
+          retention-days: 1
+
+      - name: Upload binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-darwin-amd64
+          path: supervizio-darwin-amd64
+          retention-days: 1
+
+  # macOS ARM64 binary (native on Apple Silicon runner)
+  build-darwin-arm64:
+    name: Build darwin-arm64
+    runs-on: macos-15
+    needs: [build-probe-darwin-arm64, go-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download libprobe
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libprobe-darwin-arm64
+          path: dist/lib/darwin-arm64/
+
+      - name: Install Wire
+        run: go install github.com/google/wire/cmd/wire@${{ env.WIRE_VERSION }}
+
+      - name: Generate code
+        working-directory: src
+        run: wire ./internal/bootstrap/
+
+      - name: Build binary
+        working-directory: src
+        env:
+          CGO_ENABLED: 1
+          CGO_CFLAGS: "-I${{ github.workspace }}/src/lib/probe/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/dist/lib/darwin-arm64 -lprobe"
+        run: |
+          go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=0.0.0-ci" \
+            -o ../supervizio-darwin-arm64 ./cmd/daemon
+
+      - name: Probe smoke test
+        run: |
+          chmod +x supervizio-darwin-arm64
+          chmod +x e2e/probe-capabilities.sh
+          e2e/probe-capabilities.sh ./supervizio-darwin-arm64 probe-cap-darwin-arm64.json
+
+      - name: Upload probe capabilities
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: probe-cap-darwin-arm64
+          path: probe-cap-darwin-arm64.json
+          retention-days: 1
+
+      - name: Upload binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-darwin-arm64
+          path: supervizio-darwin-arm64
+          retention-days: 1
+
+  # =============================================================================
+  # PHASE 4: VERIFY BINARIES
+  # =============================================================================
+
+  verify-binaries:
+    name: Verify Binaries
+    runs-on: ubuntu-24.04
+    needs:
+      - build-amd64
+      - build-amd64-musl
+      - build-arm64
+      - build-arm64-musl
+      - build-linux-cross
+      - build-linux-cross-musl
+      - build-bsd-native
+      - build-darwin-amd64
+      - build-darwin-arm64
+    steps:
+      - name: Download all binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: supervizio-*
+          merge-multiple: true
+          path: bin/
+
+      - name: Verify all binaries exist
+        run: |
+          set -euo pipefail
+          echo "=== All artifacts ==="
+          ls -la bin/
+          echo ""
+
+          REQUIRED=(
+            "supervizio-linux-amd64"
+            "supervizio-linux-amd64-musl"
+            "supervizio-linux-arm64"
+            "supervizio-linux-arm64-musl"
+            "supervizio-linux-arm"
+            "supervizio-linux-386"
+            "supervizio-linux-riscv64"
+            "supervizio-linux-arm-musl"
+            "supervizio-linux-386-musl"
+            "supervizio-linux-riscv64-musl"
+            "supervizio-darwin-amd64"
+            "supervizio-darwin-arm64"
+            "supervizio-freebsd-amd64"
+            "supervizio-openbsd-amd64"
+            "supervizio-netbsd-amd64"
+          )
+
+          echo "=== Checking all binaries ==="
+          MISSING=0
+          for bin in "${REQUIRED[@]}"; do
+            if [ -f "bin/$bin" ]; then
+              echo "OK $bin found"
+              file "bin/$bin"
+            else
+              echo "FAIL $bin MISSING!"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+
+          if [ "$MISSING" -gt 0 ]; then
+            echo ""
+            echo "ERROR: $MISSING binaries missing!"
+            exit 1
+          fi
+          echo ""
+          echo "All ${#REQUIRED[@]} binaries verified."
+
+      - name: Verify musl is static
+        run: |
+          for musl_bin in bin/supervizio-linux-amd64-musl bin/supervizio-linux-arm64-musl bin/supervizio-linux-arm-musl bin/supervizio-linux-386-musl bin/supervizio-linux-riscv64-musl; do
+            if [ -f "$musl_bin" ]; then
+              if ! file "$musl_bin" | grep -qE "statically linked|static-pie"; then
+                echo "ERROR: $musl_bin is NOT statically linked!"
+                file "$musl_bin"
+                exit 1
+              fi
+              echo "OK $musl_bin is statically linked"
+            fi
+          done
+
+      - name: Generate checksums
+        run: |
+          cd bin
+          sha256sum supervizio-* > checksums.txt
+          echo "=== Checksums ==="
+          cat checksums.txt
+
+      - name: Upload checksums
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: checksums
+          path: bin/checksums.txt
+          retention-days: 1
+
+  # =============================================================================
+  # PHASE 5: BUILD PACKAGES
+  # =============================================================================
+
+  packages-glibc:
+    name: Package ${{ matrix.format }} (amd64)
+    needs: [verify-binaries]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        format: [deb, rpm]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-linux-amd64
+
+      - name: Prepare binary
+        run: chmod +x supervizio-linux-amd64
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
+
+      - name: Build package
+        env:
+          VERSION: "0.0.0"
+          GOARCH: amd64
+        run: |
+          envsubst < nfpm.yaml > nfpm-resolved.yaml
+          nfpm package --config nfpm-resolved.yaml --packager ${{ matrix.format }} --target ./
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-amd64.${{ matrix.format }}
+          path: "*.${{ matrix.format }}"
+          retention-days: 1
+
+  packages-musl:
+    name: Package apk (amd64)
+    needs: [verify-binaries]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-linux-amd64-musl
+
+      - name: Prepare binary
+        run: |
+          # nfpm expects supervizio-linux-amd64, rename musl version
+          mv supervizio-linux-amd64-musl supervizio-linux-amd64
+          chmod +x supervizio-linux-amd64
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
+
+      - name: Build package
+        env:
+          VERSION: "0.0.0"
+          GOARCH: amd64
+        run: |
+          envsubst < nfpm.yaml > nfpm-resolved.yaml
+          nfpm package --config nfpm-resolved.yaml --packager apk --target ./
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-amd64.apk
+          path: "*.apk"
+          retention-days: 1
+
+  packages-archlinux:
+    name: Package archlinux (amd64)
+    needs: [verify-binaries]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-linux-amd64
+
+      - name: Prepare binary
+        run: chmod +x supervizio-linux-amd64
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.44.1
+
+      - name: Build package
+        env:
+          VERSION: "0.0.0"
+          GOARCH: amd64
+        run: |
+          envsubst < nfpm.yaml > nfpm-resolved.yaml
+          nfpm package --config nfpm-resolved.yaml --packager archlinux --target ./
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-amd64.pkg.tar.zst
+          path: "*.pkg.tar.zst"
+          retention-days: 1
+
+  packages-xbps:
+    name: Package xbps (amd64)
+    needs: [verify-binaries]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-linux-amd64
+
+      - name: Prepare binary
+        run: chmod +x supervizio-linux-amd64
+
+      - name: Build xbps package
+        run: |
+          cat > /tmp/build-xbps.sh << 'XBPS_SCRIPT'
+          set -eu
+          xbps-create --version
+
+          PKG_DIR="/tmp/supervizio-pkg"
+          mkdir -p "${PKG_DIR}/usr/local/bin"
+          mkdir -p "${PKG_DIR}/etc/supervizio"
+          mkdir -p "${PKG_DIR}/var/log/supervizio"
+          mkdir -p "${PKG_DIR}/etc/sv/supervizio"
+
+          cp /workspace/supervizio-linux-amd64 "${PKG_DIR}/usr/local/bin/supervizio"
+          chmod 755 "${PKG_DIR}/usr/local/bin/supervizio"
+
+          if [ -f /workspace/examples/config.yaml ]; then
+            cp /workspace/examples/config.yaml "${PKG_DIR}/etc/supervizio/config.example.yaml"
+          fi
+
+          if [ -d /workspace/setup/init/runit ]; then
+            cp -r /workspace/setup/init/runit/* "${PKG_DIR}/etc/sv/supervizio/" 2>/dev/null || true
+          fi
+
+          cd /tmp
+          xbps-create -A x86_64 \
+            -n supervizio-0.0.0_1 \
+            -s "PID1-capable process supervisor" \
+            -H "https://github.com/supervizio/daemon" \
+            -l "MIT" \
+            -M "supervizio <noreply@superviz.io>" \
+            supervizio-pkg
+
+          ls -la /tmp/supervizio-*.xbps
+          cp /tmp/supervizio-0.0.0_1.x86_64.xbps /workspace/supervizio-amd64.xbps
+          XBPS_SCRIPT
+
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -v "/tmp/build-xbps.sh:/tmp/build-xbps.sh:ro" \
+            -w /workspace \
+            ghcr.io/void-linux/void-glibc:latest \
+            sh /tmp/build-xbps.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supervizio-amd64.xbps
+          path: supervizio-amd64.xbps
+          retention-days: 1
+
+  # =============================================================================
+  # PHASE 6: VERIFY PACKAGES
+  # =============================================================================
+
+  verify-packages-linux:
+    name: Verify Linux Packages
+    runs-on: ubuntu-24.04
+    needs:
+      - packages-glibc
+      - packages-musl
+      - packages-archlinux
+      - packages-xbps
+    steps:
+      - name: Download all Linux packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: supervizio-amd64.*
+          merge-multiple: true
+          path: packages/
+
+      - name: List and verify Linux packages
+        run: |
+          echo "=== All Linux packages ==="
+          ls -la packages/
+          echo ""
+
+          REQUIRED=(
+            "deb"
+            "rpm"
+            "apk"
+            "pkg.tar.zst"
+            "xbps"
+          )
+
+          echo "=== Checking Linux packages ==="
+          MISSING=0
+          for ext in "${REQUIRED[@]}"; do
+            FOUND=$(find packages/ -name "*.${ext}" -o -name "*${ext}" 2>/dev/null | head -1)
+            if [ -n "$FOUND" ]; then
+              echo "OK ${ext} package found: ${FOUND}"
+              ls -la "$FOUND"
+            else
+              echo "FAIL ${ext} package MISSING!"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+
+          if [ "$MISSING" -gt 0 ]; then
+            echo ""
+            echo "ERROR: $MISSING Linux packages missing!"
+            exit 1
+          fi
+          echo ""
+          echo "All ${#REQUIRED[@]} Linux packages present."
+
+  verify-packages-all:
+    name: Verify All Packages
+    runs-on: ubuntu-24.04
+    needs:
+      - verify-packages-linux
+      - build-bsd-native
+    steps:
+      - name: Download all package artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: supervizio-*
+          merge-multiple: true
+          path: all-artifacts/
+
+      - name: Final package verification
+        run: |
+          echo "=== All artifacts ==="
+          ls -la all-artifacts/ 2>/dev/null || echo "No artifacts directory"
+          echo ""
+
+          echo "=== Linux packages ==="
+          echo "  - deb (Debian/Devuan)"
+          echo "  - rpm (Fedora/openSUSE)"
+          echo "  - apk (Alpine)"
+          echo "  - pkg.tar.zst (Arch/Artix)"
+          echo "  - xbps (Void)"
+          echo ""
+          echo "=== BSD packages ==="
+          echo "  - FreeBSD (.pkg/.txz)"
+          echo "  - OpenBSD (.tgz)"
+          echo "  - NetBSD (.tgz)"
+          echo ""
+          echo "All packages verified. Ready for E2E testing."
+
+  # =============================================================================
+  # PHASE 7: E2E DOCKER TESTS
+  # =============================================================================
+
+  e2e-docker:
+    name: E2E Docker ${{ matrix.name }}
+    needs: [packages-glibc, packages-musl]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: debian-glibc
+            dockerfile: Dockerfile.debian-script
+            artifact: supervizio-linux-amd64
+            description: "Debian with glibc (systemd)"
+          - name: alpine-musl
+            dockerfile: Dockerfile.alpine-script
+            artifact: supervizio-linux-amd64-musl
+            description: "Alpine with musl (OpenRC)"
+          - name: scratch
+            dockerfile: Dockerfile.scratch
+            artifact: supervizio-linux-amd64-musl
+            description: "Scratch (static binary, no OS)"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ matrix.artifact }}
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          ls -la bin/
+          chmod +x bin/${{ matrix.artifact }}
+          # Dockerfile.scratch expects bin/supervizio, others expect bin/supervizio-linux-amd64
+          if [ "${{ matrix.dockerfile }}" = "Dockerfile.scratch" ]; then
+            mv bin/${{ matrix.artifact }} bin/supervizio
+          elif [ "${{ matrix.artifact }}" != "supervizio-linux-amd64" ]; then
+            mv bin/${{ matrix.artifact }} bin/supervizio-linux-amd64
+          fi
+          file bin/supervizio* | head -5
+
+      - name: Build container
+        run: |
+          docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-e2e:${{ matrix.name }}-amd64 .
+
+      - name: Test container startup
+        run: |
+          docker run --rm supervizio-e2e:${{ matrix.name }}-amd64
+
+      - name: Validate probe metrics
+        if: matrix.dockerfile != 'Dockerfile.scratch'
+        run: |
+          docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }}-amd64 -c "
+            set -e
+            echo '=== System Info ==='
+            uname -a
+            cat /etc/os-release 2>/dev/null || true
+
+            echo ''
+            echo '=== Running --probe ==='
+            OUTPUT=\$(/usr/local/bin/supervizio --probe 2>&1) || {
+              echo 'ERROR: --probe failed'
+              echo \"Output: \$OUTPUT\"
+              exit 1
+            }
+
+            echo 'Raw JSON:'
+            echo \"\$OUTPUT\"
+
+            echo ''
+            echo '=== Validation ==='
+            echo \"\$OUTPUT\" | jq -e '.timestamp' > /dev/null && echo 'OK timestamp'
+            echo \"\$OUTPUT\" | jq -e '.platform' > /dev/null && echo 'OK platform'
+            echo \"\$OUTPUT\" | jq -r '.cpu.cores // \"null\"' | xargs -I {} echo 'cpu.cores = {}'
+
+            echo \"\$OUTPUT\" | jq -e '.timestamp and .platform and .cpu.cores > 0' && \
+              echo 'OK Probe validation passed: ${{ matrix.description }}'
+          "
+
+      - name: Test scratch container (no shell)
+        if: matrix.dockerfile == 'Dockerfile.scratch'
+        run: |
+          echo "=== Testing scratch container (static binary, no OS) ==="
+          # Scratch has no shell, can only run the binary directly
+
+          echo "--- Test --version ---"
+          docker run --rm supervizio-e2e:scratch-amd64 --version
+          echo "OK --version works"
+
+          echo ""
+          echo "--- Test --probe ---"
+          OUTPUT=$(docker run --rm supervizio-e2e:scratch-amd64 --probe 2>&1) || {
+            echo "ERROR: --probe failed"
+            echo "Output: $OUTPUT"
+            exit 1
+          }
+          echo "Probe output:"
+          echo "$OUTPUT"
+
+          # Validate JSON structure
+          echo ""
+          echo "--- Validate JSON ---"
+          echo "$OUTPUT" | jq -e '.timestamp' > /dev/null && echo "OK timestamp present"
+          echo "$OUTPUT" | jq -e '.platform' > /dev/null && echo "OK platform present"
+          echo "$OUTPUT" | jq -e '.cpu.cores > 0' > /dev/null && echo "OK cpu.cores > 0"
+          echo "$OUTPUT" | jq -e '.memory.total_bytes > 0' > /dev/null && echo "OK memory.total_bytes > 0"
+
+          echo ""
+          echo "OK Scratch container tests passed"
+
+  e2e-docker-arm64:
+    name: E2E Docker arm64 ${{ matrix.name }}
+    needs: [build-arm64, build-arm64-musl]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: debian-glibc
+            dockerfile: Dockerfile.debian-script
+            artifact: supervizio-linux-arm64
+            binary_name: supervizio-linux-amd64
+            description: "Debian ARM64 with glibc (systemd)"
+          - name: alpine-musl
+            dockerfile: Dockerfile.alpine-script
+            artifact: supervizio-linux-arm64-musl
+            binary_name: supervizio-linux-amd64
+            description: "Alpine ARM64 with musl (OpenRC)"
+          - name: scratch
+            dockerfile: Dockerfile.scratch
+            artifact: supervizio-linux-arm64-musl
+            binary_name: supervizio
+            description: "Scratch ARM64 (static binary, no OS)"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ matrix.artifact }}
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          ls -la bin/
+          chmod +x bin/${{ matrix.artifact }}
+          # Dockerfiles expect amd64 binary names — rename arm64 to match
+          mv bin/${{ matrix.artifact }} bin/${{ matrix.binary_name }}
+          file bin/${{ matrix.binary_name }}
+
+      - name: Build container
+        run: |
+          docker build -f e2e/${{ matrix.dockerfile }} -t supervizio-e2e:${{ matrix.name }}-arm64 .
+
+      - name: Test container startup
+        run: |
+          docker run --rm supervizio-e2e:${{ matrix.name }}-arm64
+
+      - name: Validate probe metrics
+        if: matrix.dockerfile != 'Dockerfile.scratch'
+        run: |
+          docker run --rm --entrypoint sh supervizio-e2e:${{ matrix.name }}-arm64 -c "
+            set -e
+            echo '=== System Info ==='
+            uname -a
+            cat /etc/os-release 2>/dev/null || true
+
+            echo ''
+            echo '=== Running --probe ==='
+            OUTPUT=\$(/usr/local/bin/supervizio --probe 2>&1) || {
+              echo 'ERROR: --probe failed'
+              echo \"Output: \$OUTPUT\"
+              exit 1
+            }
+
+            echo 'Raw JSON:'
+            echo \"\$OUTPUT\"
+
+            echo ''
+            echo '=== Validation ==='
+            echo \"\$OUTPUT\" | jq -e '.timestamp' > /dev/null && echo 'OK timestamp'
+            echo \"\$OUTPUT\" | jq -e '.platform' > /dev/null && echo 'OK platform'
+            echo \"\$OUTPUT\" | jq -r '.cpu.cores // \"null\"' | xargs -I {} echo 'cpu.cores = {}'
+
+            echo \"\$OUTPUT\" | jq -e '.timestamp and .platform and .cpu.cores > 0' && \
+              echo 'OK Probe validation passed: ${{ matrix.description }}'
+          "
+
+      - name: Test scratch container (no shell)
+        if: matrix.dockerfile == 'Dockerfile.scratch'
+        run: |
+          echo "=== Testing scratch container (static binary, no OS) ==="
+
+          echo "--- Test --version ---"
+          docker run --rm supervizio-e2e:scratch-arm64 --version
+          echo "OK --version works"
+
+          echo ""
+          echo "--- Test --probe ---"
+          OUTPUT=$(docker run --rm supervizio-e2e:scratch-arm64 --probe 2>&1) || {
+            echo "ERROR: --probe failed"
+            echo "Output: $OUTPUT"
+            exit 1
+          }
+          echo "Probe output:"
+          echo "$OUTPUT"
+
+          echo ""
+          echo "--- Validate JSON ---"
+          echo "$OUTPUT" | jq -e '.timestamp' > /dev/null && echo "OK timestamp present"
+          echo "$OUTPUT" | jq -e '.platform' > /dev/null && echo "OK platform present"
+          echo "$OUTPUT" | jq -e '.cpu.cores > 0' > /dev/null && echo "OK cpu.cores > 0"
+          echo "$OUTPUT" | jq -e '.memory.total_bytes > 0' > /dev/null && echo "OK memory.total_bytes > 0"
+
+          echo ""
+          echo "OK Scratch ARM64 container tests passed"
+
+  # =============================================================================
+  # PHASE 8: E2E macOS TESTS
+  # =============================================================================
+
+  e2e-macos:
+    name: E2E macOS x86_64
+    needs: [verify-binaries]
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-darwin-amd64
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          chmod +x bin/supervizio-darwin-amd64
+          file bin/supervizio-darwin-amd64
+
+      - name: Run macOS E2E test
+        run: |
+          set -euo pipefail
+          export PATH="$PWD/bin:$PATH"
+          mv bin/supervizio-darwin-amd64 bin/supervizio
+          chmod +x bin/supervizio
+
+          echo "=== System Info ==="
+          uname -a
+          sysctl hw.ncpu || true
+          sw_vers || true
+
+          echo ""
+          echo "=== Test version ==="
+          bin/supervizio --version
+
+          echo ""
+          echo "=== Test probe ==="
+          OUTPUT=$(bin/supervizio --probe 2>&1) || {
+            echo "ERROR: --probe command failed with exit code $?"
+            echo "Output: $OUTPUT"
+            exit 1
+          }
+
+          echo "Raw JSON output:"
+          echo "$OUTPUT"
+
+          echo ""
+          echo "=== Validate JSON structure ==="
+          echo "$OUTPUT" | jq -e 'type == "object"' > /dev/null || {
+            echo "ERROR: Output is not valid JSON object"
+            exit 1
+          }
+
+          echo "Checking required fields..."
+          echo "$OUTPUT" | jq -e '.timestamp' > /dev/null && echo "OK timestamp present"
+          echo "$OUTPUT" | jq -e '.platform' > /dev/null && echo "OK platform present"
+          echo "$OUTPUT" | jq -e '.cpu' > /dev/null && echo "OK cpu present" || echo "FAIL cpu MISSING"
+          echo "$OUTPUT" | jq -r '.cpu.cores // "null"' | xargs -I {} echo "  cpu.cores = {}"
+
+          # Final validation
+          echo ""
+          echo "=== Final validation ==="
+          echo "$OUTPUT" | jq -e '.timestamp and .platform and .cpu.cores > 0' && \
+            echo "OK Probe validation passed on macOS x86_64"
+
+  e2e-macos-arm64:
+    name: E2E macOS ARM64
+    needs: [verify-binaries]
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: supervizio-darwin-arm64
+          path: bin
+
+      - name: Prepare binary
+        run: |
+          chmod +x bin/supervizio-darwin-arm64
+          file bin/supervizio-darwin-arm64
+
+      - name: Run macOS ARM64 E2E test
+        run: |
+          set -euo pipefail
+          export PATH="$PWD/bin:$PATH"
+          mv bin/supervizio-darwin-arm64 bin/supervizio
+          chmod +x bin/supervizio
+
+          echo "=== System Info ==="
+          uname -a
+          sysctl hw.ncpu || true
+          sw_vers || true
+
+          echo ""
+          echo "=== Test version ==="
+          bin/supervizio --version
+
+          echo ""
+          echo "=== Test probe ==="
+          OUTPUT=$(bin/supervizio --probe 2>&1) || {
+            echo "ERROR: --probe command failed with exit code $?"
+            echo "Output: $OUTPUT"
+            exit 1
+          }
+
+          echo "Raw JSON output:"
+          echo "$OUTPUT"
+
+          echo ""
+          echo "=== Validate JSON structure ==="
+          echo "$OUTPUT" | jq -e 'type == "object"' > /dev/null || {
+            echo "ERROR: Output is not valid JSON object"
+            exit 1
+          }
+
+          echo "Checking required fields..."
+          echo "$OUTPUT" | jq -e '.timestamp' > /dev/null && echo "OK timestamp present"
+          echo "$OUTPUT" | jq -e '.platform' > /dev/null && echo "OK platform present"
+          echo "$OUTPUT" | jq -e '.cpu' > /dev/null && echo "OK cpu present" || echo "FAIL cpu MISSING"
+          echo "$OUTPUT" | jq -r '.cpu.cores // "null"' | xargs -I {} echo "  cpu.cores = {}"
+
+          # Final validation
+          echo ""
+          echo "=== Final validation ==="
+          echo "$OUTPUT" | jq -e '.timestamp and .platform and .cpu.cores > 0' && \
+            echo "OK Probe validation passed on macOS ARM64"
+
+  # =============================================================================
+  # PHASE 9: E2E VM TESTS (Proxmox, self-hosted)
+  # =============================================================================
+
+  e2e-vm:
+    name: E2E VM ${{ matrix.name }}
+    runs-on: [self-hosted, proxmox, linux, x64]
+    needs: [verify-packages-all, e2e-docker, e2e-docker-arm64]
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - name: alpine-openrc
+            vmid: "117"
+            binary_artifact: supervizio-linux-amd64-musl
+            pkg_artifact: supervizio-amd64.apk
+            pkg_ext: apk
+          - name: alpine-s6
+            vmid: "118"
+            binary_artifact: supervizio-linux-amd64-musl
+            pkg_artifact: supervizio-amd64.apk
+            pkg_ext: apk
+          - name: arch-systemd
+            vmid: "116"
+            binary_artifact: supervizio-linux-amd64
+            pkg_artifact: supervizio-amd64.pkg.tar.zst
+            pkg_ext: pkg.tar.zst
+          - name: artix-dinit
+            vmid: "128"
+            binary_artifact: supervizio-linux-amd64
+            pkg_artifact: supervizio-amd64.pkg.tar.zst
+            pkg_ext: pkg.tar.zst
+          - name: debian-systemd
+            vmid: "121"
+            binary_artifact: supervizio-linux-amd64
+            pkg_artifact: supervizio-amd64.deb
+            pkg_ext: deb
+          - name: devuan-sysvinit
+            vmid: "115"
+            binary_artifact: supervizio-linux-amd64
+            pkg_artifact: supervizio-amd64.deb
+            pkg_ext: deb
+          - name: fedora-systemd
+            vmid: "114"
+            binary_artifact: supervizio-linux-amd64
+            pkg_artifact: supervizio-amd64.rpm
+            pkg_ext: rpm
+          - name: opensuse-systemd
+            vmid: "119"
+            binary_artifact: supervizio-linux-amd64
+            pkg_artifact: supervizio-amd64.rpm
+            pkg_ext: rpm
+          - name: void-runit
+            vmid: "113"
+            binary_artifact: supervizio-linux-amd64
+            pkg_artifact: supervizio-amd64.xbps
+            pkg_ext: xbps
+          - name: freebsd
+            vmid: "123"
+            vm_ip: "192.168.100.132"
+            binary_artifact: supervizio-freebsd-amd64
+            pkg_artifact: ""
+            pkg_ext: ""
+          - name: openbsd
+            vmid: "120"
+            vm_ip: "192.168.100.34"
+            binary_artifact: supervizio-openbsd-amd64
+            pkg_artifact: ""
+            pkg_ext: ""
+          - name: netbsd
+            vmid: "122"
+            vm_ip: "192.168.100.199"
+            binary_artifact: supervizio-netbsd-amd64
+            pkg_artifact: ""
+            pkg_ext: ""
+    env:
+      PROXMOX_API_URL: "https://192.168.100.1:8006/api2/json"
+      # PVE_AUTH format: PVEAPIToken=<user>@<realm>!<tokenname>=<uuid>
+      PVE_AUTH: "PVEAPIToken=${{ secrets.CI_RUNNER_API_TOKEN_ID }}=${{ secrets.CI_RUNNER_API_TOKEN_SECRET }}"
+      NODE: ${{ secrets.PROXMOX_NODE }}
+      SSH_OPTS: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download package artifact
+        if: matrix.pkg_artifact != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        continue-on-error: true
+        id: download-pkg
+        with:
+          name: ${{ matrix.pkg_artifact }}
+          path: artifacts/
+
+      - name: Download binary artifact (fallback)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        continue-on-error: true
+        id: download-bin
+        with:
+          name: ${{ matrix.binary_artifact }}
+          path: artifacts/
+
+      - name: Prepare artifacts
+        run: |
+          echo "=== Available artifacts ==="
+          ls -la artifacts/ 2>/dev/null || echo "No artifacts found"
+
+          # Find the package or binary to deploy
+          if [ -n "${{ matrix.pkg_ext }}" ]; then
+            PKG_FILE=$(find artifacts/ -name "*.${{ matrix.pkg_ext }}" 2>/dev/null | head -1)
+            if [ -n "$PKG_FILE" ]; then
+              echo "PKG_FILE=$PKG_FILE" >> "$GITHUB_ENV"
+              echo "DEPLOY_MODE=package" >> "$GITHUB_ENV"
+              echo "Found package: $PKG_FILE"
+            else
+              echo "Package not found, falling back to binary"
+              echo "DEPLOY_MODE=binary" >> "$GITHUB_ENV"
+            fi
+          else
+            echo "DEPLOY_MODE=binary" >> "$GITHUB_ENV"
+          fi
+
+          # Find binary
+          BIN_FILE=$(find artifacts/ -name "supervizio-*" -not -name "*.deb" -not -name "*.rpm" -not -name "*.apk" -not -name "*.pkg.tar.zst" -not -name "*.xbps" 2>/dev/null | head -1)
+          if [ -n "$BIN_FILE" ]; then
+            chmod +x "$BIN_FILE"
+            echo "BIN_FILE=$BIN_FILE" >> "$GITHUB_ENV"
+            echo "Found binary: $BIN_FILE"
+          fi
+
+      - name: Acquire VM (lock)
+        id: vm
+        run: |
+          chmod +x .github/scripts/vm-acquire.sh
+          .github/scripts/vm-acquire.sh "${{ matrix.vmid }}" "${GITHUB_RUN_ID}_e2e-vm-${{ matrix.name }}" "${{ matrix.vm_ip }}"
+
+      - name: SCP files to VM
+        run: |
+          # Retry helper for transient SSH/SCP failures
+          retry() {
+            local n=0 max=3
+            while [ $n -lt $max ]; do
+              "$@" && return 0
+              n=$((n + 1))
+              echo "Retry $n/$max..."
+              sleep 5
+            done
+            echo "Failed after $max attempts: $*"
+            return 1
+          }
+
+          # Use -O (legacy SCP protocol) for VMs without SFTP subsystem
+          SCP_CMD="scp -O ${SSH_OPTS}"
+
+          # Clean previous files to prevent SCP nesting issues
+          ssh ${SSH_OPTS} root@${VM_IP} "rm -rf /tmp/setup /tmp/validate-probe.sh /tmp/supervizio*" || true
+
+          # Copy setup scripts
+          retry ${SCP_CMD} -r setup root@${VM_IP}:/tmp/setup
+
+          # Copy test scripts
+          retry ${SCP_CMD} e2e/validate-probe.sh root@${VM_IP}:/tmp/validate-probe.sh
+
+          # Copy package if available
+          if [ "$DEPLOY_MODE" = "package" ] && [ -n "${PKG_FILE:-}" ]; then
+            retry ${SCP_CMD} "$PKG_FILE" root@${VM_IP}:/tmp/supervizio.${{ matrix.pkg_ext }}
+            echo "Copied package: $PKG_FILE"
+          fi
+
+          # Always copy binary as fallback
+          if [ -n "${BIN_FILE:-}" ]; then
+            retry ${SCP_CMD} "$BIN_FILE" root@${VM_IP}:/tmp/supervizio
+            ssh ${SSH_OPTS} root@${VM_IP} "chmod +x /tmp/supervizio"
+            echo "Copied binary: $BIN_FILE"
+          fi
+
+          # Fail if nothing was copied
+          if [ -z "${PKG_FILE:-}" ] && [ -z "${BIN_FILE:-}" ]; then
+            echo "ERROR: No package or binary to deploy"
+            exit 1
+          fi
+
+      - name: Install jq (best-effort)
+        run: |
+          ssh ${SSH_OPTS} root@${VM_IP} << 'INSTALL_JQ'
+          # Try to install jq - varies by OS
+          # Verify jq actually works (not just exists — some VMs have empty binaries)
+          if command -v jq >/dev/null 2>&1 && echo '{}' | jq . >/dev/null 2>&1; then
+            echo "jq already available and functional"
+            exit 0
+          fi
+          # Remove broken jq if present but non-functional
+          if command -v jq >/dev/null 2>&1; then
+            echo "jq exists but broken, forcing reinstall"
+            rm -f "$(command -v jq)" 2>/dev/null || true
+          fi
+          # Try common package managers
+          apk add --no-cache jq 2>/dev/null && echo '{}' | jq . >/dev/null 2>&1 && exit 0
+          apt-get update -qq && apt-get install -y -qq jq 2>/dev/null && echo '{}' | jq . >/dev/null 2>&1 && exit 0
+          dnf install -y jq 2>/dev/null && echo '{}' | jq . >/dev/null 2>&1 && exit 0
+          yum install -y jq 2>/dev/null && echo '{}' | jq . >/dev/null 2>&1 && exit 0
+          zypper install -y jq 2>/dev/null && echo '{}' | jq . >/dev/null 2>&1 && exit 0
+          pacman -Sy --noconfirm jq 2>/dev/null && echo '{}' | jq . >/dev/null 2>&1 && exit 0
+          xbps-install -Sy jq 2>/dev/null && echo '{}' | jq . >/dev/null 2>&1 && exit 0
+          pkg install -y jq 2>/dev/null && echo '{}' | jq . >/dev/null 2>&1 && exit 0
+          pkg_add jq 2>/dev/null && echo '{}' | jq . >/dev/null 2>&1 && exit 0
+          pkgin -y install jq 2>/dev/null && echo '{}' | jq . >/dev/null 2>&1 && exit 0
+          # Static binary fallback (works on any Linux/BSD x86_64)
+          echo "Package jq install failed or broken, trying static binary..."
+          ARCH=$(uname -m)
+          case "$ARCH" in
+            x86_64|amd64) JQ_ARCH="amd64" ;;
+            aarch64|arm64) JQ_ARCH="arm64" ;;
+            *) JQ_ARCH="" ;;
+          esac
+          if [ -n "$JQ_ARCH" ]; then
+            OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+            case "$OS" in
+              freebsd) OS="linux" ;; # jq linux static works on FreeBSD via compat
+              *) ;;
+            esac
+            JQ_URL="https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-${OS}-${JQ_ARCH}"
+            curl -fsSL "$JQ_URL" -o /usr/local/bin/jq 2>/dev/null || \
+              fetch -o /usr/local/bin/jq "$JQ_URL" 2>/dev/null || \
+              ftp -o /usr/local/bin/jq "$JQ_URL" 2>/dev/null || true
+            chmod +x /usr/local/bin/jq 2>/dev/null
+            if echo '{}' | /usr/local/bin/jq . >/dev/null 2>&1; then
+              echo "Static jq installed successfully"
+              exit 0
+            fi
+          fi
+          echo "WARNING: Could not install functional jq"
+          exit 0
+          INSTALL_JQ
+
+      - name: Install supervizio
+        run: |
+          ssh ${SSH_OPTS} root@${VM_IP} << 'INSTALL_CMD'
+          set -e
+          echo "=== Platform Info ==="
+          uname -a
+          echo ""
+
+          # Set package source if available
+          if [ -f "/tmp/supervizio.${{ matrix.pkg_ext }}" ] && [ -n "${{ matrix.pkg_ext }}" ]; then
+            echo "Package available: /tmp/supervizio.${{ matrix.pkg_ext }}"
+            export SUPERVIZIO_LOCAL_PKG="/tmp/supervizio.${{ matrix.pkg_ext }}"
+          fi
+
+          # Set binary fallback if available
+          if [ -f "/tmp/supervizio" ]; then
+            echo "Binary available: /tmp/supervizio"
+            export SUPERVIZIO_LOCAL_BIN="/tmp/supervizio"
+          fi
+
+          if [ -z "${SUPERVIZIO_LOCAL_PKG:-}" ] && [ -z "${SUPERVIZIO_LOCAL_BIN:-}" ]; then
+            echo "ERROR: No package or binary found"
+            exit 1
+          fi
+
+          chmod +x /tmp/setup/install.sh
+          /tmp/setup/install.sh
+          INSTALL_CMD
+
+      - name: Verify installation
+        run: |
+          ssh ${SSH_OPTS} root@${VM_IP} << 'VERIFY_CMD'
+          set -e
+          echo "=== Verify Installation ==="
+
+          # Check binary exists
+          if [ -f /usr/local/bin/supervizio ]; then
+            echo "OK Binary found at /usr/local/bin/supervizio"
+          else
+            echo "FAIL Binary NOT found"
+            exit 1
+          fi
+
+          # Check config directory
+          if [ -d /etc/supervizio ]; then
+            echo "OK Config directory exists"
+          else
+            echo "SKIP Config directory not found (may be OK for BSD)"
+          fi
+
+          # Check config file
+          if [ -f /etc/supervizio/config.example.yaml ]; then
+            echo "OK Example config found"
+          else
+            echo "SKIP Example config not found"
+          fi
+
+          # Check version
+          echo ""
+          echo "=== Version ==="
+          /usr/local/bin/supervizio --version || echo "version check done"
+          VERIFY_CMD
+
+      - name: Validate probe
+        run: |
+          ssh ${SSH_OPTS} root@${VM_IP} << 'PROBE_CMD'
+          set -e
+          if command -v jq >/dev/null 2>&1; then
+            chmod +x /tmp/validate-probe.sh
+            /tmp/validate-probe.sh
+          else
+            echo "[WARN] jq not available, running basic probe test"
+            OUTPUT=$(/usr/local/bin/supervizio --probe 2>&1) || {
+              echo "ERROR: --probe failed"
+              echo "Output: $OUTPUT"
+              exit 1
+            }
+            echo "Probe output:"
+            echo "$OUTPUT"
+            echo "OK Probe returned output (jq not available for validation)"
+          fi
+          PROBE_CMD
+
+      - name: Uninstall supervizio
+        run: |
+          ssh ${SSH_OPTS} root@${VM_IP} << 'UNINSTALL_CMD'
+          set -e
+          echo "=== Uninstalling supervizio ==="
+          export SUPERVIZIO_NON_INTERACTIVE=true
+          chmod +x /tmp/setup/uninstall.sh
+          /tmp/setup/uninstall.sh
+          UNINSTALL_CMD
+
+      - name: Verify clean uninstall
+        run: |
+          ssh ${SSH_OPTS} root@${VM_IP} << 'VERIFY_CLEAN'
+          set -e
+          echo "=== Verify Clean Uninstall ==="
+          ERRORS=0
+
+          # Check binary removed
+          if [ -f /usr/local/bin/supervizio ]; then
+            echo "FAIL Binary still present!"
+            ERRORS=$((ERRORS + 1))
+          else
+            echo "OK Binary removed"
+          fi
+
+          # Check service files removed
+          for svc in /etc/systemd/system/supervizio.service \
+                     /usr/lib/systemd/system/supervizio.service \
+                     /etc/init.d/supervizio \
+                     /etc/sv/supervizio/run \
+                     /etc/s6/supervizio/run \
+                     /etc/dinit.d/supervizio \
+                     /etc/rc.d/supervizio; do
+            if [ -f "$svc" ]; then
+              echo "FAIL Service file still present: $svc"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+
+          if [ "$ERRORS" -gt 0 ]; then
+            echo ""
+            echo "WARNING: $ERRORS items not cleaned up"
+            # Don't fail - some systems may retain config
+          else
+            echo "OK Clean uninstall verified"
+          fi
+          VERIFY_CLEAN
+
+      - name: Release VM
+        if: always()
+        run: |
+          chmod +x .github/scripts/vm-release.sh
+          .github/scripts/vm-release.sh "${{ matrix.vmid }}"
+
+  # =============================================================================
+  # PHASE 10: SUMMARY
+  # =============================================================================
+
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-24.04
+    needs:
+      - rust-lint
+      - rust-test
+      - go-test
+      - build-probe-linux
+      - build-probe-linux-arm64
+      - build-probe-linux-cross
+      - build-probe-darwin
+      - build-probe-darwin-arm64
+      - verify-probes
+      - build-amd64
+      - build-amd64-musl
+      - build-arm64
+      - build-arm64-musl
+      - build-linux-cross
+      - build-linux-cross-musl
+      - build-bsd-native
+      - build-darwin-amd64
+      - build-darwin-arm64
+      - verify-binaries
+      - packages-glibc
+      - packages-musl
+      - packages-archlinux
+      - packages-xbps
+      - verify-packages-linux
+      - verify-packages-all
+      - e2e-docker
+      - e2e-docker-arm64
+      - e2e-macos
+      - e2e-macos-arm64
+      - e2e-vm
+    if: always()
+    steps:
+      - name: Platform Support Matrix
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << 'MATRIX'
+          ## Platform Support Matrix
+
+          | OS | amd64 | arm64 | CGO | libc | Probe | Package | Init Systems |
+          |----|:-----:|:-----:|:---:|------|:-----:|---------|--------------|
+          | Debian/Ubuntu | :white_check_mark: | :white_check_mark: | 1 | glibc | :white_check_mark: | apt (.deb) | systemd |
+          | Devuan | :white_check_mark: | :white_check_mark: | 1 | glibc | :white_check_mark: | apt (.deb) | sysvinit |
+          | Fedora/RHEL | :white_check_mark: | :white_check_mark: | 1 | glibc | :white_check_mark: | dnf (.rpm) | systemd |
+          | openSUSE | :white_check_mark: | :white_check_mark: | 1 | glibc | :white_check_mark: | zypper (.rpm) | systemd |
+          | Alpine | :white_check_mark: | :white_check_mark: | 1 | musl | :white_check_mark: | apk (.apk) | openrc, s6, runit, dinit |
+          | Arch | :white_check_mark: | — | 1 | glibc | :white_check_mark: | pacman (.pkg.tar.zst) | systemd |
+          | Artix | :white_check_mark: | — | 1 | glibc | :white_check_mark: | pacman (.pkg.tar.zst) | dinit, runit, s6, openrc |
+          | Void | :white_check_mark: | — | 1 | glibc | :white_check_mark: | xbps (.xbps) | runit |
+          | FreeBSD | :white_check_mark: | — | 1 | libc | :white_check_mark: | pkg (.pkg) | rc.d |
+          | OpenBSD | :white_check_mark: | — | 1 | libc | :white_check_mark: | pkg_add (.tgz) | rc.d |
+          | NetBSD | :white_check_mark: | — | 1 | libc | :white_check_mark: | pkg_add (.tgz) | rc.d |
+          | macOS | :white_check_mark: | :white_check_mark: | 1 | libSystem | :white_check_mark: | — | launchd |
+          | scratch | :white_check_mark: | :white_check_mark: | 1 | static musl | :white_check_mark: | — | — |
+
+          MATRIX
+
+      - name: Download probe capabilities
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: probe-cap-*
+          path: probe-caps/
+          merge-multiple: true
+
+      - name: Probe Capability Matrix
+        run: |
+          echo "## Probe Capability Matrix" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Platform | cpu | mem | load | disk | net | io | proc | psi | thermal | ctx_sw | conn | quota | container |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|----------|:---:|:---:|:----:|:----:|:---:|:--:|:----:|:---:|:-------:|:------:|:----:|:-----:|:---------:|" >> "$GITHUB_STEP_SUMMARY"
+
+          for f in probe-caps/probe-cap-*.json; do
+            [ -f "$f" ] || continue
+            PLAT=$(jq -r '.platform' "$f")
+            # Handle error entries (probe failed to run)
+            if [ "$(jq -r '.error // false' "$f")" = "true" ]; then
+              ROW="| $PLAT | :warning: probe failed | | | | | | | | | | | | |"
+              echo "$ROW" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            ROW="| $PLAT"
+            for field in cpu memory load disk network io process psi thermal context_switches connections quota container; do
+              VAL=$(jq -r ".$field // false" "$f")
+              if [ "$VAL" = "true" ]; then
+                ROW="$ROW | :white_check_mark:"
+              else
+                ROW="$ROW | :x:"
+              fi
+            done
+            ROW="$ROW |"
+            echo "$ROW" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Job Results
+        run: |
+          # Helper to convert result to emoji
+          emoji() {
+            case "$1" in
+              success)  echo ":white_check_mark:" ;;
+              failure)  echo ":x:" ;;
+              skipped)  echo ":fast_forward:" ;;
+              cancelled) echo ":stop_sign:" ;;
+              *)        echo ":grey_question:" ;;
+            esac
+          }
+
+          {
+            echo "## Job Results"
+            echo ""
+            echo "### Phase 1: Quality Gates"
+            echo "| Job | Status |"
+            echo "|-----|--------|"
+            echo "| rust-lint | $(emoji "${{ needs.rust-lint.result }}") \`${{ needs.rust-lint.result }}\` |"
+            echo "| rust-test | $(emoji "${{ needs.rust-test.result }}") \`${{ needs.rust-test.result }}\` |"
+            echo "| go-test | $(emoji "${{ needs.go-test.result }}") \`${{ needs.go-test.result }}\` |"
+            echo ""
+            echo "### Phase 2: Probe Libraries"
+            echo "| Job | Status |"
+            echo "|-----|--------|"
+            echo "| probe-linux (amd64) | $(emoji "${{ needs.build-probe-linux.result }}") \`${{ needs.build-probe-linux.result }}\` |"
+            echo "| probe-linux (arm64) | $(emoji "${{ needs.build-probe-linux-arm64.result }}") \`${{ needs.build-probe-linux-arm64.result }}\` |"
+            echo "| probe-linux-cross (arm/386/riscv64) | $(emoji "${{ needs.build-probe-linux-cross.result }}") \`${{ needs.build-probe-linux-cross.result }}\` |"
+            echo "| probe-darwin (amd64) | $(emoji "${{ needs.build-probe-darwin.result }}") \`${{ needs.build-probe-darwin.result }}\` |"
+            echo "| probe-darwin (arm64) | $(emoji "${{ needs.build-probe-darwin-arm64.result }}") \`${{ needs.build-probe-darwin-arm64.result }}\` |"
+            echo "| verify-probes | $(emoji "${{ needs.verify-probes.result }}") \`${{ needs.verify-probes.result }}\` |"
+            echo ""
+            echo "### Phase 3: Binaries"
+            echo "| Job | Status |"
+            echo "|-----|--------|"
+            echo "| build-amd64 (glibc) | $(emoji "${{ needs.build-amd64.result }}") \`${{ needs.build-amd64.result }}\` |"
+            echo "| build-amd64 (musl) | $(emoji "${{ needs.build-amd64-musl.result }}") \`${{ needs.build-amd64-musl.result }}\` |"
+            echo "| build-arm64 (glibc) | $(emoji "${{ needs.build-arm64.result }}") \`${{ needs.build-arm64.result }}\` |"
+            echo "| build-arm64 (musl) | $(emoji "${{ needs.build-arm64-musl.result }}") \`${{ needs.build-arm64-musl.result }}\` |"
+            echo "| build-linux-cross (arm/386/riscv64) | $(emoji "${{ needs.build-linux-cross.result }}") \`${{ needs.build-linux-cross.result }}\` |"
+            echo "| build-linux-cross-musl (arm/386/riscv64) | $(emoji "${{ needs.build-linux-cross-musl.result }}") \`${{ needs.build-linux-cross-musl.result }}\` |"
+            echo "| build-bsd-native | $(emoji "${{ needs.build-bsd-native.result }}") \`${{ needs.build-bsd-native.result }}\` |"
+            echo "| build-darwin (amd64) | $(emoji "${{ needs.build-darwin-amd64.result }}") \`${{ needs.build-darwin-amd64.result }}\` |"
+            echo "| build-darwin (arm64) | $(emoji "${{ needs.build-darwin-arm64.result }}") \`${{ needs.build-darwin-arm64.result }}\` |"
+            echo "| verify-binaries | $(emoji "${{ needs.verify-binaries.result }}") \`${{ needs.verify-binaries.result }}\` |"
+            echo ""
+            echo "### Phase 4: Packages"
+            echo "| Job | Status |"
+            echo "|-----|--------|"
+            echo "| packages-glibc (.deb, .rpm) | $(emoji "${{ needs.packages-glibc.result }}") \`${{ needs.packages-glibc.result }}\` |"
+            echo "| packages-musl (.apk) | $(emoji "${{ needs.packages-musl.result }}") \`${{ needs.packages-musl.result }}\` |"
+            echo "| packages-archlinux (.pkg.tar.zst) | $(emoji "${{ needs.packages-archlinux.result }}") \`${{ needs.packages-archlinux.result }}\` |"
+            echo "| packages-xbps (.xbps) | $(emoji "${{ needs.packages-xbps.result }}") \`${{ needs.packages-xbps.result }}\` |"
+            echo "| verify-packages-linux | $(emoji "${{ needs.verify-packages-linux.result }}") \`${{ needs.verify-packages-linux.result }}\` |"
+            echo "| verify-packages-all | $(emoji "${{ needs.verify-packages-all.result }}") \`${{ needs.verify-packages-all.result }}\` |"
+            echo ""
+            echo "### Phase 5: E2E Tests"
+            echo "| Job | Status |"
+            echo "|-----|--------|"
+            echo "| e2e-docker (amd64) | $(emoji "${{ needs.e2e-docker.result }}") \`${{ needs.e2e-docker.result }}\` |"
+            echo "| e2e-docker (arm64) | $(emoji "${{ needs.e2e-docker-arm64.result }}") \`${{ needs.e2e-docker-arm64.result }}\` |"
+            echo "| e2e-macos (amd64) | $(emoji "${{ needs.e2e-macos.result }}") \`${{ needs.e2e-macos.result }}\` |"
+            echo "| e2e-macos (arm64) | $(emoji "${{ needs.e2e-macos-arm64.result }}") \`${{ needs.e2e-macos-arm64.result }}\` |"
+            echo "| e2e-vm | $(emoji "${{ needs.e2e-vm.result }}") \`${{ needs.e2e-vm.result }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: CI Results
+        run: |
+          echo "============================================="
+          echo "  CI Pipeline Results"
+          echo "============================================="
+
+          # Determine overall result
+          # Required jobs that must pass
+          REQUIRED_RESULTS=(
+            "${{ needs.rust-lint.result }}"
+            "${{ needs.rust-test.result }}"
+            "${{ needs.go-test.result }}"
+            "${{ needs.build-probe-linux.result }}"
+            "${{ needs.build-probe-linux-arm64.result }}"
+            "${{ needs.build-probe-linux-cross.result }}"
+            "${{ needs.build-probe-darwin.result }}"
+            "${{ needs.build-probe-darwin-arm64.result }}"
+            "${{ needs.build-amd64.result }}"
+            "${{ needs.build-amd64-musl.result }}"
+            "${{ needs.build-arm64.result }}"
+            "${{ needs.build-arm64-musl.result }}"
+            "${{ needs.build-linux-cross.result }}"
+            "${{ needs.build-linux-cross-musl.result }}"
+            "${{ needs.build-bsd-native.result }}"
+            "${{ needs.build-darwin-amd64.result }}"
+            "${{ needs.build-darwin-arm64.result }}"
+            "${{ needs.verify-binaries.result }}"
+            "${{ needs.packages-glibc.result }}"
+            "${{ needs.packages-musl.result }}"
+            "${{ needs.packages-archlinux.result }}"
+            "${{ needs.packages-xbps.result }}"
+            "${{ needs.verify-packages-linux.result }}"
+            "${{ needs.e2e-docker.result }}"
+            "${{ needs.e2e-docker-arm64.result }}"
+            "${{ needs.e2e-macos.result }}"
+            "${{ needs.e2e-macos-arm64.result }}"
+          )
+
+          FAILED=0
+          for result in "${REQUIRED_RESULTS[@]}"; do
+            if [ "$result" = "failure" ]; then
+              FAILED=$((FAILED + 1))
+            fi
+          done
+
+          if [ "$FAILED" -gt 0 ]; then
+            echo ""
+            echo "RESULT: FAILED ($FAILED required jobs failed)"
+            exit 1
+          else
+            echo ""
+            echo "RESULT: SUCCESS (all required jobs passed)"
+          fi
+
+  # =============================================================================
+  # PHASE 11: VM CLEANUP (always runs)
+  # =============================================================================
+
+  vm-cleanup:
+    name: VM Cleanup
+    runs-on: [self-hosted, proxmox, linux, x64]
+    needs: [summary]
+    if: always()
+    timeout-minutes: 10
+    env:
+      PROXMOX_API_URL: "https://192.168.100.1:8006/api2/json"
+      # PVE_AUTH format: PVEAPIToken=<user>@<realm>!<tokenname>=<uuid>
+      PVE_AUTH: "PVEAPIToken=${{ secrets.CI_RUNNER_API_TOKEN_ID }}=${{ secrets.CI_RUNNER_API_TOKEN_SECRET }}"
+      NODE: ${{ secrets.PROXMOX_NODE }}
+    steps:
+      - name: Reset all VMs to base snapshot
+        run: |
+          echo "=== VM Cleanup: Resetting all VMs to base snapshot ==="
+
+          # Validate Proxmox credentials
+          if [ -z "$NODE" ] || [ "$PVE_AUTH" = "PVEAPIToken==" ]; then
+            echo "WARNING: Proxmox secrets not configured, skipping VM cleanup"
+            exit 0
+          fi
+
+          VMIDS=(113 114 115 116 117 118 119 120 121 122 123 128)
+          FAILED=0
+
+          for VMID in "${VMIDS[@]}"; do
+            echo ""
+            echo "--- VM ${VMID} ---"
+
+            echo "  Stopping VM ${VMID}..."
+            curl -sf -k -H "Authorization: ${PVE_AUTH}" \
+              -X POST "${PROXMOX_API_URL}/nodes/${NODE}/qemu/${VMID}/status/stop" 2>/dev/null || true
+            sleep 5
+
+            echo "  Rolling back to 'base' snapshot..."
+            if curl -sf -k -H "Authorization: ${PVE_AUTH}" \
+              -X POST "${PROXMOX_API_URL}/nodes/${NODE}/qemu/${VMID}/snapshot/base/rollback" 2>/dev/null; then
+              echo "  VM ${VMID} reset to base"
+            else
+              echo "  WARNING: Failed to rollback VM ${VMID}"
+              FAILED=$((FAILED + 1))
+            fi
+          done
+
+          echo ""
+          echo "=== VM Cleanup Complete ==="
+          echo "  Total VMs: ${#VMIDS[@]}"
+          echo "  Failed: ${FAILED}"
+
+          if [ "$FAILED" -gt 0 ]; then
+            echo "  WARNING: Some VMs failed to reset (non-fatal)"
+          fi

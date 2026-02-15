@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-12T17:05:00Z -->
 # Healthcheck - Probers de Santé
 
 Vérification de la santé des services via différents protocoles.
@@ -18,6 +19,7 @@ Tester qu'un service est accessible et répond correctement.
 | gRPC | `grpc.go` | Protocole health/v1 |
 | Exec | `exec.go` | Commande exit code 0 |
 | ICMP | `icmp.go` | Ping (fallback TCP si pas CAP_NET_RAW) |
+| ICMP Native | `icmp_native.go` | Raw ICMP (requires CAP_NET_RAW) |
 
 ## Factory
 

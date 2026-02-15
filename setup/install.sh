@@ -1,6 +1,7 @@
 #!/bin/sh
 # supervizio install script
-# Detects platform and installs supervizio with appropriate init system
+# Detects platform, package manager, and installs supervizio.
+# Strategy: native package first, fallback to raw binary install.
 set -e
 
 VERSION="${SUPERVIZIO_VERSION:-latest}"
@@ -71,6 +72,18 @@ detect_init_system() {
         return
     fi
 
+    # Check for s6 (Alpine s6 overlay, Artix s6)
+    if command -v s6-svc >/dev/null 2>&1 || [ -d /etc/s6 ]; then
+        echo "s6"
+        return
+    fi
+
+    # Check for dinit (Artix, Chimera Linux)
+    if command -v dinitctl >/dev/null 2>&1; then
+        echo "dinit"
+        return
+    fi
+
     # Check for runit (Void Linux, Artix)
     if command -v sv >/dev/null 2>&1 && [ -d /etc/sv ]; then
         echo "runit"
@@ -102,6 +115,183 @@ detect_distro() {
     fi
 }
 
+# Detect package manager
+detect_package_manager() {
+    OS="$1"
+
+    case "$OS" in
+        linux)
+            if command -v dpkg >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then
+                echo "deb"
+            elif command -v dnf >/dev/null 2>&1; then
+                echo "rpm-dnf"
+            elif command -v zypper >/dev/null 2>&1; then
+                echo "rpm-zypper"
+            elif command -v apk >/dev/null 2>&1; then
+                echo "apk"
+            elif command -v pacman >/dev/null 2>&1; then
+                echo "pacman"
+            elif command -v xbps-install >/dev/null 2>&1; then
+                echo "xbps"
+            else
+                echo "none"
+            fi
+            ;;
+        freebsd)
+            if command -v pkg >/dev/null 2>&1; then
+                echo "freebsd-pkg"
+            else
+                echo "none"
+            fi
+            ;;
+        openbsd)
+            if command -v pkg_add >/dev/null 2>&1; then
+                echo "openbsd-pkg"
+            else
+                echo "none"
+            fi
+            ;;
+        netbsd)
+            if command -v pkg_add >/dev/null 2>&1; then
+                echo "netbsd-pkg"
+            elif command -v pkgin >/dev/null 2>&1; then
+                echo "netbsd-pkg"
+            else
+                echo "none"
+            fi
+            ;;
+        *)
+            echo "none"
+            ;;
+    esac
+}
+
+# Download a file using available tool
+# Note: || return 1 prevents set -e from killing the script on download failure
+download_file() {
+    URL="$1"
+    DEST="$2"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$URL" -o "$DEST" || return 1
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q "$URL" -O "$DEST" || return 1
+    elif command -v fetch >/dev/null 2>&1; then
+        fetch -q "$URL" -o "$DEST" || return 1
+    elif command -v ftp >/dev/null 2>&1; then
+        ftp -o "$DEST" "$URL" || return 1
+    else
+        log_error "No download tool found (curl, wget, fetch, or ftp required)"
+        return 1
+    fi
+}
+
+# Get package file (local or download)
+get_package() {
+    PKG_MGR="$1"
+    ARCH="$2"
+
+    # E2E mode: use local package if SUPERVIZIO_LOCAL_PKG is set
+    if [ -n "${SUPERVIZIO_LOCAL_PKG:-}" ] && [ -f "$SUPERVIZIO_LOCAL_PKG" ]; then
+        log_info "Using local package: $SUPERVIZIO_LOCAL_PKG"
+        # Preserve original extension (apk-tools 3.x requires .apk extension)
+        PKG_EXT="${SUPERVIZIO_LOCAL_PKG##*.}"
+        cp "$SUPERVIZIO_LOCAL_PKG" "/tmp/supervizio-pkg.${PKG_EXT}"
+        return 0
+    fi
+
+    # Construct package filename based on package manager
+    case "$PKG_MGR" in
+        deb)          PKG_FILE="supervizio-${ARCH}.deb" ;;
+        rpm-dnf|rpm-zypper) PKG_FILE="supervizio-${ARCH}.rpm" ;;
+        apk)          PKG_FILE="supervizio-${ARCH}.apk" ;;
+        pacman)       PKG_FILE="supervizio-${ARCH}.pkg.tar.zst" ;;
+        xbps)         PKG_FILE="supervizio-${ARCH}.xbps" ;;
+        freebsd-pkg)  PKG_FILE="supervizio-freebsd-${ARCH}.pkg" ;;
+        openbsd-pkg)  PKG_FILE="supervizio-openbsd-${ARCH}.tgz" ;;
+        netbsd-pkg)   PKG_FILE="supervizio-netbsd-${ARCH}.tgz" ;;
+        *)            return 1 ;;
+    esac
+
+    # Construct download URL
+    if [ "$VERSION" = "latest" ]; then
+        DOWNLOAD_URL="https://github.com/supervizio/daemon/releases/latest/download/${PKG_FILE}"
+    else
+        DOWNLOAD_URL="https://github.com/supervizio/daemon/releases/download/${VERSION}/${PKG_FILE}"
+    fi
+
+    log_info "Downloading package from $DOWNLOAD_URL"
+    if download_file "$DOWNLOAD_URL" "/tmp/supervizio-pkg.${PKG_FILE##*.}"; then
+        return 0
+    else
+        log_warn "Package download failed"
+        return 1
+    fi
+}
+
+# Install package using native package manager
+install_package() {
+    PKG_MGR="$1"
+
+    # Find the package file (with extension preserved)
+    PKG_FILE=$(ls /tmp/supervizio-pkg.* 2>/dev/null | head -1)
+    if [ -z "$PKG_FILE" ]; then
+        log_error "Package file not found"
+        return 1
+    fi
+
+    log_info "Installing via package manager: $PKG_MGR"
+
+    case "$PKG_MGR" in
+        deb)
+            dpkg -i "$PKG_FILE" || true
+            apt-get install -f -y
+            ;;
+        rpm-dnf)
+            dnf install -y "$PKG_FILE"
+            ;;
+        rpm-zypper)
+            zypper install -y --allow-unsigned-rpm "$PKG_FILE"
+            ;;
+        apk)
+            apk add --allow-untrusted "$PKG_FILE"
+            ;;
+        pacman)
+            pacman -U --noconfirm "$PKG_FILE"
+            ;;
+        xbps)
+            # xbps-install requires a repository index; create local repo
+            REPO_DIR=$(dirname "$PKG_FILE")
+            if command -v xbps-rindex >/dev/null 2>&1; then
+                xbps-rindex -a "$PKG_FILE" 2>/dev/null || true
+                xbps-install -y --repository="$REPO_DIR" supervizio
+            else
+                log_warn "xbps-rindex not available"
+                return 1
+            fi
+            ;;
+        freebsd-pkg)
+            pkg add "$PKG_FILE"
+            ;;
+        openbsd-pkg)
+            pkg_add "$PKG_FILE"
+            ;;
+        netbsd-pkg)
+            pkg_add "$PKG_FILE"
+            ;;
+        *)
+            log_error "Unknown package manager: $PKG_MGR"
+            return 1
+            ;;
+    esac
+    INSTALL_RESULT=$?
+
+    # Cleanup
+    rm -f "$PKG_FILE"
+
+    return "$INSTALL_RESULT"
+}
+
 # Get binary (local or download)
 get_binary() {
     OS="$1"
@@ -111,8 +301,12 @@ get_binary() {
     LOCAL_BIN="${SUPERVIZIO_LOCAL_BIN:-/bin-local/supervizio}"
     if [ -f "$LOCAL_BIN" ]; then
         log_info "Using local binary: $LOCAL_BIN"
-        cp "$LOCAL_BIN" "/tmp/$BINARY_NAME"
-        chmod +x "/tmp/$BINARY_NAME"
+        # Avoid copying file to itself (e.g., when LOCAL_BIN is /tmp/supervizio)
+        DEST="/tmp/$BINARY_NAME"
+        if [ "$(readlink -f "$LOCAL_BIN" 2>/dev/null || echo "$LOCAL_BIN")" != "$(readlink -f "$DEST" 2>/dev/null || echo "$DEST")" ]; then
+            cp "$LOCAL_BIN" "$DEST"
+        fi
+        chmod +x "$DEST"
         return
     fi
 
@@ -124,18 +318,7 @@ get_binary() {
     fi
 
     log_info "Downloading supervizio from $DOWNLOAD_URL"
-
-    if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "$DOWNLOAD_URL" -o "/tmp/$BINARY_NAME"
-    elif command -v wget >/dev/null 2>&1; then
-        wget -q "$DOWNLOAD_URL" -O "/tmp/$BINARY_NAME"
-    elif command -v fetch >/dev/null 2>&1; then
-        fetch -q "$DOWNLOAD_URL" -o "/tmp/$BINARY_NAME"
-    else
-        log_error "No download tool found (curl, wget, or fetch required)"
-        exit 1
-    fi
-
+    download_file "$DOWNLOAD_URL" "/tmp/$BINARY_NAME"
     chmod +x "/tmp/$BINARY_NAME"
 }
 
@@ -209,10 +392,31 @@ install_init() {
                     ;;
                 sysvinit)
                     log_info "Installing SysVinit service"
-                    cp "$SCRIPT_DIR/init/openrc/supervizio" /etc/init.d/
+                    cp "$SCRIPT_DIR/init/sysvinit/supervizio" /etc/init.d/
                     chmod +x /etc/init.d/supervizio
                     update-rc.d supervizio defaults 2>/dev/null || true
                     log_info "Service enabled. Start with: /etc/init.d/supervizio start"
+                    ;;
+                s6)
+                    log_info "Installing s6 service"
+                    mkdir -p /etc/s6/supervizio/log
+                    cp "$SCRIPT_DIR/init/s6/supervizio/run" /etc/s6/supervizio/
+                    cp "$SCRIPT_DIR/init/s6/supervizio/type" /etc/s6/supervizio/
+                    chmod +x /etc/s6/supervizio/run
+                    if [ -f "$SCRIPT_DIR/init/s6/supervizio/log/run" ]; then
+                        cp "$SCRIPT_DIR/init/s6/supervizio/log/run" /etc/s6/supervizio/log/
+                        chmod +x /etc/s6/supervizio/log/run
+                        mkdir -p /var/log/supervizio
+                    fi
+                    log_info "Service installed. Enable with: s6-rc-bundle-update add default supervizio"
+                    ;;
+                dinit)
+                    log_info "Installing dinit service"
+                    mkdir -p /etc/dinit.d
+                    cp "$SCRIPT_DIR/init/dinit/supervizio" /etc/dinit.d/
+                    mkdir -p /var/log/supervizio
+                    dinitctl enable supervizio 2>/dev/null || true
+                    log_info "Service enabled. Start with: dinitctl start supervizio"
                     ;;
                 runit)
                     log_info "Installing runit service"
@@ -288,7 +492,31 @@ main() {
         log_info "Distribution: $DISTRO"
     fi
 
-    # Get and install binary (local or download)
+    # Detect package manager
+    PKG_MGR=$(detect_package_manager "$OS")
+    log_info "Package manager: $PKG_MGR"
+
+    # Strategy: try native package first, fallback to raw binary
+    if [ "$PKG_MGR" != "none" ]; then
+        if get_package "$PKG_MGR" "$ARCH"; then
+            if install_package "$PKG_MGR"; then
+                # Verify the binary was actually installed (not just metadata)
+                if [ -x "$INSTALL_DIR/$BINARY_NAME" ]; then
+                    log_info "=== Installation complete (via package) ==="
+                    "$INSTALL_DIR/$BINARY_NAME" --version 2>/dev/null && \
+                        log_info "Version: $("$INSTALL_DIR/$BINARY_NAME" --version 2>&1)"
+                    return 0
+                fi
+                log_warn "Package installed but binary missing, falling back to manual install"
+            fi
+            log_warn "Package install failed, falling back to manual install"
+        else
+            log_warn "Package unavailable, falling back to manual install"
+        fi
+    fi
+
+    # Fallback: raw binary install
+    log_info "Installing via raw binary"
     get_binary "$OS" "$ARCH"
     install_binary
 

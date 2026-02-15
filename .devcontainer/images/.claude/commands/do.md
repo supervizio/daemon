@@ -14,7 +14,10 @@ allowed-tools:
   - "Edit(**/*)"
   - "Bash(*)"
   - "Task(*)"
-  - "TodoWrite(*)"
+  - "TaskCreate(*)"
+  - "TaskUpdate(*)"
+  - "TaskList(*)"
+  - "TaskGet(*)"
   - "AskUserQuestion(*)"
   - "mcp__codacy__codacy_cli_analyze(*)"
 ---
@@ -22,6 +25,12 @@ allowed-tools:
 # /do - Iterative Task Loop (RLM Architecture)
 
 $ARGUMENTS
+
+## GREPAI-FIRST (MANDATORY)
+
+Use `grepai_search` for ALL semantic/meaning-based queries BEFORE Grep.
+Use `grepai_trace_callers`/`grepai_trace_callees` for impact analysis.
+Fallback to Grep ONLY for exact string matches or regex patterns.
 
 ---
 
@@ -59,12 +68,13 @@ Boucle itérative utilisant **Recursive Language Model** decomposition :
     /do --help              Affiche cette aide
 
   RLM PATTERNS
-    -1. Plan    - Détection plan approuvé (skip questions si oui)
-    0. Questions - Configuration interactive (si pas de plan)
-    1. Peek     - Scan du codebase + git conflict check
-    2. Decompose - Division en sous-objectifs mesurables
-    3. Parallelize - Validations simultanées (test/lint/build)
-    4. Synthesize - Rapport consolidé par itération
+    1. Plan    - Détection plan approuvé (skip questions si oui)
+    2. Secret   - Découverte secrets 1Password
+    3. Questions - Configuration interactive (si pas de plan)
+    4. Peek     - Scan du codebase + git conflict check
+    5. Decompose - Division en sous-objectifs mesurables
+    6. Loop     - Validations simultanées (test/lint/build)
+    7. Synthesize - Rapport consolidé par itération
 
   EXEMPLES
     /do "Migrer les tests Jest vers Vitest"
@@ -84,7 +94,7 @@ Boucle itérative utilisant **Recursive Language Model** decomposition :
 
 ---
 
-## Phase -1 : Détection de Plan Approuvé
+## Phase 1.0 : Détection de Plan Approuvé
 
 **TOUJOURS exécuter en premier. Vérifie si /plan a été utilisé.**
 
@@ -115,7 +125,7 @@ plan_detection:
       - "Continuer vers Phase 0 (questions)"
 ```
 
-**Output Phase -1 (plan détecté) :**
+**Output Phase 1.0 (plan détecté) :**
 
 ```
 ═══════════════════════════════════════════════════════════════
@@ -131,12 +141,12 @@ plan_detection:
 
   Mode: PLAN_EXECUTION (skipping interactive questions)
 
-  Proceeding to Phase 1 (Peek)...
+  Proceeding to Phase 4.0 (Peek)...
 
 ═══════════════════════════════════════════════════════════════
 ```
 
-**Output Phase -1 (pas de plan) :**
+**Output Phase 1.0 (pas de plan) :**
 
 ```
 ═══════════════════════════════════════════════════════════════
@@ -147,14 +157,66 @@ plan_detection:
 
   Mode: ITERATIVE (interactive questions required)
 
-  Proceeding to Phase 0 (Questions)...
+  Proceeding to Phase 3.0 (Questions)...
 
 ═══════════════════════════════════════════════════════════════
 ```
 
 ---
 
-## Phase 0 : Questions Interactives (SI PAS DE PLAN)
+## Phase 2.0 : Secret Discovery (1Password)
+
+**Verifier si des secrets sont disponibles pour ce projet :**
+
+```yaml
+secret_discovery:
+  trigger: "ALWAYS (avant Phase 0)"
+  blocking: false  # Informatif seulement
+
+  1_check_available:
+    condition: "command -v op && test -n $OP_SERVICE_ACCOUNT_TOKEN"
+    on_failure: "Skip silently (1Password not configured)"
+
+  2_resolve_path:
+    action: "Extraire org/repo depuis git remote origin"
+    command: |
+      REMOTE=$(git config --get remote.origin.url)
+      # Extract org/repo from HTTPS, SSH, or token-embedded URLs
+      PROJECT_PATH=$(echo "${REMOTE%.git}" | grep -oP '[:/]\K[^/]+/[^/]+$')
+
+  3_list_project_secrets:
+    action: "Lister les secrets du projet"
+    command: |
+      op item list --vault='$VAULT_ID' --format=json \
+        | jq -r '.[] | select(.title | startswith("'$PROJECT_PATH'/")) | .title'
+    extract: "Supprimer le prefix pour garder les noms de cles"
+
+  4_check_task_needs:
+    action: "Si la tache mentionne secret/token/credential/password/API key"
+    match_keywords: ["secret", "token", "credential", "password", "api key", "api_key", "auth"]
+    if_match_and_secrets_exist:
+      output: |
+        ═══════════════════════════════════════════════════════════════
+          /do - Secrets Available
+        ═══════════════════════════════════════════════════════════════
+
+          Project: {PROJECT_PATH}
+          Available secrets in 1Password:
+            ├─ DB_PASSWORD
+            ├─ API_KEY
+            └─ JWT_SECRET
+
+          Use /secret --get <key> to retrieve a value
+          These may help with the current task.
+
+        ═══════════════════════════════════════════════════════════════
+    if_no_secrets:
+      output: "(no project secrets in 1Password, continuing...)"
+```
+
+---
+
+## Phase 3.0 : Questions Interactives (SI PAS DE PLAN)
 
 **Poser ces 4 questions UNIQUEMENT si aucun plan approuvé n'est détecté :**
 
@@ -236,7 +298,7 @@ AskUserQuestion:
 
 ---
 
-## Phase 1 : Peek (RLM Pattern)
+## Phase 4.0 : Peek (RLM Pattern)
 
 **Scan rapide AVANT toute modification :**
 
@@ -279,7 +341,7 @@ peek_workflow:
     output: "test_command, lint_command, build_command"
 ```
 
-**Output Phase 1 :**
+**Output Phase 4.0 :**
 
 ```
 ═══════════════════════════════════════════════════════════════
@@ -308,7 +370,7 @@ peek_workflow:
 
 ---
 
-## Phase 2 : Decompose (RLM Pattern)
+## Phase 5.0 : Decompose (RLM Pattern)
 
 **Diviser la tâche en sous-objectifs mesurables :**
 
@@ -330,10 +392,10 @@ decompose_workflow:
     principle: "Smallest change first"
 
   3_create_todos:
-    action: "Initialiser TodoWrite avec les sous-objectifs"
+    action: "Initialiser TaskCreate avec les sous-objectifs"
 ```
 
-**Output Phase 2 :**
+**Output Phase 5.0 :**
 
 ```
 ═══════════════════════════════════════════════════════════════
@@ -356,7 +418,7 @@ decompose_workflow:
 
 ---
 
-## Phase 3 : Boucle Principale
+## Phase 6.0 : Boucle Principale
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -470,7 +532,7 @@ synthesize_iteration:
 
 ---
 
-## Phase 4 : Synthèse Finale
+## Phase 7.0 : Synthèse Finale
 
 ### Rapport de succès
 
@@ -552,28 +614,27 @@ synthesize_iteration:
 
 ---
 
-## TodoWrite Integration
+## TaskCreate Integration
 
 ```yaml
-todo_pattern:
+task_pattern:
   phase_0:
-    - content: "Questions de configuration"
-      status: "completed"
+    - TaskCreate: { subject: "Configuration questions", activeForm: "Asking configuration questions" }
+      → TaskUpdate: { status: "completed" }
 
   phase_1:
-    - content: "Peek: Analyse du codebase"
-      status: "in_progress"
+    - TaskCreate: { subject: "Peek: Analyze codebase", activeForm: "Analyzing codebase" }
+      → TaskUpdate: { status: "in_progress" }
 
   phase_2:
-    - content: "Decompose: {sub_objective_1}"
-      status: "pending"
-    - content: "Decompose: {sub_objective_2}"
-      status: "pending"
+    - TaskCreate: { subject: "{sub_objective_1}", activeForm: "Working on {sub_objective_1}" }
+    - TaskCreate: { subject: "{sub_objective_2}", activeForm: "Working on {sub_objective_2}" }
 
   per_iteration:
-    on_start: "Mark current → in_progress"
-    on_complete: "Mark current → completed"
-    on_success: "Mark all → completed"
+    on_start: "TaskUpdate → status: in_progress"
+    on_complete: "TaskUpdate → status: completed"
+    on_blocked: "TaskCreate new blocker task"
+    on_success: "TaskUpdate all → completed"
 ```
 
 ---
@@ -582,9 +643,9 @@ todo_pattern:
 
 | Action | Status | Raison |
 |--------|--------|--------|
-| Skip Phase -1 (Plan detect) | ❌ **INTERDIT** | Vérifier si plan existe |
-| Skip Phase 0 sans plan | ❌ **INTERDIT** | Questions requises |
-| Skip Phase 1 (Peek) | ❌ **INTERDIT** | Contexte + git check |
+| Skip Phase 1.0 (Plan detect) | ❌ **INTERDIT** | Vérifier si plan existe |
+| Skip Phase 3.0 sans plan | ❌ **INTERDIT** | Questions requises |
+| Skip Phase 4.0 (Peek) | ❌ **INTERDIT** | Contexte + git check |
 | Ignorer max_iterations | ❌ **INTERDIT** | Boucle infinie |
 | Critères subjectifs ("joli", "clean") | ❌ **INTERDIT** | Non mesurable |
 | Modifier .claude/ ou .devcontainer/ | ❌ **INTERDIT** | Fichiers protégés |
@@ -702,8 +763,25 @@ review_integration:
 | `.ts`, `.js` | `developer-specialist-nodejs` |
 | `.rs` | `developer-specialist-rust` |
 | `.rb` | `developer-specialist-ruby` |
-| `.ex` | `developer-specialist-elixir` |
+| `.ex`, `.exs` | `developer-specialist-elixir` |
 | `.php` | `developer-specialist-php` |
+| `.c`, `.h` | `developer-specialist-c` |
+| `.cpp`, `.cc`, `.hpp` | `developer-specialist-cpp` |
+| `.cs` | `developer-specialist-csharp` |
+| `.kt`, `.kts` | `developer-specialist-kotlin` |
+| `.swift` | `developer-specialist-swift` |
+| `.r`, `.R` | `developer-specialist-r` |
+| `.pl`, `.pm` | `developer-specialist-perl` |
+| `.lua` | `developer-specialist-lua` |
+| `.f90`, `.f95`, `.f03` | `developer-specialist-fortran` |
+| `.adb`, `.ads` | `developer-specialist-ada` |
+| `.cob`, `.cbl` | `developer-specialist-cobol` |
+| `.pas`, `.dpr`, `.pp` | `developer-specialist-pascal` |
+| `.vb` | `developer-specialist-vbnet` |
+| `.m` (Octave) | `developer-specialist-matlab` |
+| `.asm`, `.s` | `developer-specialist-assembly` |
+| `.scala` | `developer-specialist-scala` |
+| `.dart` | `developer-specialist-dart` |
 
 ---
 
