@@ -190,7 +190,7 @@ printf "${BLUE}=== Section 1: Metadata ===${NC}\n"
 
 check_field_not_null ".timestamp"
 check_field_not_null ".platform"
-check_field_not_null ".collected_at_ns"
+check_field_not_null ".collected_at_us"
 
 # =============================================================================
 # SECTION 2: CPU Metrics
@@ -333,7 +333,13 @@ case "$PLATFORM" in
             if echo "$JSON" | jq -e '.disk.io | length > 0' >/dev/null 2>&1; then
                 check_field_not_null ".disk.io[0].device"
                 check_field_numeric ".disk.io[0].reads_completed"
+                check_field_numeric ".disk.io[0].read_bytes"
+                check_field_numeric ".disk.io[0].read_time_us"
                 check_field_numeric ".disk.io[0].writes_completed"
+                check_field_numeric ".disk.io[0].write_bytes"
+                check_field_numeric ".disk.io[0].write_time_us"
+                check_field_numeric ".disk.io[0].io_time_us"
+                check_field_numeric ".disk.io[0].weighted_io_time_us"
             else
                 printf "${YELLOW}[WARN]${NC} disk.io array is empty (may be expected on some VMs)\n"
             fi

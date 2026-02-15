@@ -15,5 +15,5 @@ type MemoryMetricsJSON struct {
 	SwapTotalBytes uint64              `json:"swap_total_bytes"`
 	SwapUsedBytes  uint64              `json:"swap_used_bytes"`
 	UsedPercent    float64             `json:"used_percent"`
-	Pressure       *MemoryPressureJSON `json:"pressure,omitempty"`
+	Pressure       *MemoryPressureJSON `json:"pressure"`
 }

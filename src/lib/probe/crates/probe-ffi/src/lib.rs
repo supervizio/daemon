@@ -878,14 +878,14 @@ impl From<probe_metrics::DiskUsage> for DiskUsage {
 pub struct DiskIOStats {
     pub device: [c_char; 64],
     pub reads_completed: u64,
-    pub sectors_read: u64,
-    pub read_time_ms: u64,
+    pub read_bytes: u64,
+    pub read_time_us: u64,
     pub writes_completed: u64,
-    pub sectors_written: u64,
-    pub write_time_ms: u64,
+    pub write_bytes: u64,
+    pub write_time_us: u64,
     pub io_in_progress: u64,
-    pub io_time_ms: u64,
-    pub weighted_io_time_ms: u64,
+    pub io_time_us: u64,
+    pub weighted_io_time_us: u64,
 }
 
 impl Default for DiskIOStats {
@@ -893,14 +893,14 @@ impl Default for DiskIOStats {
         Self {
             device: [0; 64],
             reads_completed: 0,
-            sectors_read: 0,
-            read_time_ms: 0,
+            read_bytes: 0,
+            read_time_us: 0,
             writes_completed: 0,
-            sectors_written: 0,
-            write_time_ms: 0,
+            write_bytes: 0,
+            write_time_us: 0,
             io_in_progress: 0,
-            io_time_ms: 0,
-            weighted_io_time_ms: 0,
+            io_time_us: 0,
+            weighted_io_time_us: 0,
         }
     }
 }
@@ -910,14 +910,14 @@ impl From<probe_metrics::DiskIOStats> for DiskIOStats {
         let mut result = Self::default();
         copy_str_to_carray(&d.device, &mut result.device);
         result.reads_completed = d.reads_completed;
-        result.sectors_read = d.sectors_read;
-        result.read_time_ms = d.read_time_ms;
+        result.read_bytes = d.read_bytes;
+        result.read_time_us = d.read_time_us;
         result.writes_completed = d.writes_completed;
-        result.sectors_written = d.sectors_written;
-        result.write_time_ms = d.write_time_ms;
+        result.write_bytes = d.write_bytes;
+        result.write_time_us = d.write_time_us;
         result.io_in_progress = d.io_in_progress;
-        result.io_time_ms = d.io_time_ms;
-        result.weighted_io_time_ms = d.weighted_io_time_ms;
+        result.io_time_us = d.io_time_us;
+        result.weighted_io_time_us = d.weighted_io_time_us;
         result
     }
 }
@@ -1701,8 +1701,8 @@ pub struct AllMetrics {
     pub io_stats: IOStats,
     /// Pressure metrics.
     pub pressure: AllPressure,
-    /// Timestamp when metrics were collected (nanoseconds since epoch).
-    pub timestamp_ns: u64,
+    /// Timestamp when metrics were collected (microseconds since epoch).
+    pub timestamp_us: u64,
 
     /// Partition count.
     pub partition_count: u32,
@@ -1751,7 +1751,7 @@ impl Default for AllMetrics {
             load: LoadAverage { load_1min: 0.0, load_5min: 0.0, load_15min: 0.0 },
             io_stats: IOStats { read_ops: 0, read_bytes: 0, write_ops: 0, write_bytes: 0 },
             pressure: AllPressure::default(),
-            timestamp_ns: 0,
+            timestamp_us: 0,
             partition_count: 0,
             disk_usage_count: 0,
             disk_io_count: 0,
@@ -1793,7 +1793,7 @@ pub unsafe extern "C" fn probe_collect_all(out: *mut AllMetrics) -> ProbeResult 
             result.memory = SystemMemory::from(metrics.memory);
             result.load = LoadAverage::from(metrics.load);
             result.io_stats = IOStats::from(metrics.io_stats);
-            result.timestamp_ns = metrics.timestamp_ns;
+            result.timestamp_us = metrics.timestamp_us;
 
             // Copy pressure if available
             if let Some(pressure) = metrics.pressure {

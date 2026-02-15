@@ -490,24 +490,24 @@ unsafe fn parse_iokit_disk_stats(stats_dict: *const libc::c_void, device: &str) 
     let mut stats = DiskIOStats {
         device: device.to_string(),
         reads_completed: 0,
-        sectors_read: 0,
-        read_time_ms: 0,
+        read_bytes: 0,
+        read_time_us: 0,
         writes_completed: 0,
-        sectors_written: 0,
-        write_time_ms: 0,
+        write_bytes: 0,
+        write_time_us: 0,
         io_in_progress: 0,
-        io_time_ms: 0,
-        weighted_io_time_ms: 0,
+        io_time_us: 0,
+        weighted_io_time_us: 0,
     };
 
     // Key strings for statistics
     let keys = [
         (b"Operations (Read)\0".as_ptr(), &mut stats.reads_completed as *mut u64),
         (b"Operations (Write)\0".as_ptr(), &mut stats.writes_completed as *mut u64),
-        (b"Bytes (Read)\0".as_ptr(), &mut stats.sectors_read as *mut u64),
-        (b"Bytes (Write)\0".as_ptr(), &mut stats.sectors_written as *mut u64),
-        (b"Total Time (Read)\0".as_ptr(), &mut stats.read_time_ms as *mut u64),
-        (b"Total Time (Write)\0".as_ptr(), &mut stats.write_time_ms as *mut u64),
+        (b"Bytes (Read)\0".as_ptr(), &mut stats.read_bytes as *mut u64),
+        (b"Bytes (Write)\0".as_ptr(), &mut stats.write_bytes as *mut u64),
+        (b"Total Time (Read)\0".as_ptr(), &mut stats.read_time_us as *mut u64),
+        (b"Total Time (Write)\0".as_ptr(), &mut stats.write_time_us as *mut u64),
     ];
 
     for (key_bytes, value_ptr) in keys {
@@ -538,17 +538,13 @@ unsafe fn parse_iokit_disk_stats(stats_dict: *const libc::c_void, device: &str) 
         unsafe { CFRelease(key as *const _) };
     }
 
-    // Convert bytes to sectors (512 bytes per sector)
-    stats.sectors_read /= 512;
-    stats.sectors_written /= 512;
-
-    // Convert nanoseconds to milliseconds
-    stats.read_time_ms /= 1_000_000;
-    stats.write_time_ms /= 1_000_000;
+    // Convert nanoseconds to microseconds
+    stats.read_time_us /= 1_000;
+    stats.write_time_us /= 1_000;
 
     // Calculate total IO time
-    stats.io_time_ms = stats.read_time_ms + stats.write_time_ms;
-    stats.weighted_io_time_ms = stats.io_time_ms;
+    stats.io_time_us = stats.read_time_us + stats.write_time_us;
+    stats.weighted_io_time_us = stats.io_time_us;
 
     stats
 }

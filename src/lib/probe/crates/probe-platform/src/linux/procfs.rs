@@ -552,14 +552,14 @@ pub fn read_diskstats() -> Result<Vec<DiskIOStats>> {
         stats.push(DiskIOStats {
             device: device.to_string(),
             reads_completed: parts[3].parse().unwrap_or(0),
-            sectors_read: parts[5].parse().unwrap_or(0),
-            read_time_ms: parts[6].parse().unwrap_or(0),
+            read_bytes: parts[5].parse::<u64>().unwrap_or(0) * 512,
+            read_time_us: parts[6].parse::<u64>().unwrap_or(0) * 1000,
             writes_completed: parts[7].parse().unwrap_or(0),
-            sectors_written: parts[9].parse().unwrap_or(0),
-            write_time_ms: parts[10].parse().unwrap_or(0),
+            write_bytes: parts[9].parse::<u64>().unwrap_or(0) * 512,
+            write_time_us: parts[10].parse::<u64>().unwrap_or(0) * 1000,
             io_in_progress: parts[11].parse().unwrap_or(0),
-            io_time_ms: parts[12].parse().unwrap_or(0),
-            weighted_io_time_ms: parts[13].parse().unwrap_or(0),
+            io_time_us: parts[12].parse::<u64>().unwrap_or(0) * 1000,
+            weighted_io_time_us: parts[13].parse::<u64>().unwrap_or(0) * 1000,
         });
     }
 
@@ -738,9 +738,9 @@ pub fn read_io_stats() -> Result<IOStats> {
 
     for disk in diskstats {
         stats.read_ops += disk.reads_completed;
-        stats.read_bytes += disk.sectors_read * 512; // 512 bytes per sector
+        stats.read_bytes += disk.read_bytes;
         stats.write_ops += disk.writes_completed;
-        stats.write_bytes += disk.sectors_written * 512;
+        stats.write_bytes += disk.write_bytes;
     }
 
     Ok(stats)

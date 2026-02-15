@@ -10,5 +10,5 @@ type CPUMetricsJSON struct {
 	UsagePercent float64          `json:"usage_percent"`
 	Cores        uint32           `json:"cores"`
 	FrequencyMHz uint64           `json:"frequency_mhz"`
-	Pressure     *CPUPressureJSON `json:"pressure,omitempty"`
+	Pressure     *CPUPressureJSON `json:"pressure"`
 }

@@ -9,20 +9,20 @@ type RawDiskIOData struct {
 	Device string
 	// ReadsCompleted is completed read operations.
 	ReadsCompleted uint64
-	// SectorsRead is sectors read.
-	SectorsRead uint64
-	// ReadTimeMs is time spent reading in ms.
-	ReadTimeMs uint64
+	// ReadBytes is bytes read.
+	ReadBytes uint64
+	// ReadTimeUs is time spent reading in us.
+	ReadTimeUs uint64
 	// WritesCompleted is completed write operations.
 	WritesCompleted uint64
-	// SectorsWritten is sectors written.
-	SectorsWritten uint64
-	// WriteTimeMs is time spent writing in ms.
-	WriteTimeMs uint64
+	// WriteBytes is bytes written.
+	WriteBytes uint64
+	// WriteTimeUs is time spent writing in us.
+	WriteTimeUs uint64
 	// IOInProgress is current I/O operations.
 	IOInProgress uint64
-	// IOTimeMs is total I/O time in ms.
-	IOTimeMs uint64
-	// WeightedIOTimeMs is weighted I/O time in ms.
-	WeightedIOTimeMs uint64
+	// IOTimeUs is total I/O time in us.
+	IOTimeUs uint64
+	// WeightedIOTimeUs is weighted I/O time in us.
+	WeightedIOTimeUs uint64
 }

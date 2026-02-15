@@ -14,20 +14,20 @@ type DiskIOInfo struct {
 	Device string `dto:"out,api,pub" json:"device"`
 	// ReadsCompleted is the number of completed read operations.
 	ReadsCompleted uint64 `dto:"out,api,pub" json:"reads_completed"`
-	// SectorsRead is the number of sectors read.
-	SectorsRead uint64 `dto:"out,api,pub" json:"sectors_read"`
-	// ReadTimeMs is the time spent reading in milliseconds.
-	ReadTimeMs uint64 `dto:"out,api,pub" json:"read_time_ms"`
+	// ReadBytes is the number of bytes read.
+	ReadBytes uint64 `dto:"out,api,pub" json:"read_bytes"`
+	// ReadTimeUs is the time spent reading in microseconds.
+	ReadTimeUs uint64 `dto:"out,api,pub" json:"read_time_us"`
 	// WritesCompleted is the number of completed write operations.
 	WritesCompleted uint64 `dto:"out,api,pub" json:"writes_completed"`
-	// SectorsWritten is the number of sectors written.
-	SectorsWritten uint64 `dto:"out,api,pub" json:"sectors_written"`
-	// WriteTimeMs is the time spent writing in milliseconds.
-	WriteTimeMs uint64 `dto:"out,api,pub" json:"write_time_ms"`
+	// WriteBytes is the number of bytes written.
+	WriteBytes uint64 `dto:"out,api,pub" json:"write_bytes"`
+	// WriteTimeUs is the time spent writing in microseconds.
+	WriteTimeUs uint64 `dto:"out,api,pub" json:"write_time_us"`
 	// IOInProgress is the number of I/O operations in progress.
 	IOInProgress uint64 `dto:"out,api,pub" json:"io_in_progress"`
-	// IOTimeMs is the total time spent on I/O in milliseconds.
-	IOTimeMs uint64 `dto:"out,api,pub" json:"io_time_ms"`
-	// WeightedIOTimeMs is the weighted time spent on I/O.
-	WeightedIOTimeMs uint64 `dto:"out,api,pub" json:"weighted_io_time_ms"`
+	// IOTimeUs is the total time spent on I/O in microseconds.
+	IOTimeUs uint64 `dto:"out,api,pub" json:"io_time_us"`
+	// WeightedIOTimeUs is the weighted time spent on I/O in microseconds.
+	WeightedIOTimeUs uint64 `dto:"out,api,pub" json:"weighted_io_time_us"`
 }

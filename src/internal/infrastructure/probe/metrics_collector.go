@@ -41,7 +41,7 @@ func CollectAllMetrics(ctx context.Context, cfg *config.MetricsConfig) (*AllSyst
 			Timestamp:   time.Now(),
 			Platform:    runtime.GOOS,
 			Hostname:    getHostname(),
-			CollectedAt: time.Now().UnixNano(),
+			CollectedAt: time.Now().UnixMicro(),
 		}, nil
 	}
 
@@ -51,7 +51,7 @@ func CollectAllMetrics(ctx context.Context, cfg *config.MetricsConfig) (*AllSyst
 		Timestamp:   now,
 		Platform:    runtime.GOOS,
 		Hostname:    hostname,
-		CollectedAt: now.UnixNano(),
+		CollectedAt: now.UnixMicro(),
 	}
 
 	collector := NewCollector()
@@ -379,14 +379,14 @@ func extractDiskIOInfo(ctx context.Context, coll *Collector) []DiskIOInfo {
 		result = append(result, DiskIOInfo{
 			Device:           io.Device,
 			ReadsCompleted:   io.ReadCount,
-			SectorsRead:      io.ReadBytes / sectorSize,
-			ReadTimeMs:       uint64(io.ReadTime.Milliseconds()),
+			ReadBytes:        io.ReadBytes,
+			ReadTimeUs:       uint64(io.ReadTime.Microseconds()),
 			WritesCompleted:  io.WriteCount,
-			SectorsWritten:   io.WriteBytes / sectorSize,
-			WriteTimeMs:      uint64(io.WriteTime.Milliseconds()),
+			WriteBytes:       io.WriteBytes,
+			WriteTimeUs:      uint64(io.WriteTime.Microseconds()),
 			IOInProgress:     io.IOInProgress,
-			IOTimeMs:         uint64(io.IOTime.Milliseconds()),
-			WeightedIOTimeMs: uint64(io.WeightedIOTime.Milliseconds()),
+			IOTimeUs:         uint64(io.IOTime.Microseconds()),
+			WeightedIOTimeUs: uint64(io.WeightedIOTime.Microseconds()),
 		})
 	}
 	// return extracted disk I/O info

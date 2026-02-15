@@ -247,7 +247,7 @@ func buildAllMetricsFromRaw(raw *RawAllMetrics) *AllMetrics {
 		Memory:        buildMemoryMetricsFromRaw(&raw.Memory, ts),
 		Load:          buildLoadMetricsFromRaw(&raw.Load, ts),
 		IOStats:       buildIOStatsMetricsFromRaw(&raw.IOStats, ts),
-		Timestamp:     time.Unix(0, raw.TimestampNs),
+		Timestamp:     time.UnixMicro(raw.TimestampUs),
 		Partitions:    buildPartitionsFromRaw(raw.Partitions),
 		DiskUsage:     buildDiskUsageFromRaw(raw.DiskUsage),
 		DiskIO:        buildDiskIOFromRaw(raw.DiskIO),

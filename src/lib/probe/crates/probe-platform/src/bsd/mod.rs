@@ -274,9 +274,9 @@ impl IOCollector for BsdIOCollector {
         let mut total = IOStats::default();
         for stat in disk_stats {
             total.read_ops += stat.reads_completed;
-            total.read_bytes += stat.sectors_read * 512;
+            total.read_bytes += stat.read_bytes;
             total.write_ops += stat.writes_completed;
-            total.write_bytes += stat.sectors_written * 512;
+            total.write_bytes += stat.write_bytes;
         }
 
         Ok(total)
