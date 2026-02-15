@@ -11,5 +11,5 @@ type IOMetricsJSON struct {
 	ReadBytes  uint64          `json:"read_bytes"`
 	WriteOps   uint64          `json:"write_ops"`
 	WriteBytes uint64          `json:"write_bytes"`
-	Pressure   *IOPressureJSON `json:"pressure,omitempty"`
+	Pressure   *IOPressureJSON `json:"pressure"`
 }

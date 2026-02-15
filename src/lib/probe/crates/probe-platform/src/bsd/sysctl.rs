@@ -1366,9 +1366,11 @@ mod freebsd {
     fn bintime_to_us(sec: i64, frac: u64) -> u64 {
         // bintime fraction is scaled by 2^64
         // frac / 2^64 gives the fractional seconds
+        // Clamp negative values (kernel error/uninitialized) to zero
+        let sec_clamped = sec.max(0) as u64;
         // Multiply by 1_000_000 to get microseconds
         let frac_us = (frac as u128 * 1_000_000) >> 64;
-        (sec as u64 * 1_000_000).saturating_add(frac_us as u64)
+        sec_clamped.saturating_mul(1_000_000).saturating_add(frac_us as u64)
     }
 }
 
@@ -1460,7 +1462,11 @@ mod openbsd {
                 }
 
                 // Convert time from seconds + microseconds to microseconds
-                let time_us = (disk.ds_time_sec * 1_000_000).saturating_add(disk.ds_time_usec);
+                let time_us = disk
+                    .ds_time_sec
+                    .max(0)
+                    .saturating_mul(1_000_000)
+                    .saturating_add(disk.ds_time_usec.max(0));
 
                 let read_bytes = disk.ds_rbytes;
                 let write_bytes = disk.ds_wbytes;
@@ -1469,13 +1475,13 @@ mod openbsd {
                     device,
                     reads_completed: disk.ds_rxfer,
                     read_bytes,
-                    read_time_us: (time_us / 2).max(0) as u64, // Estimate split
+                    read_time_us: (time_us / 2) as u64,
                     writes_completed: disk.ds_wxfer,
                     write_bytes,
-                    write_time_us: (time_us / 2).max(0) as u64, // Estimate split
+                    write_time_us: (time_us / 2) as u64,
                     io_in_progress: disk.ds_busy as u64,
-                    io_time_us: time_us.max(0) as u64,
-                    weighted_io_time_us: time_us.max(0) as u64,
+                    io_time_us: time_us as u64,
+                    weighted_io_time_us: time_us as u64,
                 });
             }
 
@@ -1599,8 +1605,11 @@ mod netbsd {
                 }
 
                 // Convert time from seconds + microseconds to microseconds
-                let time_us =
-                    (disk.dk_time_sec * 1_000_000).saturating_add(disk.dk_time_usec as i64);
+                let time_us = disk
+                    .dk_time_sec
+                    .max(0)
+                    .saturating_mul(1_000_000)
+                    .saturating_add(disk.dk_time_usec as i64);
 
                 let read_bytes = disk.dk_rbytes;
                 let write_bytes = disk.dk_wbytes;
@@ -1609,13 +1618,13 @@ mod netbsd {
                     device,
                     reads_completed: disk.dk_rxfer,
                     read_bytes,
-                    read_time_us: (time_us / 2).max(0) as u64,
+                    read_time_us: (time_us / 2) as u64,
                     writes_completed: disk.dk_wxfer,
                     write_bytes,
-                    write_time_us: (time_us / 2).max(0) as u64,
+                    write_time_us: (time_us / 2) as u64,
                     io_in_progress: disk.dk_busy as u64,
-                    io_time_us: time_us.max(0) as u64,
-                    weighted_io_time_us: time_us.max(0) as u64,
+                    io_time_us: time_us as u64,
+                    weighted_io_time_us: time_us as u64,
                 });
             }
 
