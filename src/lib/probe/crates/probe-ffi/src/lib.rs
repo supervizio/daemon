@@ -633,11 +633,7 @@ pub extern "C" fn probe_get_platform() -> *const c_char {
 fn get_uname_info() -> Option<libc::utsname> {
     unsafe {
         let mut info: libc::utsname = std::mem::zeroed();
-        if libc::uname(&mut info) == 0 {
-            Some(info)
-        } else {
-            None
-        }
+        if libc::uname(&mut info) == 0 { Some(info) } else { None }
     }
 }
 
