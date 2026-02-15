@@ -184,4 +184,4 @@ dto_check:
     DTOs correctly use dto:"dir,ctx,sec" format with appropriate security classification
 ```
 
-**Reference:** `.claude/docs/conventions/dto-tags.md`
+**Reference:** `~/.claude/docs/conventions/dto-tags.md`

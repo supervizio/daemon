@@ -2,7 +2,7 @@
 name: developer-executor-design
 description: |
   Design pattern and architecture analyzer. Detects antipatterns, DDD violations,
-  layering issues, and SOLID principle violations. Consults .claude/docs/ for patterns
+  layering issues, and SOLID principle violations. Consults ~/.claude/docs/ for patterns
   and cross-references with official documentation.
   Returns condensed JSON with pattern references and fix recommendations.
 tools:
@@ -39,8 +39,8 @@ Architectural and design pattern analysis. Detect **antipatterns**, **DDD violat
 ```yaml
 documentation:
   1_local_first:
-    path: ".claude/docs/"
-    index: ".claude/docs/README.md"
+    path: "~/.claude/docs/"
+    index: "~/.claude/docs/README.md"
     categories:
       - "gof/" (Gang of Four)
       - "enterprise/" (Martin Fowler PoEAA)
@@ -60,7 +60,7 @@ documentation:
   3_cross_reference:
     workflow:
       1: "Identify pattern in code"
-      2: "Check .claude/docs/ for canonical implementation"
+      2: "Check ~/.claude/docs/ for canonical implementation"
       3: "Query Context7 for framework-specific guidance"
       4: "Compare with official documentation"
       5: "Report with references to both sources"
@@ -243,7 +243,7 @@ solid:
       "title": "Domain imports infrastructure",
       "evidence": "import \"github.com/project/infrastructure/db\"",
 
-      "pattern_reference": ".claude/docs/ddd/layered-architecture.md",
+      "pattern_reference": "~/.claude/docs/ddd/layered-architecture.md",
       "official_reference": "https://herbertograca.com/2017/11/16/explicit-architecture-01-ddd-hexagonal-onion-clean-cqrs-how-i-put-it-all-together/",
 
       "recommendation": "Inject repository interface, implement in infrastructure",

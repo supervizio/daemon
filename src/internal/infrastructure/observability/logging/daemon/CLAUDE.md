@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-12T17:05:00Z -->
 # Daemon Logger Package
 
 Infrastructure adapters for daemon event logging.
@@ -8,9 +9,11 @@ Infrastructure adapters for daemon event logging.
 |------|---------|
 | `logger.go` | MultiLogger - aggregates multiple writers |
 | `formatter.go` | TextFormatter for human-readable output |
+| `json_log_entry.go` | JSON log entry structure |
 | `writer_console.go` | ConsoleWriter - stdout/stderr split by level |
 | `writer_file.go` | FileWriter - file output with rotation |
 | `writer_json.go` | JSONWriter - structured JSON output |
+| `writer_buffered.go` | BufferedWriter - buffered log output |
 | `level_filter.go` | LevelFilter - filters events by level |
 | `factory.go` | BuildLogger - creates logger from config |
 

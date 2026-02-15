@@ -247,7 +247,7 @@ codacy_integration:
 ```yaml
 documentation:
   1_local_first:
-    path: ".claude/docs/security/"
+    path: "~/.claude/docs/security/"
     usage: "Security patterns, OWASP guidelines"
 
   2_remote:

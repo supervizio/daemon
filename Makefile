@@ -44,14 +44,20 @@ RUST_TARGETS := x86_64-unknown-linux-gnu \
                 aarch64-unknown-linux-gnu \
                 x86_64-apple-darwin \
                 aarch64-apple-darwin \
-                x86_64-unknown-freebsd
+                x86_64-unknown-freebsd \
+                armv7-unknown-linux-gnueabihf \
+                i686-unknown-linux-gnu \
+                riscv64gc-unknown-linux-gnu
 
 # Go targets for cross-compilation (Unix only)
 GO_TARGETS := linux/amd64 \
               linux/arm64 \
               darwin/amd64 \
               darwin/arm64 \
-              freebsd/amd64
+              freebsd/amd64 \
+              linux/arm \
+              linux/386 \
+              linux/riscv64
 
 # Directories
 SRC_DIR := src
@@ -78,6 +84,18 @@ ifeq ($(UNAME_S),Linux)
         CURRENT_RUST_TARGET := aarch64-unknown-linux-gnu
         CURRENT_PLATFORM := linux-arm64
         CURRENT_GO_ARCH := arm64
+    else ifeq ($(UNAME_M),armv7l)
+        CURRENT_RUST_TARGET := armv7-unknown-linux-gnueabihf
+        CURRENT_PLATFORM := linux-arm
+        CURRENT_GO_ARCH := arm
+    else ifeq ($(UNAME_M),i686)
+        CURRENT_RUST_TARGET := i686-unknown-linux-gnu
+        CURRENT_PLATFORM := linux-386
+        CURRENT_GO_ARCH := 386
+    else ifeq ($(UNAME_M),riscv64)
+        CURRENT_RUST_TARGET := riscv64gc-unknown-linux-gnu
+        CURRENT_PLATFORM := linux-riscv64
+        CURRENT_GO_ARCH := riscv64
     endif
     CURRENT_GO_OS := linux
 endif
@@ -164,14 +182,10 @@ build-daemon: ensure-probe ## Build Go daemon with Rust probe linked
 	    -o ../$(DIST_BIN)/$(CURRENT_PLATFORM)/$(BINARY_NAME) ./cmd/daemon
 	@echo "$(GREEN)Daemon built: $(DIST_BIN)/$(CURRENT_PLATFORM)/$(BINARY_NAME)$(RESET)"
 
-build-go-only: dirs ## Build Go daemon without CGO (fallback, no Rust)
-	@echo "$(CYAN)Building Go daemon (without Rust probe)...$(RESET)"
-	@mkdir -p $(DIST_BIN)/$(CURRENT_PLATFORM)
-	cd $(SRC_DIR) && \
-	    CGO_ENABLED=0 \
-	    go build -ldflags="-s -w -X github.com/kodflow/daemon/internal/bootstrap.version=$(VERSION)" \
-	    -o ../$(DIST_BIN)/$(CURRENT_PLATFORM)/$(BINARY_NAME) ./cmd/daemon
-	@echo "$(GREEN)Daemon built (no CGO): $(DIST_BIN)/$(CURRENT_PLATFORM)/$(BINARY_NAME)$(RESET)"
+build-go-only: ## NOT SUPPORTED — CGO required for probe library
+	@echo "ERROR: CGO_ENABLED=1 is mandatory (Rust probe FFI)"
+	@echo "Use 'make build-daemon' or 'make build' instead"
+	@exit 1
 
 build-e2e: build ## Build E2E test binaries (supervizio + crasher)
 	@mkdir -p $(BIN_DIR)
@@ -221,7 +235,10 @@ build-probe-%:
 	    sed 's/aarch64-unknown-linux-gnu/linux-arm64/' | \
 	    sed 's/x86_64-apple-darwin/darwin-amd64/' | \
 	    sed 's/aarch64-apple-darwin/darwin-arm64/' | \
-	    sed 's/x86_64-unknown-freebsd/freebsd-amd64/'); \
+	    sed 's/x86_64-unknown-freebsd/freebsd-amd64/' | \
+	    sed 's/armv7-unknown-linux-gnueabihf/linux-arm/' | \
+	    sed 's/i686-unknown-linux-gnu/linux-386/' | \
+	    sed 's/riscv64gc-unknown-linux-gnu/linux-riscv64/'); \
 	mkdir -p $(DIST_LIB)/$$platform; \
 	if command -v cargo >/dev/null 2>&1; then \
 	    cd $(PROBE_DIR) && cargo build --release --target $* && \
@@ -244,8 +261,10 @@ run-dev: build ## Run the daemon with examples/config-dev.yaml (raw mode)
 run-tui: build ## Run the daemon in interactive TUI mode
 	@./$(DIST_BIN)/$(CURRENT_PLATFORM)/$(BINARY_NAME) --config=examples/config-dev.yaml --tui
 
-run-go-only: build-go-only ## Run the Go-only build (no Rust probe)
-	@./$(DIST_BIN)/$(CURRENT_PLATFORM)/$(BINARY_NAME)
+run-go-only: ## NOT SUPPORTED — CGO required for probe library
+	@echo "ERROR: CGO_ENABLED=1 is mandatory (Rust probe FFI)"
+	@echo "Use 'make run' or 'make run-dev' instead"
+	@exit 1
 
 # ==============================================================================
 # HEADER GENERATION
@@ -358,6 +377,9 @@ install-rust-targets: ## Install Rust cross-compilation targets (Unix only)
 	rustup target add x86_64-apple-darwin
 	rustup target add aarch64-apple-darwin
 	rustup target add x86_64-unknown-freebsd
+	rustup target add armv7-unknown-linux-gnueabihf
+	rustup target add i686-unknown-linux-gnu
+	rustup target add riscv64gc-unknown-linux-gnu
 	@echo "$(GREEN)Targets installed$(RESET)"
 
 install-cbindgen: ## Install cbindgen for header generation

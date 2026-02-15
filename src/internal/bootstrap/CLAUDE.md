@@ -6,10 +6,18 @@ Wire-based dependency injection for the superviz.io daemon.
 
 ```
 bootstrap/
-├── app.go           # App struct, Run(), signal handling
-├── providers.go     # Custom Wire providers
-├── wire.go          # Wire injector (build tag: wireinject)
-└── wire_gen.go      # Generated code (DO NOT EDIT)
+├── app.go                          # App struct, Run(), signal handling
+├── app_external_test.go            # Black-box tests for App
+├── app_internal_test.go            # White-box tests for App
+├── providers.go                    # Custom Wire providers
+├── providers_external_test.go      # Providers tests
+├── providers_internal_test.go      # Providers white-box tests
+├── service_provider.go             # Service provider abstraction
+├── service_provider_external_test.go
+├── service_provider_internal_test.go
+├── tui_mode_config.go              # TUI mode configuration
+├── wire.go                         # Wire injector (build tag: wireinject)
+└── wire_gen.go                     # Generated code (DO NOT EDIT)
 ```
 
 ## Key Types

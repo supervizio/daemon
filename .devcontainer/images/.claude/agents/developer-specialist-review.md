@@ -17,7 +17,9 @@ tools:
   - mcp__grepai__grepai_trace_graph
   - mcp__grepai__grepai_index_status
   - Task
-  - TodoWrite
+  - TaskCreate
+  - TaskUpdate
+  - TaskList
   - Bash
   # GitHub MCP (PR context)
   - mcp__github__get_pull_request
@@ -170,7 +172,7 @@ parallel_dispatch:
 
       Repo profile: {repo_profile}
       Diff context: {diff_snippet}
-      Consult: .claude/docs/ for patterns
+      Consult: ~/.claude/docs/ for patterns
 
       Check: antipatterns, DDD, layering, SOLID
 

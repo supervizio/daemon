@@ -20,42 +20,16 @@ EXT="${FILE##*.}"
 DIR=$(dirname "$FILE")
 BASENAME=$(basename "$FILE")
 
-# Find project root
-find_project_root() {
-    local current="$1"
-    while [ "$current" != "/" ]; do
-        if [ -f "$current/Makefile" ] || \
-           [ -f "$current/package.json" ] || \
-           [ -f "$current/pyproject.toml" ] || \
-           [ -f "$current/go.mod" ] || \
-           [ -f "$current/Cargo.toml" ]; then
-            echo "$current"
-            return
-        fi
-        current=$(dirname "$current")
-    done
-    echo "$DIR"
-}
+# Source shared utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+[ -f "$SCRIPT_DIR/common.sh" ] && . "$SCRIPT_DIR/common.sh"
 
-PROJECT_ROOT=$(find_project_root "$DIR")
-
-# Check if Makefile has lint target
-has_makefile_lint() {
-    if [ -f "$PROJECT_ROOT/Makefile" ]; then
-        grep -qE "^lint:" "$PROJECT_ROOT/Makefile" 2>/dev/null
-        return $?
-    fi
-    return 1
-}
+PROJECT_ROOT=$(find_project_root "$DIR" "$DIR")
 
 # === Makefile-first approach ===
-if has_makefile_lint; then
-    cd "$PROJECT_ROOT"
-    if grep -qE "FILE\s*[:?]?=" "$PROJECT_ROOT/Makefile" 2>/dev/null; then
-        make lint FILE="$FILE" 2>/dev/null || true
-    else
-        make lint 2>/dev/null || true
-    fi
+if has_makefile_target "lint" "$PROJECT_ROOT"; then
+    run_makefile_target "lint" "$FILE" "$PROJECT_ROOT"
     exit 0
 fi
 
@@ -242,6 +216,73 @@ case "$EXT" in
     proto)
         if command -v buf &>/dev/null; then
             buf lint "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Scala - scalafix or scalac -Xlint
+    scala)
+        if command -v scalafix &>/dev/null; then
+            scalafix "$FILE" 2>/dev/null || true
+        elif command -v scalac &>/dev/null; then
+            scalac -Xlint "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # C# - dotnet build with warnings as errors
+    cs)
+        if command -v dotnet &>/dev/null; then
+            dotnet build /warnaserror 2>/dev/null || true
+        fi
+        ;;
+
+    # R - lintr
+    r|R)
+        if command -v Rscript &>/dev/null; then
+            Rscript -e "lintr::lint(commandArgs(TRUE)[1])" "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Fortran - gfortran warnings
+    f|f90|f95|f03|f08)
+        if command -v gfortran &>/dev/null; then
+            gfortran -Wall -Wextra -fsyntax-only "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # COBOL - cobc warnings
+    cob|cbl)
+        if command -v cobc &>/dev/null; then
+            cobc -Wall -fsyntax-only "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Pascal - fpc syntax check
+    pas|dpr|pp)
+        if command -v fpc &>/dev/null; then
+            fpc -Se "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Visual Basic .NET - dotnet build with warnings
+    vb)
+        if command -v dotnet &>/dev/null; then
+            dotnet build /warnaserror 2>/dev/null || true
+        fi
+        ;;
+
+    # Ada - gnat check
+    adb|ads)
+        if command -v gcc &>/dev/null; then
+            gcc -c -gnatwa "$FILE" 2>/dev/null || true
+        fi
+        ;;
+
+    # Perl - perlcritic or syntax check
+    pl|pm)
+        if command -v perlcritic &>/dev/null; then
+            perlcritic "$FILE" 2>/dev/null || true
+        elif command -v perl &>/dev/null; then
+            perl -cw "$FILE" 2>/dev/null || true
         fi
         ;;
 esac

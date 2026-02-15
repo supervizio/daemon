@@ -273,6 +273,12 @@ fn parse_io_max(content: &str) -> (Option<u64>, Option<u64>) {
     (rbps, wbps)
 }
 
+/// Convert rlimit value to u64, handling RLIM_INFINITY and 32-bit platforms.
+#[allow(clippy::unnecessary_cast)] // rlim_t is u32 on 32-bit, u64 on 64-bit
+fn rlimit_to_u64(val: libc::rlim_t) -> u64 {
+    if val == libc::RLIM_INFINITY { u64::MAX } else { val as u64 }
+}
+
 /// Read rlimits into QuotaLimits.
 fn read_rlimits_into(limits: &mut QuotaLimits) {
     use libc::{RLIMIT_CPU, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_NPROC, getrlimit, rlimit};
@@ -282,26 +288,22 @@ fn read_rlimits_into(limits: &mut QuotaLimits) {
 
         // RLIMIT_NOFILE
         if getrlimit(RLIMIT_NOFILE, &mut rl) == 0 {
-            limits.nofile_limit =
-                Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
+            limits.nofile_limit = Some(rlimit_to_u64(rl.rlim_cur));
         }
 
         // RLIMIT_CPU
         if getrlimit(RLIMIT_CPU, &mut rl) == 0 {
-            limits.cpu_time_limit_secs =
-                Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
+            limits.cpu_time_limit_secs = Some(rlimit_to_u64(rl.rlim_cur));
         }
 
         // RLIMIT_DATA
         if getrlimit(RLIMIT_DATA, &mut rl) == 0 {
-            limits.data_limit_bytes =
-                Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
+            limits.data_limit_bytes = Some(rlimit_to_u64(rl.rlim_cur));
         }
 
         // RLIMIT_NPROC (if not already set from cgroups)
         if limits.pids_limit.is_none() && getrlimit(RLIMIT_NPROC, &mut rl) == 0 {
-            limits.pids_limit =
-                Some(if rl.rlim_cur == libc::RLIM_INFINITY { u64::MAX } else { rl.rlim_cur });
+            limits.pids_limit = Some(rlimit_to_u64(rl.rlim_cur));
         }
     }
 }

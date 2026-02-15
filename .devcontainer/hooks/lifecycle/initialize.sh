@@ -111,7 +111,10 @@ echo "All features validated successfully"
 # Ollama runs on the HOST to leverage GPU (Metal on Mac, CUDA on Linux)
 # The DevContainer connects via host.docker.internal:11434
 # ============================================================================
-OLLAMA_MODEL="qwen3-embedding:0.6b"
+# Extract Ollama model from grepai config (single source of truth)
+GREPAI_CONFIG="$DEVCONTAINER_DIR/images/grepai.config.yaml"
+OLLAMA_MODEL=$(grep -E '^\s+model:' "$GREPAI_CONFIG" 2>/dev/null | awk '{print $2}' | head -1)
+OLLAMA_MODEL="${OLLAMA_MODEL:-bge-m3}"
 
 echo ""
 echo "Setting up Ollama for GPU-accelerated semantic search..."

@@ -8,9 +8,13 @@ End-to-end testing across all supported platforms and init systems.
 |-------------|--------------|-----|:--:|:------:|:-----:|
 | systemd | Debian 13 | .deb | ✅ | ✅ | 100% |
 | systemd | Fedora 38 | .rpm | ✅ | ✅ | 100% |
+| systemd | Arch | pacman | ✅ | - | 100% |
+| systemd | openSUSE | .rpm | ✅ | - | 100% |
 | OpenRC | Alpine 3.21 | .apk | ✅ | ✅ | 100% |
+| s6 | Alpine 3.21 | .apk | ✅ | - | 100% |
+| dinit | Artix | pacman | ✅ | - | 100% |
 | SysVinit | Devuan 6 | .deb | ✅ | ✅ | 100% |
-| runit | Alpine 3.21 | .apk | ✅ | ✅ | 100% |
+| runit | Void | xbps | ✅ | ✅ | 100% |
 | BSD rc.d | FreeBSD 14 | pkg | ✅ | - | 98% |
 | BSD rc.d | OpenBSD 7 | pkg | ✅ | - | 92% |
 | BSD rc.d | NetBSD 9 | pkgin | ✅ | - | 90% |

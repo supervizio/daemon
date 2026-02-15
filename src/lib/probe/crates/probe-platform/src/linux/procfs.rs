@@ -493,14 +493,24 @@ pub fn read_disk_usage(path: &str) -> Result<DiskUsage> {
 
     let stat = unsafe { stat.assume_init() };
 
-    let block_size = stat.f_frsize;
-    let total_bytes = stat.f_blocks * block_size;
-    let free_bytes = stat.f_bfree * block_size;
-    let available_bytes = stat.f_bavail * block_size;
+    // Cast statvfs fields to u64 — field sizes vary by platform (u32 on 32-bit glibc/musl).
+    #[allow(clippy::unnecessary_cast)]
+    let block_size = stat.f_frsize as u64;
+    #[allow(clippy::unnecessary_cast)]
+    let total_bytes = stat.f_blocks as u64 * block_size;
+    #[allow(clippy::unnecessary_cast)]
+    let free_bytes = stat.f_bfree as u64 * block_size;
+    #[allow(clippy::unnecessary_cast)]
+    let available_bytes = stat.f_bavail as u64 * block_size;
     let used_bytes = total_bytes.saturating_sub(free_bytes);
 
     let used_percent =
         if total_bytes > 0 { (used_bytes as f64 / total_bytes as f64) * 100.0 } else { 0.0 };
+
+    #[allow(clippy::unnecessary_cast)]
+    let inodes_total = stat.f_files as u64;
+    #[allow(clippy::unnecessary_cast)]
+    let inodes_free = stat.f_ffree as u64;
 
     Ok(DiskUsage {
         path: path.to_string(),
@@ -508,9 +518,9 @@ pub fn read_disk_usage(path: &str) -> Result<DiskUsage> {
         used_bytes,
         free_bytes: available_bytes,
         used_percent,
-        inodes_total: stat.f_files,
-        inodes_used: stat.f_files.saturating_sub(stat.f_ffree),
-        inodes_free: stat.f_ffree,
+        inodes_total,
+        inodes_used: inodes_total.saturating_sub(inodes_free),
+        inodes_free,
     })
 }
 

@@ -11,6 +11,7 @@ Development container setup for consistent dev environments across languages.
 ├── devcontainer.json    # Main config
 ├── docker-compose.yml   # Multi-service setup
 ├── Dockerfile           # Base image
+├── docs/                # Review agent & workflow knowledge base
 ├── features/            # Language & tool features
 ├── hooks/               # Lifecycle scripts
 └── images/              # Docker images

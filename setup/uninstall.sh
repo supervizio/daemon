@@ -1,6 +1,7 @@
 #!/bin/sh
 # supervizio uninstall script
-# Removes supervizio and its init system configuration
+# Removes supervizio and its init system configuration.
+# Supports package-aware uninstall and non-interactive mode.
 set -e
 
 BINARY_NAME="supervizio"
@@ -47,6 +48,10 @@ detect_init_system() {
         echo "systemd"
     elif command -v rc-service >/dev/null 2>&1; then
         echo "openrc"
+    elif command -v s6-svc >/dev/null 2>&1 || [ -d /etc/s6 ]; then
+        echo "s6"
+    elif command -v dinitctl >/dev/null 2>&1; then
+        echo "dinit"
     elif command -v sv >/dev/null 2>&1 && [ -d /etc/sv ]; then
         echo "runit"
     elif [ -d /etc/init.d ]; then
@@ -54,6 +59,85 @@ detect_init_system() {
     else
         echo "unknown"
     fi
+}
+
+# Detect how supervizio was installed (package or manual)
+detect_install_method() {
+    # Check Linux package managers
+    if command -v dpkg >/dev/null 2>&1 && dpkg -l supervizio >/dev/null 2>&1; then
+        echo "deb"
+        return
+    fi
+    if command -v rpm >/dev/null 2>&1 && rpm -q supervizio >/dev/null 2>&1; then
+        echo "rpm"
+        return
+    fi
+    if command -v apk >/dev/null 2>&1 && apk info -e supervizio >/dev/null 2>&1; then
+        echo "apk"
+        return
+    fi
+    if command -v pacman >/dev/null 2>&1 && pacman -Q supervizio >/dev/null 2>&1; then
+        echo "pacman"
+        return
+    fi
+    if command -v xbps-query >/dev/null 2>&1 && xbps-query supervizio >/dev/null 2>&1; then
+        echo "xbps"
+        return
+    fi
+    # Check BSD package managers
+    OS="$(detect_os)"
+    if [ "$OS" = "freebsd" ] && command -v pkg >/dev/null 2>&1 && pkg info supervizio >/dev/null 2>&1; then
+        echo "freebsd-pkg"
+        return
+    fi
+    if [ "$OS" = "openbsd" ] && command -v pkg_info >/dev/null 2>&1 && pkg_info supervizio >/dev/null 2>&1; then
+        echo "openbsd-pkg"
+        return
+    fi
+    if [ "$OS" = "netbsd" ] && command -v pkg_info >/dev/null 2>&1 && pkg_info supervizio >/dev/null 2>&1; then
+        echo "netbsd-pkg"
+        return
+    fi
+    echo "manual"
+}
+
+# Uninstall via package manager
+uninstall_package() {
+    METHOD="$1"
+    log_info "Uninstalling via package manager: $METHOD"
+
+    case "$METHOD" in
+        deb)
+            apt-get remove -y supervizio || dpkg --remove supervizio
+            ;;
+        rpm)
+            if command -v dnf >/dev/null 2>&1; then
+                dnf remove -y supervizio
+            elif command -v zypper >/dev/null 2>&1; then
+                zypper remove -y supervizio
+            else
+                rpm -e supervizio
+            fi
+            ;;
+        apk)
+            apk del supervizio
+            ;;
+        pacman)
+            pacman -R --noconfirm supervizio
+            ;;
+        xbps)
+            xbps-remove -y supervizio
+            ;;
+        freebsd-pkg)
+            pkg delete -y supervizio
+            ;;
+        openbsd-pkg)
+            pkg_delete supervizio
+            ;;
+        netbsd-pkg)
+            pkg_delete supervizio
+            ;;
+    esac
 }
 
 # Stop and remove service
@@ -69,6 +153,7 @@ remove_service() {
                     systemctl stop supervizio 2>/dev/null || true
                     systemctl disable supervizio 2>/dev/null || true
                     rm -f /etc/systemd/system/supervizio.service
+                    rm -f /usr/lib/systemd/system/supervizio.service
                     systemctl daemon-reload
                     ;;
                 openrc)
@@ -76,6 +161,17 @@ remove_service() {
                     rc-service supervizio stop 2>/dev/null || true
                     rc-update del supervizio default 2>/dev/null || true
                     rm -f /etc/init.d/supervizio
+                    ;;
+                s6)
+                    log_info "Stopping and removing s6 service"
+                    s6-svc -d /etc/s6/supervizio 2>/dev/null || true
+                    rm -rf /etc/s6/supervizio
+                    ;;
+                dinit)
+                    log_info "Stopping and removing dinit service"
+                    dinitctl stop supervizio 2>/dev/null || true
+                    dinitctl disable supervizio 2>/dev/null || true
+                    rm -f /etc/dinit.d/supervizio
                     ;;
                 sysvinit)
                     log_info "Stopping and removing SysVinit service"
@@ -143,38 +239,57 @@ main() {
 
     log_info "Detected: OS=$OS INIT=$INIT"
 
-    # Remove service first
-    remove_service "$OS" "$INIT"
+    # Detect install method
+    INSTALL_METHOD=$(detect_install_method)
+    log_info "Install method: $INSTALL_METHOD"
 
-    # Remove binary
-    remove_binary
+    # If installed via package manager, use it for uninstall
+    if [ "$INSTALL_METHOD" != "manual" ]; then
+        # Stop service first (package scripts may not handle all init systems)
+        remove_service "$OS" "$INIT"
+        uninstall_package "$INSTALL_METHOD"
+    else
+        # Manual uninstall: remove service first, then binary
+        remove_service "$OS" "$INIT"
+        remove_binary
+    fi
 
-    # Ask about config
+    # Handle config directory
     CONFIG_DIR="/etc/supervizio"
     if [ "$OS" = "freebsd" ]; then
         CONFIG_DIR="/usr/local/etc/supervizio"
     fi
 
     if [ -d "$CONFIG_DIR" ]; then
-        printf "Remove configuration directory %s? [y/N] " "$CONFIG_DIR"
-        read -r REPLY
-        if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
+        if [ "${SUPERVIZIO_NON_INTERACTIVE:-}" = "true" ]; then
             rm -rf "$CONFIG_DIR"
             log_info "Configuration removed"
         else
-            log_info "Configuration kept at $CONFIG_DIR"
+            printf "Remove configuration directory %s? [y/N] " "$CONFIG_DIR"
+            read -r REPLY
+            if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
+                rm -rf "$CONFIG_DIR"
+                log_info "Configuration removed"
+            else
+                log_info "Configuration kept at $CONFIG_DIR"
+            fi
         fi
     fi
 
-    # Ask about logs
+    # Handle logs
     if [ -d /var/log/supervizio ]; then
-        printf "Remove logs at /var/log/supervizio? [y/N] "
-        read -r REPLY
-        if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
+        if [ "${SUPERVIZIO_NON_INTERACTIVE:-}" = "true" ]; then
             rm -rf /var/log/supervizio
             log_info "Logs removed"
         else
-            log_info "Logs kept at /var/log/supervizio"
+            printf "Remove logs at /var/log/supervizio? [y/N] "
+            read -r REPLY
+            if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
+                rm -rf /var/log/supervizio
+                log_info "Logs removed"
+            else
+                log_info "Logs kept at /var/log/supervizio"
+            fi
         fi
     fi
 

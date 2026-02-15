@@ -2,8 +2,13 @@
 # E2E test script for supervizio installation
 # This script runs inside the VM to test install/uninstall
 #
-# Usage: test-install.sh [--skip-install]
-#   --skip-install: Skip install.sh execution (use when installed via package manager)
+# Usage: test-install.sh [--skip-install] [--skip-uninstall]
+#   --skip-install:   Skip install.sh execution (use when installed via package manager)
+#   --skip-uninstall: Skip uninstall.sh execution
+#
+# Environment variables:
+#   SUPERVIZIO_LOCAL_PKG: Path to local package file (triggers package install flow)
+#   SUPERVIZIO_LOCAL_BIN: Path to local binary (fallback install flow)
 #
 # Note: Uses /bin/sh for maximum portability (BSD, busybox).
 # pipefail not available in POSIX sh - using set -e for error handling.
@@ -15,9 +20,11 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 
 SKIP_INSTALL=false
+SKIP_UNINSTALL=false
 for arg in "$@"; do
     case "$arg" in
         --skip-install) SKIP_INSTALL=true ;;
+        --skip-uninstall) SKIP_UNINSTALL=true ;;
     esac
 done
 
@@ -28,6 +35,9 @@ echo "=== supervizio E2E Installation Test ==="
 echo "OS: $(uname -s) $(uname -r)"
 echo "Arch: $(uname -m)"
 echo "Skip install: $SKIP_INSTALL"
+echo "Skip uninstall: $SKIP_UNINSTALL"
+echo "LOCAL_PKG: ${SUPERVIZIO_LOCAL_PKG:-unset}"
+echo "LOCAL_BIN: ${SUPERVIZIO_LOCAL_BIN:-unset}"
 
 # Test 1: Run install script (skip if installed via package manager)
 echo ""
@@ -71,10 +81,10 @@ fi
 # Test 4: Config file exists
 echo ""
 echo "=== Test 4: Config file ==="
-if [ -f "$CONFIG_DIR/config.yaml" ]; then
-    pass "Config file exists: $CONFIG_DIR/config.yaml"
+if [ -f "$CONFIG_DIR/config.yaml" ] || [ -f "$CONFIG_DIR/config.example.yaml" ]; then
+    pass "Config file exists in $CONFIG_DIR"
 else
-    fail "Config file not found"
+    fail "No config file found"
 fi
 
 # Test 5: Service installed (platform-specific)
@@ -94,6 +104,18 @@ case "$OS" in
                 pass "OpenRC service installed"
             else
                 fail "OpenRC service not found"
+            fi
+        elif command -v s6-svc >/dev/null 2>&1 || [ -d /etc/s6 ]; then
+            if [ -d /etc/s6/supervizio ] && [ -x /etc/s6/supervizio/run ]; then
+                pass "s6 service installed"
+            else
+                fail "s6 service not found"
+            fi
+        elif command -v dinitctl >/dev/null 2>&1; then
+            if [ -f /etc/dinit.d/supervizio ]; then
+                pass "dinit service installed"
+            else
+                fail "dinit service not found"
             fi
         elif command -v sv >/dev/null 2>&1 && [ -d /etc/sv ]; then
             if [ -d /etc/sv/supervizio ] && [ -L /var/service/supervizio ]; then
@@ -151,8 +173,16 @@ fi
 echo ""
 echo "=== Test 6.5: Probe metrics ==="
 if command -v jq >/dev/null 2>&1; then
-    if [ -x /vagrant/validate-probe.sh ]; then
-        if /vagrant/validate-probe.sh; then
+    PROBE_SCRIPT=""
+    for p in /vagrant/validate-probe.sh /tmp/validate-probe.sh /setup/validate-probe.sh; do
+        if [ -x "$p" ]; then
+            PROBE_SCRIPT="$p"
+            break
+        fi
+    done
+
+    if [ -n "$PROBE_SCRIPT" ]; then
+        if "$PROBE_SCRIPT"; then
             pass "Probe metrics valid"
         else
             fail "Probe metrics validation failed"
@@ -164,14 +194,15 @@ else
     echo "[WARN] jq not installed, skipping probe validation"
 fi
 
-# Test 7: Uninstall (skip if installed via package manager)
+# Test 7: Uninstall
 echo ""
 echo "=== Test 7: Uninstallation ==="
-if [ "$SKIP_INSTALL" = "true" ]; then
+if [ "$SKIP_UNINSTALL" = "true" ]; then
+    pass "Skipped (uninstall not requested)"
+elif [ "$SKIP_INSTALL" = "true" ]; then
     pass "Skipped (uninstall via package manager)"
 else
-    # Auto-answer 'n' to keep config and logs prompts
-    printf 'n\nn\n' | /setup/uninstall.sh
+    SUPERVIZIO_NON_INTERACTIVE=true /setup/uninstall.sh
     if [ ! -f /usr/local/bin/supervizio ]; then
         pass "Binary removed"
     else

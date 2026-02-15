@@ -13,17 +13,20 @@ PID1-capable process supervisor in Go for containers and Unix systems.
 │       ├── application/          # Use cases: supervisor, lifecycle, health, metrics
 │       ├── domain/               # Entities, value objects, port interfaces
 │       └── infrastructure/       # Adapters: process, persistence, observability, resources, transport
+├── api/proto/                    # Canonical protobuf definitions (buf.yaml)
+├── docs/                         # MkDocs Material documentation source
 ├── e2e/                          # E2E tests (Vagrant VMs + Docker containers)
+├── examples/                     # Configuration examples (YAML)
 ├── setup/                        # Installation scripts (Linux, BSD, macOS)
-├── website/                      # Documentation website
+├── website/                      # Static landing page (GitHub Pages)
 ├── .github/workflows/            # CI/CD (lint, test, release)
 └── .devcontainer/                # Development environment
 ```
 
 ## Tech Stack
 
-- **Language**: Go 1.25.5
-- **Dependencies**: gopkg.in/yaml.v3, testify
+- **Language**: Go 1.25.6
+- **Dependencies**: gopkg.in/yaml.v3, testify, bubbletea, wire, bbolt, grpc, protobuf
 - **Architecture**: Hexagonal (ports & adapters)
 - **Linting**: golangci-lint, ktn-linter
 
@@ -58,6 +61,8 @@ ktn-linter lint -c ../.ktn-linter.yaml ./...  # KTN convention linting
 | Directory | See |
 |-----------|-----|
 | Source code | `src/CLAUDE.md` |
+| Proto definitions | `api/proto/` (canonical) |
+| Documentation | `docs/` (MkDocs Material) |
 | E2E tests | `e2e/CLAUDE.md` |
 | Installation | `setup/CLAUDE.md` |
 | CI/CD | `.github/CLAUDE.md` |

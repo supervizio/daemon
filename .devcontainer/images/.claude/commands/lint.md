@@ -14,12 +14,21 @@ allowed-tools:
   - "Edit(**/*)"
   - "Bash(*)"
   - "Task(*)"
-  - "TodoWrite(*)"
+  - "TaskCreate(*)"
+  - "TaskUpdate(*)"
+  - "TaskList(*)"
+  - "TaskGet(*)"
 ---
 
 # /lint - Intelligent Linting (RLM Architecture)
 
 $ARGUMENTS
+
+## GREPAI-FIRST (MANDATORY)
+
+Use `grepai_search` for ALL semantic/meaning-based queries BEFORE Grep.
+Use `grepai_trace_callers`/`grepai_trace_callees` for impact analysis.
+Fallback to Grep ONLY for exact string matches or regex patterns.
 
 ---
 
@@ -292,7 +301,54 @@ SI KTN-STRUCT-PRIVTAG :
 
 ---
 
-## Boucle de Correction
+## Execution Mode: Agent Teams (Claude 4.6)
+
+**Si `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` est active**, utiliser Agent Teams pour paralleliser les phases independantes.
+
+### Architecture Agent Teams
+
+```text
+LEAD (Phase 1-3 : SEQUENTIAL - dependances inter-fichiers)
+  Phase 1: STRUCTURAL (7 regles)
+    ↓
+  Phase 2: SIGNATURES (7 regles)
+    ↓
+  Phase 3: LOGIC (17 regles)
+    ↓
+  Re-run ktn-linter → valider convergence Phase 1-3
+    ↓
+  === SPAWN 4 TEAMMATES ===
+    ├── "perf"   → Phase 4 PERFORMANCE (11 regles)
+    ├── "modern" → Phase 5 MODERN (20 regles)
+    ├── "polish" → Phase 6 STYLE + Phase 7 DOCS (25 regles)
+    └── "tester" → Phase 8 TESTS (8 regles)
+    ↓
+  LEAD: attend completion de tous les teammates
+    ↓
+  Re-run ktn-linter final → valider convergence globale
+```
+
+### Teammate Roles
+
+**Lead** : Orchestre le workflow. Execute Phase 1-3 (structurel + signatures + logique) qui ont des dependances inter-fichiers. Apres convergence Phase 3, spawne les 4 teammates. Collecte les resultats et lance la verification finale.
+
+**Teammate "perf"** (Phase 4) : Specialiste optimisation memoire. Corrige : KTN-VAR-HOTLOOP, KTN-VAR-BIGSTRUCT, KTN-VAR-SLICECAP, KTN-VAR-MAPCAP, KTN-VAR-MAKEAPPEND, KTN-VAR-GROW, KTN-VAR-STRBUILDER, KTN-VAR-STRCONV, KTN-VAR-SYNCPOOL, KTN-VAR-ARRAY.
+
+**Teammate "modern"** (Phase 5) : Specialiste Go idiomatique. Corrige : KTN-VAR-USEANY, KTN-VAR-USECLEAR, KTN-VAR-USEMINMAX, KTN-VAR-RANGEINT, KTN-VAR-LOOPVAR, KTN-VAR-SLICEGROW, KTN-VAR-SLICECLONE, KTN-VAR-MAPCLONE, KTN-VAR-CMPOR, KTN-VAR-WGGO, MODERNIZE-*.
+
+**Teammate "polish"** (Phase 6+7) : Style et documentation. Corrige : KTN-VAR-CAMEL, KTN-CONST-CAMEL, KTN-VAR-MINLEN/MAXLEN, KTN-FUNC-UNUSEDARG, KTN-FUNC-NOMAGIC, KTN-FUNC-EARLYRET, KTN-STRUCT-NOGET, KTN-INTERFACE-ERNAME + tous les KTN-COMMENT-*.
+
+**Teammate "tester"** (Phase 8) : Qualite tests. Corrige : KTN-TEST-TABLE, KTN-TEST-COVERAGE, KTN-TEST-ASSERT, KTN-TEST-ERRCASES, KTN-TEST-NOSKIP, KTN-TEST-SETENV, KTN-TEST-SUBPARALLEL, KTN-TEST-CLEANUP.
+
+### User Interaction (VS Code)
+
+- `Shift+Up/Down` pour naviguer entre teammates
+- Ecrire directement a un teammate pour guider ses decisions
+- Chaque teammate utilise TaskCreate/TaskUpdate pour reporter sa progression
+
+### Fallback : Mode Sequentiel
+
+**Si Agent Teams non disponible**, executer le mode classique :
 
 ```text
 POUR chaque phase de 1 a 8 :
@@ -300,7 +356,7 @@ POUR chaque phase de 1 a 8 :
         1. Lire le fichier concerne
         2. SI struct DTO → appliquer convention dto:"dir,ctx,sec"
         3. Appliquer la correction
-        4. Marquer comme corrige
+        4. TaskUpdate → completed
     FIN POUR
 FIN POUR
 
@@ -318,19 +374,20 @@ SINON : terminer avec rapport
   /lint - COMPLETE
 ═══════════════════════════════════════════════════════════════
 
+  Mode           : Agent Teams (4 teammates) | Sequential
   Issues corrigees : 47
   Iterations       : 3
   DTOs detectes    : 4 (exclus de ONEFILE/CTOR)
 
   Par phase :
-    STRUCTURAL  : 5 corriges (dont 2 via dto tags)
-    SIGNATURES  : 8 corriges
-    LOGIC       : 12 corriges
-    PERFORMANCE : 4 corriges
-    MODERN      : 10 corriges
-    STYLE       : 5 corriges
-    DOCS        : 3 corriges
-    TESTS       : 0 corriges
+    STRUCTURAL  : 5 corriges (dont 2 via dto tags)  [Lead]
+    SIGNATURES  : 8 corriges                         [Lead]
+    LOGIC       : 12 corriges                        [Lead]
+    PERFORMANCE : 4 corriges                         [perf]
+    MODERN      : 10 corriges                        [modern]
+    STYLE       : 5 corriges                         [polish]
+    DOCS        : 3 corriges                         [polish]
+    TESTS       : 0 corriges                         [tester]
 
   DTOs traites :
     - user_dto.go: CreateUserRequest, UserResponse (dto:"...,api,...")
@@ -346,11 +403,12 @@ SINON : terminer avec rapport
 ## REGLES ABSOLUES
 
 1. **TOUT corriger** - Aucune exception, aucun skip
-2. **Ordre des phases** - TOUJOURS respecter l'ordre 1→8
+2. **Ordre des phases** - Phase 1→3 sequentiel, Phase 4→8 parallele (Agent Teams) ou sequentiel (fallback)
 3. **DTOs au vol** - Detecter et appliquer dto:"dir,ctx,sec"
 4. **Iteration** - Relancer jusqu'a 0 issues
 5. **Pas de questions** - Tout est automatique
 6. **Format dto strict** - Toujours 3 valeurs separees par virgule
+7. **TaskCreate** - Chaque phase = 1 task avec progression
 
 ---
 
@@ -359,6 +417,8 @@ SINON : terminer avec rapport
 1. Lancer `./builds/ktn-linter lint ./...`
 2. Parser le retour
 3. Classer par phase
-4. Corriger dans l'ordre (DTOs avec convention dto:"dir,ctx,sec")
-5. Relancer jusqu'a convergence
-6. Afficher rapport final
+4. Detecter Agent Teams disponible (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`)
+5. SI Agent Teams : Lead Phase 1-3, spawn teammates Phase 4-8
+6. SINON : corriger sequentiellement 1→8 (DTOs avec convention dto:"dir,ctx,sec")
+7. Relancer jusqu'a convergence
+8. Afficher rapport final

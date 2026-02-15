@@ -1,0 +1,5 @@
+#!/bin/execlineb -P
+# supervizio s6 service
+# s6 requires services to run in foreground (exec into the process)
+fdmove -c 2 1
+/usr/local/bin/supervizio --config /etc/supervizio/config.yaml

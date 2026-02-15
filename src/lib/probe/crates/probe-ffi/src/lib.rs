@@ -1372,8 +1372,8 @@ pub unsafe extern "C" fn probe_collect_system_context_switches(out: *mut u64) ->
     #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
     {
         match probe_platform::bsd::read_system_context_switches() {
-            Ok(count) => {
-                unsafe { *out = count };
+            Ok(cs) => {
+                unsafe { *out = cs.voluntary.saturating_add(cs.involuntary) };
                 ProbeResult::ok()
             }
             Err(e) => ProbeResult::from_metrics_error(e),
@@ -1421,8 +1421,14 @@ pub unsafe extern "C" fn probe_collect_process_context_switches(
     #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
     {
         match probe_platform::bsd::read_process_context_switches(pid) {
-            Ok(switches) => {
-                unsafe { *out = ContextSwitches::from(switches) };
+            Ok(cs) => {
+                unsafe {
+                    *out = ContextSwitches {
+                        voluntary: cs.voluntary,
+                        involuntary: cs.involuntary,
+                        system_total: 0,
+                    }
+                };
                 ProbeResult::ok()
             }
             Err(e) => ProbeResult::from_metrics_error(e),
@@ -1470,8 +1476,14 @@ pub unsafe extern "C" fn probe_collect_self_context_switches(
     #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
     {
         match probe_platform::bsd::read_self_context_switches() {
-            Ok(switches) => {
-                unsafe { *out = ContextSwitches::from(switches) };
+            Ok(cs) => {
+                unsafe {
+                    *out = ContextSwitches {
+                        voluntary: cs.voluntary,
+                        involuntary: cs.involuntary,
+                        system_total: 0,
+                    }
+                };
                 ProbeResult::ok()
             }
             Err(e) => ProbeResult::from_metrics_error(e),

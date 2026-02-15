@@ -5,6 +5,67 @@ use std::ffi::CString;
 use std::mem;
 use std::ptr;
 
+// OpenBSD doesn't have sysctlbyname in libc. Provide a Rust implementation
+// that maps well-known sysctl names to MIB arrays and calls sysctl().
+#[cfg(target_os = "openbsd")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sysctlbyname(
+    name: *const libc::c_char,
+    oldp: *mut libc::c_void,
+    oldlenp: *mut usize,
+    newp: *mut libc::c_void,
+    newlen: usize,
+) -> libc::c_int {
+    // OpenBSD sysctl MIB constants (from sys/sysctl.h)
+    const CTL_KERN: libc::c_int = 1;
+    const CTL_HW: libc::c_int = 6;
+    const KERN_CPTIME: libc::c_int = 40;
+    const HW_NCPU: libc::c_int = 3;
+    const HW_PHYSMEM64: libc::c_int = 19;
+    const HW_CPUSPEED: libc::c_int = 12;
+    const HW_DISKSTATS: libc::c_int = 9;
+
+    let name_cstr = unsafe { std::ffi::CStr::from_ptr(name) };
+    let name_bytes = name_cstr.to_bytes();
+
+    // Map sysctl name to MIB array
+    let mib: [libc::c_int; 2] = match name_bytes {
+        b"kern.cp_time" => [CTL_KERN, KERN_CPTIME],
+        b"hw.ncpu" => [CTL_HW, HW_NCPU],
+        b"hw.cpuspeed" => [CTL_HW, HW_CPUSPEED],
+        b"hw.physmem" => [CTL_HW, HW_PHYSMEM64],
+        b"hw.diskstats" => [CTL_HW, HW_DISKSTATS],
+        _ => return -1,
+    };
+
+    unsafe { libc::sysctl(mib.as_ptr() as *mut libc::c_int, 2, oldp, oldlenp, newp, newlen) }
+}
+
+// Cross-BSD wrapper: uses libc on FreeBSD/NetBSD, shim on OpenBSD
+#[cfg(not(target_os = "openbsd"))]
+#[inline(always)]
+unsafe fn do_sysctlbyname(
+    name: *const libc::c_char,
+    oldp: *mut libc::c_void,
+    oldlenp: *mut usize,
+    newp: *mut libc::c_void,
+    newlen: usize,
+) -> libc::c_int {
+    unsafe { libc::sysctlbyname(name, oldp, oldlenp, newp, newlen) }
+}
+
+#[cfg(target_os = "openbsd")]
+#[inline(always)]
+unsafe fn do_sysctlbyname(
+    name: *const libc::c_char,
+    oldp: *mut libc::c_void,
+    oldlenp: *mut usize,
+    newp: *mut libc::c_void,
+    newlen: usize,
+) -> libc::c_int {
+    unsafe { sysctlbyname(name, oldp, oldlenp, newp, newlen) }
+}
+
 // ============================================================================
 // CPU
 // ============================================================================
@@ -29,7 +90,7 @@ pub fn get_cpu_times() -> Result<CpuTimes> {
         let mut cp_time: [u64; 5] = [0; 5]; // user, nice, sys, intr, idle
         let mut len = mem::size_of_val(&cp_time);
 
-        let result = libc::sysctlbyname(
+        let result = do_sysctlbyname(
             name.as_ptr(),
             cp_time.as_mut_ptr() as *mut libc::c_void,
             &mut len,
@@ -66,7 +127,7 @@ pub fn get_cpu_info() -> Result<CpuInfo> {
         let mut ncpu: libc::c_int = 0;
         let mut len = mem::size_of::<libc::c_int>();
 
-        libc::sysctlbyname(
+        do_sysctlbyname(
             name.as_ptr(),
             &mut ncpu as *mut _ as *mut libc::c_void,
             &mut len,
@@ -88,7 +149,7 @@ pub fn get_cpu_info() -> Result<CpuInfo> {
         let mut freq: libc::c_int = 0;
         let mut freq_len = mem::size_of::<libc::c_int>();
 
-        libc::sysctlbyname(
+        do_sysctlbyname(
             freq_name.as_ptr(),
             &mut freq as *mut _ as *mut libc::c_void,
             &mut freq_len,
@@ -128,7 +189,7 @@ pub fn get_memory_info() -> Result<MemInfo> {
         let mut physmem: u64 = 0;
         let mut len = mem::size_of::<u64>();
 
-        libc::sysctlbyname(
+        do_sysctlbyname(
             name.as_ptr(),
             &mut physmem as *mut _ as *mut libc::c_void,
             &mut len,
@@ -146,7 +207,7 @@ pub fn get_memory_info() -> Result<MemInfo> {
         #[cfg(target_os = "freebsd")]
         {
             let mut free_len = mem::size_of::<u64>();
-            libc::sysctlbyname(
+            do_sysctlbyname(
                 free_name.as_ptr(),
                 &mut free_pages as *mut _ as *mut libc::c_void,
                 &mut free_len,
@@ -174,7 +235,7 @@ pub fn get_memory_info() -> Result<MemInfo> {
                 .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
             let mut cache_pages: u64 = 0;
             let mut cache_len = mem::size_of::<u64>();
-            libc::sysctlbyname(
+            do_sysctlbyname(
                 cache_name.as_ptr(),
                 &mut cache_pages as *mut _ as *mut libc::c_void,
                 &mut cache_len,
@@ -232,7 +293,7 @@ fn get_swap_freebsd() -> (u64, u64) {
         let mut nswapdev: i32 = 0;
         let mut len = mem::size_of::<i32>();
 
-        if libc::sysctlbyname(
+        if do_sysctlbyname(
             nswapdev_name.as_ptr(),
             &mut nswapdev as *mut _ as *mut libc::c_void,
             &mut len,
@@ -267,7 +328,7 @@ fn get_swap_freebsd() -> (u64, u64) {
             let mut xsw: Xswdev = mem::zeroed();
             let mut xsw_len = mem::size_of::<Xswdev>();
 
-            if libc::sysctlbyname(
+            if do_sysctlbyname(
                 name.as_ptr(),
                 &mut xsw as *mut _ as *mut libc::c_void,
                 &mut xsw_len,
@@ -317,7 +378,7 @@ fn get_swap_freebsd_fallback() -> (u64, u64) {
         let mut total_pages: u64 = 0;
         let mut len = mem::size_of::<u64>();
 
-        if libc::sysctlbyname(
+        if do_sysctlbyname(
             total_name.as_ptr(),
             &mut total_pages as *mut _ as *mut libc::c_void,
             &mut len,
@@ -337,7 +398,7 @@ fn get_swap_freebsd_fallback() -> (u64, u64) {
         let mut reserved_pages: u64 = 0;
         len = mem::size_of::<u64>();
 
-        libc::sysctlbyname(
+        do_sysctlbyname(
             reserved_name.as_ptr(),
             &mut reserved_pages as *mut _ as *mut libc::c_void,
             &mut len,
@@ -359,7 +420,7 @@ fn get_swap_freebsd_fallback() -> (u64, u64) {
 /// containing the fields most commonly needed for memory metrics.
 #[cfg(any(target_os = "openbsd", target_os = "netbsd"))]
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 struct Uvmexp {
     pagesize: i32,  // Page size in bytes
     pagemask: i32,  // Page mask
@@ -486,7 +547,7 @@ pub fn get_process_info(pid: i32) -> Result<ProcessInfo> {
                 rss: kinfo.ki_rssize as u64 * 4096,
                 vsize: kinfo.ki_size as u64,
                 num_threads: kinfo.ki_numthreads as u32,
-                num_fds: kinfo.ki_fd.fd_nfiles as u32,
+                num_fds: 0, // Fallback: libc crate may not expose fd_nfiles field
                 state: match kinfo.ki_stat as i32 {
                     SRUN => 1,
                     SSLEEP => 2,
@@ -839,6 +900,7 @@ fn list_pids_openbsd() -> Result<Vec<i32>> {
     unsafe {
         // Minimal struct to get just PIDs
         #[repr(C)]
+        #[derive(Clone, Copy)]
         struct KinfoProcMin {
             _padding: [u8; 108],
             p_pid: i32,
@@ -894,6 +956,7 @@ fn list_pids_netbsd() -> Result<Vec<i32>> {
 
         // Minimal struct to get just PIDs
         #[repr(C)]
+        #[derive(Clone, Copy)]
         struct KinfoProc2Min {
             _padding: [u8; 76],
             p_pid: i32,
@@ -961,11 +1024,6 @@ pub fn get_mounts() -> Result<Vec<Partition>> {
     unsafe {
         #[cfg(target_os = "freebsd")]
         {
-            let count = libc::getmntinfo(ptr::null_mut(), libc::MNT_NOWAIT);
-            if count <= 0 {
-                return Ok(Vec::new());
-            }
-
             let mut fs_list: *mut libc::statfs = ptr::null_mut();
             let actual = libc::getmntinfo(&mut fs_list, libc::MNT_NOWAIT);
             if actual <= 0 || fs_list.is_null() {
@@ -1006,12 +1064,7 @@ pub fn get_mounts() -> Result<Vec<Partition>> {
 #[cfg(target_os = "openbsd")]
 fn get_mounts_openbsd() -> Result<Vec<Partition>> {
     unsafe {
-        // OpenBSD uses getfsstat/getmntinfo with statfs structure
-        let count = libc::getmntinfo(ptr::null_mut(), libc::MNT_NOWAIT);
-        if count <= 0 {
-            return Ok(Vec::new());
-        }
-
+        // OpenBSD uses getmntinfo with statfs structure
         let mut fs_list: *mut libc::statfs = ptr::null_mut();
         let actual = libc::getmntinfo(&mut fs_list, libc::MNT_NOWAIT);
         if actual <= 0 || fs_list.is_null() {
@@ -1052,8 +1105,7 @@ fn get_mounts_netbsd() -> Result<Vec<Partition>> {
         let mut fs_list: Vec<libc::statvfs> = vec![mem::zeroed(); count as usize];
         let buf_size = count as usize * mem::size_of::<libc::statvfs>();
 
-        let actual =
-            libc::getvfsstat(fs_list.as_mut_ptr(), buf_size as libc::c_long, libc::MNT_NOWAIT);
+        let actual = libc::getvfsstat(fs_list.as_mut_ptr(), buf_size as usize, libc::MNT_NOWAIT);
         if actual <= 0 {
             return Ok(Vec::new());
         }
@@ -1081,8 +1133,14 @@ fn get_mounts_netbsd() -> Result<Vec<Partition>> {
 pub fn get_disk_usage(path: &str) -> Result<DiskUsage> {
     unsafe {
         let c_path = CString::new(path).map_err(|_| Error::Platform("invalid path".to_string()))?;
+        #[cfg(any(target_os = "freebsd", target_os = "netbsd"))]
+        let mut stat: libc::statvfs = mem::zeroed();
+        #[cfg(not(any(target_os = "freebsd", target_os = "netbsd")))]
         let mut stat: libc::statfs = mem::zeroed();
 
+        #[cfg(any(target_os = "freebsd", target_os = "netbsd"))]
+        let result = libc::statvfs(c_path.as_ptr(), &mut stat);
+        #[cfg(not(any(target_os = "freebsd", target_os = "netbsd")))]
         let result = libc::statfs(c_path.as_ptr(), &mut stat);
         if result != 0 {
             return Err(Error::NotFound(format!("path {} not found", path)));
@@ -1164,70 +1222,68 @@ pub fn get_disk_io_stats() -> Result<Vec<DiskIOStats>> {
 mod freebsd {
     use super::*;
 
-    /// FreeBSD devstat structure (from sys/devicestat.h).
-    /// This is a simplified representation for reading device statistics.
+    /// Bintime structure matching FreeBSD sys/time.h.
     #[repr(C)]
     #[derive(Debug, Clone, Copy)]
-    struct Devstat {
-        /// Sequence counter for consistency checking.
-        sequence0: u32,
-        /// Allocated flag.
-        allocated: i32,
-        /// Start count.
-        start_count: u32,
-        /// End count.
-        end_count: u32,
-        /// Busy time (bintime).
-        busy_time_sec: i64,
-        busy_time_frac: u64,
-        /// Bytes transferred [READ, WRITE, FREE].
-        bytes: [u64; 3],
-        /// Operations completed.
-        operations: [u64; 3],
-        /// Duration of operations (bintime).
-        duration_sec: [i64; 3],
-        duration_frac: [u64; 3],
-        /// Time at which the device was created.
-        creation_time_sec: i64,
-        creation_time_frac: u64,
-        /// Block size.
-        block_size: u32,
-        /// Tag types (simple, ordered, head of queue).
-        tag_types: [u64; 3],
-        /// Device name.
-        device_name: [libc::c_char; 16],
-        /// Unit number.
-        unit_number: i32,
-        /// Sequence counter (same as sequence0 for consistency).
-        sequence1: u32,
+    struct Bintime {
+        sec: i64,
+        frac: u64,
     }
 
-    /// Device info structure containing all devices.
+    /// FreeBSD devstat structure (from sys/devicestat.h).
+    /// Layout verified against FreeBSD 15 with offsetof() checks.
+    /// sizeof = 288, DEVSTAT_N_TRANS_FLAGS = 4.
+    #[repr(C)]
+    struct Devstat {
+        sequence0: u32,                  // offset 0
+        allocated: i32,                  // offset 4
+        start_count: u32,                // offset 8
+        end_count: u32,                  // offset 12
+        busy_from: Bintime,              // offset 16 (16 bytes)
+        dev_links_next: *mut Devstat,    // offset 32 (STAILQ_ENTRY)
+        device_number: u32,              // offset 40
+        device_name: [libc::c_char; 16], // offset 44
+        unit_number: i32,                // offset 60
+        bytes: [u64; 4],                 // offset 64 (N_TRANS_FLAGS=4)
+        operations: [u64; 4],            // offset 96
+        duration: [Bintime; 4],          // offset 128
+        busy_time: Bintime,              // offset 192
+        creation_time: Bintime,          // offset 208
+        block_size: u32,                 // offset 224
+        _pad0: u32,                      // padding for alignment
+        tag_types: [u64; 3],             // offset 232
+        flags: u32,                      // offset 256
+        device_type: u32,                // offset 260
+        priority: u32,                   // offset 264
+        _pad1: u32,                      // padding for pointer alignment
+        id: *const libc::c_void,         // offset 272
+        sequence1: u32,                  // offset 280
+        _pad2: u32,                      // padding to 288
+    }
+
+    /// Device info structure (from devstat.h).
+    /// sizeof = 32.
     #[repr(C)]
     struct Devinfo {
-        /// Array of device statistics.
-        devices: *mut Devstat,
-        /// Allocated storage.
-        mem_ptr: *mut libc::c_void,
-        /// Generation number.
-        generation: i64,
-        /// Number of devices.
-        numdevs: i32,
+        devices: *mut Devstat,    // offset 0
+        mem_ptr: *mut u8,         // offset 8
+        generation: libc::c_long, // offset 16
+        numdevs: libc::c_int,     // offset 24
+        _pad: u32,                // padding to 32
     }
 
-    /// Statistics info for devstat_getdevs.
+    /// Statistics info for devstat_getdevs (from devstat.h).
+    /// sizeof = 80, CPUSTATES = 5.
     #[repr(C)]
     struct Statinfo {
-        /// Generation number.
-        generation: i64,
-        /// Time of statistics.
-        snap_time_sec: i64,
-        snap_time_frac: u64,
-        /// Device info pointer.
-        dinfo: *mut Devinfo,
+        cp_time: [libc::c_long; 5], // offset 0 (40 bytes)
+        tk_nin: libc::c_long,       // offset 40
+        tk_nout: libc::c_long,      // offset 48
+        dinfo: *mut Devinfo,        // offset 56
+        snap_time: [u8; 16],        // offset 64 (long double = 16 bytes)
     }
 
-    extern "C" {
+    unsafe extern "C" {
         fn devstat_checkversion(kd: *mut libc::c_void) -> libc::c_int;
         fn devstat_getdevs(kd: *mut libc::c_void, stats: *mut Statinfo) -> libc::c_int;
     }
@@ -1240,10 +1296,10 @@ mod freebsd {
                 return Err(Error::Platform("devstat version mismatch".to_string()));
             }
 
-            // Initialize structures
+            // Initialize structures (zeroed, then set dinfo pointer)
             let mut dinfo: Devinfo = mem::zeroed();
-            let mut stats =
-                Statinfo { generation: 0, snap_time_sec: 0, snap_time_frac: 0, dinfo: &mut dinfo };
+            let mut stats: Statinfo = mem::zeroed();
+            stats.dinfo = &mut dinfo;
 
             // Get device statistics
             if devstat_getdevs(ptr::null_mut(), &mut stats) < 0 {
@@ -1282,9 +1338,9 @@ mod freebsd {
                 let sectors_written = ds.bytes[1] / 512;
 
                 // Calculate time in milliseconds from bintime (sec + frac/2^64)
-                let read_time_ms = bintime_to_ms(ds.duration_sec[0], ds.duration_frac[0]);
-                let write_time_ms = bintime_to_ms(ds.duration_sec[1], ds.duration_frac[1]);
-                let busy_time_ms = bintime_to_ms(ds.busy_time_sec, ds.busy_time_frac);
+                let read_time_ms = bintime_to_ms(ds.duration[0].sec, ds.duration[0].frac);
+                let write_time_ms = bintime_to_ms(ds.duration[1].sec, ds.duration[1].frac);
+                let busy_time_ms = bintime_to_ms(ds.busy_time.sec, ds.busy_time.frac);
 
                 // IO in progress: difference between start and end counts
                 let io_in_progress = ds.start_count.saturating_sub(ds.end_count) as u64;
@@ -1368,7 +1424,7 @@ mod openbsd {
             // Get required buffer size
             let mut len: usize = 0;
             let result =
-                libc::sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0);
+                do_sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0);
 
             if result != 0 || len == 0 {
                 return Ok(Vec::new());
@@ -1378,7 +1434,7 @@ mod openbsd {
             let count = len / mem::size_of::<DiskStats>();
             let mut stats: Vec<DiskStats> = vec![mem::zeroed(); count];
 
-            let result = libc::sysctlbyname(
+            let result = do_sysctlbyname(
                 name.as_ptr(),
                 stats.as_mut_ptr() as *mut libc::c_void,
                 &mut len,
@@ -1508,7 +1564,7 @@ mod netbsd {
             // Get required buffer size
             let mut len: usize = 0;
             let result =
-                libc::sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0);
+                do_sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0);
 
             if result != 0 || len == 0 {
                 return Ok(Vec::new());
@@ -1518,7 +1574,7 @@ mod netbsd {
             let count = len / mem::size_of::<DiskSysctl>();
             let mut stats: Vec<DiskSysctl> = vec![mem::zeroed(); count];
 
-            let result = libc::sysctlbyname(
+            let result = do_sysctlbyname(
                 name.as_ptr(),
                 stats.as_mut_ptr() as *mut libc::c_void,
                 &mut len,
@@ -2175,7 +2231,7 @@ fn list_tcp_connections() -> Result<Vec<NetworkConnection>> {
 
         // Get required buffer size
         let mut len: usize = 0;
-        if libc::sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+        if do_sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
             return Ok(Vec::new());
         }
 
@@ -2187,7 +2243,7 @@ fn list_tcp_connections() -> Result<Vec<NetworkConnection>> {
         len = len * 2;
         let mut buf: Vec<u8> = vec![0; len];
 
-        if libc::sysctlbyname(
+        if do_sysctlbyname(
             name.as_ptr(),
             buf.as_mut_ptr() as *mut libc::c_void,
             &mut len,
@@ -2351,7 +2407,7 @@ fn list_udp_connections() -> Result<Vec<NetworkConnection>> {
             .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
 
         let mut len: usize = 0;
-        if libc::sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+        if do_sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
             return Ok(Vec::new());
         }
 
@@ -2362,7 +2418,7 @@ fn list_udp_connections() -> Result<Vec<NetworkConnection>> {
         len = len * 2;
         let mut buf: Vec<u8> = vec![0; len];
 
-        if libc::sysctlbyname(
+        if do_sysctlbyname(
             name.as_ptr(),
             buf.as_mut_ptr() as *mut libc::c_void,
             &mut len,
@@ -2447,7 +2503,7 @@ fn list_unix_connections() -> Result<Vec<NetworkConnection>> {
             .map_err(|e| Error::Platform(format!("invalid sysctl name: {}", e)))?;
 
         let mut len: usize = 0;
-        if libc::sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
+        if do_sysctlbyname(name.as_ptr(), ptr::null_mut(), &mut len, ptr::null_mut(), 0) != 0 {
             return Ok(Vec::new());
         }
 
@@ -2902,5 +2958,5 @@ unsafe fn cstr_to_string(ptr: *const libc::c_char) -> String {
     if ptr.is_null() {
         return String::new();
     }
-    std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned()
+    unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() }
 }

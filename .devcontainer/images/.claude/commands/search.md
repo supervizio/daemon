@@ -2,7 +2,7 @@
 name: search
 description: |
   Documentation Research with RLM (Recursive Language Model) patterns.
-  LOCAL-FIRST: Searches internal docs (.claude/docs/) before external sources.
+  LOCAL-FIRST: Searches internal docs (~/.claude/docs/) before external sources.
   Cross-validates sources, generates .context.md, handles conflicts.
   Use when: researching technologies, APIs, or best practices before implementation.
 allowed-tools:
@@ -23,6 +23,12 @@ allowed-tools:
 
 $ARGUMENTS
 
+## GREPAI-FIRST (MANDATORY)
+
+Use `grepai_search` for ALL semantic/meaning-based queries BEFORE Grep.
+Use `grepai_trace_callers`/`grepai_trace_callees` for impact analysis.
+Fallback to Grep ONLY for exact string matches or regex patterns.
+
 ---
 
 ## Description
@@ -32,7 +38,7 @@ Recherche avec stratégie **LOCAL-FIRST** et patterns RLM.
 ### Priorité : Documentation locale validée
 
 ```
-.claude/docs/ (LOCAL)  →  Sources officielles (EXTERNE)
+~/.claude/docs/ (LOCAL)  →  Sources officielles (EXTERNE)
      ✓ Validée              ⚠ Peut être obsolète
      ✓ Cohérente            ⚠ Peut contredire local
      ✓ Immédiate            ⚠ Nécessite validation
@@ -40,7 +46,7 @@ Recherche avec stratégie **LOCAL-FIRST** et patterns RLM.
 
 **Patterns RLM appliqués :**
 
-- **Local-First** - Consultation `.claude/docs/` en priorité
+- **Local-First** - Consultation `~/.claude/docs/` en priorité
 - **Peek** - Aperçu rapide avant analyse complète
 - **Grep** - Filtrage par keywords avant fetch sémantique
 - **Partition+Map** - Recherches parallèles multi-domaines
@@ -151,20 +157,20 @@ Workflow:
 
 ## Workflow RLM (7 phases)
 
-### Phase -1 : Documentation locale (LOCAL-FIRST)
+### Phase 1.0 : Documentation locale (LOCAL-FIRST)
 
 **TOUJOURS exécuter en premier. La documentation locale est VALIDÉE et prioritaire.**
 
 ```yaml
 local_first:
-  source: ".claude/docs/"
-  index: ".claude/docs/README.md"
+  source: "~/.claude/docs/"
+  index: "~/.claude/docs/README.md"
 
   workflow:
     1_search_local:
       action: |
-        Grep(".claude/docs/", pattern=<keywords>)
-        Glob(".claude/docs/**/*.md", pattern=<topic>)
+        Grep("~/.claude/docs/", pattern=<keywords>)
+        Glob("~/.claude/docs/**/*.md", pattern=<topic>)
       output: [matching_files]
 
     2_read_matches:
@@ -203,7 +209,7 @@ local_first:
     principles: "principles/"
 ```
 
-**Output Phase -1 :**
+**Output Phase 1.0 :**
 
 ```
 ═══════════════════════════════════════════════
@@ -213,7 +219,7 @@ local_first:
   Query    : <query>
   Keywords : <k1>, <k2>, <k3>
 
-  Local Search (.claude/docs/):
+  Local Search (~/.claude/docs/):
     ├─ Matches: 3 files
     │   ├─ behavioral/observer.md (95% match)
     │   ├─ behavioral/README.md (70% match)
@@ -237,7 +243,7 @@ local_first:
   Query    : "OAuth2 JWT authentication"
   Keywords : OAuth2, JWT, authentication
 
-  Local Search (.claude/docs/):
+  Local Search (~/.claude/docs/):
     ├─ Matches: 1 file
     │   └─ security/README.md (50% match)
     │
@@ -255,7 +261,7 @@ local_first:
 
 ---
 
-### Phase 0 : Décomposition (RLM Pattern: Peek + Grep)
+### Phase 2.0 : Décomposition (RLM Pattern: Peek + Grep)
 
 **Analyser la query AVANT toute recherche :**
 
@@ -295,7 +301,7 @@ local_first:
 
 ---
 
-### Phase 1 : Recherche parallèle (RLM Pattern: Partition + Map)
+### Phase 3.0 : Recherche parallèle (RLM Pattern: Partition + Map)
 
 **Pour chaque sous-query, lancer un Task agent :**
 
@@ -319,7 +325,7 @@ Task({ prompt: "REST API sur developer.mozilla.org", ... })
 
 ---
 
-### Phase 2 : Peek des résultats
+### Phase 4.0 : Peek des résultats
 
 **Avant analyse complète, peek sur chaque résultat :**
 
@@ -337,7 +343,7 @@ Résultats agents:
 
 ---
 
-### Phase 3 : Fetch approfondi (RLM Pattern: Summarization)
+### Phase 5.0 : Fetch approfondi (RLM Pattern: Summarization)
 
 **Pour les résultats pertinents, WebFetch avec summarization :**
 
@@ -356,7 +362,7 @@ WebFetch({
 
 ---
 
-### Phase 4 : Croisement et validation
+### Phase 6.0 : Croisement et validation
 
 | Situation | Confidence | Action |
 |-----------|------------|--------|
@@ -390,7 +396,7 @@ conflict_detection:
 
 ---
 
-### Phase 4.5 : Résolution des conflits (CONFLICT HANDLING)
+### Phase 7.0 : Résolution des conflits (CONFLICT HANDLING)
 
 **OBLIGATOIRE si conflit détecté entre documentation locale et externe.**
 
@@ -403,7 +409,7 @@ conflict_resolution:
 
       **Sujet:** {topic}
 
-      **Documentation locale (.claude/docs/):**
+      **Documentation locale (~/.claude/docs/):**
       {local_content}
 
       **Documentation externe ({source}):**
@@ -437,7 +443,7 @@ conflict_resolution:
         **Date:** {ISO8601}
 
         ### Local Documentation
-        **File:** `.claude/docs/{path}`
+        **File:** `~/.claude/docs/{path}`
         **Content:**
         ```
         {local_excerpt}
@@ -474,7 +480,7 @@ conflict_resolution:
         → Documenter les deux contextes
 ```
 
-**Output Phase 4.5 :**
+**Output Phase 7.0 :**
 
 ```
 ═══════════════════════════════════════════════
@@ -485,7 +491,7 @@ conflict_resolution:
 
   Topic: Observer Pattern implementation
 
-  Local (.claude/docs/behavioral/observer.md):
+  Local (~/.claude/docs/behavioral/observer.md):
     → Uses EventEmitter interface
     → Recommends typed events
 
@@ -513,7 +519,7 @@ conflict_resolution:
 
   Topic: JWT expiration handling
 
-  Local (.claude/docs/security/jwt.md):
+  Local (~/.claude/docs/security/jwt.md):
     → Recommends 15min access token
 
   External (tools.ietf.org/html/rfc7519):
@@ -531,7 +537,7 @@ conflict_resolution:
 
 ---
 
-### Phase 5 : Questions (si nécessaire)
+### Phase 8.0 : Questions (si nécessaire)
 
 **UNIQUEMENT si ambiguïté détectée :**
 
@@ -557,7 +563,7 @@ AskUserQuestion({
 
 ---
 
-### Phase 6 : Génération context.md (RLM Pattern: Programmatic)
+### Phase 9.0 : Génération context.md (RLM Pattern: Programmatic)
 
 **Générer le fichier de manière structurée :**
 
@@ -643,11 +649,11 @@ Identique à la version précédente.
 
 | Action | Status |
 |--------|--------|
-| Skip Phase -1 (documentation locale) | ❌ **INTERDIT** |
+| Skip Phase 1.0 (documentation locale) | ❌ **INTERDIT** |
 | Ignorer conflit local/externe | ❌ **INTERDIT** |
 | Préférer externe sur local sans validation | ❌ **INTERDIT** |
 | Source non-officielle | ❌ INTERDIT |
-| Skip Phase 0 (décomposition) | ❌ INTERDIT |
+| Skip Phase 2.0 (décomposition) | ❌ INTERDIT |
 | Agents séquentiels si parallélisable | ❌ INTERDIT |
 | Info sans source | ❌ INTERDIT |
 
@@ -659,7 +665,7 @@ local_first_rule:
   reason: "Documentation locale est validée et cohérente"
 
   workflow:
-    1: "TOUJOURS chercher dans .claude/docs/ d'abord"
+    1: "TOUJOURS chercher dans ~/.claude/docs/ d'abord"
     2: "SI local suffisant → utiliser local uniquement"
     3: "SI conflit → demander à l'utilisateur"
     4: "SI mise à jour nécessaire → créer issue GitHub"

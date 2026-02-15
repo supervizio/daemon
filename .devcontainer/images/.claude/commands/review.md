@@ -3,7 +3,7 @@ name: review
 description: |
   AI-powered code review (RLM decomposition) for PRs/MRs or local diffs.
   Focus: correctness, security, design, quality, shell safety.
-  12 phases, 5 agents (opus for deep analysis, haiku for patterns).
+  15 phases, 5 agents (opus for deep analysis, haiku for patterns).
   Cyclic workflow: /review --loop for iterative perfection.
   Local-only output with /plan generation for /do execution.
 allowed-tools:
@@ -18,9 +18,19 @@ allowed-tools:
   - "mcp__codacy__*"
   - "mcp__grepai__*"
   - "Task(*)"
+  - "TaskCreate(*)"
+  - "TaskUpdate(*)"
+  - "TaskList(*)"
+  - "TaskGet(*)"
 ---
 
 # Review - AI Code Review (RLM Architecture)
+
+## GREPAI-FIRST (MANDATORY)
+
+Use `grepai_search` for ALL semantic/meaning-based queries BEFORE Grep.
+Use `grepai_trace_callers`/`grepai_trace_callees` for impact analysis.
+Fallback to Grep ONLY for exact string matches or regex patterns.
 
 ## Overview
 
@@ -124,7 +134,7 @@ budget_controller:
 
 ---
 
-## Phase 0 : Context Detection
+## Phase 1.0 : Context Detection
 
 **Identifier le contexte d'exécution (GitHub/GitLab auto-détecté) :**
 
@@ -244,7 +254,7 @@ context_detection:
 
 ---
 
-## Phase 0.5 : Repo Profile (NEW - Cacheable)
+## Phase 2.0 : Repo Profile (Cacheable)
 
 **Build stable repo understanding BEFORE analysis:**
 
@@ -265,7 +275,7 @@ repo_profile:
       - ".eslintrc*"
       - "pyproject.toml"
       - "CODEOWNERS"
-      - ".claude/docs/**"
+      - "~/.claude/docs/**"
 
   extract:
     languages: [string]
@@ -291,7 +301,7 @@ repo_profile:
 
 ---
 
-## Phase 1 : Intent Analysis
+## Phase 3.0 : Intent Analysis
 
 **Comprendre l'intention de la PR/MR AVANT analyse lourde :**
 
@@ -391,7 +401,7 @@ intent_analysis:
 
 ---
 
-## Phase 1.5 : Auto-Describe (PR-Agent inspired)
+## Phase 4.0 : Auto-Describe (PR-Agent inspired)
 
 **Générer description si PR/MR vide ou insuffisante :**
 
@@ -500,7 +510,7 @@ auto_describe:
 
 ---
 
-## Phase 2 : Feedback Collection
+## Phase 5.0 : Feedback Collection
 
 **Collecter les feedbacks avec budget et priorisation :**
 
@@ -558,7 +568,7 @@ feedback_collection:
 
 ---
 
-## Phase 2.3 : CI Diagnostics (NEW - Conditional)
+## Phase 6.0 : CI Diagnostics (Conditional)
 
 **Extract actionable signal from CI failures:**
 
@@ -603,7 +613,7 @@ ci_diagnostics:
 
 ---
 
-## Phase 2.5 : Question Handling
+## Phase 7.0 : Question Handling
 
 **Préparer réponses pour questions humaines :**
 
@@ -641,7 +651,7 @@ question_handling:
 
 ---
 
-## Phase 2.6 : Behavior Extraction (AI Reviews)
+## Phase 8.0 : Behavior Extraction (AI Reviews)
 
 **Extraire axes comportementaux des reviews AI :**
 
@@ -671,7 +681,7 @@ behavior_extraction:
 
 ---
 
-## Phase 3 : Peek & Decompose
+## Phase 9.0 : Peek & Decompose
 
 **Snapshot du diff et catégorisation :**
 
@@ -717,7 +727,7 @@ peek_decompose:
 
 ---
 
-## Phase 4 : Parallel Analysis (5 AGENTS)
+## Phase 10.0 : Parallel Analysis (5 AGENTS)
 
 **Launch 5 sub-agents with strict JSON contract:**
 
@@ -869,7 +879,7 @@ secret_masking:
 
 ---
 
-## Phase 4.7 : Merge & Dedupe (NEW)
+## Phase 11.0 : Merge & Dedupe
 
 **Normalize, deduplicate, require evidence:**
 
@@ -933,7 +943,7 @@ merge_dedupe:
 
 ---
 
-## Phase 5 : Challenge & Synthesize
+## Phase 12.0 : Challenge & Synthesize
 
 **Évaluer pertinence avec NOTRE contexte :**
 
@@ -989,7 +999,7 @@ challenge_feedback:
 
 ---
 
-## Phase 6 : Output Generation (LOCAL ONLY)
+## Phase 13.0 : Output Generation (LOCAL ONLY)
 
 **Generate LOCAL report + /plan file (NO GitHub/GitLab posting):**
 
@@ -1051,7 +1061,7 @@ output_generation:
 
 ---
 
-## Phase 6.5 : Language-Specialist Dispatch (NEW)
+## Phase 14.0 : Language-Specialist Dispatch
 
 **Route fixes to language-specialist agent via /do:**
 
@@ -1064,15 +1074,41 @@ language_specialist_dispatch:
     ".py":    "developer-specialist-python"
     ".java":  "developer-specialist-java"
     ".kt":    "developer-specialist-kotlin"
+    ".kts":   "developer-specialist-kotlin"
     ".ts":    "developer-specialist-nodejs"
     ".js":    "developer-specialist-nodejs"
     ".rs":    "developer-specialist-rust"
     ".rb":    "developer-specialist-ruby"
     ".ex":    "developer-specialist-elixir"
+    ".exs":   "developer-specialist-elixir"
     ".php":   "developer-specialist-php"
     ".scala": "developer-specialist-scala"
     ".cpp":   "developer-specialist-cpp"
+    ".cc":    "developer-specialist-cpp"
+    ".hpp":   "developer-specialist-cpp"
+    ".c":     "developer-specialist-c"
+    ".h":     "developer-specialist-c"
     ".dart":  "developer-specialist-dart"
+    ".cs":    "developer-specialist-csharp"
+    ".swift": "developer-specialist-swift"
+    ".r":     "developer-specialist-r"
+    ".R":     "developer-specialist-r"
+    ".pl":    "developer-specialist-perl"
+    ".pm":    "developer-specialist-perl"
+    ".lua":   "developer-specialist-lua"
+    ".f90":   "developer-specialist-fortran"
+    ".f95":   "developer-specialist-fortran"
+    ".f03":   "developer-specialist-fortran"
+    ".adb":   "developer-specialist-ada"
+    ".ads":   "developer-specialist-ada"
+    ".cob":   "developer-specialist-cobol"
+    ".cbl":   "developer-specialist-cobol"
+    ".pas":   "developer-specialist-pascal"
+    ".dpr":   "developer-specialist-pascal"
+    ".vb":    "developer-specialist-vbnet"
+    ".m":     "developer-specialist-matlab"
+    ".asm":   "developer-specialist-assembly"
+    ".s":     "developer-specialist-assembly"
 
   dispatch:
     command: "/do --plan .claude/plans/review-fixes-{timestamp}.md"
@@ -1091,7 +1127,7 @@ language_specialist_dispatch:
 
 ---
 
-## Phase 7 : Cyclic Validation (NEW)
+## Phase 15.0 : Cyclic Validation
 
 **Loop until perfect OR --loop limit:**
 
@@ -1106,7 +1142,7 @@ cyclic_workflow:
 
   flow:
     iteration_1:
-      1_review: "Full analysis (12 phases, 5 agents)"
+      1_review: "Full analysis (15 phases, 5 agents)"
       2_generate_plan: ".claude/plans/review-fixes-{timestamp}.md"
       3_dispatch_to_do: "/do --plan {plan_file}"
 
@@ -1210,14 +1246,14 @@ CI: {status}
 
 ## Pattern Consultation (CONDITIONNELLE)
 
-**Source :** `.claude/docs/` (Design Patterns Knowledge Base)
+**Source :** `~/.claude/docs/` (Design Patterns Knowledge Base)
 
 **Déclencher UNIQUEMENT si :**
 
 ```yaml
 pattern_triggers:
-  source: ".claude/docs/"
-  index: ".claude/docs/README.md"
+  source: "~/.claude/docs/"
+  index: "~/.claude/docs/README.md"
 
   conditions:
     - "complexity_increase > 20%"
@@ -1232,8 +1268,8 @@ pattern_triggers:
     - "mode == TRIAGE"
 
   workflow:
-    1_identify: "Lire .claude/docs/README.md pour identifier catégorie"
-    2_consult: "Read(.claude/docs/<category>/README.md)"
+    1_identify: "Lire ~/.claude/docs/README.md pour identifier catégorie"
+    2_consult: "Read(~/.claude/docs/<category>/README.md)"
     3_analyze: "Vérifier patterns utilisés vs recommandés"
     4_report: "Inclure dans section 'Pattern Analysis'"
 
@@ -1330,7 +1366,7 @@ dto_validation:
     | user_dto.go | CreateUserRequest | ✓ | - |
     | order.go | OrderResponse | ✗ | Missing dto:"..." tags |
 
-  reference: ".claude/docs/conventions/dto-tags.md"
+  reference: "~/.claude/docs/conventions/dto-tags.md"
 ```
 
 ---
@@ -1389,7 +1425,7 @@ error_handling:
 ## Agents Architecture
 
 ```
-/review (12 phases, 5 agents)
+/review (15 phases, 5 agents)
     │
     ├─→ Phase 0-2.5: Context + Feedback (sequential)
     │     ├─→ 0: Context Detection (GitHub/GitLab auto)

@@ -8,9 +8,14 @@ package probe
 #cgo CFLAGS: -I${SRCDIR}/../../../lib/probe/include
 #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../../../../dist/lib/linux-amd64 -lprobe -lpthread -ldl -lm
 #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../../../../dist/lib/linux-arm64 -lprobe -lpthread -ldl -lm
+#cgo linux,arm LDFLAGS: -L${SRCDIR}/../../../../dist/lib/linux-arm -lprobe -lpthread -ldl -lm
+#cgo linux,386 LDFLAGS: -L${SRCDIR}/../../../../dist/lib/linux-386 -lprobe -lpthread -ldl -lm
+#cgo linux,riscv64 LDFLAGS: -L${SRCDIR}/../../../../dist/lib/linux-riscv64 -lprobe -lpthread -ldl -lm
 #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/../../../../dist/lib/darwin-amd64 -lprobe -lpthread -ldl -lm -framework CoreFoundation -framework IOKit
 #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../../../../dist/lib/darwin-arm64 -lprobe -lpthread -ldl -lm -framework CoreFoundation -framework IOKit
-#cgo freebsd,amd64 LDFLAGS: -L${SRCDIR}/../../../../dist/lib/freebsd-amd64 -lprobe -lpthread -lm
+#cgo freebsd,amd64 LDFLAGS: -L${SRCDIR}/../../../../dist/lib/freebsd-amd64 -lprobe -lpthread -lm -ldevstat
+#cgo openbsd,amd64 LDFLAGS: -L${SRCDIR}/../../../../dist/lib/openbsd-amd64 -lprobe -lpthread -lm -lc++abi
+#cgo netbsd,amd64 LDFLAGS: -L${SRCDIR}/../../../../dist/lib/netbsd-amd64 -lprobe -lpthread -lm
 
 #include "probe.h"
 #include <stdlib.h>
