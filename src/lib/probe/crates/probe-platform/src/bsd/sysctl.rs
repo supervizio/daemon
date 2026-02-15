@@ -3147,10 +3147,7 @@ mod tests {
 
         let times = result.unwrap();
         let total = times.user_percent + times.system_percent + times.idle_percent;
-        assert!(
-            (total - 100.0).abs() < 1.0,
-            "CPU percentages should sum to ~100%, got {total}"
-        );
+        assert!((total - 100.0).abs() < 1.0, "CPU percentages should sum to ~100%, got {total}");
     }
 
     #[test]
