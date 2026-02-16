@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Domain Lifecycle Package
 
 Domain types for daemon lifecycle management, event publishing, and zombie reaping.

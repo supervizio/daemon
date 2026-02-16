@@ -1,54 +1,55 @@
-# Logging - Gestion des Logs
+<!-- updated: 2026-02-15T21:30:00Z -->
+# Logging - Log Management
 
-Capture et formatage des sorties des processus supervisés.
+Capture and formatting of supervised process outputs.
 
-## Rôle
+## Role
 
-Capturer stdout/stderr des processus, ajouter timestamps, écrire vers fichiers avec rotation.
+Capture process stdout/stderr, add timestamps, write to files with rotation.
 
-## Composants
+## Components
 
-| Type | Fichier | Rôle |
-|------|---------|------|
-| `Capture` | `capture.go` | Coordonne stdout/stderr |
-| `LineWriter` | `linewriter.go` | Buffer ligne par ligne |
-| `MultiWriter` | `multiwriter.go` | Écrit vers plusieurs destinations |
-| `TimestampWriter` | `timestamp.go` | Ajoute préfixe horodatage |
-| `Writer` | `writer.go` | Writer de base vers fichier |
-| `FileOpener` | `fileopener.go` | Ouvre fichiers (prêt rotation) |
-| `NopCloser` | `nopcloser.go` | Wrapper sans Close() |
+| Type | File | Role |
+|------|------|------|
+| `Capture` | `capture.go` | Coordinates stdout/stderr |
+| `LineWriter` | `linewriter.go` | Line-by-line buffering |
+| `MultiWriter` | `multiwriter.go` | Writes to multiple destinations |
+| `TimestampWriter` | `timestamp.go` | Adds timestamp prefix |
+| `Writer` | `writer.go` | Base file writer |
+| `FileOpener` | `fileopener.go` | Opens files (rotation-ready) |
+| `NopCloser` | `nopcloser.go` | No-op Close() wrapper |
 
 ## Usage
 
 ```go
-// Créer un writer avec timestamp
+// Create a writer with timestamp
 tw := logging.NewTimestampWriter(file, "2006-01-02 15:04:05")
 lw := logging.NewLineWriter(tw)
 
-// Attacher au processus
+// Attach to process
 cmd.Stdout = lw
 cmd.Stderr = lw
 ```
 
-## Chaîne de Writers
+## Writer Chain
 
 ```
 Process stdout/stderr
          │
          ▼
-    LineWriter       ← Buffer jusqu'à \n
+    LineWriter       ← Buffer until \n
          │
          ▼
-  TimestampWriter    ← Ajoute [2024-01-15 10:30:45]
+  TimestampWriter    ← Adds [2024-01-15 10:30:45]
          │
          ▼
-    MultiWriter      ← Fichier + Console
+    MultiWriter      ← File + Console
          │
          ▼
-      Writer         ← Fichier avec rotation
+      Writer         ← File with rotation
 ```
 
-## Configuration YAML
+## YAML Configuration
 
 ```yaml
 logging:
@@ -60,7 +61,7 @@ logging:
       max_files: 10
 ```
 
-## Constructeurs
+## Constructors
 
 ```go
 NewCapture(stdout, stderr io.Writer) *Capture

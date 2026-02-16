@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Probe - Rust System Metrics Library
 
 Cross-platform Rust library providing system metrics and resource quota management.

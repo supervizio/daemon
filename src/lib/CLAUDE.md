@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Lib - Non-Go Libraries
 
 External libraries used by the daemon, written in other languages.

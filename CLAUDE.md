@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # superviz.io - Process Supervisor
 
 PID1-capable process supervisor in Go for containers and Unix systems.

@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Domain Config Package
 
 Configuration value objects for services managed by the supervisor.

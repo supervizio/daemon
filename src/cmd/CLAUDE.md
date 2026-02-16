@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Command - Entry Points
 
 CLI entry points for the supervisor.

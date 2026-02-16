@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # E2E Testing - Platform Matrix
 
 End-to-end testing across all supported platforms and init systems.

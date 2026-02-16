@@ -1,6 +1,7 @@
-# Credentials - Résolution User/Group
+<!-- updated: 2026-02-15T21:30:00Z -->
+# Credentials - User/Group Resolution
 
-Résolution des noms d'utilisateurs/groupes vers UID/GID et application aux commandes.
+Resolve user/group names to UID/GID and apply to commands.
 
 ## Interface
 
@@ -29,15 +30,15 @@ type Group struct {
 }
 ```
 
-## Fichiers
+## Files
 
-| Fichier | Rôle |
-|---------|------|
-| `manager.go` | Interface + types + erreurs |
+| File | Role |
+|------|------|
+| `manager.go` | Interface + types + errors |
 | `credentials_unix.go` | Lookup via `os/user` |
-| `credentials_scratch.go` | Fallback numérique pour containers minimaux |
+| `credentials_scratch.go` | Numeric fallback for minimal containers |
 
-## Implémentations
+## Implementations
 
 ### Unix (credentials_unix.go)
 
@@ -53,19 +54,19 @@ func (m *Manager) LookupUser(nameOrID string) (*User, error) {
 
 ### Scratch (credentials_scratch.go)
 
-Pour containers sans `/etc/passwd` :
+For containers without `/etc/passwd`:
 
 ```go
 func (m *Manager) LookupUser(nameOrID string) (*User, error) {
     uid, err := strconv.ParseUint(nameOrID, 10, 32)
     if err != nil {
-        return nil, ErrUserNotFound  // Noms non supportés
+        return nil, ErrUserNotFound  // Names not supported
     }
     return &User{UID: uint32(uid)}, nil
 }
 ```
 
-## Erreurs
+## Errors
 
 ```go
 var (
@@ -74,7 +75,7 @@ var (
 )
 ```
 
-## Constructeur
+## Constructor
 
 ```go
 New() *Manager

@@ -1,4 +1,4 @@
-<!-- updated: 2026-02-12T17:05:00Z -->
+<!-- updated: 2026-02-15T21:30:00Z -->
 # TUI - Terminal User Interface
 
 Terminal user interface for superviz.io providing raw (MOTD) and interactive modes.

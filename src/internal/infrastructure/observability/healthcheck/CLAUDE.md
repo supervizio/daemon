@@ -1,38 +1,38 @@
-<!-- updated: 2026-02-12T17:05:00Z -->
-# Healthcheck - Probers de Santé
+<!-- updated: 2026-02-15T21:30:00Z -->
+# Healthcheck - Health Probers
 
-Vérification de la santé des services via différents protocoles.
+Service health verification via multiple protocols.
 
-## Rôle
+## Role
 
-Tester qu'un service est accessible et répond correctement.
+Test that a service is accessible and responding correctly.
 
-**Note** : Différent de `../probe/` qui collecte des métriques système (CPU, RAM).
+**Note**: Different from `../probe/` which collects system metrics (CPU, RAM).
 
-## Probers Disponibles
+## Available Probers
 
-| Type | Fichier | Description |
-|------|---------|-------------|
-| TCP | `tcp.go` | Connexion TCP réussie |
-| UDP | `udp.go` | Envoi paquet (connectionless) |
-| HTTP | `http.go` | GET/HEAD, validation status |
-| gRPC | `grpc.go` | Protocole health/v1 |
-| Exec | `exec.go` | Commande exit code 0 |
-| ICMP | `icmp.go` | Ping (fallback TCP si pas CAP_NET_RAW) |
+| Type | File | Description |
+|------|------|-------------|
+| TCP | `tcp.go` | Successful TCP connection |
+| UDP | `udp.go` | Packet send (connectionless) |
+| HTTP | `http.go` | GET/HEAD, status validation |
+| gRPC | `grpc.go` | health/v1 protocol |
+| Exec | `exec.go` | Command exit code 0 |
+| ICMP | `icmp.go` | Ping (TCP fallback without CAP_NET_RAW) |
 | ICMP Native | `icmp_native.go` | Raw ICMP (requires CAP_NET_RAW) |
 
 ## Factory
 
 ```go
-factory := NewFactory(5 * time.Second)  // Timeout par défaut
+factory := NewFactory(5 * time.Second)  // Default timeout
 prober, err := factory.Create("http", 10*time.Second)
 
-// Ou méthodes typées
+// Or typed methods
 tcpProber := factory.CreateTCP(5 * time.Second)
 httpProber := factory.CreateHTTP(10 * time.Second)
 ```
 
-## Interface Implémentée
+## Implemented Interface
 
 ```go
 // domain/health/prober.go
@@ -41,7 +41,7 @@ type Prober interface {
 }
 ```
 
-## Constructeurs
+## Constructors
 
 ```go
 NewTCPProber(timeout time.Duration) *TCPProber
@@ -52,6 +52,6 @@ NewICMPProber(timeout time.Duration) *ICMPProber
 NewUDPProber(timeout time.Duration) *UDPProber
 ```
 
-## Sécurité
+## Security
 
-`ExecProber` utilise `executor.TrustedCommand()` - voir `process/executor/CLAUDE.md`.
+`ExecProber` uses `executor.TrustedCommand()` - see `process/executor/CLAUDE.md`.

@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Health - Health Monitoring
 
 Application service for monitoring service health via probes. This package was renamed from `healthcheck/` to better align with domain terminology.

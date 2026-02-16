@@ -4,8 +4,10 @@
 //! All types are repr(C) for C ABI compatibility.
 
 use libc::{c_char, c_int};
+use std::ffi::CString;
 use std::ptr;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::{Once, OnceLock};
 
 use probe_metrics::{ProcessState as MetricsProcessState, SystemCollector};
 use probe_platform::{PlatformCollector, new_collector};
@@ -626,6 +628,87 @@ pub extern "C" fn probe_get_platform() -> *const c_char {
         target_os = "netbsd"
     )))]
     return c"unknown".as_ptr();
+}
+
+/// Helper to call libc::uname and return the result.
+fn get_uname_info() -> Option<libc::utsname> {
+    unsafe {
+        let mut info: libc::utsname = std::mem::zeroed();
+        if libc::uname(&mut info) == 0 { Some(info) } else { None }
+    }
+}
+
+/// Helper to convert a C char array to a Rust string.
+#[allow(clippy::unnecessary_cast)] // c_char is i8 on x86_64, u8 on aarch64
+fn carray_to_string(arr: &[c_char]) -> String {
+    let len = arr.iter().position(|&c| c == 0).unwrap_or(arr.len());
+    let bytes: Vec<u8> = arr[..len].iter().map(|&c| c as u8).collect();
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// Get the OS version string (e.g. "Linux 6.12.69", "Darwin 24.6.0").
+///
+/// Uses `Once` + `AtomicPtr` + `CString::into_raw()` instead of `OnceLock<CString>`
+/// to avoid FreeBSD SIGSEGV with `OnceLock<CString>.as_ptr()` in staticlib context.
+#[unsafe(no_mangle)]
+pub extern "C" fn probe_get_os_version() -> *const c_char {
+    static INIT: Once = Once::new();
+    static PTR: AtomicPtr<c_char> = AtomicPtr::new(ptr::null_mut());
+
+    INIT.call_once(|| {
+        let s = get_uname_info()
+            .map(|u| {
+                let sysname = carray_to_string(&u.sysname);
+                let release = carray_to_string(&u.release);
+                format!("{sysname} {release}")
+            })
+            .unwrap_or_else(|| "unknown".to_string());
+        let cstring = CString::new(s).unwrap_or_else(|_| CString::new("unknown").unwrap());
+        PTR.store(cstring.into_raw(), Ordering::Release);
+    });
+
+    let p = PTR.load(Ordering::Acquire);
+    if p.is_null() { c"unknown".as_ptr() } else { p }
+}
+
+/// Get the kernel version string (full build string from uname.version).
+///
+/// Uses `Once` + `AtomicPtr` + `CString::into_raw()` for FreeBSD safety.
+#[unsafe(no_mangle)]
+pub extern "C" fn probe_get_kernel_version() -> *const c_char {
+    static INIT: Once = Once::new();
+    static PTR: AtomicPtr<c_char> = AtomicPtr::new(ptr::null_mut());
+
+    INIT.call_once(|| {
+        let s = get_uname_info()
+            .map(|u| carray_to_string(&u.version))
+            .unwrap_or_else(|| "unknown".to_string());
+        let cstring = CString::new(s).unwrap_or_else(|_| CString::new("unknown").unwrap());
+        PTR.store(cstring.into_raw(), Ordering::Release);
+    });
+
+    let p = PTR.load(Ordering::Acquire);
+    if p.is_null() { c"unknown".as_ptr() } else { p }
+}
+
+/// Get the machine architecture (e.g. "x86_64", "aarch64", "arm64").
+///
+/// Uses `Once` + `AtomicPtr` + `CString::into_raw()` for FreeBSD safety.
+#[unsafe(no_mangle)]
+pub extern "C" fn probe_get_arch() -> *const c_char {
+    static INIT: Once = Once::new();
+    static PTR: AtomicPtr<c_char> = AtomicPtr::new(ptr::null_mut());
+
+    INIT.call_once(|| {
+        let s = get_uname_info()
+            .map(|u| carray_to_string(&u.machine))
+            .unwrap_or_else(|| "unknown".to_string());
+        let cstring = CString::new(s).unwrap_or_else(|_| CString::new("unknown").unwrap());
+        PTR.store(cstring.into_raw(), Ordering::Release);
+    });
+
+    let p = PTR.load(Ordering::Acquire);
+    if p.is_null() { c"unknown".as_ptr() } else { p }
 }
 
 // ============================================================================
@@ -2904,5 +2987,96 @@ pub unsafe extern "C" fn probe_find_process_by_port(
             PROBE_ERR_NOT_SUPPORTED,
             c"port lookup not supported on this platform".as_ptr(),
         )
+    }
+}
+
+// ============================================================================
+// TESTS
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CStr;
+
+    #[test]
+    fn test_get_uname_info_returns_some() {
+        let info = get_uname_info();
+        assert!(info.is_some(), "uname() should succeed on test platform");
+    }
+
+    #[test]
+    fn test_carray_to_string_non_empty() {
+        let info = get_uname_info().expect("uname should succeed");
+        let sysname = carray_to_string(&info.sysname);
+        assert!(!sysname.is_empty(), "sysname should not be empty");
+    }
+
+    #[test]
+    fn test_carray_to_string_valid_utf8() {
+        let info = get_uname_info().expect("uname should succeed");
+        let sysname = carray_to_string(&info.sysname);
+        // Should be valid ASCII (all OS names are ASCII)
+        assert!(sysname.is_ascii(), "sysname should be ASCII: {sysname}");
+    }
+
+    #[test]
+    fn test_probe_get_os_version_not_null() {
+        let ptr = probe_get_os_version();
+        assert!(!ptr.is_null(), "probe_get_os_version should not return null");
+    }
+
+    #[test]
+    fn test_probe_get_os_version_valid_cstring() {
+        let ptr = probe_get_os_version();
+        assert!(!ptr.is_null());
+        let s = unsafe { CStr::from_ptr(ptr) }.to_string_lossy();
+        assert!(!s.is_empty(), "OS version should not be empty");
+        assert_ne!(s, "unknown", "OS version should not be 'unknown' on test platform");
+    }
+
+    #[test]
+    fn test_probe_get_os_version_idempotent() {
+        let ptr1 = probe_get_os_version();
+        let ptr2 = probe_get_os_version();
+        assert_eq!(ptr1, ptr2, "repeated calls should return the same pointer");
+    }
+
+    #[test]
+    fn test_probe_get_kernel_version_not_null() {
+        let ptr = probe_get_kernel_version();
+        assert!(!ptr.is_null(), "probe_get_kernel_version should not return null");
+    }
+
+    #[test]
+    fn test_probe_get_kernel_version_valid_cstring() {
+        let ptr = probe_get_kernel_version();
+        assert!(!ptr.is_null());
+        let s = unsafe { CStr::from_ptr(ptr) }.to_string_lossy();
+        assert!(!s.is_empty(), "kernel version should not be empty");
+    }
+
+    #[test]
+    fn test_probe_get_arch_not_null() {
+        let ptr = probe_get_arch();
+        assert!(!ptr.is_null(), "probe_get_arch should not return null");
+    }
+
+    #[test]
+    fn test_probe_get_arch_valid_cstring() {
+        let ptr = probe_get_arch();
+        assert!(!ptr.is_null());
+        let s = unsafe { CStr::from_ptr(ptr) }.to_string_lossy();
+        assert!(!s.is_empty(), "arch should not be empty");
+        let valid_archs =
+            ["x86_64", "amd64", "aarch64", "arm64", "armv7l", "i686", "i386", "riscv64"];
+        assert!(valid_archs.contains(&s.as_ref()), "unexpected arch: {s}");
+    }
+
+    #[test]
+    fn test_probe_get_arch_idempotent() {
+        let ptr1 = probe_get_arch();
+        let ptr2 = probe_get_arch();
+        assert_eq!(ptr1, ptr2, "repeated calls should return the same pointer");
     }
 }

@@ -1,6 +1,7 @@
-# Signals - Gestion des Signaux Unix
+<!-- updated: 2026-02-15T21:30:00Z -->
+# Signals - Unix Signal Management
 
-Notification, forwarding et gestion des signaux système.
+Notification, forwarding, and system signal handling.
 
 ## Interface
 
@@ -19,19 +20,19 @@ type SignalManager interface {
 }
 ```
 
-## Fichiers
+## Files
 
-| Fichier | Rôle |
-|---------|------|
-| `manager.go` | Interface `SignalManager` |
-| `signals_unix.go` | Implémentation de base (SIGTERM, SIGHUP, etc.) |
-| `signals_linux.go` | Extensions Linux (SIGRTMIN, subreaper via prctl) |
-| `signals_darwin.go` | macOS (subreaper non supporté) |
-| `signals_bsd.go` | BSD (subreaper non supporté) |
+| File | Role |
+|------|------|
+| `manager.go` | `SignalManager` interface |
+| `signals_unix.go` | Base implementation (SIGTERM, SIGHUP, etc.) |
+| `signals_linux.go` | Linux extensions (SIGRTMIN, subreaper via prctl) |
+| `signals_darwin.go` | macOS (subreaper not supported) |
+| `signals_bsd.go` | BSD (subreaper not supported) |
 
 ## Subreaper
 
-Linux permet de devenir "subreaper" : les orphelins sont réassignés à nous plutôt qu'à init.
+Linux allows becoming a "subreaper": orphans are reassigned to us instead of init.
 
 ```go
 // Linux
@@ -45,7 +46,7 @@ func (m *Manager) SetSubreaper() error {
 }
 ```
 
-## Constructeur
+## Constructor
 
 ```go
 New() *Manager

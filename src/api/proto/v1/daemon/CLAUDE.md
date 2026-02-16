@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Daemon API Protocol Buffers
 
 Generated Protocol Buffers and gRPC service definitions for the daemon API.

@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Metrics Domain Package
 
 Domain types and port interfaces for system and process metrics collection.

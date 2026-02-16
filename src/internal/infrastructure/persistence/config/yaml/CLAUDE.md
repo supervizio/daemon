@@ -1,20 +1,21 @@
-# YAML Config - Parser Configuration
+<!-- updated: 2026-02-15T21:30:00Z -->
+# YAML Config - Configuration Parser
 
-Chargement et parsing des fichiers YAML de configuration.
+Loading and parsing YAML configuration files.
 
-## Rôle
+## Role
 
-Lire un fichier YAML et le convertir en `*service.Config` du domaine.
+Read a YAML file and convert it to domain `*config.Config`.
 
 ## Structure
 
-| Fichier | Rôle |
-|---------|------|
-| `loader.go` | `Loader` avec `Load(path)` |
-| `types.go` | Types YAML intermédiaires |
+| File | Role |
+|------|------|
+| `loader.go` | `Loader` with `Load(path)` |
+| `types.go` | Intermediate YAML types |
 | `metrics_dto.go` | DTO for metrics configuration mapping |
 
-## Flux
+## Flow
 
 ```
 config.yaml
@@ -23,10 +24,10 @@ config.yaml
 yaml.Unmarshal() → types.go (YAMLConfig)
     │
     ▼
-Mapping → domain/service.Config
+Mapping → domain/config.Config
 ```
 
-## Types Intermédiaires
+## Intermediate Types
 
 ```go
 // types.go
@@ -42,7 +43,7 @@ type YAMLService struct {
 }
 ```
 
-## Constructeur
+## Constructor
 
 ```go
 NewLoader() *Loader
@@ -57,9 +58,9 @@ cfg, err := loader.Load("/etc/daemon/config.yaml")
 
 ## Validation
 
-Le `Loader` valide :
-- Syntaxe YAML
-- Champs requis
-- Valeurs acceptables
+The `Loader` validates:
+- YAML syntax
+- Required fields
+- Acceptable values
 
-Erreurs retournées avec contexte (ligne, champ).
+Errors returned with context (line, field).

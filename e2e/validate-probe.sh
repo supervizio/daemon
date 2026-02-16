@@ -190,6 +190,9 @@ printf "${BLUE}=== Section 1: Metadata ===${NC}\n"
 
 check_field_not_null ".timestamp"
 check_field_not_null ".platform"
+check_field_not_null ".os_version"
+check_field_not_null ".kernel_version"
+check_field_not_null ".arch"
 check_field_not_null ".collected_at_us"
 
 # =============================================================================

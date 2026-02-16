@@ -92,9 +92,55 @@ func IsInitialized() bool {
 // Platform returns the current platform name.
 //
 // Returns:
-//   - string: platform identifier (e.g., "linux", "darwin", "freebsd")
+//   - string: platform identifier (e.g., "linux", "darwin", "freebsd"), "unknown" if unavailable
 func Platform() string {
 	cStr := C.probe_get_platform()
+	// Guard against nil pointer from FFI.
+	if cStr == nil {
+		return "unknown"
+	}
+	// Convert C string to Go string.
+	return C.GoString(cStr)
+}
+
+// OSVersion returns the OS version string (e.g., "Linux 6.12.69", "Darwin 24.6.0").
+//
+// Returns:
+//   - string: OS name and release version from uname, "unknown" if unavailable
+func OSVersion() string {
+	cStr := C.probe_get_os_version()
+	// Guard against nil pointer from FFI.
+	if cStr == nil {
+		return "unknown"
+	}
+	// Convert C string to Go string.
+	return C.GoString(cStr)
+}
+
+// KernelVersion returns the full kernel build string from uname.
+//
+// Returns:
+//   - string: kernel version string (e.g., "#1 SMP PREEMPT_DYNAMIC ..."), "unknown" if unavailable
+func KernelVersion() string {
+	cStr := C.probe_get_kernel_version()
+	// Guard against nil pointer from FFI.
+	if cStr == nil {
+		return "unknown"
+	}
+	// Convert C string to Go string.
+	return C.GoString(cStr)
+}
+
+// Arch returns the machine architecture (e.g., "x86_64", "aarch64", "arm64").
+//
+// Returns:
+//   - string: machine architecture from uname, "unknown" if unavailable
+func Arch() string {
+	cStr := C.probe_get_arch()
+	// Guard against nil pointer from FFI.
+	if cStr == nil {
+		return "unknown"
+	}
 	// Convert C string to Go string.
 	return C.GoString(cStr)
 }

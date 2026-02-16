@@ -2446,35 +2446,182 @@ jobs:
           path: probe-caps/
           merge-multiple: true
 
-      - name: Probe Capability Matrix
+      - name: Probe Metrics Summary
         run: |
-          echo "## Probe Capability Matrix" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Platform | cpu | mem | load | disk | net | io | proc | psi | thermal | ctx_sw | conn | quota | container |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|----------|:---:|:---:|:----:|:----:|:---:|:--:|:----:|:---:|:-------:|:------:|:----:|:-----:|:---------:|" >> "$GITHUB_STEP_SUMMARY"
-
+          # Map probe-cap files to 6 platform columns
+          F_LINUX=""; F_FREEBSD=""; F_OPENBSD=""; F_NETBSD=""; F_MACOS_ARM=""; F_MACOS_X86=""
+          ERRORS=""
           for f in probe-caps/probe-cap-*.json; do
             [ -f "$f" ] || continue
-            PLAT=$(jq -r '.platform' "$f")
-            # Handle error entries (probe failed to run)
-            if [ "$(jq -r '.error // false' "$f")" = "true" ]; then
-              ROW="| $PLAT | :warning: probe failed | | | | | | | | | | | | |"
-              echo "$ROW" >> "$GITHUB_STEP_SUMMARY"
+            p=$(jq -r '._platform // .platform // "unknown"' "$f")
+            if [ "$(jq -r '._error // .error // false' "$f")" = "true" ]; then
+              ERRORS="${ERRORS} ${p}"
               continue
             fi
-            ROW="| $PLAT"
-            for field in cpu memory load disk network io process psi thermal context_switches connections quota container; do
-              VAL=$(jq -r ".$field // false" "$f")
-              if [ "$VAL" = "true" ]; then
-                ROW="$ROW | :white_check_mark:"
-              else
-                ROW="$ROW | :x:"
-              fi
-            done
-            ROW="$ROW |"
-            echo "$ROW" >> "$GITHUB_STEP_SUMMARY"
+            case "$p" in
+              linux-amd64)   F_LINUX="$f" ;;
+              freebsd-amd64) F_FREEBSD="$f" ;;
+              openbsd-amd64) F_OPENBSD="$f" ;;
+              netbsd-amd64)  F_NETBSD="$f" ;;
+              darwin-arm64)  F_MACOS_ARM="$f" ;;
+              darwin-amd64)  F_MACOS_X86="$f" ;;
+            esac
           done
-          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # --- Helper functions ---
+
+          # Extract raw value (empty string if missing/file absent)
+          v() {
+            [ -z "$1" ] || [ ! -f "$1" ] && return
+            local result
+            result=$(jq -r "$2" "$1" 2>/dev/null) || return
+            [ "$result" = "null" ] && return
+            echo "$result"
+          }
+
+          # Value or dash
+          vd() {
+            local r; r=$(v "$1" "$2")
+            [ -z "$r" ] && echo "-" || echo "$r"
+          }
+
+          # Human-readable bytes
+          hb() {
+            local r; r=$(v "$1" "$2")
+            if [ -z "$r" ]; then echo "-"; return; fi
+            echo "$r" | awk '{
+              if ($1 == 0) print "0"
+              else if ($1 >= 1073741824) printf "%.1f GB", $1/1073741824
+              else if ($1 >= 1048576) printf "%.1f MB", $1/1048576
+              else if ($1 >= 1024) printf "%.1f KB", $1/1024
+              else printf "%d B", $1
+            }'
+          }
+
+          # Format percent
+          pct() {
+            local r; r=$(v "$1" "$2")
+            if [ -z "$r" ]; then echo "-"; return; fi
+            printf "%.1f%%" "$r" 2>/dev/null || echo "$r"
+          }
+
+          # Boolean emoji
+          be() {
+            local r; r=$(v "$1" "$2")
+            case "$r" in
+              true) echo ":white_check_mark:" ;;
+              false) echo ":x:" ;;
+              *) echo "-" ;;
+            esac
+          }
+
+          # Truncate long strings (max 35 chars)
+          trunc() {
+            local r; r=$(v "$1" "$2")
+            if [ -z "$r" ]; then echo "-"; return; fi
+            if [ ${#r} -gt 35 ]; then
+              echo "${r:0:32}..."
+            else
+              echo "$r"
+            fi
+          }
+
+          # Generate one data row across all 6 platforms
+          row() {
+            local label="$1" expr="$2" fmt="${3:-vd}"
+            printf "| %s | %s | %s | %s | %s | %s | %s |\n" \
+              "$label" \
+              "$($fmt "$F_LINUX" "$expr")" \
+              "$($fmt "$F_FREEBSD" "$expr")" \
+              "$($fmt "$F_OPENBSD" "$expr")" \
+              "$($fmt "$F_NETBSD" "$expr")" \
+              "$($fmt "$F_MACOS_ARM" "$expr")" \
+              "$($fmt "$F_MACOS_X86" "$expr")"
+          }
+
+          # Group header (bold, spans all columns)
+          grp() { echo "| **$1** | | | | | | |"; }
+
+          # --- Generate table ---
+          {
+            echo "## Probe Metrics Summary"
+            echo ""
+            echo "| Field | Linux | FreeBSD | OpenBSD | NetBSD | macOS ARM64 | macOS x86 |"
+            echo "|-------|-------|---------|---------|--------|-------------|-----------|"
+
+            grp "METADATA"
+            row "platform" ".platform"
+            row "os_version" ".os_version" trunc
+            row "kernel_version" ".kernel_version" trunc
+            row "arch" ".arch"
+
+            grp "CPU"
+            row "usage %" ".cpu.usage_percent" pct
+            row "cores" ".cpu.cores"
+            row "freq MHz" ".cpu.frequency_mhz"
+            row "PSI avg10" ".cpu.pressure.some_avg10"
+
+            grp "MEMORY"
+            row "total" ".memory.total_bytes" hb
+            row "available" ".memory.available_bytes" hb
+            row "used" ".memory.used_bytes" hb
+            row "cached" ".memory.cached_bytes" hb
+            row "buffers" ".memory.buffers_bytes" hb
+            row "swap total" ".memory.swap_total_bytes" hb
+            row "swap used" ".memory.swap_used_bytes" hb
+            row "used %" ".memory.used_percent" pct
+            row "PSI avg10" ".memory.pressure.some_avg10"
+
+            grp "LOAD"
+            row "1 min" ".load.load_1min"
+            row "5 min" ".load.load_5min"
+            row "15 min" ".load.load_15min"
+
+            grp "DISK"
+            row "partitions" "(.disk.usage // [] | length)"
+            row "I/O devices" "(.disk.io // [] | length)"
+
+            grp "I/O"
+            row "read" ".io.read_bytes" hb
+            row "write" ".io.write_bytes" hb
+            row "read ops" ".io.read_ops"
+            row "write ops" ".io.write_ops"
+            row "PSI avg10" ".io.pressure.some_avg10"
+
+            grp "NETWORK"
+            row "interfaces" "(.network.interfaces // [] | length)"
+            row "stats" "(.network.stats // [] | length)"
+
+            grp "PROCESS"
+            row "pid" ".process.current_pid"
+            row "count" ".process.process_count"
+
+            grp "THERMAL"
+            row "supported" ".thermal.supported" be
+
+            grp "CONTEXT SWITCHES"
+            row "system total" ".context_switches.system_total"
+            row "voluntary" ".context_switches.self.voluntary"
+            row "involuntary" ".context_switches.self.involuntary"
+
+            grp "CONNECTIONS"
+            row "tcp established" ".connections.tcp_stats.established"
+            row "tcp listen" ".connections.tcp_stats.listen"
+            row "tcp time_wait" ".connections.tcp_stats.time_wait"
+
+            grp "QUOTA"
+            row "supported" ".quota.supported" be
+
+            grp "CONTAINER & RUNTIME"
+            row "containerized" ".container.is_containerized" be
+            row "runtime" ".runtime.is_containerized" be
+
+            echo ""
+            if [ -n "$ERRORS" ]; then
+              echo "> :warning: Probe failed on:${ERRORS}"
+              echo ""
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Job Results
         run: |

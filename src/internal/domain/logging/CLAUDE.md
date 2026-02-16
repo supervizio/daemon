@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Domain Logging Package
 
 Daemon event logging domain types and port interfaces.

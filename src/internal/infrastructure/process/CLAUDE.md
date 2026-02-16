@@ -1,34 +1,35 @@
-# Process - Gestion Processus OS
+<!-- updated: 2026-02-15T21:30:00Z -->
+# Process - OS Process Management
 
-Tout ce qui touche à l'exécution et au contrôle des processus Unix.
+Everything related to Unix process execution and control.
 
-## Rôle
+## Role
 
-Abstraire les opérations OS : démarrer/arrêter des processus, envoyer des signaux, gérer les credentials, nettoyer les zombies.
+Abstract OS operations: start/stop processes, send signals, manage credentials, clean up zombies.
 
 ## Navigation
 
-| Besoin | Package |
-|--------|---------|
-| Démarrer/arrêter un processus | `executor/` |
-| Envoyer des signaux (SIGTERM, SIGHUP) | `signals/` |
-| Récupérer les processus zombies (PID1) | `reaper/` |
-| Résoudre user/group vers UID/GID | `credentials/` |
-| Gérer les process groups | `control/` |
+| Need | Package |
+|------|---------|
+| Start/stop a process | `executor/` |
+| Send signals (SIGTERM, SIGHUP) | `signals/` |
+| Reap zombie processes (PID1) | `reaper/` |
+| Resolve user/group to UID/GID | `credentials/` |
+| Manage process groups | `control/` |
 
 ## Structure
 
 ```
 process/
-├── errors.go       # Erreurs partagées par tous les sous-packages
+├── errors.go       # Shared errors across sub-packages
 ├── executor/       # Start(), Stop(), Signal()
 ├── signals/        # Notification, forwarding, subreaper
-├── reaper/         # Boucle waitpid() pour PID1
+├── reaper/         # waitpid() loop for PID1
 ├── credentials/    # LookupUser(), ApplyCredentials()
 └── control/        # SetProcessGroup(), GetProcessGroup()
 ```
 
-## Erreurs Partagées (errors.go)
+## Shared Errors (errors.go)
 
 ```go
 var (
@@ -37,10 +38,10 @@ var (
     ErrNotSupported     = errors.New("operation not supported")
 )
 
-func WrapError(op string, err error) error  // Ajoute contexte
+func WrapError(op string, err error) error  // Adds context
 ```
 
-## Flux Principal
+## Main Flow
 
 ```
 Supervisor
@@ -54,8 +55,8 @@ executor.Start(spec)
 
 executor.Stop(pid, timeout)
     └── signals.Forward(pid, SIGTERM)
-        └── si timeout → Kill()
+        └── if timeout → Kill()
 
-reaper.Start()  ← Tourne en background si PID1
-    └── waitpid(-1) en boucle
+reaper.Start()  ← Runs in background if PID1
+    └── waitpid(-1) in loop
 ```

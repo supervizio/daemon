@@ -19,7 +19,6 @@ import (
 	"github.com/kodflow/daemon/internal/domain/metrics"
 )
 
-
 // DiskCollector provides disk metrics via the Rust probe library.
 // It implements the metrics.DiskCollector interface for disk statistics.
 type DiskCollector struct{}
@@ -69,7 +68,7 @@ func (d *DiskCollector) ListPartitions(ctx context.Context) ([]metrics.Partition
 			opts = strings.Split(optStr, ",")
 		}
 		partitions = append(partitions, metrics.Partition{
-			Device:     cCharArrayToStringCached(item.device[:], true),     // stable: device names don't change
+			Device:     cCharArrayToStringCached(item.device[:], true),      // stable: device names don't change
 			Mountpoint: cCharArrayToStringCached(item.mount_point[:], true), // stable: mount points don't change
 			FSType:     cCharArrayToStringCached(item.fs_type[:], true),     // stable: filesystem types don't change
 			Options:    opts,

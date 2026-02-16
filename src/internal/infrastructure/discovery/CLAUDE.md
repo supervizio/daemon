@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Discovery - Target Discovery Adapters
 
 Implements `domain/target.Discoverer` for discovering external monitoring targets.

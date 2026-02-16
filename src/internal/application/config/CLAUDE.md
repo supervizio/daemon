@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Config - Configuration Port
 
 Application port interface for configuration loading.

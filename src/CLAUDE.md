@@ -1,3 +1,4 @@
+<!-- updated: 2026-02-15T21:30:00Z -->
 # Source Code - superviz.io
 
 Go source code for the process supervisor using hexagonal architecture.

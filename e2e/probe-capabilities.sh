@@ -1,7 +1,11 @@
 #!/bin/sh
-# Extract probe capability report from supervizio --probe output.
-# Outputs a JSON capability report for each metric section.
+# =============================================================================
+# Save raw probe JSON output with platform metadata for CI summary.
 # Usage: probe-capabilities.sh <binary_path> <output_json_path> [platform_override]
+#
+# Note: Uses /bin/sh for maximum portability (BSD VMs, Alpine, etc.)
+# Security: SAST-SAFE - No user input, all paths are hardcoded constants.
+# =============================================================================
 set -e
 
 BINARY="$1"
@@ -27,37 +31,14 @@ set -e
 
 if [ "$PROBE_EXIT" -ne 0 ]; then
   echo "WARNING: --probe exited with code $PROBE_EXIT" >&2
-  cat > "$OUTPUT_FILE" << EOF
-{"platform":"$PLATFORM","error":true,"exit_code":$PROBE_EXIT}
-EOF
-  echo "Probe capabilities for $PLATFORM saved to $OUTPUT_FILE (probe failed)"
+  printf '{"_platform":"%s","_error":true,"_exit_code":%d}\n' "$PLATFORM" "$PROBE_EXIT" > "$OUTPUT_FILE"
+  echo "Probe output for $PLATFORM saved to $OUTPUT_FILE (probe failed)"
   cat "$OUTPUT_FILE"
   exit 0
 fi
 
-# Check if a key exists in the JSON output
-check() { echo "$PROBE_OUTPUT" | grep -q "\"$1\"" && echo "true" || echo "false"; }
+# Save raw probe JSON with _platform field injected (sed works everywhere, no jq needed)
+echo "$PROBE_OUTPUT" | sed "s/^{/{\"_platform\":\"$PLATFORM\",/" > "$OUTPUT_FILE"
 
-# Generate capability JSON
-cat > "$OUTPUT_FILE" << CAPABILITY_EOF
-{
-  "platform": "$PLATFORM",
-  "cpu": $(check cpu),
-  "memory": $(check memory),
-  "load": $(check load),
-  "disk": $(check disk),
-  "network": $(check network),
-  "io": $(check io),
-  "process": $(check process),
-  "thermal": $(check thermal),
-  "psi": $(echo "$PROBE_OUTPUT" | grep -q '"pressure"' && echo "true" || echo "false"),
-  "context_switches": $(check context_switches),
-  "connections": $(check connections),
-  "quota": $(check quota),
-  "container": $(check container),
-  "runtime": $(check runtime)
-}
-CAPABILITY_EOF
-
-echo "Probe capabilities for $PLATFORM saved to $OUTPUT_FILE"
+echo "Probe output for $PLATFORM saved to $OUTPUT_FILE"
 cat "$OUTPUT_FILE"

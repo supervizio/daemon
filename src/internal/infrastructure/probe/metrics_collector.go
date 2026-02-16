@@ -38,20 +38,26 @@ func CollectAllMetrics(ctx context.Context, cfg *config.MetricsConfig) (*AllSyst
 	if cfg == nil || !cfg.Enabled {
 		// return minimal result with only metadata
 		return &AllSystemMetrics{
-			Timestamp:   time.Now(),
-			Platform:    runtime.GOOS,
-			Hostname:    getHostname(),
-			CollectedAt: time.Now().UnixMicro(),
+			Timestamp:     time.Now(),
+			Platform:      runtime.GOOS,
+			Hostname:      getHostname(),
+			OSVersion:     OSVersion(),
+			KernelVersion: KernelVersion(),
+			Arch:          Arch(),
+			CollectedAt:   time.Now().UnixMicro(),
 		}, nil
 	}
 
 	now := time.Now()
 	hostname := getHostname()
 	result := &AllSystemMetrics{
-		Timestamp:   now,
-		Platform:    runtime.GOOS,
-		Hostname:    hostname,
-		CollectedAt: now.UnixMicro(),
+		Timestamp:     now,
+		Platform:      runtime.GOOS,
+		Hostname:      hostname,
+		OSVersion:     OSVersion(),
+		KernelVersion: KernelVersion(),
+		Arch:          Arch(),
+		CollectedAt:   now.UnixMicro(),
 	}
 
 	collector := NewCollector()

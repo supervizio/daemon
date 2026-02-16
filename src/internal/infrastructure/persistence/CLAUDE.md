@@ -1,33 +1,35 @@
-# Persistence - Stockage de Données
+<!-- updated: 2026-02-15T21:30:00Z -->
+# Persistence - Data Storage
 
-Adaptateurs pour le stockage persistant et le chargement de configuration.
+Adapters for persistent storage and configuration loading.
 
-## Rôle
+## Role
 
-Abstraire l'accès aux données : fichiers de configuration, base de données key-value.
+Abstract data access: configuration files, key-value database.
 
 ## Navigation
 
-| Besoin | Package |
-|--------|---------|
-| Stocker des données clé-valeur | `storage/boltdb/` |
-| Charger la configuration YAML | `config/yaml/` |
+| Need | Package |
+|------|---------|
+| Store key-value data | `storage/boltdb/` |
+| Load YAML configuration | `config/yaml/` |
 
 ## Structure
 
 ```
 persistence/
-├── storage/           # Adaptateurs stockage
+├── storage/           # Storage adapters
 │   └── boltdb/        # BoltDB embedded database
-│       └── store.go   # Implémente domain/storage.Store
+│       └── store.go   # Implements domain/storage.MetricsStore
 │
-└── config/            # Chargement configuration
-    └── yaml/          # Parser YAML
-        ├── loader.go  # Loader principal
-        └── types.go   # Types de mapping YAML → domain
+└── config/            # Configuration loading
+    └── yaml/          # YAML parser
+        ├── loader.go  # Main loader
+        ├── types.go   # YAML → domain mapping types
+        └── metrics_dto.go # Metrics configuration DTO
 ```
 
-## Séparation des Responsabilités
+## Separation of Concerns
 
-- **storage/** : Persistance runtime (état, métriques, cache)
-- **config/** : Configuration statique au démarrage
+- **storage/**: Runtime persistence (state, metrics, cache)
+- **config/**: Static configuration at startup
